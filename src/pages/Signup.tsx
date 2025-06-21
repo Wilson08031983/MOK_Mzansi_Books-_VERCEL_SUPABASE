@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, EyeOff, ArrowLeft, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, UserPlus, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
+import { sendConfirmationEmail } from '@/services/emailService';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -28,6 +29,10 @@ const Signup = () => {
     password: invitationPassword || '',
     confirmPassword: invitationPassword || ''
   });
+  
+  // State for terms agreement checkbox
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [showTermsWarning, setShowTermsWarning] = useState(false);
 
   useEffect(() => {
     if (isInvitationSignup) {
@@ -43,6 +48,12 @@ const Signup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // For normal signup, check if terms are agreed to
+    if (!isInvitationSignup && !agreeToTerms) {
+      setShowTermsWarning(true);
+      return;
+    }
     
     if (formData.password !== formData.confirmPassword) {
       alert('Passwords do not match');
@@ -70,7 +81,19 @@ const Signup = () => {
         alert('Account created successfully! Welcome to the team.');
         navigate('/dashboard');
       } else {
-        alert('Please check your email for verification instructions');
+        // Send confirmation email using Resend
+        const emailSent = await sendConfirmationEmail({
+          to: formData.email,
+          subject: 'Confirm Your MOK Mzansi Books Account',
+          firstName: formData.firstName,
+          lastName: formData.lastName
+        });
+        
+        if (emailSent) {
+          alert('Account created successfully! Please check your email for verification instructions.');
+        } else {
+          alert('Account created, but we encountered an issue sending your verification email. Please contact support if you don\'t receive it.');
+        }
         navigate('/login');
       }
     } catch (error: any) {
@@ -194,18 +217,44 @@ const Signup = () => {
               )}
 
               {!isInvitationSignup && (
-                <div className="flex items-start space-x-2">
-                  <input type="checkbox" className="mt-1 rounded border-gray-300" required />
-                  <span className="text-sm text-gray-600">
-                    I agree to the <Link to="/terms" className="text-purple-600 hover:text-purple-700">Terms of Service</Link> and <Link to="/privacy" className="text-purple-600 hover:text-purple-700">Privacy Policy</Link>
-                  </span>
-                </div>
+                <>
+                  <div className="flex items-start space-x-2">
+                    <input 
+                      type="checkbox" 
+                      id="terms-checkbox"
+                      className="mt-1 rounded border-gray-300" 
+                      checked={agreeToTerms}
+                      onChange={() => {
+                        setAgreeToTerms(!agreeToTerms);
+                        if (!agreeToTerms) {
+                          setShowTermsWarning(false);
+                        }
+                      }}
+                    />
+                    <label htmlFor="terms-checkbox" className="text-sm text-gray-600">
+                      I agree to the <Link to="/terms" className="text-purple-600 hover:text-purple-700">Terms of Service</Link> and <Link to="/privacy" className="text-purple-600 hover:text-purple-700">Privacy Policy</Link>
+                    </label>
+                  </div>
+                  
+                  {showTermsWarning && (
+                    <div className="text-red-500 text-sm flex items-center space-x-1 mt-1">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>You must agree to the Terms of Service and Privacy Policy to continue</span>
+                    </div>
+                  )}
+                </>
               )}
 
               <Button
                 type="submit"
-                disabled={loading}
-                className="w-full h-12 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                disabled={loading || (!isInvitationSignup && !agreeToTerms)}
+                className={`w-full h-12 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 ${(!isInvitationSignup && !agreeToTerms) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                onClick={(e) => {
+                  if (!isInvitationSignup && !agreeToTerms) {
+                    e.preventDefault();
+                    setShowTermsWarning(true);
+                  }
+                }}
               >
                 {loading ? 'Creating Account...' : (isInvitationSignup ? 'Complete Registration' : 'Start Free Trial')}
               </Button>
