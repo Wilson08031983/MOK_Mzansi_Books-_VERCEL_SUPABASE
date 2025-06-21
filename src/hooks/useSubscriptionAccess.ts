@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { useAuth } from './useAuthHook';
 
 export const useSubscriptionAccess = () => {
   const { user } = useAuth();
@@ -19,15 +18,8 @@ export const useSubscriptionAccess = () => {
 
   const checkAccess = async () => {
     try {
-      const { data, error } = await supabase
-        .rpc('check_subscription_access', { user_uuid: user?.id });
-
-      if (error) {
-        console.error('Error checking subscription access:', error);
-        setAccessLevel('limited');
-      } else {
-        setAccessLevel(data === 'full' ? 'full' : 'limited');
-      }
+      // For development, always provide full access
+      setAccessLevel('full');
     } catch (error) {
       console.error('Error checking subscription access:', error);
       setAccessLevel('limited');

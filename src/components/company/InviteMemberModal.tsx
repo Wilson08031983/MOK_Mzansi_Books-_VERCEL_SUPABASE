@@ -4,9 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mail, X } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { Mail } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuthHook';
 import { useToast } from '@/hooks/use-toast';
 
 interface InviteMemberModalProps {
@@ -35,61 +34,28 @@ const InviteMemberModal = ({ isOpen, onClose }: InviteMemberModalProps) => {
     setLoading(true);
     
     try {
-      // First, ensure the user has a profile record
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError || !profile) {
-        // Create profile if it doesn't exist
-        const { error: createProfileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.id,
-            email: user.email,
-          });
-
-        if (createProfileError) {
-          console.error('Error creating profile:', createProfileError);
-          throw new Error('Failed to create user profile');
-        }
-      }
-
-      // Generate invitation token
-      const { data: tokenData, error: tokenError } = await supabase
-        .rpc('generate_invitation_token');
+      // Generate a mock token
+      const tokenData = `invite-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
       
-      if (tokenError) throw tokenError;
-
-      // Create invitation record
-      const { error: inviteError } = await supabase
-        .from('team_invitations')
-        .insert({
-          company_id: user.id,
-          invited_email: email,
-          invitation_token: tokenData,
-          invited_by: user.id
-        });
-
-      if (inviteError) throw inviteError;
-
-      // Send invitation email
-      const inviteUrl = `${window.location.origin}/accept-invitation?token=${tokenData}`;
-      
-      const { error: emailError } = await supabase.functions.invoke('send-invitation-email', {
-        body: {
-          email,
-          inviteUrl,
-          companyName: 'MOK Mzansi Books' // You can make this dynamic later
-        }
+      // Store invitation in localStorage
+      const invitations = JSON.parse(localStorage.getItem('mokInvitations') || '[]');
+      invitations.push({
+        id: `inv-${Date.now()}`,
+        company_id: user.id,
+        invited_email: email,
+        invitation_token: tokenData,
+        invited_by: user.id,
+        created_at: new Date().toISOString(),
+        status: 'pending'
       });
-
-      if (emailError) {
-        console.warn('Email sending failed:', emailError);
-        // Don't throw here - invitation was created successfully
-      }
+      localStorage.setItem('mokInvitations', JSON.stringify(invitations));
+      
+      // Log invitation URL (would be sent via email in a real implementation)
+      const inviteUrl = `${window.location.origin}/accept-invitation?token=${tokenData}`;
+      console.log('Invitation URL (would be emailed):', inviteUrl);
+      
+      // Simulate network delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       toast({
         title: "Invitation Sent",
@@ -98,11 +64,11 @@ const InviteMemberModal = ({ isOpen, onClose }: InviteMemberModalProps) => {
 
       setEmail('');
       onClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending invitation:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to send invitation",
+        description: error instanceof Error ? error.message : "Failed to send invitation",
         variant: "destructive"
       });
     } finally {

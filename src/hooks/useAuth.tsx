@@ -1,18 +1,29 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 
-interface AuthContextType {
+// Properly typed user interface without Supabase dependency
+export interface User {
+  id: string;
+  email: string;
+  user_metadata?: UserMetadata;
+}
+
+export interface UserMetadata {
+  first_name?: string;
+  last_name?: string;
+  [key: string]: string | undefined;
+}
+
+export interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string, userData: any) => Promise<void>;
+  signUp: (email: string, password: string, userData: UserMetadata) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -20,47 +31,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      setLoading(false);
-    };
-
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
+    // Check if user is stored in local storage
+    const storedUser = localStorage.getItem('mokUser');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
       }
-    );
-
-    return () => subscription.unsubscribe();
+    }
+    setLoading(false);
   }, []);
 
-  const signUp = async (email: string, password: string, userData: any) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, password: string, userData: UserMetadata) => {
+    // Create mock user
+    const newUser = {
+      id: Date.now().toString(),
       email,
-      password,
-      options: {
-        data: userData
-      }
-    });
-    if (error) throw error;
+      user_metadata: userData
+    };
+    
+    // Store in local storage
+    localStorage.setItem('mokUser', JSON.stringify(newUser));
+    setUser(newUser);
+    
+    // Simulate async behavior
+    return Promise.resolve();
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    // For development, just create a mock user and sign in
+    const mockUser = {
+      id: 'mock-user-id',
       email,
-      password
-    });
-    if (error) throw error;
+      user_metadata: {
+        first_name: 'Test',
+        last_name: 'User'
+      }
+    };
+    
+    localStorage.setItem('mokUser', JSON.stringify(mockUser));
+    setUser(mockUser);
+    
+    return Promise.resolve();
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    localStorage.removeItem('mokUser');
+    setUser(null);
     navigate('/');
+    
+    return Promise.resolve();
   };
 
   return (
@@ -76,10 +97,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export const useAuth = () => {
+// Export the useAuth hook directly from this file to maintain compatibility
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
+// This file only contains the AuthProvider component now

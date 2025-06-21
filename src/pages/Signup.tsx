@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Eye, EyeOff, ArrowLeft, UserPlus } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuthHook';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -26,10 +26,7 @@ const Signup = () => {
     lastName: '',
     email: invitationData?.invited_email || '',
     password: invitationPassword || '',
-    confirmPassword: invitationPassword || '',
-    companyName: isInvitationSignup ? 'MOK Mzansi Books' : '',
-    businessType: '',
-    phone: ''
+    confirmPassword: invitationPassword || ''
   });
 
   useEffect(() => {
@@ -39,8 +36,7 @@ const Signup = () => {
         ...prev,
         email: invitationData.invited_email,
         password: invitationPassword,
-        confirmPassword: invitationPassword,
-        companyName: 'MOK Mzansi Books'
+        confirmPassword: invitationPassword
       }));
     }
   }, [invitationData, invitationPassword, isInvitationSignup]);
@@ -60,9 +56,6 @@ const Signup = () => {
       const userData = {
         first_name: formData.firstName,
         last_name: formData.lastName,
-        company_name: formData.companyName,
-        business_type: formData.businessType,
-        phone: formData.phone,
         email: formData.email, // Store email in metadata as well for easy access
         invitation_token: invitationData?.invitation_token || null
       };
@@ -89,23 +82,25 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-orange-200/20 to-pink-300/20 rounded-full mix-blend-multiply filter blur-xl opacity-60 animate-blob shadow-4xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-purple-200/20 to-blue-300/20 rounded-full mix-blend-multiply filter blur-xl opacity-60 animate-blob animation-delay-2000 shadow-4xl"></div>
+      </div>
+      
+      <div className="relative w-full max-w-2xl">
         <div className="mb-8">
-          <Link to={isInvitationSignup ? "/accept-invitation" : "/"} className="inline-flex items-center text-gray-600 hover:text-purple-600 transition-colors">
+          <Link to={isInvitationSignup ? "/accept-invitation" : "/"} className="inline-flex items-center text-gray-600 hover:text-purple-600 transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg bg-white/80 backdrop-blur-sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             {isInvitationSignup ? 'Back to Invitation' : 'Back to Home'}
           </Link>
         </div>
 
-        <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+        <Card className="shadow-business-xl border-0 bg-white/90 backdrop-blur-md hover-lift animate-fade-in">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-purple-600 to-blue-500 rounded-2xl flex items-center justify-center">
-              {isInvitationSignup ? (
-                <UserPlus className="text-white text-2xl" />
-              ) : (
-                <span className="text-white font-bold text-2xl">M</span>
-              )}
+            <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-white">
+              <img src="/lovable-uploads/8021eb93-6e6a-421e-a8ff-bed101269a7c.png" alt="MOKMzansiBooks Logo" className="w-full h-full object-contain p-2" />
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-gray-900">
@@ -160,47 +155,7 @@ const Signup = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="companyName" className="text-gray-700 font-medium">Company Name</Label>
-                <Input
-                  id="companyName"
-                  type="text"
-                  value={formData.companyName}
-                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
-                  required
-                  disabled={isInvitationSignup}
-                />
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="businessType" className="text-gray-700 font-medium">Business Type</Label>
-                  <Select onValueChange={(value) => setFormData({ ...formData, businessType: value })}>
-                    <SelectTrigger className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500">
-                      <SelectValue placeholder="Select business type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sole-proprietor">Sole Proprietor</SelectItem>
-                      <SelectItem value="partnership">Partnership</SelectItem>
-                      <SelectItem value="private-company">Private Company</SelectItem>
-                      <SelectItem value="public-company">Public Company</SelectItem>
-                      <SelectItem value="npo">Non-Profit Organization</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-gray-700 font-medium">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
-                    placeholder="+27 XX XXX XXXX"
-                  />
-                </div>
-              </div>
 
               {!isInvitationSignup && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

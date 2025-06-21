@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuthHook';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Edit, Save, X } from 'lucide-react';
@@ -45,18 +44,19 @@ const CompanyDetails = () => {
       try {
         setLoading(true);
         
-        // Get user metadata from auth
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        const userData = authUser?.user_metadata;
-        
-        if (userData) {
+        // Get user data from localStorage (previously saved in useAuth)
+        const storedUser = localStorage.getItem('mokUser');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          const userMeta = userData.user_metadata || {};
+          
           setCompanyData(prev => ({
             ...prev,
-            name: userData.company_name || prev.name,
-            contactName: userData.first_name || prev.contactName,
-            contactSurname: userData.last_name || prev.contactSurname,
-            email: userData.email || user.email || prev.email,
-            phone: userData.phone || prev.phone
+            name: userMeta.company_name || prev.name,
+            contactName: userMeta.first_name || prev.contactName,
+            contactSurname: userMeta.last_name || prev.contactSurname,
+            email: userMeta.email || user.email || prev.email,
+            phone: userMeta.phone || prev.phone
           }));
         }
       } catch (error) {
@@ -72,19 +72,27 @@ const CompanyDetails = () => {
   const handleSave = async () => {
     try {
       if (user) {
-        // Update profile in database
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            company_name: companyData.name,
-            first_name: companyData.contactName,
-            last_name: companyData.contactSurname,
-            email: companyData.email,
-            phone: companyData.phone
-          })
-          .eq('id', user.id);
+        // Get user data from localStorage
+        const storedUser = localStorage.getItem('mokUser');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
           
-        if (error) throw error;
+          // Update user metadata
+          const updatedUserData = {
+            ...userData,
+            user_metadata: {
+              ...userData.user_metadata,
+              company_name: companyData.name,
+              first_name: companyData.contactName,
+              last_name: companyData.contactSurname,
+              email: companyData.email,
+              phone: companyData.phone
+            }
+          };
+          
+          // Store updated user data
+          localStorage.setItem('mokUser', JSON.stringify(updatedUserData));
+        }
       }
       
       console.log('Saving company data:', companyData);

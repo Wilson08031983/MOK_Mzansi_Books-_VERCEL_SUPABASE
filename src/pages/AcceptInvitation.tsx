@@ -1,13 +1,24 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+
+// Define the invitation data type
+interface InvitationData {
+  id: string;
+  company_id: string;
+  invited_email: string;
+  invitation_token: string;
+  status: 'pending' | 'accepted' | 'expired';
+  invited_by: string;
+  created_at: string;
+  expires_at: string;
+}
 
 const AcceptInvitation = () => {
   const [searchParams] = useSearchParams();
@@ -18,33 +29,26 @@ const AcceptInvitation = () => {
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(true);
   const [invitationValid, setInvitationValid] = useState(false);
-  const [invitationData, setInvitationData] = useState<any>(null);
+  const [invitationData, setInvitationData] = useState<InvitationData | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: ''
   });
 
-  useEffect(() => {
-    if (!token) {
-      navigate('/');
-      return;
-    }
-    
-    verifyInvitation();
-  }, [token]);
-
-  const verifyInvitation = async () => {
+  const verifyInvitation = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('team_invitations')
-        .select('*')
-        .eq('invitation_token', token)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .single();
-
-      if (error || !data) {
+      // Get invitations from localStorage
+      const invitations = JSON.parse(localStorage.getItem('mokInvitations') || '[]');
+      
+      // Find the invitation with the matching token
+      const invitation = invitations.find((inv: InvitationData) => 
+        inv.invitation_token === token && 
+        inv.status === 'pending' && 
+        new Date(inv.expires_at) > new Date()
+      );
+      
+      if (!invitation) {
         toast({
           title: "Invalid Invitation",
           description: "This invitation link is invalid or has expired.",
@@ -53,8 +57,8 @@ const AcceptInvitation = () => {
         navigate('/');
         return;
       }
-
-      setInvitationData(data);
+      
+      setInvitationData(invitation);
       setInvitationValid(true);
     } catch (error) {
       console.error('Error verifying invitation:', error);
@@ -62,7 +66,16 @@ const AcceptInvitation = () => {
     } finally {
       setVerifying(false);
     }
-  };
+  }, [token, navigate, toast]);
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/');
+      return;
+    }
+    
+    verifyInvitation();
+  }, [token, navigate, verifyInvitation]);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,14 +101,20 @@ const AcceptInvitation = () => {
     setLoading(true);
 
     try {
-      // Update invitation status
-      const { error: updateError } = await supabase
-        .from('team_invitations')
-        .update({ status: 'accepted' })
-        .eq('invitation_token', token);
-
-      if (updateError) throw updateError;
-
+      // Get invitations from localStorage
+      const invitations = JSON.parse(localStorage.getItem('mokInvitations') || '[]');
+      
+      // Update the invitation status
+      const updatedInvitations = invitations.map((inv: InvitationData) => {
+        if (inv.invitation_token === token) {
+          return { ...inv, status: 'accepted' };
+        }
+        return inv;
+      });
+      
+      // Save back to localStorage
+      localStorage.setItem('mokInvitations', JSON.stringify(updatedInvitations));
+      
       // Navigate to signup with invitation data
       navigate('/signup', { 
         state: { 
@@ -103,11 +122,11 @@ const AcceptInvitation = () => {
           password: formData.password 
         } 
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error accepting invitation:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to accept invitation",
+        description: error instanceof Error ? error.message : "Failed to accept invitation",
         variant: "destructive"
       });
     } finally {

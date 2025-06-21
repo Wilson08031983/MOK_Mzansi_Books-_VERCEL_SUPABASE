@@ -1,0 +1,22 @@
+_format_version: "2.1"
+_transform: true
+
+services:
+  - name: rest-api
+    url: http://db:5432
+    routes:
+      - name: rest-api-route
+        paths:
+          - /rest/v1/
+        strip_path: true
+    plugins:
+      - name: cors
+  - name: auth-api
+    url: http://auth:9999
+    routes:
+      - name: auth-api-route
+        paths:
+          - /auth/v1/
+        strip_path: true
+    plugins:
+      - name: cors

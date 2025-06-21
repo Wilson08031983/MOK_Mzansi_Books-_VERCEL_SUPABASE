@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/hooks/useAuth";
+import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import AccessGuard from "@/components/AccessGuard";
 import Index from "./pages/Index";
 import Pricing from "./pages/Pricing";
@@ -45,7 +45,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <Router>
-        <AuthProvider>
+        <AuthProviderSelector>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -183,7 +183,7 @@ const App = () => (
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </AuthProvider>
+        </AuthProviderSelector>
       </Router>
     </TooltipProvider>
   </QueryClientProvider>

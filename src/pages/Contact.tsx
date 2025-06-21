@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Mail, Phone, MapPin } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 const Contact = () => {
   const { toast } = useToast();
@@ -47,13 +46,12 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.functions.invoke('send-contact-email', {
-        body: formData,
-      });
-
-      if (error) {
-        throw error;
-      }
+      // Mock implementation for contact form submission
+      // In a real implementation, this would connect to a backend service
+      console.log('Contact form submitted:', formData);
+      
+      // Simulate a network request
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       toast({
         title: "Message Sent!",

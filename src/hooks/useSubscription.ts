@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { useAuth } from './useAuthHook';
 
 interface Subscription {
   id: string;
@@ -29,16 +28,18 @@ export const useSubscription = () => {
 
   const fetchSubscription = async () => {
     try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      setSubscription(data);
+      // Mock subscription data for development
+      const mockSubscription = {
+        id: 'mock-subscription',
+        plan_type: 'premium',
+        status: 'active',
+        access_level: 'full',
+        paystack_reference: 'mock-ref-123',
+        start_date: new Date().toISOString(),
+        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      };
+      
+      setSubscription(mockSubscription);
     } catch (error) {
       console.error('Error fetching subscription:', error);
     } finally {
@@ -50,42 +51,45 @@ export const useSubscription = () => {
     if (!user) throw new Error('User not authenticated');
 
     const subscriptionData = {
+      id: `subscription-${Date.now()}`,
       user_id: user.id,
       plan_type: planType,
       status: planType === 'trial' ? 'trial' : 'active',
       access_level: 'full',
       paystack_reference: paystackReference,
+      start_date: new Date().toISOString(),
       end_date: planType === 'trial' 
         ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        : null
+        : undefined
     };
 
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .insert(subscriptionData)
-      .select()
-      .single();
-
-    if (error) throw error;
-    setSubscription(data);
-    return data;
+    // Store in local storage for persistence
+    localStorage.setItem('mokSubscription', JSON.stringify(subscriptionData));
+    
+    setSubscription(subscriptionData);
+    return subscriptionData;
   };
 
   const createPayment = async (subscriptionId: string, amount: number, paystackReference: string) => {
     if (!user) throw new Error('User not authenticated');
 
-    const { error } = await supabase
-      .from('payments')
-      .insert({
-        user_id: user.id,
-        subscription_id: subscriptionId,
-        paystack_reference: paystackReference,
-        amount,
-        status: 'success',
-        payment_date: new Date().toISOString()
-      });
-
-    if (error) throw error;
+    // Create mock payment record
+    const paymentData = {
+      id: `payment-${Date.now()}`,
+      user_id: user.id,
+      subscription_id: subscriptionId,
+      paystack_reference: paystackReference,
+      amount,
+      status: 'success',
+      payment_date: new Date().toISOString()
+    };
+    
+    // Store in local storage
+    const payments = JSON.parse(localStorage.getItem('mokPayments') || '[]');
+    payments.push(paymentData);
+    localStorage.setItem('mokPayments', JSON.stringify(payments));
+    
+    return Promise.resolve(paymentData);
   };
 
   return {
