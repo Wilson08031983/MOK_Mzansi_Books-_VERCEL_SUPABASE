@@ -19,6 +19,7 @@ import ThankYou from "./pages/ThankYou";
 import Features from "./pages/Features";
 import Integrations from "./pages/Integrations";
 import AcceptInvitation from "./pages/AcceptInvitation";
+import InvitedSignup from "./pages/InvitedSignup";
 import Dashboard from "./pages/Dashboard";
 import Quotations from "./pages/Quotations";
 import QuotationDetail from "./pages/QuotationDetail";
@@ -36,6 +37,9 @@ import Reports from './pages/Reports';
 import Inventory from './pages/Inventory';
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import WelcomeBack from "./pages/WelcomeBack";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +54,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/invited-signup" element={<InvitedSignup />} />
             <Route path="/accept-invitation" element={<AcceptInvitation />} />
             <Route path="/features" element={<Features />} />
             <Route path="/pricing" element={<Pricing />} />
@@ -61,6 +66,16 @@ const App = () => (
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/payment" element={<Payment />} />
             <Route path="/thank-you" element={<ThankYou />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route 
+              path="/welcome-back" 
+              element={
+                <AccessGuard>
+                  <WelcomeBack />
+                </AccessGuard>
+              } 
+            />
             <Route 
               path="/dashboard" 
               element={

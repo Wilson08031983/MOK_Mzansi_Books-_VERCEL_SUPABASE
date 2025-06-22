@@ -1,16 +1,33 @@
 import { Resend } from 'resend';
 
 // Initialize Resend with API key from environment variables
-const resend = new Resend(import.meta.env.VITE_RESEND_API_KEY);
+const resend = new Resend(import.meta.env.VITE_RESEND_API_KEY || 're_AkPz7nFU_JCaJi8MwrTy2TUga9nqkMogU');
 
 // Domain for sending emails
-const domain = import.meta.env.VITE_RESEND_DOMAIN;
+const domain = import.meta.env.VITE_RESEND_DOMAIN || 'mokmzansibooks.com';
 
 interface EmailOptions {
   to: string;
   subject: string;
   firstName?: string;
   lastName?: string;
+}
+
+interface PasswordResetEmailOptions {
+  to: string;
+  subject: string;
+  resetToken: string;
+  firstName?: string;
+}
+
+interface InvitationEmailOptions {
+  to: string;
+  subject?: string;
+  inviterName?: string;
+  email: string;
+  role: string;
+  invitationLink: string;
+  companyName?: string;
 }
 
 /**
@@ -34,12 +51,12 @@ export const sendConfirmationEmail = async (options: EmailOptions): Promise<bool
           <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello ${fullName},</p>
           <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Thanks for signing up! Please confirm your email address to start using your MOK Mzansi Books account and access your free trial.</p>
           <div style="text-align: center; margin: 32px 0;">
-            <a href="http://localhost:8083/login" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Confirm My Email & Go to Login</a>
+            <a href="http://localhost:8084/login" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Confirm My Email & Go to Login</a>
           </div>
           <p style="color: #374151; font-size: 16px; margin-bottom: 8px;">If you didn't create an account, you can safely ignore this email.</p>
           <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">This link will expire in 24 hours.</p>
           <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">© ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
+          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
         </div>
       `,
     });
@@ -53,6 +70,107 @@ export const sendConfirmationEmail = async (options: EmailOptions): Promise<bool
     return true;
   } catch (error) {
     console.error('Error sending email:', error);
+    return false;
+  }
+};
+
+/**
+ * Send a password reset email to a user
+ */
+export const sendPasswordResetEmail = async (options: PasswordResetEmailOptions): Promise<boolean> => {
+  try {
+    const { to, subject, resetToken, firstName = 'there' } = options;
+    
+    // Create reset link with token and email
+    const resetLink = `http://localhost:8084/reset-password?token=${resetToken}&email=${encodeURIComponent(to)}`;
+    
+    const { data, error } = await resend.emails.send({
+      from: `MOK Mzansi Books <no-reply@${domain}>`,
+      to: [to],
+      subject: subject || 'Reset Your Password',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
+          </div>
+          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">Password Reset Request</h1>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello ${firstName},</p>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">We received a request to reset your password for your MOK Mzansi Books account. Click the button below to create a new password:</p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${resetLink}" style="background: linear-gradient(to right, #ec4899, #8b5cf6); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Reset My Password</a>
+          </div>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 8px;">If you didn't request this password reset, you can safely ignore this email.</p>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">This link will expire in 1 hour for your security.</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('Failed to send password reset email:', error);
+      return false;
+    }
+    
+    console.log('Password reset email sent successfully with ID:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
+    return false;
+  }
+};
+
+/**
+ * Send an invitation email to a new team member
+ */
+export const sendInvitationEmail = async (options: InvitationEmailOptions): Promise<boolean> => {
+  try {
+    const { 
+      to, 
+      subject, 
+      inviterName = 'Admin', 
+      email,
+      role,
+      invitationLink,
+      companyName = 'MOK Mzansi Books'
+    } = options;
+    
+    const { data, error } = await resend.emails.send({
+      from: `${companyName} <no-reply@${domain}>`,
+      to: [to],
+      subject: subject || `You've been invited to join ${companyName}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://mokmzansibooks.com/logo.png" alt="${companyName}" style="width: 120px; height: auto;" />
+          </div>
+          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">You've Been Invited!</h1>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello,</p>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">${inviterName} has invited you to join ${companyName} as a <strong>${role}</strong>.</p>
+          <div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+            <p style="color: #374151; font-size: 16px; margin-bottom: 8px;"><strong>Your account details:</strong></p>
+            <p style="color: #374151; font-size: 16px; margin-bottom: 0;"><strong>Email:</strong> ${email}</p>
+          </div>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">To complete your registration and set up your password, click the button below:</p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${invitationLink}" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Complete Your Registration</a>
+          </div>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;"><strong>Note:</strong> This invitation link will expire in 24 hours.</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('Failed to send invitation email:', error);
+      return false;
+    }
+    
+    console.log('Invitation email sent successfully with ID:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending invitation email:', error);
     return false;
   }
 };
