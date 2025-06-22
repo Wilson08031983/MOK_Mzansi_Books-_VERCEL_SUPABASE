@@ -22,18 +22,25 @@ const CompanyDetails = () => {
     email: 'info@mokmzansibooks.com',
     phone: '+27 11 123 4567',
     website: 'www.mokmzansibooks.com',
+    websiteNotApplicable: false,
     addressLine1: '123 Business Street',
     addressLine2: '',
     addressLine3: '',
     addressLine4: 'Johannesburg, 2000',
     regNumber: '2024/123456/07',
     vatNumber: '4123456789',
+    vatNumberNotApplicable: false,
     taxNumber: 'TAX123456789',
-    maaarNumber: ''
+    csdNumber: '', // renamed from maaarNumber
+    csdNumberNotApplicable: false
   });
 
   const handleInputChange = (field: string, value: string) => {
-    setCompanyData(prev => ({ ...prev, [field]: value }));
+    if (field === 'websiteNotApplicable' || field === 'vatNumberNotApplicable' || field === 'csdNumberNotApplicable') {
+      setCompanyData(prev => ({ ...prev, [field]: value === 'true' }));
+    } else {
+      setCompanyData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   // Fetch user profile data on component mount
@@ -44,7 +51,16 @@ const CompanyDetails = () => {
       try {
         setLoading(true);
         
-        // Get user data from localStorage (previously saved in useAuth)
+        // First try to load complete company details if available
+        const savedCompanyDetails = localStorage.getItem('companyDetails');
+        if (savedCompanyDetails) {
+          const parsedDetails = JSON.parse(savedCompanyDetails);
+          setCompanyData(parsedDetails);
+          setLoading(false);
+          return;
+        }
+        
+        // Fallback to user metadata from mokUser
         const storedUser = localStorage.getItem('mokUser');
         if (storedUser) {
           const userData = JSON.parse(storedUser);
@@ -77,7 +93,7 @@ const CompanyDetails = () => {
         if (storedUser) {
           const userData = JSON.parse(storedUser);
           
-          // Update user metadata
+          // Update user metadata with basic info
           const updatedUserData = {
             ...userData,
             user_metadata: {
@@ -95,6 +111,12 @@ const CompanyDetails = () => {
         }
       }
       
+      // Save complete company data separately for persistence
+      localStorage.setItem('companyDetails', JSON.stringify({
+        ...companyData,
+        lastUpdated: new Date().toISOString()
+      }));
+      
       console.log('Saving company data:', companyData);
       setIsEditing(false);
     } catch (error) {
@@ -108,13 +130,6 @@ const CompanyDetails = () => {
 
   return (
     <div className="space-y-8">
-      {loading && (
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-          <CardContent className="py-6">
-            <p className="text-center text-slate-600">Loading company information...</p>
-          </CardContent>
-        </Card>
-      )}
       {/* Company Information */}
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader className="flex flex-row items-center justify-between">

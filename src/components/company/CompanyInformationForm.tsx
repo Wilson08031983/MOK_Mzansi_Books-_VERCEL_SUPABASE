@@ -1,12 +1,14 @@
 
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface CompanyData {
   name: string;
   email: string;
   phone: string;
   website: string;
+  websiteNotApplicable: boolean;
 }
 
 interface CompanyInformationFormProps {
@@ -16,6 +18,11 @@ interface CompanyInformationFormProps {
 }
 
 const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: CompanyInformationFormProps) => {
+  
+  const handleWebsiteCheckboxChange = (checked: boolean) => {
+    onInputChange('websiteNotApplicable', checked ? 'true' : 'false');
+    if (checked) onInputChange('website', 'N/A');
+  };
   return (
     <>
       <div>
@@ -60,16 +67,32 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
           )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2 font-sf-pro">Website</label>
+          <div className="flex justify-between items-center mb-2">
+            <label className="block text-sm font-medium text-slate-700 font-sf-pro">Website</label>
+            {isEditing && (
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="websiteNA"
+                  checked={companyData.websiteNotApplicable}
+                  onCheckedChange={handleWebsiteCheckboxChange}
+                  className="data-[state=checked]:bg-mokm-purple-500"
+                />
+                <label htmlFor="websiteNA" className="text-xs text-slate-600 cursor-pointer">Not Applicable</label>
+              </div>
+            )}
+          </div>
           {isEditing ? (
             <input
               type="url"
               value={companyData.website}
               onChange={(e) => onInputChange('website', e.target.value)}
-              className="w-full px-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+              disabled={companyData.websiteNotApplicable}
+              className={`w-full px-4 py-3 glass backdrop-blur-sm ${companyData.websiteNotApplicable ? 'bg-slate-100 text-slate-400' : 'bg-white/50'} border border-slate-200 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro`}
             />
           ) : (
-            <p className="px-4 py-3 bg-slate-50 rounded-xl font-sf-pro text-slate-900">{companyData.website}</p>
+            <p className="px-4 py-3 bg-slate-50 rounded-xl font-sf-pro text-slate-900">
+              {companyData.websiteNotApplicable ? 'Not Applicable' : companyData.website}
+            </p>
           )}
         </div>
       </div>
