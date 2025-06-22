@@ -18,6 +18,7 @@ const InvitedSignup = () => {
     email: '',
     role: '',
     token: '',
+    permissions: {},
   });
 
   const [formData, setFormData] = useState({
@@ -51,7 +52,8 @@ const InvitedSignup = () => {
       setInvitedUserData({
         email: invitation.email,
         role: invitation.role,
-        token: token
+        token: token,
+        permissions: invitation.permissions
       });
     } else {
       toast({

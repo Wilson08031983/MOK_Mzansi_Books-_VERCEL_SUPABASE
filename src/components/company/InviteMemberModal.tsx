@@ -1,17 +1,18 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mail, Shield, AlertCircle, UserPlus, Lock, CheckCircle, Link } from 'lucide-react';
+import { Mail, Shield, AlertCircle, UserPlus, Lock, CheckCircle, Link, Eye, Edit2, LucideFileText, Users, ShoppingBag, ClipboardList, Receipt, Briefcase, Package, UserCog, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { sendInvitationEmail } from '@/services/emailService';
 import { verifyAdminPermission } from '@/services/localAuthService';
 import { createInvitation, generateInvitationLink } from '@/services/invitationService';
+import { PERMISSION_PAGES, UserPermissions, isAdminRole, getAdminPermissions, getDefaultPermissions } from '@/services/permissionService';
 
 interface InviteMemberModalProps {
   isOpen: boolean;
@@ -30,6 +31,8 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('Staff Member');
   const [invitationLink, setInvitationLink] = useState('');
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [permissions, setPermissions] = useState<UserPermissions>(getDefaultPermissions());
   
   // Admin verification states
   const [adminEmail, setAdminEmail] = useState('');
@@ -48,6 +51,19 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
     'Staff Member'
   ];
   
+  // Effect to handle role selection - show permissions for non-admin roles
+  useEffect(() => {
+    const isAdmin = isAdminRole(selectedRole);
+    setShowPermissions(!isAdmin);
+    
+    // Set default permissions based on role
+    if (isAdmin) {
+      setPermissions(getAdminPermissions());
+    } else {
+      setPermissions(getDefaultPermissions());
+    }
+  }, [selectedRole]);
+
   // Reset modal state when closed
   const handleClose = () => {
     // Reset all states
@@ -60,6 +76,8 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
     setSuccess(false);
     setLoading(false);
     setInvitationLink('');
+    setPermissions(getDefaultPermissions());
+    setShowPermissions(true);
     onClose();
   };
 
@@ -105,7 +123,7 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
       const adminName = adminEmail.split('@')[0] || 'Admin';
       
       // Create a secure invitation with token
-      const invitation = createInvitation(inviteEmail, selectedRole, adminEmail);
+      const invitation = createInvitation(inviteEmail, selectedRole, adminEmail, permissions);
       const inviteLink = generateInvitationLink(invitation.token);
       
       // Set the invitation link for display
@@ -273,6 +291,102 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
                 </SelectContent>
               </Select>
             </div>
+            
+            {/* Page Permissions Section - Only shown for non-admin roles */}
+            {showPermissions && (
+              <div className="space-y-4 mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900">Page Permissions</h3>
+                  <div className="flex items-center space-x-4 text-xs text-slate-600">
+                    <div className="flex items-center space-x-1">
+                      <div className="w-4 h-4 rounded bg-slate-200 flex items-center justify-center">
+                        <Eye className="h-3 w-3 text-slate-600" />
+                      </div>
+                      <span>View</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-4 h-4 rounded bg-slate-200 flex items-center justify-center">
+                        <Edit2 className="h-3 w-3 text-slate-600" />
+                      </div>
+                      <span>Edit</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <ul className="space-y-2 text-sm">
+                  {PERMISSION_PAGES.map((page) => {
+                    const pageIcon = (() => {
+                      switch(page) {
+                        case 'My Company': return <LucideFileText className="h-4 w-4 text-slate-600" />;
+                        case 'Clients': return <Users className="h-4 w-4 text-slate-600" />;
+                        case 'Quotations': return <ClipboardList className="h-4 w-4 text-slate-600" />;
+                        case 'Invoices': return <Receipt className="h-4 w-4 text-slate-600" />;
+                        case 'Projects': return <Briefcase className="h-4 w-4 text-slate-600" />;
+                        case 'Inventory': return <Package className="h-4 w-4 text-slate-600" />;
+                        case 'HR Management': return <UserCog className="h-4 w-4 text-slate-600" />;
+                        case 'Accounting': return <ShoppingBag className="h-4 w-4 text-slate-600" />;
+                        case 'Reports': return <BarChart3 className="h-4 w-4 text-slate-600" />;
+                        default: return <LucideFileText className="h-4 w-4 text-slate-600" />;
+                      }
+                    })();
+                    
+                    return (
+                      <li key={page} className="flex items-center justify-between py-2 px-3 hover:bg-slate-100 rounded-md">
+                        <div className="flex items-center space-x-2">
+                          {pageIcon}
+                          <span>{page}</span>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                          {/* Read Permission Checkbox */}
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`read-${page}`}
+                              checked={permissions[page]?.read || false}
+                              onChange={(e) => {
+                                const newPermissions = {...permissions};
+                                newPermissions[page] = {
+                                  ...newPermissions[page],
+                                  read: e.target.checked,
+                                  // If read is unchecked, also uncheck write
+                                  write: e.target.checked ? newPermissions[page]?.write || false : false
+                                };
+                                setPermissions(newPermissions);
+                              }}
+                              className="rounded border-slate-300 text-mokm-purple-500 focus:ring-mokm-purple-500"
+                            />
+                          </div>
+                          
+                          {/* Write Permission Checkbox - only enabled if read is checked */}
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`write-${page}`}
+                              checked={permissions[page]?.write || false}
+                              disabled={!permissions[page]?.read}
+                              onChange={(e) => {
+                                const newPermissions = {...permissions};
+                                newPermissions[page] = {
+                                  ...newPermissions[page],
+                                  write: e.target.checked
+                                };
+                                setPermissions(newPermissions);
+                              }}
+                              className="rounded border-slate-300 text-mokm-blue-500 focus:ring-mokm-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                
+                <div className="pt-2 border-t border-slate-200 text-xs text-slate-600">
+                  <p><span className="font-semibold">Note:</span> All users automatically have access to the Dashboard page.</p>
+                  <p className="mt-1"><span className="font-semibold">❌ Restricted:</span> Non-admin users cannot access Settings or the Admin Panel.</p>
+                </div>
+              </div>
+            )}
             
             {/* Invitation Link Display Section - Only shown after link is generated */}
             {invitationLink && (

@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { UserPermissions } from './permissionService';
 
 export interface InvitedUser {
   email: string;
@@ -6,6 +7,7 @@ export interface InvitedUser {
   token: string;
   invitedBy: string;
   invitedAt: number; // timestamp
+  permissions: UserPermissions;
   password?: string;
   isAccepted: boolean;
 }
@@ -20,7 +22,7 @@ export interface InvitationDetails {
 /**
  * Creates a new invitation with a secure token
  */
-export const createInvitation = (email: string, role: string, invitedBy: string): InvitationDetails => {
+export const createInvitation = (email: string, role: string, invitedBy: string, permissions: UserPermissions): InvitationDetails => {
   const token = uuidv4();
   const invitedUsers = getInvitedUsers();
   
@@ -31,6 +33,7 @@ export const createInvitation = (email: string, role: string, invitedBy: string)
     token,
     invitedBy,
     invitedAt: Date.now(),
+    permissions,
     isAccepted: false
   };
   
@@ -55,7 +58,7 @@ export const getInvitedUsers = (): Record<string, InvitedUser> => {
 /**
  * Validate an invitation token
  */
-export const validateInvitationToken = (token: string): InvitedUser | null => {
+export const validateInvitationToken = (token: string): { email: string; role: string; permissions: UserPermissions; } | null => {
   const invitedUsers = getInvitedUsers();
   const invitation = invitedUsers[token];
   
@@ -74,7 +77,12 @@ export const validateInvitationToken = (token: string): InvitedUser | null => {
     return null; // Token expired
   }
   
-  return invitation;
+  // Return user info if token is valid
+  return {
+    email: invitation.email,
+    role: invitation.role,
+    permissions: invitation.permissions
+  };
 };
 
 /**
@@ -88,7 +96,7 @@ export const completeInvitation = (token: string, userData: {
   addressLine2: string;
   addressLine3: string;
   addressLine4: string;
-}): boolean => {
+}, password?: string): boolean => {
   const invitedUsers = getInvitedUsers();
   const invitation = invitedUsers[token];
   
@@ -106,8 +114,9 @@ export const completeInvitation = (token: string, userData: {
   
   userCredentials[newUserId] = {
     email: invitation.email,
-    password: invitation.password || 'changeme123', // This should be changed by the user
+    password: password || 'changeme123', // This should be changed by the user
     role: invitation.role,
+    permissions: invitation.permissions,
     user_metadata: {
       first_name: userData.name,
       last_name: userData.surname,

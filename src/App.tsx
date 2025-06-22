@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import AccessGuard from "@/components/AccessGuard";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
@@ -76,126 +77,64 @@ const App = () => (
                 </AccessGuard>
               } 
             />
-            <Route 
-              path="/dashboard" 
-              element={
-                <AccessGuard>
-                  <Dashboard />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/company" 
-              element={
-                <AccessGuard>
-                  <Company />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/clients" 
-              element={
-                <AccessGuard>
-                  <Clients />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/clients-list" 
-              element={
-                <AccessGuard>
-                  <ClientList />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/hr-management" 
-              element={
-                <AccessGuard>
-                  <HRManagement />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/accounting" 
-              element={
-                <AccessGuard>
-                  <Accounting />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/projects" 
-              element={
-                <AccessGuard>
-                  <Projects />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/projects/:id" 
-              element={
-                <AccessGuard>
-                  <ProjectDetail />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/quotations" 
-              element={
-                <AccessGuard>
-                  <Quotations />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/quotations/:id" 
-              element={
-                <AccessGuard>
-                  <QuotationDetail />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/invoices" 
-              element={
-                <AccessGuard>
-                  <Invoices />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/invoices/:id" 
-              element={
-                <AccessGuard>
-                  <InvoiceDetail />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/reports" 
-              element={
-                <AccessGuard>
-                  <Reports />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/inventory" 
-              element={
-                <AccessGuard>
-                  <Inventory />
-                </AccessGuard>
-              } 
-            />
-            <Route 
-              path="/settings" 
-              element={
-                <AccessGuard>
-                  <Settings />
-                </AccessGuard>
-              } 
-            />
+            {/* Protected Dashboard Route - Always accessible to logged-in users */}
+            <Route element={<ProtectedRoute pageName="Dashboard" />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+            </Route>
+
+            {/* Protected Company Route */}
+            <Route element={<ProtectedRoute pageName="My Company" />}>
+              <Route path="/company" element={<Company />} />
+            </Route>
+
+            {/* Protected Clients Route */}
+            <Route element={<ProtectedRoute pageName="Clients" />}>
+              <Route path="/clients" element={<Clients />} />
+              <Route path="/clients-list" element={<ClientList />} />
+            </Route>
+
+            {/* Protected Quotations Route */}
+            <Route element={<ProtectedRoute pageName="Quotations" />}>
+              <Route path="/quotations" element={<Quotations />} />
+              <Route path="/quotations/:id" element={<QuotationDetail />} />
+            </Route>
+
+            {/* Protected Invoices Route */}
+            <Route element={<ProtectedRoute pageName="Invoices" />}>
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/invoices/:id" element={<InvoiceDetail />} />
+            </Route>
+
+            {/* Protected Projects Route */}
+            <Route element={<ProtectedRoute pageName="Projects" />}>
+              <Route path="/projects" element={<Projects />} />
+              <Route path="/projects/:id" element={<ProjectDetail />} />
+            </Route>
+
+            {/* Protected Inventory Route */}
+            <Route element={<ProtectedRoute pageName="Inventory" />}>
+              <Route path="/inventory" element={<Inventory />} />
+            </Route>
+
+            {/* Protected HR Management Route */}
+            <Route element={<ProtectedRoute pageName="HR Management" />}>
+              <Route path="/hr-management" element={<HRManagement />} />
+            </Route>
+
+            {/* Protected Accounting Route */}
+            <Route element={<ProtectedRoute pageName="Accounting" />}>
+              <Route path="/accounting" element={<Accounting />} />
+            </Route>
+
+            {/* Protected Reports Route */}
+            <Route element={<ProtectedRoute pageName="Reports" />}>
+              <Route path="/reports" element={<Reports />} />
+            </Route>
+
+            {/* Protected Settings Route - Admin only */}
+            <Route element={<ProtectedRoute pageName="Settings" />}>
+              <Route path="/settings" element={<Settings />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProviderSelector>

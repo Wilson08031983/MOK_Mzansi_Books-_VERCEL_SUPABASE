@@ -1,15 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Mail, MoreHorizontal, Shield, User, Crown, UserPlus, Briefcase, BookOpen } from 'lucide-react';
+import { 
+  Plus, 
+  Mail, 
+  MoreHorizontal, 
+  Shield, 
+  User, 
+  Crown, 
+  UserPlus, 
+  Briefcase, 
+  BookOpen, 
+  LockIcon, 
+  KeyRound,
+  Eye,
+  Trash2,
+  Edit2,
+  MoreVertical
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import InviteMemberModal from './InviteMemberModal';
-import { getAllTeamMembers } from '@/services/localAuthService';
+import ManagePermissionsModal from './ManagePermissionsModal';
+import AuthVerificationModal from './AuthVerificationModal';
+import { getAllTeamMembers, deleteUser } from '@/services/localAuthService';
+import { sendAccountDeletionEmail } from '@/services/emailService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuthHook';
+import { getUserPermissions, isAdminRole } from '@/services/permissionService';
 
 const TeamManagement = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; email: string; role: string; }>>([]);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+  const [isAuthVerificationModalOpen, setIsAuthVerificationModalOpen] = useState(false);
+  const [authAction, setAuthAction] = useState<'delete' | 'update'>('update');
+  const [selectedMember, setSelectedMember] = useState<{
+    id: string;
+    email: string;
+    role: string;
+    fullName?: string;
+  } | null>(null);
+  const [teamMembers, setTeamMembers] = useState<Array<{
+    id: string;
+    email: string;
+    role: string;
+    fullName?: string;
+    permissions?: Record<string, { read: boolean; write: boolean; }>;
+  }>>([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -45,21 +86,107 @@ const TeamManagement = () => {
     });
   };
   
-  // New user form - would integrate with future components
+  // Handle permissions update
+  const handlePermissionsUpdated = () => {
+    loadTeamMembers();
+    toast({
+      title: "Permissions Updated",
+      description: "User permissions have been updated successfully."
+    });
+  };
+  
+  // Open confirm delete modal for a member
+  const openDeleteConfirmation = (member: { id: string; email: string; role: string; fullName?: string; }) => {
+    setSelectedMember(member);
+    setAuthAction('delete');
+    setIsAuthVerificationModalOpen(true);
+  };
+  
+  // Handle admin verification for permissions
+  const openPermissionsWithVerification = (member: { id: string; email: string; role: string; fullName?: string; }) => {
+    setSelectedMember(member);
+    setAuthAction('update');
+    setIsAuthVerificationModalOpen(true);
+  };
+  
+  // When admin is verified for permissions
+  const handleAuthVerifiedForPermissions = () => {
+    if (selectedMember) {
+      setIsPermissionModalOpen(true);
+    }
+  };
+  
+  // Handle user deletion after admin verification
+  const handleAuthVerifiedForDeletion = async () => {
+    if (selectedMember) {
+      const { success } = deleteUser(selectedMember.id);
+      
+      if (success) {
+        // Send deletion email
+        await sendAccountDeletionEmail({
+          to: selectedMember.email,
+          firstName: selectedMember.fullName || selectedMember.email.split('@')[0],
+        });
+        
+        loadTeamMembers();
+        toast({
+          title: "User Deleted",
+          description: `${selectedMember.email} has been removed from your team.`,
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "Deletion Failed",
+          description: "There was a problem removing this user.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+  
+  // Open permissions modal for a member
+  const openPermissionsModal = (member: { id: string; email: string; role: string; fullName?: string; }) => {
+    setSelectedMember(member);
+    // Require admin verification first
+    openPermissionsWithVerification(member);
+  };
+  
+  // New user form
   const handleAddNewUser = () => {
     setIsInviteModalOpen(true);
   };
 
   // Convert team members from the local auth service format to display format
-  const displayMembers = teamMembers.map(member => ({
-    id: member.id,
-    name: member.email.split('@')[0],  // Use email username as name
-    email: member.email,
-    role: member.role.toLowerCase(),
-    status: 'active',  // In a real app, this would be based on actual status
-    lastActive: 'Recently',  // In a real app, this would track actual activity
-    avatar: member.email.charAt(0).toUpperCase()
-  }));
+  const displayMembers = teamMembers.map(member => {
+    // Get number of permissions enabled (for pages with read access)
+    const permissions = member.permissions || {};
+    const permissionCount = Object.values(permissions)
+      .filter((p): p is { read: boolean; write: boolean } => 
+        p !== null && typeof p === 'object' && 'read' in p)
+      .filter(p => p.read)
+      .length;
+    
+    // Get number of write permissions
+    const writePermissionCount = Object.values(permissions)
+      .filter((p): p is { read: boolean; write: boolean } => 
+        p !== null && typeof p === 'object' && 'write' in p)
+      .filter(p => p.write)
+      .length;
+    
+    return {
+      id: member.id,
+      name: member.fullName || member.email.split('@')[0],
+      email: member.email,
+      role: member.role?.toLowerCase() || 'staff',
+      isAdmin: isAdminRole(member.role || ''),
+      permissionCount,
+      writePermissionCount,
+      permissions: permissions,
+      status: 'active',  // In a real app, this would be based on actual status
+      lastActive: 'Recently',  // In a real app, this would track actual activity
+      avatar: member.email.charAt(0).toUpperCase()
+    };
+  });
 
   const getRoleIcon = (role: string) => {
     switch (role.toLowerCase()) {
@@ -209,17 +336,65 @@ const TeamManagement = () => {
                         </span>
                       </div>
                       
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium font-sf-pro ${getStatusBadgeColor(member.status)}`}>
-                        {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
-                      </span>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-500 hover:text-slate-700 hover:bg-white/50 rounded-xl"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium font-sf-pro ${getStatusBadgeColor(member.status)}`}>
+                          {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
+                        </span>
+                        
+                        {!member.isAdmin && (
+                          <div className="flex gap-1">
+                            <span className="px-3 py-1 rounded-full text-xs font-medium font-sf-pro bg-blue-100 text-blue-800 flex items-center gap-1">
+                              <Eye className="h-3 w-3" /> {member.permissionCount} Page{member.permissionCount !== 1 ? 's' : ''}
+                            </span>
+                            
+                            <span className="px-3 py-1 rounded-full text-xs font-medium font-sf-pro bg-green-100 text-green-800 flex items-center gap-1">
+                              <Edit2 className="h-3 w-3" /> {member.writePermissionCount} Write
+                            </span>
+                          </div>
+                        )}
+                        
+                        {member.isAdmin ? (
+                          <span className="px-3 py-1 rounded-full text-xs font-medium font-sf-pro bg-purple-100 text-purple-800 flex items-center gap-1">
+                            <KeyRound className="h-3 w-3" /> Full Access
+                          </span>
+                        ) : null}
+                        
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="glass backdrop-blur-sm bg-white/70 border border-white/20">
+                            {!member.isAdmin && (
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer"
+                                onClick={() => openPermissionsModal({
+                                  id: member.id,
+                                  email: member.email,
+                                  role: member.role,
+                                  fullName: member.name
+                                })}
+                              >
+                                <LockIcon className="h-4 w-4" />
+                                <span>Edit Access</span>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                              onClick={() => openDeleteConfirmation({
+                                id: member.id,
+                                email: member.email,
+                                role: member.role,
+                                fullName: member.name
+                              })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span>Delete User</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -233,6 +408,25 @@ const TeamManagement = () => {
         isOpen={isInviteModalOpen} 
         onClose={() => setIsInviteModalOpen(false)}
         onInviteSuccess={handleInviteSuccess}
+      />
+      
+      {selectedMember && (
+        <ManagePermissionsModal
+          isOpen={isPermissionModalOpen}
+          onClose={() => setIsPermissionModalOpen(false)}
+          userId={selectedMember.id}
+          userEmail={selectedMember.email}
+          userRole={selectedMember.role}
+          onPermissionsUpdated={handlePermissionsUpdated}
+        />
+      )}
+      
+      <AuthVerificationModal
+        isOpen={isAuthVerificationModalOpen}
+        onClose={() => setIsAuthVerificationModalOpen(false)}
+        onVerified={authAction === 'delete' ? handleAuthVerifiedForDeletion : handleAuthVerifiedForPermissions}
+        actionType={authAction}
+        targetEntityName={authAction === 'delete' ? 'User' : 'User Permissions'}
       />
     </div>
   );

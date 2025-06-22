@@ -30,6 +30,13 @@ interface InvitationEmailOptions {
   companyName?: string;
 }
 
+interface DeletionEmailOptions {
+  to: string;
+  subject?: string;
+  firstName?: string;
+  companyName?: string;
+}
+
 /**
  * Send an email confirmation to a newly registered user
  */
@@ -173,4 +180,51 @@ export const sendInvitationEmail = async (options: InvitationEmailOptions): Prom
     console.error('Error sending invitation email:', error);
     return false;
   }
+};
+
+/**
+ * Send an account deletion notification email
+ */
+export const sendAccountDeletionEmail = async (options: DeletionEmailOptions): Promise<boolean> => {
+  try {
+    const { to, subject, firstName = 'there', companyName = 'MOK Mzansi Books' } = options;
+    
+    const { data, error } = await resend.emails.send({
+      from: `${companyName} <no-reply@${domain}>`,
+      to: [to],
+      subject: subject || 'Your Account Has Been Removed',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://mokmzansibooks.com/logo.png" alt="${companyName}" style="width: 120px; height: auto;" />
+          </div>
+          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">Account Removed</h1>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello ${firstName},</p>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
+            Your user account has been removed from ${companyName}. If you believe this was a mistake, please contact your administrator.
+          </p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('Failed to send account deletion email:', error);
+      return false;
+    }
+    
+    console.log('Account deletion email sent successfully with ID:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending account deletion email:', error);
+    return false;
+  }
+};
+
+export default {
+  sendConfirmationEmail,
+  sendPasswordResetEmail,
+  sendInvitationEmail,
+  sendAccountDeletionEmail
 };

@@ -24,7 +24,7 @@ const Login = () => {
     
     try {
       await signIn(formData.email, formData.password);
-      navigate('/dashboard');
+      navigate('/welcome-back');
     } catch (error: unknown) {
       console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error signing in';

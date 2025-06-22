@@ -1,10 +1,13 @@
 // Local authentication service to handle user authentication and role-based access
 // without requiring Supabase cloud connection
+import { UserPermissions, getDefaultPermissions, getAdminPermissions, isAdminRole, saveUserPermissions } from './permissionService';
 
 interface UserCredentials {
   email: string;
   password: string;
   role?: string; // Added role to user credentials
+  permissions?: UserPermissions; // Added permissions for role-based access control
+  fullName?: string; // Full name of the user
 }
 
 interface User {
@@ -129,4 +132,103 @@ export const initializeLocalAuth = (): void => {
 export const resetAuthState = (): void => {
   localStorage.removeItem('userCredentials');
   console.log('Auth state reset. Call initializeLocalAuth() to reinitialize.');
+};
+
+// Add a new user with specified credentials
+export const addNewUser = (email: string, password: string, role: string, permissions?: UserPermissions): { success: boolean; error?: string } => {
+  try {
+    const storedCredentials = localStorage.getItem('userCredentials');
+    let credentials: Record<string, UserCredentials> = {};
+    
+    if (storedCredentials) {
+      credentials = JSON.parse(storedCredentials);
+      
+      // Check if email already exists
+      const existingUser = Object.values(credentials).find(cred => cred.email === email);
+      if (existingUser) {
+        return { success: false, error: 'A user with this email already exists.' };
+      }
+    }
+    
+    // Generate a new user ID
+    const userId = `user${Date.now()}`;
+    
+    // Add new user
+    const userPermissions = permissions || (isAdminRole(role) ? getAdminPermissions() : getDefaultPermissions());
+    
+    const newCredentials: UserCredentials = {
+      email,
+      password,
+      role,
+      permissions: userPermissions
+    };
+    
+    // Save updated credentials
+    credentials[userId] = newCredentials;
+    localStorage.setItem('userCredentials', JSON.stringify(credentials));
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error adding new user:', error);
+    return { success: false, error: 'Failed to add new user' };
+  }
+};
+
+// Get all team members
+export const getAllTeamMembers = (): Array<{ id: string; email: string; role: string; permissions?: UserPermissions; fullName?: string; }> => {
+  try {
+    // Get stored credentials
+    const storedCredentials = localStorage.getItem('userCredentials');
+    if (!storedCredentials) {
+      return [];
+    }
+    
+    const credentials = JSON.parse(storedCredentials) as Record<string, UserCredentials>;
+    
+    // Map credentials to team members
+    const teamMembers = Object.entries(credentials).map(([id, cred]) => ({
+      id,
+      email: cred.email,
+      fullName: cred.fullName || cred.email.split('@')[0],
+      role: cred.role || 'staff',
+      permissions: cred.permissions
+    }));
+    
+    return teamMembers;
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    return [];
+  }
+};
+
+// Delete a user by ID
+export const deleteUser = (userId: string): { success: boolean; error?: string } => {
+  try {
+    // Get stored credentials
+    const storedCredentials = localStorage.getItem('userCredentials');
+    if (!storedCredentials) {
+      return { success: false, error: 'No user credentials found' };
+    }
+    
+    const credentials = JSON.parse(storedCredentials) as Record<string, UserCredentials>;
+    
+    // Check if user exists
+    if (!credentials[userId]) {
+      return { success: false, error: 'User not found' };
+    }
+    
+    // Get user email for returning
+    const userEmail = credentials[userId].email;
+    
+    // Delete the user
+    delete credentials[userId];
+    
+    // Save updated credentials
+    localStorage.setItem('userCredentials', JSON.stringify(credentials));
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return { success: false, error: 'Failed to delete user' };
+  }
 };
