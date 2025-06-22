@@ -77,7 +77,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
                   onCheckedChange={handleWebsiteCheckboxChange}
                   className="data-[state=checked]:bg-mokm-purple-500"
                 />
-                <label htmlFor="websiteNA" className="text-xs text-slate-600 cursor-pointer">Not Applicable</label>
+                <label htmlFor="websiteNA" className="text-xs text-slate-500 cursor-pointer">Not Applicable</label>
               </div>
             )}
           </div>

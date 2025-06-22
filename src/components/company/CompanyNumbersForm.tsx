@@ -54,7 +54,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
                 onCheckedChange={handleCheckboxChange('vatNumberNotApplicable')}
                 className="data-[state=checked]:bg-mokm-purple-500"
               />
-              <label htmlFor="vatNA" className="text-xs text-slate-600 cursor-pointer">Not Applicable</label>
+              <label htmlFor="vatNA" className="text-xs text-slate-500 cursor-pointer">Not Applicable</label>
             </div>
           )}
         </div>
@@ -96,7 +96,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
                 onCheckedChange={handleCheckboxChange('csdNumberNotApplicable')}
                 className="data-[state=checked]:bg-mokm-purple-500"
               />
-              <label htmlFor="csdNA" className="text-xs text-slate-600 cursor-pointer">Not Applicable</label>
+              <label htmlFor="csdNA" className="text-xs text-slate-500 cursor-pointer">Not Applicable</label>
             </div>
           )}
         </div>
