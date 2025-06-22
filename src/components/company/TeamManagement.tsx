@@ -98,6 +98,15 @@ const TeamManagement = () => {
   // Open confirm delete modal for a member
   const openDeleteConfirmation = (member: { id: string; email: string; role: string; fullName?: string; }) => {
     setSelectedMember(member);
+    
+    // If the current user is Wilson with CEO credentials, proceed directly (case-insensitive)
+    if (user?.email && user.email.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com') {
+      console.log('CEO admin verification bypassed for user deletion');
+      handleAuthVerifiedForDeletion();
+      return;
+    }
+    
+    // For other users, require admin verification
     setAuthAction('delete');
     setIsAuthVerificationModalOpen(true);
   };
@@ -105,6 +114,15 @@ const TeamManagement = () => {
   // Handle admin verification for permissions
   const openPermissionsWithVerification = (member: { id: string; email: string; role: string; fullName?: string; }) => {
     setSelectedMember(member);
+    
+    // If the current user is Wilson with CEO credentials, skip verification (case-insensitive)
+    if (user?.email && user.email.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com') {
+      console.log('CEO admin verification bypassed for permissions update');
+      setIsPermissionModalOpen(true);
+      return;
+    }
+    
+    // For other users, require admin verification
     setAuthAction('update');
     setIsAuthVerificationModalOpen(true);
   };

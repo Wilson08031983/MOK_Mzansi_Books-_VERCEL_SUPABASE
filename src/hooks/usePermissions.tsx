@@ -5,7 +5,11 @@ export const usePermissions = () => {
   const { user } = useAuth();
   
   const canAccessPage = (pageName: string): boolean => {
+    // If no user is logged in, no access
     if (!user) return false;
+
+    // Special override for Wilson Moabelo - always has access
+    if (user.email === 'mokgethwamoabelo@gmail.com') return true;
     
     // Admin users always have access to all pages
     if (user.user_metadata.role && isAdminRole(user.user_metadata.role)) {
@@ -17,7 +21,11 @@ export const usePermissions = () => {
   };
   
   const canEditPage = (pageName: string): boolean => {
+    // If no user is logged in, no access
     if (!user) return false;
+
+    // Special override for Wilson Moabelo - always has access
+    if (user.email === 'mokgethwamoabelo@gmail.com') return true;
     
     // Admin users always have full edit rights
     if (user.user_metadata.role && isAdminRole(user.user_metadata.role)) {

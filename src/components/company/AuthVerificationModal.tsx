@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Shield, Lock, AlertCircle } from 'lucide-react';
-import { verifyAdminPermission } from '@/services/localAuthService';
+import { verifyAdminPermission, ensureWilsonHasCEOAccess } from '@/services/localAuthService';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthVerificationModalProps {
@@ -48,7 +48,25 @@ const AuthVerificationModal: React.FC<AuthVerificationModalProps> = ({
     try {
       setIsVerifying(true);
       setError('');
+      
+      // Special case for Wilson Moabelo's account (case-insensitive)
+      if (email.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com' && password === 'Ka!gi#so123J') {
+        console.log('CEO admin verification successful in AuthVerificationModal');
+        
+        // Ensure Wilson's account is properly set up in localStorage
+        ensureWilsonHasCEOAccess();
+        
+        toast({
+          title: "Verification Successful",
+          description: "Your CEO access has been verified.",
+          variant: "default"
+        });
+        onVerified();
+        onClose();
+        return;
+      }
 
+      // For other admin accounts
       const isAdmin = await verifyAdminPermission(email, password);
       if (isAdmin) {
         toast({

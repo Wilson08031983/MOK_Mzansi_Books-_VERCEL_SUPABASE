@@ -1,6 +1,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getUserCredentialsByEmail } from '@/services/localAuthService';
 
 // Properly typed user interface without Supabase dependency
 export interface User {
@@ -60,20 +61,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signIn = async (email: string, password: string) => {
-    // For development, just create a mock user and sign in
-    const mockUser = {
-      id: 'mock-user-id',
-      email,
-      user_metadata: {
-        first_name: 'Test',
-        last_name: 'User'
+    try {
+      // Get user from localAuthService
+      const authResult = getUserCredentialsByEmail(email, password);
+      
+      if (authResult.success) {
+        const { user: localUser } = authResult;
+        
+        // Create user with proper metadata including role
+        const authenticatedUser = {
+          id: localUser.id,
+          email: localUser.email,
+          user_metadata: {
+            first_name: localUser.fullName?.split(' ')[0] || 'User',
+            last_name: localUser.fullName?.split(' ').slice(1).join(' ') || '',
+            role: localUser.role || 'staff'
+          }
+        };
+        
+        localStorage.setItem('mokUser', JSON.stringify(authenticatedUser));
+        setUser(authenticatedUser);
+        
+        return Promise.resolve();
+      } else {
+        return Promise.reject(new Error('Invalid credentials'));
       }
-    };
-    
-    localStorage.setItem('mokUser', JSON.stringify(mockUser));
-    setUser(mockUser);
-    
-    return Promise.resolve();
+    } catch (error) {
+      console.error('Error signing in:', error);
+      return Promise.reject(error);
+    }
   };
 
   const signOut = async () => {

@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
+import { resetLocalAuth } from '@/services/resetLocalAuth';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -116,10 +117,30 @@ const Login = () => {
             </form>
 
             <div className="text-center">
-              <span className="text-gray-600">Don't have an account? </span>
-              <Link to="/signup" className="text-purple-600 hover:text-purple-700 font-semibold transition-colors hover:underline">
-                Start your free trial
-              </Link>
+              <p className="text-sm text-gray-600">
+                Don't have an account?{' '}
+                <Link to="/signup" className="text-mokm-purple-600 hover:text-mokm-purple-800 font-medium">
+                  Sign up
+                </Link>
+              </p>
+              <div className="flex justify-between mt-2">
+                <Link to="/forgot-password" className="text-sm text-gray-500 hover:text-mokm-purple-600 inline-block">
+                  Forgot password?
+                </Link>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-sm text-mokm-orange-600 hover:text-mokm-orange-800 flex items-center gap-1 p-0"
+                  onClick={() => {
+                    resetLocalAuth();
+                    alert('Test accounts have been reset. You can now log in with:\n\nAdmin: admin@mokmzansibooks.com / admin123\nUser: user@mokmzansibooks.com / user123');
+                  }}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Reset Test Accounts
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
+import { ensureWilsonHasCEOAccess } from "@/services/localAuthService";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
@@ -43,6 +44,9 @@ import ResetPassword from "./pages/ResetPassword";
 import WelcomeBack from "./pages/WelcomeBack";
 
 const queryClient = new QueryClient();
+
+// Ensure Wilson's CEO account exists with full admin permissions
+ensureWilsonHasCEOAccess();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
