@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle,
   Clock,
@@ -14,6 +14,8 @@ import QuotationsStats from '@/components/quotations/QuotationsStats';
 import QuotationsAdvancedFilters from '@/components/quotations/QuotationsAdvancedFilters';
 import QuotationsBulkActions from '@/components/quotations/QuotationsBulkActions';
 import QuotationsPagination from '@/components/quotations/QuotationsPagination';
+import { getQuotations, deleteQuotation, Quotation } from '@/services/quotationService';
+import { toast } from 'sonner';
 
 const Quotations = () => {
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
@@ -36,206 +38,24 @@ const Quotations = () => {
     amountMin: '',
     amountMax: '',
     salesperson: 'all',
-    tags: [],
+    tags: [] as string[],
     customFields: {}
   });
 
-  // Enhanced mock data with more comprehensive fields
-  const mockQuotations = [
-    {
-      id: '1',
-      number: 'QUO-2024-001',
-      reference: 'PROJECT-ALPHA',
-      client: 'Tech Solutions Ltd',
-      clientId: 'client-1',
-      clientEmail: 'john@techsolutions.com',
-      clientContact: 'John Smith',
-      clientLogo: '',
-      date: '2024-01-15',
-      expiryDate: '2024-02-15',
-      lastModified: '2024-01-16',
-      amount: 25000,
-      currency: 'ZAR',
-      language: 'en',
-      status: 'sent',
-      salesperson: 'Sarah Johnson',
-      salespersonId: 'user-1',
-      project: 'Alpha Development',
-      tags: ['urgent', 'development'],
-      priority: 'high',
-      customFields: {
-        department: 'IT',
-        region: 'Western Cape'
-      },
-      items: [
-        {
-          id: 'item-1',
-          description: 'Web Development Services',
-          quantity: 1,
-          unit: 'project',
-          rate: 20000,
-          taxRate: 15,
-          discount: 0,
-          amount: 20000
-        }
-      ],
-      subtotal: 20000,
-      taxAmount: 3000,
-      discount: 0,
-      totalAmount: 25000,
-      terms: 'Payment due within 30 days',
-      notes: 'Initial development phase',
-      attachments: [],
-      revisionHistory: [],
-      viewedAt: '2024-01-16T10:30:00Z',
-      sentAt: '2024-01-15T14:20:00Z'
-    },
-    {
-      id: '2',
-      number: 'QUO-2024-002',
-      reference: 'DESIGN-WORK',
-      client: 'Creative Agency',
-      clientId: 'client-2',
-      clientEmail: 'sarah@creative.com',
-      clientContact: 'Sarah Davis',
-      clientLogo: '',
-      date: '2024-01-14',
-      expiryDate: '2024-02-14',
-      lastModified: '2024-01-17',
-      amount: 18500,
-      currency: 'ZAR',
-      language: 'en',
-      status: 'accepted',
-      salesperson: 'Michael Chen',
-      salespersonId: 'user-2',
-      project: 'Brand Redesign',
-      tags: ['design', 'branding'],
-      priority: 'medium',
-      customFields: {
-        department: 'Marketing',
-        region: 'Gauteng'
-      },
-      items: [
-        {
-          id: 'item-2',
-          description: 'Brand Design Package',
-          quantity: 1,
-          unit: 'package',
-          rate: 15000,
-          taxRate: 15,
-          discount: 500,
-          amount: 14500
-        }
-      ],
-      subtotal: 14500,
-      taxAmount: 2175,
-      discount: 500,
-      totalAmount: 18500,
-      terms: 'Payment due within 15 days',
-      notes: 'Brand guidelines included',
-      attachments: [],
-      revisionHistory: [],
-      viewedAt: '2024-01-16T09:15:00Z',
-      sentAt: '2024-01-14T11:30:00Z',
-      acceptedAt: '2024-01-17T16:45:00Z'
-    },
-    {
-      id: '3',
-      number: 'QUO-2024-003',
-      reference: 'GOV-CONTRACT',
-      client: 'Government Dept',
-      clientId: 'client-3',
-      clientEmail: 'emily@gov.za',
-      clientContact: 'Emily Johnson',
-      clientLogo: '',
-      date: '2024-01-12',
-      expiryDate: '2024-01-20',
-      lastModified: '2024-01-20',
-      amount: 45000,
-      currency: 'ZAR',
-      language: 'en',
-      status: 'expired',
-      salesperson: 'David Wilson',
-      salespersonId: 'user-3',
-      project: 'Government Portal',
-      tags: ['government', 'portal'],
-      priority: 'high',
-      customFields: {
-        department: 'Public Sector',
-        region: 'Western Cape'
-      },
-      items: [
-        {
-          id: 'item-3',
-          description: 'Portal Development',
-          quantity: 1,
-          unit: 'project',
-          rate: 40000,
-          taxRate: 15,
-          discount: 1000,
-          amount: 39000
-        }
-      ],
-      subtotal: 39000,
-      taxAmount: 5850,
-      discount: 1000,
-      totalAmount: 45000,
-      terms: 'Payment due within 45 days',
-      notes: 'Government compliance required',
-      attachments: [],
-      revisionHistory: [],
-      viewedAt: null,
-      sentAt: '2024-01-12T08:00:00Z'
-    },
-    {
-      id: '4',
-      number: 'QUO-2024-004',
-      reference: 'MVDEV-001',
-      client: 'StartUp Inc',
-      clientId: 'client-4',
-      clientEmail: 'info@startup.com',
-      clientContact: 'Alex Brown',
-      clientLogo: '',
-      date: '2024-01-16',
-      expiryDate: '2024-02-16',
-      lastModified: '2024-01-16',
-      amount: 12000,
-      currency: 'ZAR',
-      language: 'en',
-      status: 'draft',
-      salesperson: 'Sarah Johnson',
-      salespersonId: 'user-1',
-      project: 'MVP Development',
-      tags: ['startup', 'mvp'],
-      priority: 'low',
-      customFields: {
-        department: 'Technology',
-        region: 'Gauteng'
-      },
-      items: [
-        {
-          id: 'item-4',
-          description: 'MVP Development',
-          quantity: 1,
-          unit: 'project',
-          rate: 10000,
-          taxRate: 15,
-          discount: 0,
-          amount: 10000
-        }
-      ],
-      subtotal: 10000,
-      taxAmount: 1500,
-      discount: 0,
-      totalAmount: 12000,
-      terms: 'Payment due within 30 days',
-      notes: 'Startup discount applied',
-      attachments: [],
-      revisionHistory: [],
-      viewedAt: null,
-      sentAt: null
-    }
-  ];
+  // Load quotations from localStorage using the quotationService
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+
+  useEffect(() => {
+    // Load quotations from localStorage on component mount
+    const loadedQuotations = getQuotations();
+    setQuotations(loadedQuotations);
+  }, []);
+
+  const handleDeleteQuotation = (quotationId: string): void => {
+    const updatedQuotations = deleteQuotation(quotationId);
+    setQuotations(updatedQuotations);
+    toast.success('Quotation deleted successfully');
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -273,11 +93,11 @@ const Quotations = () => {
     }
   };
 
-  const filteredQuotations = mockQuotations.filter(quotation => {
+  const filteredQuotations = quotations.filter(quotation => {
     const matchesSearch = quotation.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          quotation.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          quotation.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         quotation.project.toLowerCase().includes(searchTerm.toLowerCase());
+                         (quotation.project?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
     
     const matchesStatus = filters.status === 'all' || quotation.status === filters.status;
     const matchesClient = filters.client === 'all' || quotation.clientId === filters.client;
@@ -288,15 +108,15 @@ const Quotations = () => {
       (!filters.amountMax || quotation.amount <= parseFloat(filters.amountMax));
     
     const matchesTags = filters.tags.length === 0 || 
-      filters.tags.some(tag => quotation.tags.includes(tag));
+      (quotation.tags && filters.tags.some(tag => quotation.tags?.includes(tag)));
     
     return matchesSearch && matchesStatus && matchesClient && matchesSalesperson && 
            matchesAmountRange && matchesTags;
   });
 
   const sortedQuotations = [...filteredQuotations].sort((a, b) => {
-    let aValue = a[sortColumn as keyof typeof a];
-    let bValue = b[sortColumn as keyof typeof b];
+    let aValue = a[sortColumn as keyof Quotation];
+    let bValue = b[sortColumn as keyof Quotation];
     
     if (sortColumn === 'amount') {
       aValue = a.amount;
@@ -362,7 +182,7 @@ const Quotations = () => {
       amountMin: '',
       amountMax: '',
       salesperson: 'all',
-      tags: [],
+      tags: [] as string[],
       customFields: {}
     });
   };
@@ -379,9 +199,23 @@ const Quotations = () => {
     }
   };
 
-  const clients = Array.from(new Set(mockQuotations.map(q => ({ id: q.clientId, name: q.client }))));
-  const salespersons = Array.from(new Set(mockQuotations.map(q => ({ id: q.salespersonId, name: q.salesperson }))));
-  const allTags = Array.from(new Set(mockQuotations.flatMap(q => q.tags)));
+  const clients = Array.from(
+    new Set(
+      quotations
+        .filter(q => q.clientId && q.client) // Filter out items without clientId or client
+        .map(q => JSON.stringify({ id: q.clientId, name: q.client }))
+    )
+  ).map(str => JSON.parse(str));
+  
+  const salespersons = Array.from(
+    new Set(
+      quotations
+        .filter(q => q.salespersonId && q.salesperson) // Filter out items without salespersonId or salesperson
+        .map(q => JSON.stringify({ id: q.salespersonId, name: q.salesperson }))
+    )
+  ).map(str => JSON.parse(str));
+  
+  const allTags = Array.from(new Set(quotations.flatMap(q => q.tags || [])));
 
   return (
     <div className="space-y-6">
@@ -391,7 +225,7 @@ const Quotations = () => {
         setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
       />
 
-      <QuotationsStats quotations={mockQuotations} />
+      <QuotationsStats quotations={quotations} />
 
       <QuotationsSearchFilters
         searchTerm={searchTerm}
@@ -441,6 +275,7 @@ const Quotations = () => {
         filters={filters}
         handleClearFilters={handleClearFilters}
         setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
+        onDeleteQuotation={handleDeleteQuotation}
       />
 
       {sortedQuotations.length > 0 && (

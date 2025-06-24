@@ -9,16 +9,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { 
   SortAsc,
   SortDesc,
   Calendar,
   User,
   DollarSign,
-  MoreVertical
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import QuotationActionsMenu from './QuotationActionsMenu';
 
 interface QuotationsTableProps {
   quotations: any[];
@@ -30,6 +29,7 @@ interface QuotationsTableProps {
   sortColumn: string;
   sortDirection: 'asc' | 'desc';
   onSort: (column: string) => void;
+  onDeleteQuotation: (quotationId: string) => void;
 }
 
 const QuotationsTable: React.FC<QuotationsTableProps> = ({
@@ -41,7 +41,8 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
   getStatusColor,
   sortColumn,
   sortDirection,
-  onSort
+  onSort,
+  onDeleteQuotation
 }) => {
   const getSortIcon = (column: string) => {
     if (sortColumn !== column) return null;
@@ -152,13 +153,14 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 <span className="font-sf-pro">{quotation.salesperson}</span>
               </TableCell>
               <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+                <QuotationActionsMenu 
+                  quotation={{
+                    id: quotation.id,
+                    number: quotation.number,
+                    clientEmail: quotation.clientEmail
+                  }}
+                  onDelete={onDeleteQuotation}
+                />
               </TableCell>
             </TableRow>
           ))}

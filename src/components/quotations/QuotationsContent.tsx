@@ -27,6 +27,7 @@ interface QuotationsContentProps {
   filters: any;
   handleClearFilters: () => void;
   setIsCreateQuotationModalOpen: (open: boolean) => void;
+  onDeleteQuotation: (quotationId: string) => void;
 }
 
 const QuotationsContent: React.FC<QuotationsContentProps> = ({
@@ -44,7 +45,8 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
   searchTerm,
   filters,
   handleClearFilters,
-  setIsCreateQuotationModalOpen
+  setIsCreateQuotationModalOpen,
+  onDeleteQuotation
 }) => {
   return (
     <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
@@ -111,6 +113,7 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
             sortColumn={sortColumn}
             sortDirection={sortDirection}
             onSort={handleSort}
+            onDeleteQuotation={onDeleteQuotation}
           />
         ) : (
           <QuotationsGrid 

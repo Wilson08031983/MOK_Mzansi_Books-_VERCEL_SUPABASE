@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,17 @@ import {
   Eye
 } from 'lucide-react';
 
+// Define the line item interface
+interface LineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  markupPercent: number;
+  discount: number;
+  amount: number;
+}
+
 interface CreateQuotationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,53 +36,76 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     date: new Date().toISOString().split('T')[0],
     expiryDate: '',
     currency: 'ZAR',
-    items: [
-      { description: '', quantity: 1, rate: 0, amount: 0 }
-    ],
     notes: '',
     terms: ''
   });
 
+  // Using proper typed state for line items
+  const [lineItems, setLineItems] = useState<LineItem[]>([
+    { 
+      id: crypto.randomUUID(), 
+      description: '', 
+      quantity: 1, 
+      rate: 0, 
+      markupPercent: 0, 
+      discount: 0, 
+      amount: 0 
+    }
+  ]);
+
   const [subtotal, setSubtotal] = useState(0);
-  const [tax, setTax] = useState(0);
   const [total, setTotal] = useState(0);
 
+  // Add a new line item
   const addItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, { description: '', quantity: 1, rate: 0, amount: 0 }]
-    }));
-  };
-
-  const removeItem = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateItem = (index: number, field: string, value: any) => {
-    setFormData(prev => {
-      const newItems = [...prev.items];
-      newItems[index] = { ...newItems[index], [field]: value };
-      
-      if (field === 'quantity' || field === 'rate') {
-        newItems[index].amount = newItems[index].quantity * newItems[index].rate;
+    setLineItems(prev => [
+      ...prev, 
+      { 
+        id: crypto.randomUUID(), 
+        description: '', 
+        quantity: 1, 
+        rate: 0, 
+        markupPercent: 0, 
+        discount: 0, 
+        amount: 0 
       }
-      
-      return { ...prev, items: newItems };
+    ]);
+  };
+
+  // Remove a line item by index
+  const removeItem = (id: string) => {
+    setLineItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Update a specific field of a line item
+  const updateItem = (id: string, field: keyof LineItem, value: string | number) => {
+    setLineItems(prev => {
+      return prev.map(item => {
+        if (item.id === id) {
+          const updatedItem = { ...item, [field]: value };
+          
+          // Recalculate the amount when relevant fields change
+          if (['quantity', 'rate', 'markupPercent', 'discount'].includes(field)) {
+            const markupAmount = updatedItem.rate * (updatedItem.markupPercent / 100);
+            const grossAmount = (updatedItem.rate + markupAmount) * updatedItem.quantity;
+            updatedItem.amount = Math.max(0, grossAmount - updatedItem.discount);
+          }
+          
+          return updatedItem;
+        }
+        return item;
+      });
     });
   };
 
-  React.useEffect(() => {
-    const newSubtotal = formData.items.reduce((sum, item) => sum + item.amount, 0);
-    const newTax = newSubtotal * 0.15; // 15% VAT
-    const newTotal = newSubtotal + newTax;
+  // Calculate totals whenever line items change
+  useEffect(() => {
+    const newSubtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+    const newTotal = newSubtotal; // No VAT for now as specified
     
     setSubtotal(newSubtotal);
-    setTax(newTax);
     setTotal(newTotal);
-  }, [formData.items]);
+  }, [lineItems]);
 
   if (!isOpen) return null;
 
@@ -163,76 +197,129 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {formData.items.map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-4 items-end">
-                    <div className="col-span-12 md:col-span-5">
-                      <Label className="font-sf-pro">Description</Label>
-                      <Input
-                        value={item.description}
-                        onChange={(e) => updateItem(index, 'description', e.target.value)}
-                        placeholder="Item description"
-                        className="font-sf-pro"
-                      />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <Label className="font-sf-pro">Qty</Label>
-                      <Input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                        min="0"
-                        step="0.01"
-                        className="font-sf-pro"
-                      />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <Label className="font-sf-pro">Rate</Label>
-                      <Input
-                        type="number"
-                        value={item.rate}
-                        onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
-                        min="0"
-                        step="0.01"
-                        className="font-sf-pro"
-                      />
-                    </div>
-                    <div className="col-span-3 md:col-span-2">
-                      <Label className="font-sf-pro">Amount</Label>
-                      <div className="font-semibold text-slate-900 py-2 font-sf-pro">
-                        R {item.amount.toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="col-span-1">
-                      {formData.items.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeItem(index)}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
+              {/* Line Items Table - Wrapped in scrollable container */}
+              <div className="overflow-x-auto">
+                <div className="min-w-[1200px]">
+                  {/* Line Items Table Header */}
+                  <div className="grid grid-cols-12 gap-4 mb-4 font-semibold text-sm text-slate-600 font-sf-pro border-b pb-2">
+                    <div className="col-span-1 w-20">Item No.</div>
+                    <div className="col-span-3 w-[300px]">Description</div>
+                    <div className="col-span-1 w-24 text-center">Qty</div>
+                    <div className="col-span-2 w-28 text-center">Rate</div>
+                    <div className="col-span-2 w-28 text-center">Mark Up %</div>
+                    <div className="col-span-1 w-28 text-center">Discount</div>
+                    <div className="col-span-2 w-32 text-right pr-3">Amount</div>
+                    <div className="col-span-1 w-16"></div>
                   </div>
-                ))}
+                  
+                  {/* Line Items */}
+                  <div className="space-y-6">
+                    {lineItems.map((item, index) => (
+                      <div key={item.id} className="grid grid-cols-12 gap-4 items-center border-b pb-4 last:border-0">
+                        {/* Item Number */}
+                        <div className="col-span-1 flex items-center justify-center w-20">
+                          <div className="bg-slate-100 h-8 w-8 rounded-full flex items-center justify-center text-slate-600 font-semibold font-sf-pro shadow-sm">
+                            {index + 1}
+                          </div>
+                        </div>
+                        
+                        {/* Description */}
+                        <div className="col-span-3 w-[300px]">
+                          <Input
+                            value={item.description}
+                            onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                            placeholder="Item description"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                          />
+                        </div>
+                        
+                        {/* Quantity */}
+                        <div className="col-span-1 w-24">
+                          <Input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            min="0"
+                            step="1"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                          />
+                        </div>
+                        
+                        {/* Rate */}
+                        <div className="col-span-2 w-28">
+                          <Input
+                            type="number"
+                            value={item.rate}
+                            onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                            min="0"
+                            step="0.01"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                          />
+                        </div>
+                        
+                        {/* Mark Up % */}
+                        <div className="col-span-2 w-28">
+                          <Input
+                            type="number"
+                            value={item.markupPercent}
+                            onChange={(e) => updateItem(item.id, 'markupPercent', parseFloat(e.target.value) || 0)}
+                            min="0"
+                            step="1"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            placeholder="0"
+                          />
+                        </div>
+                        
+                        {/* Discount */}
+                        <div className="col-span-1 w-28">
+                          <Input
+                            type="number"
+                            value={item.discount}
+                            onChange={(e) => updateItem(item.id, 'discount', parseFloat(e.target.value) || 0)}
+                            min="0"
+                            step="0.01"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        
+                        {/* Amount */}
+                        <div className="col-span-2 w-32">
+                          <div className="font-semibold text-slate-900 py-2 px-3 bg-slate-50 rounded-xl border shadow-sm text-right font-sf-pro">
+                            R {item.amount.toFixed(2)}
+                          </div>
+                        </div>
+                        
+                        {/* Delete Button */}
+                        <div className="col-span-1 w-16 flex justify-center">
+                          {lineItems.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeItem(item.id)}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full"
+                              title="Delete Item"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Totals */}
-              <div className="mt-6 border-t pt-4">
+              <div className="mt-8 border-t pt-4">
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
                     <div className="flex justify-between font-sf-pro">
                       <span>Subtotal:</span>
                       <span>R {subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between font-sf-pro">
-                      <span>VAT (15%):</span>
-                      <span>R {tax.toFixed(2)}</span>
-                    </div>
                     <div className="flex justify-between text-lg font-bold border-t pt-2 font-sf-pro">
-                      <span>Total:</span>
+                      <span>Total (ZAR):</span>
                       <span>R {total.toFixed(2)}</span>
                     </div>
                   </div>
