@@ -9,17 +9,19 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { X, Save, User, Building, MapPin, CreditCard, Check, AlertCircle } from 'lucide-react';
-import { addClient, ClientFormData } from '@/services/clientService';
+import { addClient, getClientById, ClientFormData } from '@/services/clientService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface AddClientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onClientAdded?: () => void;
+  onClientAdded?: (client?: any) => void;
+  clientId?: string;
+  viewMode?: boolean;
 }
 
-const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps) => {
+const AddClientModal = ({ isOpen, onClose, onClientAdded, clientId, viewMode = false }: AddClientModalProps) => {
   const [formData, setFormData] = useState<ClientFormData>({
     // Basic Information
     clientType: 'individual',
@@ -66,14 +68,53 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Reset form when modal is reopened
+  // Reset form when modal is reopened or load client data if clientId is provided
   useEffect(() => {
     if (isOpen) {
       setErrors({});
       setIsSubmitting(false);
       setSubmitSuccess(false);
+      
+      if (clientId) {
+        // Load client data if an ID is provided
+        const client = getClientById(clientId);
+        if (client) {
+          setFormData({
+            clientType: client.clientType,
+            companyName: client.companyName,
+            contactPerson: client.contactPerson,
+            email: client.email,
+            phone: client.phone,
+            website: client.website,
+            websiteNotApplicable: client.websiteNotApplicable,
+            taxNumber: client.taxNumber,
+            registrationNumber: client.registrationNumber,
+            vatNumber: client.vatNumber,
+            vatNumberNotApplicable: client.vatNumberNotApplicable,
+            billingStreet: client.billingStreet,
+            billingCity: client.billingCity,
+            billingState: client.billingState,
+            billingPostal: client.billingPostal,
+            billingCountry: client.billingCountry,
+            sameAsBilling: client.sameAsBilling,
+            shippingStreet: client.shippingStreet,
+            shippingCity: client.shippingCity,
+            shippingState: client.shippingState,
+            shippingPostal: client.shippingPostal,
+            shippingCountry: client.shippingCountry,
+            paymentTerms: client.paymentTerms,
+            currency: client.currency,
+            creditLimit: client.creditLimit,
+            discountRate: client.discountRate,
+            preferredPaymentMethod: client.preferredPaymentMethod,
+            notes: client.notes,
+            tags: client.tags,
+            referralSource: client.referralSource
+          });
+        }
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, clientId]);
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({
@@ -163,11 +204,11 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-slate-900 font-sf-pro flex items-center">
             <User className="h-6 w-6 mr-2 text-mokm-purple-500" />
-            Add New Client
+            {viewMode ? 'Client Details' : 'Add New Client'}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" id="client-form">
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="basic" className="flex items-center space-x-2">
@@ -268,8 +309,8 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
                       type="url"
                       value={formData.website}
                       onChange={(e) => handleInputChange('website', e.target.value)}
-                      disabled={formData.websiteNotApplicable}
-                      className={`w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro ${formData.websiteNotApplicable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={formData.websiteNotApplicable || viewMode}
+                      className={`w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro ${formData.websiteNotApplicable || viewMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="https://example.com"
                     />
                     {errors.website && (
@@ -280,9 +321,12 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
                         id="websiteNotApplicable"
                         checked={formData.websiteNotApplicable}
                         onCheckedChange={(checked) => {
-                          handleInputChange('websiteNotApplicable', !!checked);
-                          if (checked) handleInputChange('website', '');
+                          if (!viewMode) {
+                            handleInputChange('websiteNotApplicable', !!checked);
+                            if (checked) handleInputChange('website', '');
+                          }
                         }}
+                        disabled={viewMode}
                       />
                       <label htmlFor="websiteNotApplicable" className="text-xs text-slate-600 font-sf-pro cursor-pointer">
                         Not Applicable
@@ -313,8 +357,8 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
                       type="text"
                       value={formData.vatNumber}
                       onChange={(e) => handleInputChange('vatNumber', e.target.value)}
-                      disabled={formData.vatNumberNotApplicable}
-                      className={`w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro ${formData.vatNumberNotApplicable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={formData.vatNumberNotApplicable || viewMode}
+                      className={`w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro ${formData.vatNumberNotApplicable || viewMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="Enter VAT number"
                     />
                     <div className="flex items-center space-x-2">
@@ -322,9 +366,12 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
                         id="vatNumberNotApplicable"
                         checked={formData.vatNumberNotApplicable}
                         onCheckedChange={(checked) => {
-                          handleInputChange('vatNumberNotApplicable', !!checked);
-                          if (checked) handleInputChange('vatNumber', '');
+                          if (!viewMode) {
+                            handleInputChange('vatNumberNotApplicable', !!checked);
+                            if (checked) handleInputChange('vatNumber', '');
+                          }
                         }}
+                        disabled={viewMode}
                       />
                       <label htmlFor="vatNumberNotApplicable" className="text-xs text-slate-600 font-sf-pro cursor-pointer">
                         Not Applicable
@@ -658,23 +705,15 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded }: AddClientModalProps)
             </TabsContent>
           </Tabs>
 
-          <div className="flex justify-end space-x-3 pt-6 border-t border-white/20">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl"
-            >
-              <X className="h-4 w-4 mr-2" />
-              Cancel
+          <div className="flex justify-end space-x-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              <X className="h-4 w-4 mr-2" />Close
             </Button>
-            <Button
-              type="submit"
-              className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Save Client
-            </Button>
+            {!viewMode && (
+              <Button type="submit" form="client-form" disabled={isSubmitting}>
+                <Save className="h-4 w-4 mr-2" />{isSubmitting ? 'Saving...' : 'Save Client'}
+              </Button>
+            )}
           </div>
         </form>
       </DialogContent>

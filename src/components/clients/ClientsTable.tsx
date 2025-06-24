@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { 
   Table, 
@@ -12,7 +12,6 @@ import {
 import { 
   MoreHorizontal, 
   Eye, 
-  Edit, 
   Mail, 
   FileText, 
   Receipt 
@@ -24,6 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+import AddClientModal from './AddClientModal';
 
 interface Client {
   id: string;
@@ -55,6 +56,7 @@ const ClientsTable = ({
   getStatusIcon,
   getStatusColor
 }: ClientsTableProps) => {
+  const [viewClientData, setViewClientData] = useState<string | null>(null);
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-ZA', {
       year: 'numeric',
@@ -130,24 +132,25 @@ const ClientsTable = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setViewClientData(client.id)}>
                       <Eye className="h-4 w-4 mr-2" />
                       View Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Client
-                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Send Email
+                    <DropdownMenuItem asChild>
+                      <a 
+                        href={`mailto:${client.email}`} 
+                        className="flex items-center cursor-pointer w-full"
+                      >
+                        <Mail className="h-4 w-4 mr-2" />
+                        Send Email
+                      </a>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => toast.info(`Create invoice for ${client.name} feature coming soon!`)}>
                       <FileText className="h-4 w-4 mr-2" />
                       Create Invoice
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => toast.info(`Create quotation for ${client.name} feature coming soon!`)}>
                       <Receipt className="h-4 w-4 mr-2" />
                       Create Quotation
                     </DropdownMenuItem>
@@ -167,6 +170,16 @@ const ClientsTable = ({
           <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">No clients found</h3>
           <p className="text-slate-600 font-sf-pro text-sm">Try adjusting your search terms or filters</p>
         </div>
+      )}
+      
+      {/* View Client Modal */}
+      {viewClientData && (
+        <AddClientModal
+          isOpen={viewClientData !== null}
+          onClose={() => setViewClientData(null)}
+          clientId={viewClientData}
+          viewMode={true}
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -28,101 +28,148 @@ import ClientsGrid from '@/components/clients/ClientsGrid';
 import AddClientModal from '@/components/clients/AddClientModal';
 import BulkActionsBar from '@/components/clients/BulkActionsBar';
 import ClientsStats from '@/components/clients/ClientsStats';
+import { Client, getClients, initializeClients } from '@/services/clientService';
+
+// Interface for displaying clients in the UI
+interface ClientDisplay {
+  id: string;
+  name: string; // maps to contactPerson in Client
+  company: string; // maps to companyName in Client
+  email: string;
+  phone: string;
+  totalValue: number;
+  lastActivity: string;
+  status: string;
+  type: string;
+  avatar: string;
+}
 
 const Clients = () => {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [clients, setClients] = useState<ClientDisplay[]>([]);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  
+  // Ref for container to save scroll position
+  const contentContainerRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef<number>(0);
   const [filters, setFilters] = useState({
     status: 'all',
     clientType: 'all',
     dateRange: 'all'
   });
 
-  const mockClients = [
-    {
-      id: '1',
-      name: 'John Smith',
-      company: 'Tech Solutions Ltd',
-      email: 'john@techsolutions.com',
-      phone: '+27 11 123 4567',
-      totalValue: 45000,
-      lastActivity: '2024-01-15',
-      status: 'active',
-      type: 'business',
-      avatar: 'JS'
-    },
-    {
-      id: '2',
-      name: 'Sarah Johnson',
-      company: 'Creative Agency',
-      email: 'sarah@creative.com',
-      phone: '+27 21 987 6543',
-      totalValue: 32000,
-      lastActivity: '2024-01-14',
-      status: 'active',
-      type: 'business',
-      avatar: 'SJ'
-    },
-    {
-      id: '3',
-      name: 'Michael Chen',
-      company: 'Individual',
-      email: 'michael@email.com',
-      phone: '+27 31 555 0123',
-      totalValue: 15000,
-      lastActivity: '2024-01-10',
-      status: 'overdue',
-      type: 'individual',
-      avatar: 'MC'
-    },
-    {
-      id: '4',
-      name: 'Emily Brown',
-      company: 'Government Dept',
-      email: 'emily@gov.za',
-      phone: '+27 12 444 5555',
-      totalValue: 78000,
-      lastActivity: '2024-01-08',
-      status: 'inactive',
-      type: 'government',
-      avatar: 'EB'
-    }
-  ];
+  useEffect(() => {
+    // Load clients from localStorage on component mount
+    loadClientsFromStorage();
+  }, []);
 
-  const getStatusIcon = (status: string) => {
+  // Function to save current scroll position
+  const saveScrollPosition = (): void => {
+    if (contentContainerRef.current) {
+      scrollPositionRef.current = contentContainerRef.current.scrollTop;
+    }
+  };
+
+  // Function to restore scroll position
+  const restoreScrollPosition = (): void => {
+    if (contentContainerRef.current) {
+      setTimeout(() => {
+        if (contentContainerRef.current) {
+          contentContainerRef.current.scrollTop = scrollPositionRef.current;
+        }
+      }, 10);
+    }
+  };
+  
+  // Function to load clients from localStorage
+  const loadClientsFromStorage = (): void => {
+    try {
+      const storedClients = localStorage.getItem('clients');
+      if (storedClients) {
+        const parsedClients = JSON.parse(storedClients);
+        setClients(parsedClients.map((client) => ({
+          id: client.id,
+          name: client.contactPerson,
+          company: client.companyName,
+          email: client.email,
+          phone: client.phone, 
+          totalValue: client.totalValue || 0,
+          lastActivity: client.lastActivity,
+          status: client.status,
+          type: client.clientType,
+          avatar: client.avatar
+        })));
+      } else {
+        // Initialize with mock clients if no clients exist in localStorage
+        import('@/services/clientService').then(({ initializeClients, getClients }) => {
+          initializeClients();
+          const initialClients = getClients();
+          setClients(initialClients.map((client) => ({
+            id: client.id,
+            name: client.contactPerson,
+            company: client.companyName,
+            email: client.email,
+            phone: client.phone,
+            totalValue: client.totalValue || 0,
+            lastActivity: client.lastActivity,
+            status: client.status,
+            type: client.clientType,
+            avatar: client.avatar
+          })));
+        });
+      }
+    } catch (error) {
+      console.error('Error loading clients from localStorage:', error);
+      setClients([]);
+    }
+  };
+
+  // Handle client added/updated
+  const handleClientAdded = (newClient?: Client): void => {
+    loadClientsFromStorage(); // Reload all clients from localStorage
+  };
+
+  // Handle refresh button click
+  const handleRefresh = (): void => {
+    saveScrollPosition();
+    loadClientsFromStorage();
+    // Restore scroll position after data is loaded and rendered
+    setTimeout(restoreScrollPosition, 50);
+  };
+
+  // Get status icon and color for a client
+  const getStatusIcon = (status: string): React.ReactNode => {
     switch (status) {
       case 'active':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'inactive':
-        return <XCircle className="h-4 w-4 text-gray-500" />;
+        return <Clock className="h-4 w-4 text-slate-500" />;
       case 'overdue':
         return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
       default:
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <XCircle className="h-4 w-4 text-yellow-500" />;
     }
   };
 
-  const getStatusColor = (status: string) => {
+  // Get status color
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'inactive':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-slate-100 text-slate-800';
       case 'overdue':
         return 'bg-red-100 text-red-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
       default:
-        return 'bg-green-100 text-green-800';
+        return 'bg-yellow-100 text-yellow-800';
     }
   };
 
-  const filteredClients = mockClients.filter(client => {
+  // Filter clients based on search query
+  const filteredClients = clients.filter((client: ClientDisplay) => {
     const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          client.company.toLowerCase().includes(searchTerm.toLowerCase());
@@ -180,7 +227,7 @@ const Clients = () => {
         <div className="flex items-center space-x-4">
           <Button
             variant="outline"
-            onClick={() => window.location.reload()}
+            onClick={handleRefresh}
             className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -217,7 +264,7 @@ const Clients = () => {
       </div>
 
       {/* Client Stats */}
-      <ClientsStats clients={mockClients} />
+      <ClientsStats clients={clients} />
 
       {/* Search and Filters */}
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
@@ -341,22 +388,52 @@ const Clients = () => {
         </CardHeader>
         <CardContent>
           {viewMode === 'table' ? (
-            <ClientsTable 
-              clients={filteredClients}
-              selectedClients={selectedClients}
-              onSelectClient={handleSelectClient}
-              onSelectAll={handleSelectAll}
-              getStatusIcon={getStatusIcon}
-              getStatusColor={getStatusColor}
-            />
+            <div 
+              ref={contentContainerRef}
+              className="rounded-lg border" 
+              style={{ flex: 1, overflow: 'auto' }}
+            >
+              <ClientsTable 
+                clients={filteredClients}
+                selectedClients={selectedClients}
+                onSelectClient={(id) => {
+                  if (selectedClients.includes(id)) {
+                    setSelectedClients(selectedClients.filter(clientId => clientId !== id));
+                  } else {
+                    setSelectedClients([...selectedClients, id]);
+                  }
+                }}
+                onSelectAll={() => {
+                  if (selectedClients.length === filteredClients.length) {
+                    setSelectedClients([]);
+                  } else {
+                    setSelectedClients(filteredClients.map(client => client.id));
+                  }
+                }}
+                getStatusIcon={getStatusIcon}
+                getStatusColor={getStatusColor}
+              />
+            </div>
           ) : (
-            <ClientsGrid 
-              clients={filteredClients}
-              selectedClients={selectedClients}
-              onSelectClient={handleSelectClient}
-              getStatusIcon={getStatusIcon}
-              getStatusColor={getStatusColor}
-            />
+            <div 
+              ref={contentContainerRef}
+              className="rounded-lg border" 
+              style={{ flex: 1, overflow: 'auto' }}
+            >
+              <ClientsGrid 
+                clients={filteredClients}
+                selectedClients={selectedClients}
+                onSelectClient={(id) => {
+                  if (selectedClients.includes(id)) {
+                    setSelectedClients(selectedClients.filter(clientId => clientId !== id));
+                  } else {
+                    setSelectedClients([...selectedClients, id]);
+                  }
+                }}
+                getStatusIcon={getStatusIcon}
+                getStatusColor={getStatusColor}
+              />
+            </div>
           )}
           
           {filteredClients.length === 0 && (
@@ -379,10 +456,7 @@ const Clients = () => {
       </Card>
 
       {/* Add Client Modal */}
-      <AddClientModal 
-        isOpen={isAddClientModalOpen}
-        onClose={() => setIsAddClientModalOpen(false)}
-      />
+      {isAddClientModalOpen && <AddClientModal isOpen={isAddClientModalOpen} onClose={() => setIsAddClientModalOpen(false)} onClientAdded={handleClientAdded} />}
     </div>
   );
 };

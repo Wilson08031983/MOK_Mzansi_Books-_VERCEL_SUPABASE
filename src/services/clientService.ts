@@ -32,14 +32,15 @@ export interface Client {
   notes: string;
   tags: string;
   referralSource: string;
-  createdAt: string;
-  lastActivity: string;
-  status: string;
-  totalValue: number;
   avatar: string;
+  status: string;
+  type: string;
+  totalValue: number;
+  lastActivity: string;
+  createdAt?: string;
 }
 
-export interface ClientFormData {
+export type ClientFormData = Omit<Client, 'id' | 'avatar' | 'status' | 'type' | 'totalValue' | 'lastActivity'> & {
   clientType: string;
   companyName: string;
   contactPerson: string;
@@ -73,42 +74,44 @@ export interface ClientFormData {
 }
 
 // Get all clients from localStorage
-export const getClients = (): Client[] => {
-  const storedClients = localStorage.getItem('clients');
-  if (!storedClients) return [];
-  
-  try {
-    return JSON.parse(storedClients);
-  } catch (error) {
-    console.error('Error parsing clients from localStorage:', error);
-    return [];
-  }
-};
+export function getClients(): Client[] {
+  const clientsString = localStorage.getItem('clients');
+  return clientsString ? JSON.parse(clientsString) : [];
+}
+
+// Get client by ID
+export function getClientById(id: string): Client | undefined {
+  const clients = getClients();
+  return clients.find((client: Client) => client.id === id);
+}
 
 // Save all clients to localStorage
-export const saveClients = (clients: Client[]): void => {
+export function saveClients(clients: Client[]): void {
   localStorage.setItem('clients', JSON.stringify(clients));
-};
+}
 
 // Add a new client
-export const addClient = (clientData: ClientFormData): Client => {
+export function addClient(clientData: ClientFormData): Client {
   const clients = getClients();
   
   // Generate avatar from name
-  const nameParts = clientData.contactPerson.split(' ');
-  const avatar = nameParts.length > 1 
-    ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
-    : clientData.contactPerson.substring(0, 2).toUpperCase();
+  const generateAvatar = (name: string): string => {
+    const nameParts = name.split(' ');
+    const avatar = nameParts.length > 1 
+      ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
+      : name.substring(0, 2).toUpperCase();
+    return avatar;
+  }
   
   // Create new client object
   const newClient: Client = {
-    ...clientData,
     id: uuidv4(),
-    createdAt: new Date().toISOString(),
-    lastActivity: new Date().toISOString(),
-    status: 'active',
+    ...clientData,
+    status: 'Active',
+    type: clientData.clientType === 'individual' ? 'Individual' : 'Business',
     totalValue: 0,
-    avatar
+    lastActivity: new Date().toISOString(),
+    avatar: generateAvatar(clientData.contactPerson)
   };
   
   // Add to list and save
@@ -116,55 +119,45 @@ export const addClient = (clientData: ClientFormData): Client => {
   saveClients(clients);
   
   return newClient;
-};
+}
 
-// Get a specific client by ID
-export const getClientById = (id: string): Client | undefined => {
+// Update an existing client
+export function updateClient(id: string, clientData: Partial<Client>): Client | null {
   const clients = getClients();
-  return clients.find(client => client.id === id);
-};
-
-// Update a client
-export const updateClient = (id: string, clientData: Partial<Client>): Client | undefined => {
-  const clients = getClients();
-  const clientIndex = clients.findIndex(client => client.id === id);
+  const index = clients.findIndex((client: Client) => client.id === id);
   
-  if (clientIndex === -1) return undefined;
+  if (index !== -1) {
+    clients[index] = { ...clients[index], ...clientData };
+    saveClients(clients);
+    return clients[index];
+  }
   
-  // Update client
-  clients[clientIndex] = {
-    ...clients[clientIndex],
-    ...clientData,
-    lastActivity: new Date().toISOString()
-  };
-  
-  saveClients(clients);
-  return clients[clientIndex];
-};
+  return null;
+}
 
 // Delete a client
-export const deleteClient = (id: string): boolean => {
+export function deleteClient(id: string): boolean {
   const clients = getClients();
-  const updatedClients = clients.filter(client => client.id !== id);
+  const updatedClients = clients.filter((client: Client) => client.id !== id);
   
   if (updatedClients.length === clients.length) return false;
   
   saveClients(updatedClients);
   return true;
-};
+}
 
 // Delete multiple clients
-export const deleteClients = (ids: string[]): boolean => {
+export function deleteClients(ids: string[]): boolean {
   const clients = getClients();
   const updatedClients = clients.filter(client => !ids.includes(client.id));
   
   saveClients(updatedClients);
   return true;
-};
+}
 
-// Load sample clients if none exist
-export const initializeClients = (): void => {
-  const clients = getClients();
+// Initialize clients in localStorage if it doesn't exist
+export const initializeClients = (): Client[] => {
+  let clients = getClients();
   
   if (clients.length === 0) {
     const sampleClients: Client[] = [
@@ -203,6 +196,7 @@ export const initializeClients = (): void => {
         createdAt: new Date('2024-01-01').toISOString(),
         lastActivity: new Date('2024-01-15').toISOString(),
         status: 'active',
+        type: 'Business',
         totalValue: 45000,
         avatar: 'JS'
       },
@@ -241,6 +235,7 @@ export const initializeClients = (): void => {
         createdAt: new Date('2024-01-02').toISOString(),
         lastActivity: new Date('2024-01-14').toISOString(),
         status: 'active',
+        type: 'Business',
         totalValue: 32000,
         avatar: 'SJ'
       },
@@ -279,6 +274,7 @@ export const initializeClients = (): void => {
         createdAt: new Date('2024-01-05').toISOString(),
         lastActivity: new Date('2024-01-10').toISOString(),
         status: 'overdue',
+        type: 'Individual',
         totalValue: 15000,
         avatar: 'MC'
       },
@@ -317,13 +313,17 @@ export const initializeClients = (): void => {
         createdAt: new Date('2023-12-15').toISOString(),
         lastActivity: new Date('2024-01-08').toISOString(),
         status: 'inactive',
+        type: 'Government',
         totalValue: 78000,
         avatar: 'EB'
       }
     ];
     
     saveClients(sampleClients);
+    clients = sampleClients;
   }
+  
+  return clients;
 };
 
 // Client email invitation service
