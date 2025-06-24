@@ -30,7 +30,7 @@ import Company from "./pages/Company";
 import Payment from "./pages/Payment";
 import Invoices from "./pages/Invoices";
 import InvoiceDetail from "./pages/InvoiceDetail";
-import ClientList from "./pages/ClientList";
+
 import HRManagement from "./pages/HRManagement";
 import Accounting from "./pages/Accounting";
 import Projects from "./pages/Projects";
@@ -94,7 +94,6 @@ const App = () => (
             {/* Protected Clients Route */}
             <Route element={<ProtectedRoute pageName="Clients" />}>
               <Route path="/clients" element={<Clients />} />
-              <Route path="/clients-list" element={<ClientList />} />
             </Route>
 
             {/* Protected Quotations Route */}
