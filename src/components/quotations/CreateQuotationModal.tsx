@@ -17,10 +17,10 @@ import {
 interface LineItem {
   id: string;
   description: string;
-  quantity: number;
-  rate: number;
-  markupPercent: number;
-  discount: number;
+  quantity: string | number;
+  rate: string | number;
+  markupPercent: string | number;
+  discount: string | number;
   amount: number;
 }
 
@@ -45,10 +45,10 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     { 
       id: crypto.randomUUID(), 
       description: '', 
-      quantity: 1, 
-      rate: 0, 
-      markupPercent: 0, 
-      discount: 0, 
+      quantity: '', 
+      rate: '', 
+      markupPercent: '', 
+      discount: '', 
       amount: 0 
     }
   ]);
@@ -63,10 +63,10 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
       { 
         id: crypto.randomUUID(), 
         description: '', 
-        quantity: 1, 
-        rate: 0, 
-        markupPercent: 0, 
-        discount: 0, 
+        quantity: '', 
+        rate: '', 
+        markupPercent: '', 
+        discount: '', 
         amount: 0 
       }
     ]);
@@ -86,9 +86,15 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           
           // Recalculate the amount when relevant fields change
           if (['quantity', 'rate', 'markupPercent', 'discount'].includes(field)) {
-            const markupAmount = updatedItem.rate * (updatedItem.markupPercent / 100);
-            const grossAmount = (updatedItem.rate + markupAmount) * updatedItem.quantity;
-            updatedItem.amount = Math.max(0, grossAmount - updatedItem.discount);
+            // Convert string values to numbers, defaulting to 0 for empty values
+            const rateNum = parseFloat(String(updatedItem.rate || 0));
+            const markupPercentNum = parseFloat(String(updatedItem.markupPercent || 0));
+            const quantityNum = parseFloat(String(updatedItem.quantity || 0));
+            const discountNum = parseFloat(String(updatedItem.discount || 0));
+            
+            const markupAmount = rateNum * (markupPercentNum / 100);
+            const grossAmount = (rateNum + markupAmount) * quantityNum;
+            updatedItem.amount = Math.max(0, grossAmount - discountNum);
           }
           
           return updatedItem;
@@ -197,101 +203,100 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
               </div>
             </CardHeader>
             <CardContent>
-              {/* Line Items Table - Wrapped in scrollable container */}
+              {/* Line Items Table - Traditional HTML table for better spacing */}
               <div className="overflow-x-auto">
-                <div className="min-w-[1200px]">
-                  {/* Line Items Table Header */}
-                  <div className="grid grid-cols-12 gap-4 mb-4 font-semibold text-sm text-slate-600 font-sf-pro border-b pb-2">
-                    <div className="col-span-1 w-20">Item No.</div>
-                    <div className="col-span-3 w-[300px]">Description</div>
-                    <div className="col-span-1 w-24 text-center">Qty</div>
-                    <div className="col-span-2 w-28 text-center">Rate</div>
-                    <div className="col-span-2 w-28 text-center">Mark Up %</div>
-                    <div className="col-span-1 w-28 text-center">Discount</div>
-                    <div className="col-span-2 w-32 text-right pr-3">Amount</div>
-                    <div className="col-span-1 w-16"></div>
-                  </div>
-                  
-                  {/* Line Items */}
-                  <div className="space-y-6">
+                <table className="w-full min-w-[1200px] border-separate border-spacing-x-6 border-spacing-y-2">
+                  <thead>
+                    <tr className="font-semibold text-sm text-slate-600 font-sf-pro">
+                      <th className="w-16 text-left pb-3">Item No.</th>
+                      <th className="w-[300px] text-left pb-3">Description</th>
+                      <th className="w-24 text-center pb-3">Qty</th>
+                      <th className="w-32 text-center pb-3">Rate</th>
+                      <th className="w-32 text-center pb-3">Mark Up %</th>
+                      <th className="w-32 text-center pb-3">Discount</th>
+                      <th className="w-36 text-right pb-3">Amount</th>
+                      <th className="w-16 pb-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {lineItems.map((item, index) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-4 items-center border-b pb-4 last:border-0">
+                      <tr key={item.id} className="border-b last:border-0">
                         {/* Item Number */}
-                        <div className="col-span-1 flex items-center justify-center w-20">
+                        <td className="py-3 align-middle">
                           <div className="bg-slate-100 h-8 w-8 rounded-full flex items-center justify-center text-slate-600 font-semibold font-sf-pro shadow-sm">
                             {index + 1}
                           </div>
-                        </div>
+                        </td>
                         
                         {/* Description */}
-                        <div className="col-span-3 w-[300px]">
+                        <td className="py-3 align-middle">
                           <Input
                             value={item.description}
                             onChange={(e) => updateItem(item.id, 'description', e.target.value)}
                             placeholder="Item description"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            className="w-full px-4 py-2 border border-slate-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
                           />
-                        </div>
+                        </td>
                         
                         {/* Quantity */}
-                        <div className="col-span-1 w-24">
+                        <td className="py-3 align-middle">
                           <Input
                             type="number"
                             value={item.quantity}
-                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
                             min="0"
                             step="1"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-moz-appearance:textfield]"
                           />
-                        </div>
+                        </td>
                         
                         {/* Rate */}
-                        <div className="col-span-2 w-28">
+                        <td className="py-3 align-middle">
                           <Input
                             type="number"
                             value={item.rate}
-                            onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateItem(item.id, 'rate', e.target.value)}
                             min="0"
                             step="0.01"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-right focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-moz-appearance:textfield]"
                           />
-                        </div>
+                        </td>
                         
                         {/* Mark Up % */}
-                        <div className="col-span-2 w-28">
+                        <td className="py-3 align-middle">
                           <Input
                             type="number"
                             value={item.markupPercent}
-                            onChange={(e) => updateItem(item.id, 'markupPercent', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateItem(item.id, 'markupPercent', e.target.value)}
                             min="0"
                             step="1"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            className="w-full px-4 py-2 border border-slate-300 rounded-xl bg-white text-sm text-right focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-moz-appearance:textfield]"
                             placeholder="0"
                           />
-                        </div>
+                        </td>
                         
                         {/* Discount */}
-                        <div className="col-span-1 w-28">
+                        <td className="py-3 align-middle">
                           <Input
                             type="number"
                             value={item.discount}
-                            onChange={(e) => updateItem(item.id, 'discount', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateItem(item.id, 'discount', e.target.value)}
                             min="0"
                             step="0.01"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
+                            className="w-full px-4 py-2 border border-slate-300 rounded-xl bg-white text-sm text-right focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-moz-appearance:textfield]"
                             placeholder="0.00"
                           />
-                        </div>
+                        </td>
                         
                         {/* Amount */}
-                        <div className="col-span-2 w-32">
-                          <div className="font-semibold text-slate-900 py-2 px-3 bg-slate-50 rounded-xl border shadow-sm text-right font-sf-pro">
+                        <td className="py-3 align-middle">
+                          <div className="font-semibold text-slate-900 py-2 px-4 bg-slate-50 rounded-xl border shadow-sm text-right font-sf-pro">
                             R {item.amount.toFixed(2)}
                           </div>
-                        </div>
+                        </td>
                         
                         {/* Delete Button */}
-                        <div className="col-span-1 w-16 flex justify-center">
+                        <td className="py-3 align-middle text-center">
                           {lineItems.length > 1 && (
                             <Button
                               variant="ghost"
@@ -303,11 +308,11 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
-                        </div>
-                      </div>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
+                  </tbody>
+                </table>
               </div>
 
               {/* Totals */}
