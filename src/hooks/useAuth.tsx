@@ -62,11 +62,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Get user from localAuthService
-      const authResult = getUserCredentialsByEmail(email, password);
+      console.log('Attempting to sign in with:', { email, password });
       
-      if (authResult.success) {
+      // Get user from localAuthService
+      console.log('Calling getUserCredentialsByEmail...');
+      const authResult = getUserCredentialsByEmail(email, password);
+      console.log('getUserCredentialsByEmail result:', authResult);
+      
+      if (authResult.success && authResult.user) {
         const { user: localUser } = authResult;
+        console.log('Authentication successful for user:', localUser);
         
         // Create user with proper metadata including role
         const authenticatedUser = {
@@ -75,16 +80,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           user_metadata: {
             first_name: localUser.fullName?.split(' ')[0] || 'User',
             last_name: localUser.fullName?.split(' ').slice(1).join(' ') || '',
-            role: localUser.role || 'staff'
-          }
+            role: localUser.role || 'Staff', // Changed from 'staff' to 'Staff' to match UserRole type
+            full_name: localUser.fullName
+          },
+          role: localUser.role || 'Staff' // Add role at the root level as well
         };
         
+        console.log('Saving user to localStorage:', authenticatedUser);
         localStorage.setItem('mokUser', JSON.stringify(authenticatedUser));
         setUser(authenticatedUser);
         
+        console.log('User successfully logged in and saved');
         return Promise.resolve();
       } else {
-        return Promise.reject(new Error('Invalid credentials'));
+        const errorMsg = authResult.error || 'Invalid email or password';
+        console.error('Authentication failed:', errorMsg);
+        return Promise.reject(new Error(errorMsg));
       }
     } catch (error) {
       console.error('Error signing in:', error);

@@ -3,6 +3,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { initializeLocalAuth } from '@/services/localAuthService';
+
+// Initialize local authentication with default users
+initializeLocalAuth();
 
 const container = document.getElementById("root");
 if (!container) {
