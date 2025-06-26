@@ -11,6 +11,7 @@ import CompanyInformationForm from './CompanyInformationForm';
 import ContactPersonForm from './ContactPersonForm';
 import CompanyAddressForm from './CompanyAddressForm';
 import CompanyNumbersForm from './CompanyNumbersForm';
+import BankDetailsForm from './BankDetailsForm';
 import CompanyAssetsUpload from './CompanyAssetsUpload';
 
 const CompanyDetails = () => {
@@ -49,7 +50,13 @@ const CompanyDetails = () => {
     vatNumberNotApplicable: false,
     taxNumber: 'TAX123456789',
     csdNumber: '', // renamed from maaarNumber
-    csdNumberNotApplicable: false
+    csdNumberNotApplicable: false,
+    // Bank Details Fields
+    bankName: '',
+    accountHolder: '',
+    bankAccount: '',
+    accountType: '',
+    branchCode: ''
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -71,26 +78,43 @@ const CompanyDetails = () => {
         // First try to load complete company details if available
         const savedCompanyDetails = localStorage.getItem('companyDetails');
         if (savedCompanyDetails) {
-          const parsedDetails = JSON.parse(savedCompanyDetails);
-          setCompanyData(parsedDetails);
-          setLoading(false);
-          return;
+          try {
+            const parsedDetails = JSON.parse(savedCompanyDetails);
+            setCompanyData(prevData => ({ ...prevData, ...parsedDetails }));
+          } catch (parseError) {
+            console.error('Error parsing company details:', parseError);
+          }
+        }
+        
+        // Try to load bank details if available
+        try {
+          const savedBankDetails = localStorage.getItem('companyBankDetails');
+          if (savedBankDetails) {
+            const parsedBankDetails = JSON.parse(savedBankDetails);
+            setCompanyData(prevData => ({ ...prevData, ...parsedBankDetails }));
+          }
+        } catch (bankError) {
+          console.error('Error loading bank details:', bankError);
         }
         
         // Fallback to user metadata from mokUser
         const storedUser = localStorage.getItem('mokUser');
         if (storedUser) {
-          const userData = JSON.parse(storedUser);
-          const userMeta = userData.user_metadata || {};
-          
-          setCompanyData(prev => ({
-            ...prev,
-            name: userMeta.company_name || prev.name,
-            contactName: userMeta.first_name || prev.contactName,
-            contactSurname: userMeta.last_name || prev.contactSurname,
-            email: userMeta.email || user.email || prev.email,
-            phone: userMeta.phone || prev.phone
-          }));
+          try {
+            const userData = JSON.parse(storedUser);
+            const userMeta = userData.user_metadata || {};
+            
+            setCompanyData(prev => ({
+              ...prev,
+              name: userMeta.company_name || prev.name,
+              contactName: userMeta.first_name || prev.contactName,
+              contactSurname: userMeta.last_name || prev.contactSurname,
+              email: userMeta.email || user.email || prev.email,
+              phone: userMeta.phone || prev.phone
+            }));
+          } catch (userError) {
+            console.error('Error parsing user data:', userError);
+          }
         }
       } catch (error) {
         console.error('Error fetching user profile:', error);
@@ -134,27 +158,43 @@ const CompanyDetails = () => {
         // Get user data from localStorage
         const storedUser = localStorage.getItem('mokUser');
         if (storedUser) {
-          const userData = JSON.parse(storedUser);
-          
-          // Update user metadata with basic info
-          const updatedUserData = {
-            ...userData,
-            user_metadata: {
-              ...userData.user_metadata,
-              company_name: companyData.name,
-              first_name: companyData.contactName,
-              last_name: companyData.contactSurname,
-              email: companyData.email,
-              phone: companyData.phone
-            }
-          };
-          
-          // Store updated user data
-          localStorage.setItem('mokUser', JSON.stringify(updatedUserData));
+          try {
+            const userData = JSON.parse(storedUser);
+            
+            // Update user metadata with basic info
+            const updatedUserData = {
+              ...userData,
+              user_metadata: {
+                ...userData.user_metadata,
+                company_name: companyData.name,
+                first_name: companyData.contactName,
+                last_name: companyData.contactSurname,
+                email: companyData.email,
+                phone: companyData.phone
+              }
+            };
+            
+            // Store updated user data
+            localStorage.setItem('mokUser', JSON.stringify(updatedUserData));
+          } catch (userError) {
+            console.error('Error updating user data:', userError);
+          }
         }
       }
       
-      // Save complete company data separately for persistence
+      // Extract bank details
+      const bankDetails = {
+        bankName: companyData.bankName || '',
+        accountHolder: companyData.accountHolder || '',
+        bankAccount: companyData.bankAccount || '',
+        accountType: companyData.accountType || '',
+        branchCode: companyData.branchCode || ''
+      };
+      
+      // Save bank details separately
+      localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
+      
+      // Save complete company data (including bank details) for persistence
       localStorage.setItem('companyDetails', JSON.stringify({
         ...companyData,
         lastUpdated: new Date().toISOString()
@@ -241,6 +281,19 @@ const CompanyDetails = () => {
 
           <CompanyNumbersForm
             companyData={companyData}
+            isEditing={isEditing}
+            onInputChange={handleInputChange}
+          />
+          
+          {/* Bank Details */}
+          <BankDetailsForm
+            bankData={{
+              bankName: companyData.bankName || '',
+              accountHolder: companyData.accountHolder || '',
+              bankAccount: companyData.bankAccount || '',
+              accountType: companyData.accountType || '',
+              branchCode: companyData.branchCode || ''
+            }}
             isEditing={isEditing}
             onInputChange={handleInputChange}
           />
