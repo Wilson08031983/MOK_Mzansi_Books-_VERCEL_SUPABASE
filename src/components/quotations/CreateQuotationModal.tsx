@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,9 +10,26 @@ import {
   Trash2,
   Save,
   Send,
-  Eye
+  Eye,
+  Loader2,
+  Mail
 } from 'lucide-react';
-import QuotationPreviewModal, { QuotationData, CompanyAssets } from '@/components/quotation/QuotationPreviewModal';
+import QuotationPreviewModal, { Quotation as QuotationPreviewType } from '@/components/quotation/QuotationPreviewModal';
+import { generateNextQuotationNumber, generateQuotationPdf, QuotationPdfData } from '@/utils/quotationUtils';
+import { saveQuotation, getQuotations, Quotation as QuotationType } from '@/services/quotationService';
+
+
+// Email functionality removed as per requirements
+// Mock company service since it's not available
+const getCompany = () => {
+  try {
+    const company = localStorage.getItem('companyDetails');
+    return company ? JSON.parse(company) : null;
+  } catch (error) {
+    console.error('Error getting company details:', error);
+    return null;
+  }
+};
 import { toast } from 'sonner';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
@@ -55,9 +72,10 @@ interface SavedFilter {
 interface CreateQuotationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onQuotationSaved?: (quotation: QuotationType, allQuotations: QuotationType[]) => void;
 }
 
-const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onClose }) => {
+const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onClose, onQuotationSaved }) => {
   const [formData, setFormData] = useState({
     clientId: '',
     reference: '',
@@ -87,9 +105,154 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
   
   // State for preview modal
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
-  const [companyAssets, setCompanyAssets] = useState<CompanyAssets>({});
+  const [companyAssets, setCompanyAssets] = useState<Record<string, string>>({});
   const [clientList, setClientList] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  
+  // State for loading and error handling
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Ensure Buffer is available
+  const ensureBuffer = async (): Promise<boolean> => {
+    if (typeof window === 'undefined') {
+      return true; // Not in browser, assume Buffer is available
+    }
+
+    try {
+      if (!window.Buffer) {
+        // Use dynamic import to avoid type issues
+        const bufferModule = await import('buffer/');
+        window.Buffer = bufferModule.Buffer;
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to load Buffer polyfill:', error);
+      return false;
+    }
+  };
+
+
+
+  // Generate the next quotation number in format QUO-YYYY-NNN
+  const generateNextQuotationNumber = (existingQuotations: QuotationType[]): string => {
+    const year = new Date().getFullYear();
+    const prefix = `QUO-${year}-`;
+    
+    // Get all quotation numbers for the current year
+    const currentYearQuotations = existingQuotations.filter(q => q.number.startsWith(prefix));
+    
+    // Find the highest number used so far
+    let highestNumber = 0;
+    currentYearQuotations.forEach(q => {
+      const numberPart = q.number.replace(prefix, '');
+      const num = parseInt(numberPart, 10);
+      if (!isNaN(num) && num > highestNumber) {
+        highestNumber = num;
+      }
+    });
+    
+    // Return the next number in sequence
+    return `${prefix}${String(highestNumber + 1).padStart(3, '0')}`;
+  };
+
+  // Handle save quotation
+  const saveQuotationHandler = async (isDraft: boolean = false) => {
+    if (!selectedClient) {
+      toast.error('Please select a client');
+      return;
+    }
+
+    if (lineItems.length === 0 || lineItems.some(item => !item.description || !item.quantity || !item.rate)) {
+      toast.error('Please add at least one valid line item');
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      // Get company info
+      const company = getCompany();
+      if (!company) {
+        throw new Error('Company information not found. Please set up your company details first.');
+      }
+
+      // Generate quotation number if not a draft or if it's a new quotation
+      const existingQuotations = getQuotations();
+      const quotationNumber = generateNextQuotationNumber(existingQuotations);
+
+      // Prepare client name and contact
+      const clientName = selectedClient.companyName || 
+        [selectedClient.firstName, selectedClient.lastName].filter(Boolean).join(' ').trim();
+      const clientContact = [selectedClient.firstName, selectedClient.lastName].filter(Boolean).join(' ').trim();
+
+      // Prepare quotation data
+      const quotationData: QuotationType = {
+        id: `q_${Date.now()}`,
+        number: quotationNumber,
+        reference: formData.reference,
+        client: clientName || 'Client',
+        clientId: selectedClient.id,
+        clientEmail: selectedClient.email || '',
+        clientContact: clientContact,
+        clientLogo: '',
+        date: new Date().toISOString().split('T')[0],
+        expiryDate: formData.expiryDate || '',
+        lastModified: new Date().toISOString(),
+        amount: total,
+        currency: formData.currency,
+        language: 'en',
+        status: isDraft ? 'draft' : 'sent',
+        salesperson: 'Salesperson Name',
+        salespersonId: 'user_1',
+        project: '',
+        tags: [],
+        priority: 'medium',
+        customFields: {},
+        items: lineItems.map(item => ({
+          id: item.id,
+          description: item.description,
+          quantity: Number(item.quantity),
+          unit: 'unit',
+          rate: Number(item.rate),
+          taxRate: 0, // Default to 0%
+          discount: Number(item.discount) || 0,
+          amount: item.amount
+        })),
+        subtotal: subtotal,
+        taxAmount: 0,
+        discount: 0,
+        totalAmount: total,
+        terms: formData.terms,
+        notes: formData.notes,
+        attachments: [],
+        revisionHistory: []
+      };
+
+      // Save quotation to local storage
+      const updatedQuotations = saveQuotation(quotationData);
+      
+      // Update the parent component's state if the callback is provided
+      if (onQuotationSaved) {
+        onQuotationSaved(quotationData, updatedQuotations);
+      }
+      
+      toast.success(`Quotation ${isDraft ? 'saved as draft' : 'saved'} successfully!`);
+      onClose();
+    } catch (err) {
+      console.error('Error saving quotation:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save quotation');
+      toast.error('Failed to save quotation. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle save as draft
+  const saveAsDraft = async () => {
+    await saveQuotationHandler(true);
+  };
 
   // Add a new line item
   const addItem = () => {
@@ -498,6 +661,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           </Button>
           
           <div className="flex items-center space-x-3">
+
             <Button
               variant="outline"
               className="font-sf-pro"
@@ -542,19 +706,46 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
               <Eye className="h-4 w-4 mr-2" />
               Preview
             </Button>
-            <Button
-              variant="outline"
-              className="font-sf-pro"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Save as Draft
-            </Button>
-            <Button
-              className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Save & Send
-            </Button>
+            <div className="flex space-x-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="font-sf-pro border-gray-300 hover:bg-gray-100"
+                onClick={saveAsDraft}
+                disabled={isSaving || !selectedClient}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save as Draft
+                  </>
+                )}
+              </Button>
+              
+              <Button
+                type="button"
+                className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro"
+                onClick={() => saveQuotationHandler(false)}
+                disabled={isSaving || !selectedClient || lineItems.length === 0}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Save & Send
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
         {/* Quotation Preview Modal */}

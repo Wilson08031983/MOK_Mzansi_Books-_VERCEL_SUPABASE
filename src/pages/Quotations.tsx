@@ -28,7 +28,22 @@ const Quotations = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [savedFilters, setSavedFilters] = useState<any[]>([]);
+  
+  // Define a type for the saved filters
+  interface SavedFilter {
+    id: string;
+    name: string;
+    filters: {
+      status?: string;
+      dateRange?: string;
+      client?: string;
+      amountMin?: string;
+      amountMax?: string;
+      tags?: string[];
+    };
+  }
+  
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   
   const [filters, setFilters] = useState({
     status: 'all',
@@ -45,11 +60,33 @@ const Quotations = () => {
   // Load quotations from localStorage using the quotationService
   const [quotations, setQuotations] = useState<Quotation[]>([]);
 
-  useEffect(() => {
-    // Load quotations from localStorage on component mount
+  // Load quotations from localStorage
+  const loadQuotations = () => {
     const loadedQuotations = getQuotations();
     setQuotations(loadedQuotations);
+  };
+
+  // Load quotations on component mount
+  useEffect(() => {
+    loadQuotations();
   }, []);
+
+  // Handle when a new quotation is saved
+  const handleQuotationSaved = (newQuotation: Quotation, allQuotations: Quotation[]) => {
+    // Update the local state with the latest quotations
+    setQuotations(allQuotations);
+    
+    // Show a success toast with the quotation number
+    toast.success(`Quotation ${newQuotation.number} saved successfully`, {
+      action: {
+        label: 'View',
+        onClick: () => {
+          // TODO: Implement view quotation functionality
+          console.log('View quotation:', newQuotation.id);
+        },
+      },
+    });
+  };
 
   const handleDeleteQuotation = (quotationId: string): void => {
     const updatedQuotations = deleteQuotation(quotationId);
@@ -297,6 +334,7 @@ const Quotations = () => {
       <CreateQuotationModal 
         isOpen={isCreateQuotationModalOpen}
         onClose={() => setIsCreateQuotationModalOpen(false)}
+        onQuotationSaved={handleQuotationSaved}
       />
     </div>
   );

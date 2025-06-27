@@ -46,6 +46,8 @@ export interface Quotation {
   acceptedAt?: string | null;
 }
 
+import { safeLocalStorage, safeArray, safeString, safeNumber, defaultValues } from '@/utils/safeAccess';
+
 // Mock quotations for initial data seeding
 const mockQuotations: Quotation[] = [
   {
@@ -203,14 +205,19 @@ const QUOTATIONS_STORAGE_KEY = 'mokMzansiBooks_quotations';
  * @returns array of quotations
  */
 export const initializeQuotations = (): Quotation[] => {
-  const storedQuotations = localStorage.getItem(QUOTATIONS_STORAGE_KEY);
-  
-  if (!storedQuotations) {
-    localStorage.setItem(QUOTATIONS_STORAGE_KEY, JSON.stringify(mockQuotations));
+  try {
+    const storedQuotations = safeLocalStorage.getItem(QUOTATIONS_STORAGE_KEY, null);
+    
+    if (!storedQuotations) {
+      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, mockQuotations);
+      return mockQuotations;
+    }
+    
+    return safeArray(storedQuotations);
+  } catch (error) {
+    console.error('Error initializing quotations:', error);
     return mockQuotations;
   }
-  
-  return JSON.parse(storedQuotations);
 };
 
 /**
@@ -237,23 +244,29 @@ export const getQuotationById = (id: string): Quotation | undefined => {
  * @returns updated quotations array
  */
 export const saveQuotation = (quotation: Quotation): Quotation[] => {
-  const quotations = getQuotations();
-  const index = quotations.findIndex(q => q.id === quotation.id);
-  
-  if (index >= 0) {
-    // Update existing quotation
-    quotations[index] = { ...quotation, lastModified: new Date().toISOString() };
-  } else {
-    // Add new quotation
-    quotations.push({
-      ...quotation,
-      id: quotation.id || Date.now().toString(),
-      lastModified: new Date().toISOString()
-    });
+  try {
+    const quotations = getQuotations();
+    const safeQuotation = { ...defaultValues.quotation, ...quotation };
+    const index = quotations.findIndex(q => q.id === safeQuotation.id);
+    
+    if (index >= 0) {
+      // Update existing quotation
+      quotations[index] = { ...safeQuotation, lastModified: new Date().toISOString() };
+    } else {
+      // Add new quotation
+      quotations.push({
+        ...safeQuotation,
+        id: safeQuotation.id || Date.now().toString(),
+        lastModified: new Date().toISOString()
+      });
+    }
+    
+    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, quotations);
+    return quotations;
+  } catch (error) {
+    console.error('Error saving quotation:', error);
+    return getQuotations();
   }
-  
-  localStorage.setItem(QUOTATIONS_STORAGE_KEY, JSON.stringify(quotations));
-  return quotations;
 };
 
 /**
@@ -262,11 +275,17 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
  * @returns updated quotations array
  */
 export const deleteQuotation = (id: string): Quotation[] => {
-  const quotations = getQuotations();
-  const updatedQuotations = quotations.filter(quotation => quotation.id !== id);
-  
-  localStorage.setItem(QUOTATIONS_STORAGE_KEY, JSON.stringify(updatedQuotations));
-  return updatedQuotations;
+  try {
+    const quotations = getQuotations();
+    const safeId = safeString(id);
+    const updatedQuotations = quotations.filter(quotation => quotation.id !== safeId);
+    
+    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedQuotations);
+    return updatedQuotations;
+  } catch (error) {
+    console.error('Error deleting quotation:', error);
+    return getQuotations();
+  }
 };
 
 /**
@@ -276,17 +295,24 @@ export const deleteQuotation = (id: string): Quotation[] => {
  * @returns updated quotations array
  */
 export const updateQuotationStatus = (id: string, status: string): Quotation[] => {
-  const quotations = getQuotations();
-  const index = quotations.findIndex(q => q.id === id);
-  
-  if (index >= 0) {
-    quotations[index] = { 
-      ...quotations[index], 
-      status, 
-      lastModified: new Date().toISOString() 
-    };
-    localStorage.setItem(QUOTATIONS_STORAGE_KEY, JSON.stringify(quotations));
+  try {
+    const quotations = getQuotations();
+    const safeId = safeString(id);
+    const safeStatus = safeString(status);
+    const index = quotations.findIndex(q => q.id === safeId);
+    
+    if (index >= 0) {
+      quotations[index] = { 
+        ...quotations[index], 
+        status: safeStatus, 
+        lastModified: new Date().toISOString() 
+      };
+      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, quotations);
+    }
+    
+    return quotations;
+  } catch (error) {
+    console.error('Error updating quotation status:', error);
+    return getQuotations();
   }
-  
-  return quotations;
 };
