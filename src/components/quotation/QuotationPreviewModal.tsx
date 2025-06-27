@@ -62,8 +62,21 @@ interface ClientInfo {
   sameAsBilling?: boolean;
 }
 
+// Export interfaces for use in other components
+export interface QuotationItemPreview {
+  id?: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  markup?: number;
+  markupPercent?: number;
+  discount?: number;
+  amount: number;
+  vat?: number;
+}
+
 // Main Quotation interface
-interface Quotation {
+export interface Quotation {
   id?: string;
   quotationNumber?: string;
   date: string;
@@ -214,35 +227,35 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   }, []);
 
   // Calculate subtotal, VAT total, and grand total safely
-  const calculateTotals = (): { subtotal: number; vatTotal: number; grandTotal: number } => {
+  const calculateTotals = (): { subtotal: number; vatTotal: number; grandTotal: number; vatRate: number } => {
     try {
-      let subtotal = 0;
-      let vatTotal = 0;
+      // Calculate subtotal from all items
+      const subtotal = (quotation.items || []).reduce((sum, item) => {
+        return sum + (Number(item.amount) || 0);
+      }, 0);
       
-      // Safely calculate totals from items
-      (quotation.items || []).forEach(item => {
-        const itemAmount = Number(item.amount) || 0;
-        subtotal += itemAmount;
-        
-        // Calculate VAT if present (default 0%)
-        const vatRate = Number(item.vat) || 0;
-        vatTotal += (itemAmount * vatRate) / 100;
-      });
+      // Get VAT rate from the first item or default to 0
+      const vatRate = Number(quotation.items?.[0]?.vat) || 0;
       
+      // Calculate VAT on the subtotal
+      const vatTotal = (subtotal * vatRate) / 100;
+      
+      // Calculate grand total
       const grandTotal = subtotal + vatTotal;
       
       return {
         subtotal: subtotal || 0,
         vatTotal: vatTotal || 0,
-        grandTotal: grandTotal || 0
+        grandTotal: grandTotal || 0,
+        vatRate: vatRate || 0
       };
     } catch (error) {
       console.error('Error calculating totals:', error);
-      return { subtotal: 0, vatTotal: 0, grandTotal: 0 };
+      return { subtotal: 0, vatTotal: 0, grandTotal: 0, vatRate: 0 };
     }
   };
   
-  const { subtotal, vatTotal, grandTotal } = calculateTotals();
+  const { subtotal, vatTotal, grandTotal, vatRate } = calculateTotals();
   
   // Reference to the content we want to print/download
   // contentRef is already defined at the top of the component
@@ -686,9 +699,7 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                   <th className="py-2 px-4 text-left text-sm font-semibold text-slate-700 border-b border-slate-200">Description</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Qty</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Rate</th>
-                  <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200 markup-column">Mark Up %</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Discount</th>
-                  <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">VAT</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Amount</th>
                 </tr>
               </thead>
@@ -701,20 +712,16 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                       <td className="py-3 px-4 text-sm text-slate-700">{item.description || ''}</td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">{item.quantity || 0}</td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">{formatCurrency(item.rate)}</td>
-                      <td className="py-3 px-4 text-sm text-slate-700 text-right markup-column">
-                        {item.markup ? `${item.markup}%` : '0%'}
-                      </td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">
-                        {item.discount ? `${item.discount}%` : '0%'}
+                        {formatCurrency(item.discount || 0)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-slate-700 text-right">{vatRate}%</td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">{formatCurrency(item.amount)}</td>
                     </tr>
                   );
                 })}
                 {(!quotation.items || quotation.items.length === 0) && (
                   <tr>
-                    <td colSpan={8} className="py-4 text-center text-slate-500">No items added to this quotation</td>
+                    <td colSpan={6} className="py-4 text-center text-slate-500">No items added to this quotation</td>
                   </tr>
                 )}
               </tbody>
@@ -729,7 +736,9 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                 <span className="text-sm font-medium">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-sm text-slate-600">VAT (0%):</span>
+                <span className="text-sm text-slate-600">
+                  VAT ({vatRate.toFixed(2)}%):
+                </span>
                 <span className="text-sm font-medium">{formatCurrency(vatTotal)}</span>
               </div>
               <div className="flex justify-between py-2 border-t border-slate-200 mt-2">

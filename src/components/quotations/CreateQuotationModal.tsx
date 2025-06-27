@@ -78,12 +78,14 @@ interface CreateQuotationModalProps {
 const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onClose, onQuotationSaved }) => {
   const [formData, setFormData] = useState({
     clientId: '',
+    quotationNumber: '',
     reference: '',
     date: new Date().toISOString().split('T')[0],
     expiryDate: '',
     currency: 'ZAR',
     notes: '',
-    terms: ''
+    terms: '',
+    project: ''
   });
 
   // Using proper typed state for line items
@@ -101,6 +103,8 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
   ]);
 
   const [subtotal, setSubtotal] = useState(0);
+  const [vatRate, setVatRate] = useState(0);
+  const [vatAmount, setVatAmount] = useState(0);
   const [total, setTotal] = useState(0);
   
   // State for preview modal
@@ -167,67 +171,67 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
       toast.error('Please add at least one valid line item');
       return;
     }
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      // Get company info
-      const company = getCompany();
-      if (!company) {
-        throw new Error('Company information not found. Please set up your company details first.');
+    
+    // Validate line items
+    for (const [index, item] of lineItems.entries()) {
+      if (!item.description || !item.quantity || !item.rate) {
+        setError(`Please fill in all required fields for item ${index + 1}`);
+        return;
       }
-
-      // Generate quotation number if not a draft or if it's a new quotation
-      const existingQuotations = getQuotations();
-      const quotationNumber = generateNextQuotationNumber(existingQuotations);
-
-      // Prepare client name and contact
-      const clientName = selectedClient.companyName || 
-        [selectedClient.firstName, selectedClient.lastName].filter(Boolean).join(' ').trim();
-      const clientContact = [selectedClient.firstName, selectedClient.lastName].filter(Boolean).join(' ').trim();
-
-      // Prepare quotation data
+    }
+    
+    setError('');
+    setIsSaving(true);
+    
+    try {
+      // Calculate total amount
+      const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+      const total = subtotal; // Add tax and other calculations if needed
+      const now = new Date().toISOString();
+      
+      // Create quotation data
       const quotationData: QuotationType = {
-        id: `q_${Date.now()}`,
-        number: quotationNumber,
-        reference: formData.reference,
-        client: clientName || 'Client',
-        clientId: selectedClient.id,
-        clientEmail: selectedClient.email || '',
-        clientContact: clientContact,
-        clientLogo: '',
-        date: new Date().toISOString().split('T')[0],
+        id: formData.quotationNumber || Date.now().toString(),
+        number: formData.quotationNumber || '',
+        reference: formData.reference || '',
+        client: selectedClient?.companyName || `${selectedClient?.firstName} ${selectedClient?.lastName}`.trim(),
+        clientId: formData.clientId,
+        clientEmail: selectedClient?.email || '',
+        clientContact: selectedClient?.firstName ? `${selectedClient.firstName} ${selectedClient.lastName || ''}`.trim() : '',
+        date: now.split('T')[0],
         expiryDate: formData.expiryDate || '',
-        lastModified: new Date().toISOString(),
         amount: total,
         currency: formData.currency,
-        language: 'en',
-        status: isDraft ? 'draft' : 'sent',
+        status: isDraft ? 'draft' : 'saved',
         salesperson: 'Salesperson Name',
         salespersonId: 'user_1',
-        project: '',
-        tags: [],
+        project: formData.project || '',
         priority: 'medium',
-        customFields: {},
         items: lineItems.map(item => ({
           id: item.id,
           description: item.description,
-          quantity: Number(item.quantity),
+          quantity: Number(item.quantity) || 0,
           unit: 'unit',
-          rate: Number(item.rate),
-          taxRate: 0, // Default to 0%
+          rate: Number(item.rate) || 0,
+          taxRate: vatRate, // Use the VAT rate from state
           discount: Number(item.discount) || 0,
           amount: item.amount
         })),
-        subtotal: subtotal,
-        taxAmount: 0,
+        subtotal,
+        taxRate: vatRate, // Include VAT rate in the main quotation object
+        taxAmount: vatAmount, // Include VAT amount in the main quotation object
         discount: 0,
         totalAmount: total,
         terms: formData.terms,
         notes: formData.notes,
+        // Initialize with empty arrays for array fields to ensure they're defined
         attachments: [],
-        revisionHistory: []
+        revisionHistory: [{
+          date: now,
+          changes: ['Quotation created'],
+          userId: 'user_1',
+          userName: 'System'
+        }]
       };
 
       // Save quotation to local storage
@@ -242,8 +246,9 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
       onClose();
     } catch (err) {
       console.error('Error saving quotation:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save quotation');
-      toast.error('Failed to save quotation. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save quotation';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -303,12 +308,16 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     });
   };
 
-  // Calculate totals whenever line items change
+  // Calculate totals whenever line items or VAT rate changes
   useEffect(() => {
     const calculatedSubtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+    const calculatedVat = (calculatedSubtotal * vatRate) / 100;
+    const calculatedTotal = calculatedSubtotal + calculatedVat;
+    
     setSubtotal(calculatedSubtotal);
-    setTotal(calculatedSubtotal); // For now total = subtotal, we can add tax etc later
-  }, [lineItems]);
+    setVatAmount(calculatedVat);
+    setTotal(calculatedTotal);
+  }, [lineItems, vatRate]);
   
   // Update selected client when clientId or clientList changes
   useEffect(() => {
@@ -608,6 +617,24 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                       <span>Subtotal:</span>
                       <span>R {subtotal.toFixed(2)}</span>
                     </div>
+                    <div className="flex justify-between font-sf-pro">
+                      <div className="flex items-center">
+                        <span>VAT (</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={vatRate}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setVatRate(Math.min(Math.max(0, value), 100));
+                          }}
+                          className="w-12 border-b border-gray-300 text-right focus:outline-none focus:border-mokm-purple-500"
+                        />
+                        <span>%):</span>
+                      </div>
+                      <span>R {vatAmount.toFixed(2)}</span>
+                    </div>
                     <div className="flex justify-between text-lg font-bold border-t pt-2 font-sf-pro">
                       <span>Total (ZAR):</span>
                       <span>R {total.toFixed(2)}</span>
@@ -789,10 +816,10 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   rate: Number(item.rate || 0),
                   discount: Number(item.discount || 0),
                   amount: Number(item.amount || 0),
-                  vat: 0 // Default VAT to 0%
+                  vat: vatRate // Use the VAT rate from state
                 })),
                 subtotal: subtotal,
-                vatTotal: 0, // Default VAT total to 0
+                vatTotal: vatAmount, // Use the calculated VAT amount
                 grandTotal: total,
                 termsAndConditions: formData.terms,
                 notes: formData.notes
