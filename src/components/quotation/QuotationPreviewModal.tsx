@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,14 +8,18 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X, Download, Printer } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
 
 // Define interface types needed for the component
 interface QuotationItem {
-  id: string;
+  id?: string;
   description: string;
   quantity: number;
   rate: number;
-  markup?: number; // Will be hidden in the display
+  markup?: number;
+  markupPercent?: number;
   discount?: number;
   amount: number;
   vat?: number;
@@ -40,31 +44,32 @@ interface Client {
   shippingPostal?: string;
   shippingCountry?: string;
   sameAsBilling?: boolean;
-  // Include other fields that might exist
-  [key: string]: unknown;
 }
 
-export interface QuotationData {
+// Client information interface
+interface ClientInfo {
+  companyName: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostal?: string;
+  shippingCountry?: string;
+  sameAsBilling?: boolean;
+}
+
+// Main Quotation interface
+interface Quotation {
   id?: string;
   quotationNumber?: string;
   date: string;
   reference?: string;
   clientId?: string;
-  clientInfo?: {
-    companyName: string;
-    contactPerson?: string;
-    email?: string;
-    phone?: string;
-    billingAddress?: string;
-    shippingAddress?: string;
-    // Individual shipping address fields
-    shippingStreet?: string;
-    shippingCity?: string;
-    shippingState?: string;
-    shippingPostal?: string;
-    shippingCountry?: string;
-    sameAsBilling?: boolean;
-  };
+  clientInfo?: ClientInfo;
   items: QuotationItem[];
   subtotal?: number;
   vatTotal?: number;
@@ -73,7 +78,9 @@ export interface QuotationData {
   notes?: string;
 }
 
-export interface CompanyAssets {
+// Company interface
+interface Company {
+  id?: string;
   name?: string;
   logoUrl?: string;
   stampUrl?: string;
@@ -82,27 +89,11 @@ export interface CompanyAssets {
   email?: string;
   phone?: string;
   website?: string;
-  vatNumber?: string;
-  regNumber?: string;
-}
-
-interface QuotationPreviewModalProps {
-  open: boolean;
-  onClose: () => void;
-  quotation: QuotationData;
-  company: CompanyAssets;
-}
-
-// Interface for company data from localStorage
-interface CompanyData {
-  name?: string;
-  email?: string;
-  phone?: string;
-  website?: string;
   websiteNotApplicable?: boolean;
-  regNumber?: string;
   vatNumber?: string;
   vatNumberNotApplicable?: boolean;
+  regNumber?: string;
+  // Address fields
   addressLine1?: string;
   addressLine2?: string;
   addressLine3?: string;
@@ -113,6 +104,13 @@ interface CompanyData {
   accountType?: string;
   branchCode?: string;
   accountHolder?: string;
+}
+
+interface QuotationPreviewModalProps {
+  open: boolean;
+  onClose: () => void;
+  quotation: Quotation;
+  company: Company;
 }
 
 // Helper function to safely format currency
@@ -128,6 +126,9 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   company,
 }) => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const currentYear = new Date().getFullYear();
+  const safeQuotationNumber = quotation.quotationNumber || `QUO-${currentYear}-001`;
 
   // Load client data when the modal opens
   useEffect(() => {
@@ -180,8 +181,8 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
       setSelectedClient(null);
     }
   }, [open, quotation.clientId, quotation.clientInfo]);
-  const [companyData, setCompanyData] = useState<CompanyData>({});
-  const [bankDetails, setBankDetails] = useState<Partial<CompanyData>>({});
+  const [companyData, setCompanyData] = useState<Company>({});
+  const [bankDetails, setBankDetails] = useState<Partial<Company>>({});
   const [companyAssets, setCompanyAssets] = useState<Record<string, { dataUrl: string }>>({});
 
   // Load company data, bank details, and assets from localStorage
@@ -243,33 +244,220 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   
   const { subtotal, vatTotal, grandTotal } = calculateTotals();
   
-  // Generate current year and quotation number if not provided
-  const currentYear = new Date().getFullYear();
-  const safeQuotationNumber = quotation.quotationNumber || `QUO-${currentYear}-001`;
-  
+  // Reference to the content we want to print/download
+  // contentRef is already defined at the top of the component
+
+  // Add a style element to hide markup column when printing
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'print-styles';
+    style.innerHTML = `
+      @media print {
+        @page {
+          size: A4;
+          margin: 10mm;
+        }
+        body {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .hide-for-print {
+          display: none !important;
+        }
+        .print-break-inside-avoid {
+          break-inside: avoid;
+        }
+        .print-container {
+          width: 210mm;
+          min-height: 297mm;
+          padding: 10mm;
+          margin: 0 auto;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      const styleElement = document.getElementById('print-styles');
+      if (styleElement) styleElement.remove();
+    };
+  }, []);
+
   // Handle printing the quotation
-  const handlePrint = () => {
+  const handlePrint = async () => {
     try {
-      const printContent = document.getElementById('quotation-preview-content');
-      if (!printContent) return;
+      toast.info('Preparing document for printing...');
+      if (!contentRef.current) {
+        toast.error('Content not available for printing');
+        return;
+      }
+
+      // Create a clone of the content without affecting the original
+      const content = contentRef.current.cloneNode(true) as HTMLElement;
+
+      // Hide markup column in the clone
+      content.querySelectorAll('.markup-column').forEach(cell => {
+        cell.classList.add('hide-for-print');
+      });
+
+      // Create a temporary container with appropriate A4 dimensions
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.width = '210mm';
+      tempDiv.appendChild(content);
+      document.body.appendChild(tempDiv);
+
+      // Use html2canvas with same settings as download to ensure consistency
+      const canvas = await html2canvas(content, {
+        scale: 2, // Higher resolution
+        useCORS: true,
+        allowTaint: true,
+        scrollX: 0,
+        scrollY: 0,
+        backgroundColor: '#ffffff',
+        windowWidth: content.scrollWidth,
+        windowHeight: content.scrollHeight
+      });
+
+      // Clean up
+      document.body.removeChild(tempDiv);
+
+      // Create a print window with the canvas image embedded
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast.error('Could not open print window. Please allow popups and try again.');
+        return;
+      }
+
+      // Create a document that will look exactly like the preview
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${safeQuotationNumber}</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              background-color: white;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            img {
+              width: 100%;
+              height: auto;
+              display: block;
+              margin: 0 auto;
+              page-break-inside: avoid;
+            }
+            .page-break {
+              page-break-after: always;
+              break-after: page;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${canvas.toDataURL('image/png')}" />
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.close();
+                }, 500);
+              }, 300);
+            }
+          </script>
+        </body>
+        </html>
+      `);
       
-      const originalContents = document.body.innerHTML;
-      document.body.innerHTML = printContent.innerHTML;
-      window.print();
-      document.body.innerHTML = originalContents;
-      
-      // Re-add event listeners that were lost during printing
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      printWindow.document.close();
+      toast.success('Print dialog opened');
     } catch (error) {
-      console.error('Error printing quotation:', error);
+      console.error('Error preparing print:', error);
+      toast.error('Failed to prepare document for printing. Please try again.');
     }
   };
-  
-  const handleDownload = () => {
-    // This will be implemented later with jspdf or html2canvas
-    console.log('Download functionality to be implemented');
+
+  const handleDownload = async () => {
+    try {
+      if (!contentRef.current) {
+        toast.error('Content not available for download');
+        return;
+      }
+
+      toast.info('Preparing PDF for download...', { duration: 3000 });
+      
+      // Create a clone of the content to modify for PDF
+      const content = contentRef.current.cloneNode(true) as HTMLElement;
+      
+      // Hide markup column in the cloned content
+      const markupCells = content.querySelectorAll('.markup-column');
+      markupCells.forEach(cell => {
+        cell.classList.add('hide-for-print');
+      });
+      
+      // Temporarily append the clone to the document with fixed dimensions for proper rendering
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.width = '210mm'; // A4 width
+      tempDiv.appendChild(content);
+      document.body.appendChild(tempDiv);
+      
+      // Use html2canvas to capture the content
+      const canvas = await html2canvas(content, {
+        scale: 2, // Higher scale for better quality
+        useCORS: true, // Allow loading cross-origin images
+        allowTaint: true,
+        logging: false,
+        windowWidth: 210 * 3.78, // A4 width in pixels (210mm)
+        windowHeight: 297 * 3.78, // A4 height in pixels (297mm)
+      });
+      
+      // Remove the temporary div
+      document.body.removeChild(tempDiv);
+      
+      // Calculate dimensions for A4 PDF
+      const imgWidth = 210; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // Create PDF with A4 dimensions
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      // Add the canvas image to the PDF
+      const imgData = canvas.toDataURL('image/png');
+      
+      // If content is taller than A4, split it across multiple pages
+      let heightLeft = imgHeight;
+      let position = 0;
+      const pageHeight = 297; // A4 height in mm
+      
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      // Add additional pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      // Save the PDF
+      pdf.save(`${safeQuotationNumber}.pdf`);
+      toast.success('PDF downloaded successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF. Please try again.');
+    }
   };
   
   return (
@@ -310,6 +498,7 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
         {/* A4 Preview Content */}
         <div 
           id="quotation-preview-content" 
+          ref={contentRef}
           className="p-8 bg-white font-sf-pro"
           style={{ width: '100%', maxWidth: '210mm', margin: '0 auto' }}
         >
@@ -497,6 +686,7 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                   <th className="py-2 px-4 text-left text-sm font-semibold text-slate-700 border-b border-slate-200">Description</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Qty</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Rate</th>
+                  <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200 markup-column">Mark Up %</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Discount</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">VAT</th>
                   <th className="py-2 px-4 text-right text-sm font-semibold text-slate-700 border-b border-slate-200">Amount</th>
@@ -511,6 +701,9 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                       <td className="py-3 px-4 text-sm text-slate-700">{item.description || ''}</td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">{item.quantity || 0}</td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">{formatCurrency(item.rate)}</td>
+                      <td className="py-3 px-4 text-sm text-slate-700 text-right markup-column">
+                        {item.markup ? `${item.markup}%` : '0%'}
+                      </td>
                       <td className="py-3 px-4 text-sm text-slate-700 text-right">
                         {item.discount ? `${item.discount}%` : '0%'}
                       </td>
@@ -521,7 +714,7 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                 })}
                 {(!quotation.items || quotation.items.length === 0) && (
                   <tr>
-                    <td colSpan={7} className="py-4 text-center text-slate-500">No items added to this quotation</td>
+                    <td colSpan={8} className="py-4 text-center text-slate-500">No items added to this quotation</td>
                   </tr>
                 )}
               </tbody>
