@@ -57,6 +57,13 @@ export interface QuotationData {
     phone?: string;
     billingAddress?: string;
     shippingAddress?: string;
+    // Individual shipping address fields
+    shippingStreet?: string;
+    shippingCity?: string;
+    shippingState?: string;
+    shippingPostal?: string;
+    shippingCountry?: string;
+    sameAsBilling?: boolean;
   };
   items: QuotationItem[];
   subtotal?: number;
@@ -418,34 +425,60 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
                     
                     {/* Display shipping address */}
                     <div>
-                      {/* Check for different shipping address formats */}
-                      {selectedClient.shippingAddress ? (
-                        // If we have a pre-formatted shipping address string, use it
-                        <p className="whitespace-pre-line">{selectedClient.shippingAddress}</p>
-                      ) : selectedClient.shippingStreet ? (
-                        // If we have individual shipping address fields, format them
-                        <div>
-                          <p>{selectedClient.shippingStreet}</p>
-                          <p>
-                            {[
-                              selectedClient.shippingCity,
-                              selectedClient.shippingState,
-                              selectedClient.shippingPostal
-                            ]
-                              .filter(Boolean)
-                              .join(', ')}
-                          </p>
-                          {selectedClient.shippingCountry && <p>{selectedClient.shippingCountry}</p>}
-                        </div>
-                      ) : selectedClient.sameAsBilling && selectedClient.billingAddress ? (
-                        // If shipping is same as billing, use billing address
-                        <div>
-                          <p className="whitespace-pre-line">{selectedClient.billingAddress}</p>
-                          <p className="text-xs text-slate-500 italic">(Same as billing address)</p>
-                        </div>
-                      ) : (
-                        <p className="text-slate-600">No shipping address available</p>
-                      )}
+                      {(() => {
+                        // Try to parse the shipping address if it's a semicolon-separated string
+                        const parseAddress = (address: string) => {
+                          const parts = address.split(';').map(part => part.trim()).filter(Boolean);
+                          return {
+                            line1: parts[0] || '',
+                            line2: parts.slice(1, -1).join(', '),
+                            country: parts[parts.length - 1] || ''
+                          };
+                        };
+
+                        const shippingAddress = selectedClient.shippingAddress || '';
+                        
+                        if (shippingAddress) {
+                          const parsedAddress = parseAddress(shippingAddress);
+                          return (
+                            <div>
+                              <p>{parsedAddress.line1}</p>
+                              {parsedAddress.line2 && <p>{parsedAddress.line2}</p>}
+                              {parsedAddress.country && <p>{parsedAddress.country}</p>}
+                            </div>
+                          );
+                        } else if (selectedClient.shippingStreet) {
+                          // If we have individual shipping address fields, format them
+                          return (
+                            <div>
+                              <p>{selectedClient.shippingStreet}</p>
+                              <p>
+                                {[
+                                  selectedClient.shippingCity,
+                                  selectedClient.shippingState,
+                                  selectedClient.shippingPostal
+                                ]
+                                  .filter(Boolean)
+                                  .join(', ')}
+                              </p>
+                              {selectedClient.shippingCountry && <p>{selectedClient.shippingCountry}</p>}
+                            </div>
+                          );
+                        } else if (selectedClient.sameAsBilling && selectedClient.billingAddress) {
+                          // If shipping is same as billing, use billing address
+                          const parsedBilling = parseAddress(selectedClient.billingAddress);
+                          return (
+                            <div>
+                              <p>{parsedBilling.line1}</p>
+                              {parsedBilling.line2 && <p>{parsedBilling.line2}</p>}
+                              {parsedBilling.country && <p>{parsedBilling.country}</p>}
+                              <p className="text-xs text-slate-500 italic">(Same as billing address)</p>
+                            </div>
+                          );
+                        } else {
+                          return <p className="text-slate-600">No shipping address available</p>;
+                        }
+                      })()}
                     </div>
                   </div>
                 ) : (

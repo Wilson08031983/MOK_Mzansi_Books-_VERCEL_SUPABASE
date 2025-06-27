@@ -12,8 +12,11 @@ import {
   Send,
   Eye
 } from 'lucide-react';
+import QuotationPreviewModal, { QuotationData, CompanyAssets } from '@/components/quotation/QuotationPreviewModal';
+import { toast } from 'sonner';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
-// Define the line item interface
+// Define interfaces
 interface LineItem {
   id: string;
   description: string;
@@ -22,6 +25,31 @@ interface LineItem {
   markupPercent: string | number;
   discount: string | number;
   amount: number;
+  vat?: number; // Add VAT field for preview
+}
+
+interface Client {
+  id: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  // Shipping address fields
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostal?: string;
+  shippingCountry?: string;
+  sameAsBilling?: boolean;
+}
+
+interface SavedFilter {
+  id: string;
+  name: string;
+  filters: Record<string, string | number | boolean | undefined>;
 }
 
 interface CreateQuotationModalProps {
@@ -49,12 +77,19 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
       rate: '', 
       markupPercent: '', 
       discount: '', 
-      amount: 0 
+      amount: 0,
+      vat: 0 // Default VAT to 0%
     }
   ]);
 
   const [subtotal, setSubtotal] = useState(0);
   const [total, setTotal] = useState(0);
+  
+  // State for preview modal
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [companyAssets, setCompanyAssets] = useState<CompanyAssets>({});
+  const [clientList, setClientList] = useState<Client[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
   // Add a new line item
   const addItem = () => {
@@ -67,7 +102,8 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
         rate: '', 
         markupPercent: '', 
         discount: '', 
-        amount: 0 
+        amount: 0,
+        vat: 0 // Default VAT to 0%
       }
     ]);
   };
@@ -106,12 +142,90 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
 
   // Calculate totals whenever line items change
   useEffect(() => {
-    const newSubtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
-    const newTotal = newSubtotal; // No VAT for now as specified
-    
-    setSubtotal(newSubtotal);
-    setTotal(newTotal);
+    const calculatedSubtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+    setSubtotal(calculatedSubtotal);
+    setTotal(calculatedSubtotal); // For now total = subtotal, we can add tax etc later
   }, [lineItems]);
+  
+  // Update selected client when clientId or clientList changes
+  useEffect(() => {
+    if (formData.clientId && clientList.length > 0) {
+      const client = clientList.find(c => c.id === formData.clientId);
+      if (client) {
+        // Format the shipping address from individual fields if needed
+        const formattedClient = {
+          ...client,
+          // If shippingAddress is not set but we have shipping fields, create it
+          shippingAddress: client.shippingAddress || (
+            client.shippingStreet ? [
+              client.shippingStreet,
+              client.shippingCity,
+              client.shippingState,
+              client.shippingPostal,
+              client.shippingCountry
+            ].filter(Boolean).join('; ') : ''
+          )
+        };
+        setSelectedClient(formattedClient);
+      } else {
+        setSelectedClient(null);
+      }
+    } else {
+      setSelectedClient(null);
+    }
+  }, [formData.clientId, clientList]);
+
+  // Load company assets and client list from localStorage
+  useEffect(() => {
+    try {
+      // Load company assets
+      const savedAssetsString = localStorage.getItem('companyAssets');
+      if (savedAssetsString) {
+        const savedAssets = JSON.parse(savedAssetsString);
+        setCompanyAssets(savedAssets);
+      }
+      
+      // Load company details to supplement assets info
+      const companyDetailsString = localStorage.getItem('companyDetails');
+      if (companyDetailsString) {
+        const companyDetails = JSON.parse(companyDetailsString);
+        setCompanyAssets(prev => ({
+          ...prev,
+          name: companyDetails.name,
+          address: [
+            companyDetails.addressLine1,
+            companyDetails.addressLine2,
+            companyDetails.addressLine3,
+            companyDetails.addressLine4
+          ].filter(Boolean).join('\n'),
+          email: companyDetails.email,
+          phone: companyDetails.phone,
+          website: companyDetails.websiteNotApplicable ? '' : companyDetails.website,
+          vatNumber: companyDetails.vatNumberNotApplicable ? '' : companyDetails.vatNumber,
+          regNumber: companyDetails.regNumber
+        }));
+      }
+      
+      // Load clients
+      const clientsString = localStorage.getItem('clients');
+      if (clientsString) {
+        const clients = JSON.parse(clientsString);
+        setClientList(clients);
+      }
+    } catch (error) {
+      console.error('Error loading data from localStorage:', error);
+    }
+  }, []);
+  
+  // Update selected client when clientId changes
+  useEffect(() => {
+    if (formData.clientId && clientList.length > 0) {
+      const client = clientList.find(c => c.id === formData.clientId);
+      setSelectedClient(client || null);
+    } else {
+      setSelectedClient(null);
+    }
+  }, [formData.clientId, clientList]);
 
   if (!isOpen) return null;
 
@@ -143,14 +257,22 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   <select
                     id="client"
                     value={formData.clientId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, clientId: e.target.value }))}
+                    onChange={(e) => {
+                      const clientId = e.target.value;
+                      setFormData(prev => ({ ...prev, clientId }));
+                      
+                      // Find the selected client from clientList
+                      const client = clientList.find(c => c.id === clientId) || null;
+                      setSelectedClient(client);
+                    }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500 focus:border-mokm-purple-500 font-sf-pro"
                   >
                     <option value="">Select a client</option>
-                    <option value="1">Tech Solutions Ltd</option>
-                    <option value="2">Creative Agency</option>
-                    <option value="3">Government Dept</option>
-                    <option value="4">StartUp Inc</option>
+                    {clientList.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.companyName || `${client.firstName} ${client.lastName}`.trim() || `Client ${client.id}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -379,6 +501,43 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
             <Button
               variant="outline"
               className="font-sf-pro"
+              onClick={() => {
+                try {
+                  // Check if we have a valid client selected
+                  const clientId = formData.clientId;
+                  const client = clientList.find(c => c.id === clientId);
+                  
+                  if (!client) {
+                    toast.error("Please select a valid client before previewing");
+                    return;
+                  }
+                  
+                  // Update selected client to ensure it's in sync
+                  setSelectedClient(client);
+                  
+                  // Debug logging for client data
+                  console.log('Selected client before preview:', selectedClient);
+                  console.log('Client shipping address:', selectedClient?.shippingAddress);
+                  
+                  // Log all clients in localStorage
+                  const clientsString = localStorage.getItem('clients');
+                  if (clientsString) {
+                    const clients = JSON.parse(clientsString);
+                    console.log('All clients in localStorage:', clients);
+                    console.log('Client with matching ID:', clients.find(c => c.id === formData.clientId));
+                  }
+                  
+                  // Generate quotation number if not already created
+                  const currentYear = new Date().getFullYear();
+                  const quotationNumber = `QUO-${currentYear}-001`;
+                  
+                  // Open the preview modal
+                  setIsPreviewModalOpen(true);
+                } catch (error) {
+                  console.error('Error opening preview:', error);
+                  toast.error('Could not open preview. Please try again.');
+                }
+              }}
             >
               <Eye className="h-4 w-4 mr-2" />
               Preview
@@ -398,6 +557,59 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
             </Button>
           </div>
         </div>
+        {/* Quotation Preview Modal */}
+        <ErrorBoundary fallback={<div>Something went wrong with the preview. Please try again.</div>}>
+          {isPreviewModalOpen && (
+            <QuotationPreviewModal
+              open={isPreviewModalOpen}
+              onClose={() => setIsPreviewModalOpen(false)}
+              quotation={{
+                quotationNumber: `QUO-${new Date().getFullYear()}-001`,
+                date: formData.date,
+                reference: formData.reference,
+                clientInfo: selectedClient ? {
+                  companyName: selectedClient.companyName || '',
+                  contactPerson: [selectedClient.firstName, selectedClient.lastName].filter(Boolean).join(' '),
+                  email: selectedClient.email || '',
+                  phone: selectedClient.phone || '',
+                  billingAddress: selectedClient.billingAddress || '',
+                  shippingAddress: selectedClient.shippingAddress || (
+                    // If shipping address is not set but we have shipping fields, create it
+                    selectedClient.shippingStreet ? [
+                      selectedClient.shippingStreet,
+                      selectedClient.shippingCity,
+                      selectedClient.shippingState,
+                      selectedClient.shippingPostal,
+                      selectedClient.shippingCountry
+                    ].filter(Boolean).join('; ') : ''
+                  ),
+                  // Pass through individual shipping fields as well
+                  shippingStreet: selectedClient.shippingStreet || '',
+                  shippingCity: selectedClient.shippingCity || '',
+                  shippingState: selectedClient.shippingState || '',
+                  shippingPostal: selectedClient.shippingPostal || '',
+                  shippingCountry: selectedClient.shippingCountry || '',
+                  sameAsBilling: selectedClient.sameAsBilling || false
+                } : undefined,
+                items: lineItems.map((item) => ({
+                  id: item.id,
+                  description: String(item.description || ''),
+                  quantity: Number(item.quantity || 0),
+                  rate: Number(item.rate || 0),
+                  discount: Number(item.discount || 0),
+                  amount: Number(item.amount || 0),
+                  vat: 0 // Default VAT to 0%
+                })),
+                subtotal: subtotal,
+                vatTotal: 0, // Default VAT total to 0
+                grandTotal: total,
+                termsAndConditions: formData.terms,
+                notes: formData.notes
+              }}
+              company={companyAssets}
+            />
+          )}
+        </ErrorBoundary>
       </div>
     </div>
   );
