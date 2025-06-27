@@ -4,7 +4,11 @@ import {
   Clock,
   AlertCircle,
   XCircle,
-  FileText
+  FileText,
+  Send,
+  Eye,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import QuotationsHeader from '@/components/quotations/QuotationsHeader';
 import QuotationsSearchFilters from '@/components/quotations/QuotationsSearchFilters';
@@ -62,8 +66,28 @@ const Quotations = () => {
 
   // Load quotations from localStorage
   const loadQuotations = () => {
-    const loadedQuotations = getQuotations();
-    setQuotations(loadedQuotations);
+    try {
+      const loadedQuotations = getQuotations();
+      setQuotations(loadedQuotations);
+      return loadedQuotations;
+    } catch (error) {
+      console.error('Error loading quotations:', error);
+      toast.error('Failed to load quotations');
+      return [];
+    }
+  };
+
+  // Handle refresh action
+  const handleRefresh = () => {
+    // Reset relevant states
+    setCurrentPage(1);
+    setSelectedQuotations([]);
+    
+    // Reload quotations
+    loadQuotations();
+    
+    // Show feedback to user
+    toast.success('Quotations refreshed');
   };
 
   // Load quotations on component mount
@@ -71,21 +95,31 @@ const Quotations = () => {
     loadQuotations();
   }, []);
 
-  // Handle when a new quotation is saved
+  const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
+
+  // Handle edit quotation
+  const handleEditQuotation = (quotationId: string) => {
+    const quotationToEdit = quotations.find(q => q.id === quotationId);
+    if (quotationToEdit) {
+      setEditingQuotation(quotationToEdit);
+      setIsCreateQuotationModalOpen(true);
+    } else {
+      toast.error('Quotation not found');
+    }
+  };
+
+  // Handle when a new or updated quotation is saved
   const handleQuotationSaved = (newQuotation: Quotation, allQuotations: Quotation[]) => {
     // Update the local state with the latest quotations
     setQuotations(allQuotations);
     
-    // Show a success toast with the quotation number
-    toast.success(`Quotation ${newQuotation.number} saved successfully`, {
-      action: {
-        label: 'View',
-        onClick: () => {
-          // TODO: Implement view quotation functionality
-          console.log('View quotation:', newQuotation.id);
-        },
-      },
-    });
+    // Show success message
+    const action = editingQuotation ? 'updated' : 'saved';
+    toast.success(`Quotation ${newQuotation.number} ${action} successfully`);
+    
+    // Reset editing state and close the modal
+    setEditingQuotation(null);
+    setIsCreateQuotationModalOpen(false);
   };
 
   const handleDeleteQuotation = (quotationId: string): void => {
@@ -94,40 +128,69 @@ const Quotations = () => {
     toast.success('Quotation deleted successfully');
   };
 
+  // Get status icon with proper typing
   const getStatusIcon = (status: string) => {
-    switch (status) {
+    if (!status) return <FileText className="h-4 w-4 text-gray-500" />;
+    
+    switch (status.toLowerCase()) {
+      case 'draft':
+      case 'saved':
+        return <FileText className="h-4 w-4 text-gray-500" />;
+      case 'sent':
+        return <Send className="h-4 w-4 text-blue-500" />;
+      case 'viewed':
+        return <Eye className="h-4 w-4 text-blue-400" />;
       case 'accepted':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'sent':
-      case 'viewed':
-        return <Clock className="h-4 w-4 text-blue-500" />;
-      case 'expired':
+      case 'pending':
+        return <Clock className="h-4 w-4 text-amber-500" />;
+      case 'overdue':
         return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'expired':
+        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
       case 'rejected':
         return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'draft':
-        return <FileText className="h-4 w-4 text-gray-500" />;
+      case 'cancelled':
+        return <X className="h-4 w-4 text-gray-400" />;
       default:
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+        return <FileText className="h-4 w-4 text-gray-400" />;
     }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
+    
+    switch (status.toLowerCase()) {
+      case 'draft':
+      case 'saved':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'sent':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'viewed':
+        return 'bg-blue-50 text-blue-700 border-blue-100';
       case 'accepted':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'sent':
-      case 'viewed':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'expired':
+      case 'pending':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'overdue':
         return 'bg-red-100 text-red-800 border-red-200';
+      case 'expired':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-500 border-gray-200';
       default:
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
+  };
+  
+  // Helper function to get display status text
+  const getDisplayStatus = (status?: string) => {
+    if (!status) return 'Draft';
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'saved') return 'Draft';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
   };
 
   const filteredQuotations = quotations.filter(quotation => {
@@ -260,6 +323,7 @@ const Quotations = () => {
         viewMode={viewMode}
         setViewMode={setViewMode}
         setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
+        onRefresh={handleRefresh}
       />
 
       <QuotationsStats quotations={quotations} />
@@ -305,6 +369,7 @@ const Quotations = () => {
         handleSelectAll={handleSelectAll}
         getStatusIcon={getStatusIcon}
         getStatusColor={getStatusColor}
+        getDisplayStatus={getDisplayStatus}
         sortColumn={sortColumn}
         sortDirection={sortDirection}
         handleSort={handleSort}
@@ -313,6 +378,7 @@ const Quotations = () => {
         handleClearFilters={handleClearFilters}
         setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
         onDeleteQuotation={handleDeleteQuotation}
+        onEditQuotation={handleEditQuotation}
       />
 
       {sortedQuotations.length > 0 && (
@@ -333,8 +399,12 @@ const Quotations = () => {
 
       <CreateQuotationModal 
         isOpen={isCreateQuotationModalOpen}
-        onClose={() => setIsCreateQuotationModalOpen(false)}
+        onClose={() => {
+          setEditingQuotation(null);
+          setIsCreateQuotationModalOpen(false);
+        }}
         onQuotationSaved={handleQuotationSaved}
+        quotationToEdit={editingQuotation}
       />
     </div>
   );

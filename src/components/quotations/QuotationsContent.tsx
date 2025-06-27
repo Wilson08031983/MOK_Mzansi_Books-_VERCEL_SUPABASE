@@ -10,24 +10,39 @@ import {
 } from 'lucide-react';
 import QuotationsTable from './QuotationsTable';
 import QuotationsGrid from './QuotationsGrid';
+import { Quotation } from '@/services/quotationService';
+
+interface Filters {
+  status: string;
+  dateRange: string;
+  dateType: string;
+  client: string;
+  amountMin: string;
+  amountMax: string;
+  salesperson: string;
+  tags: string[];
+  customFields: Record<string, unknown>;
+}
 
 interface QuotationsContentProps {
   viewMode: 'table' | 'grid';
-  paginatedQuotations: any[];
-  sortedQuotations: any[];
+  paginatedQuotations: Quotation[];
+  sortedQuotations: Quotation[];
   selectedQuotations: string[];
   handleSelectQuotation: (quotationId: string) => void;
   handleSelectAll: () => void;
   getStatusIcon: (status: string) => React.ReactNode;
   getStatusColor: (status: string) => string;
+  getDisplayStatus: (status?: string) => string;
   sortColumn: string;
   sortDirection: 'asc' | 'desc';
   handleSort: (column: string) => void;
   searchTerm: string;
-  filters: any;
+  filters: Filters;
   handleClearFilters: () => void;
   setIsCreateQuotationModalOpen: (open: boolean) => void;
   onDeleteQuotation: (quotationId: string) => void;
+  onEditQuotation?: (quotationId: string) => void;
 }
 
 const QuotationsContent: React.FC<QuotationsContentProps> = ({
@@ -39,6 +54,7 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
   handleSelectAll,
   getStatusIcon,
   getStatusColor,
+  getDisplayStatus,
   sortColumn,
   sortDirection,
   handleSort,
@@ -46,7 +62,8 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
   filters,
   handleClearFilters,
   setIsCreateQuotationModalOpen,
-  onDeleteQuotation
+  onDeleteQuotation,
+  onEditQuotation
 }) => {
   return (
     <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
@@ -103,17 +120,19 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
       </CardHeader>
       <CardContent>
         {viewMode === 'table' ? (
-          <QuotationsTable 
+          <QuotationsTable
             quotations={paginatedQuotations}
             selectedQuotations={selectedQuotations}
             onSelectQuotation={handleSelectQuotation}
             onSelectAll={handleSelectAll}
             getStatusIcon={getStatusIcon}
             getStatusColor={getStatusColor}
+            getDisplayStatus={getDisplayStatus}
             sortColumn={sortColumn}
             sortDirection={sortDirection}
             onSort={handleSort}
             onDeleteQuotation={onDeleteQuotation}
+            onEditQuotation={onEditQuotation}
           />
         ) : (
           <QuotationsGrid 

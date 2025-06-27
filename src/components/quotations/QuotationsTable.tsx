@@ -18,18 +18,21 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import QuotationActionsMenu from './QuotationActionsMenu';
+import { Quotation } from '@/services/quotationService';
 
 interface QuotationsTableProps {
-  quotations: any[];
+  quotations: Quotation[];
   selectedQuotations: string[];
   onSelectQuotation: (quotationId: string) => void;
   onSelectAll: () => void;
   getStatusIcon: (status: string) => React.ReactNode;
   getStatusColor: (status: string) => string;
+  getDisplayStatus: (status?: string) => string;
   sortColumn: string;
   sortDirection: 'asc' | 'desc';
   onSort: (column: string) => void;
   onDeleteQuotation: (quotationId: string) => void;
+  onEditQuotation?: (quotationId: string) => void;
 }
 
 const QuotationsTable: React.FC<QuotationsTableProps> = ({
@@ -39,10 +42,12 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
   onSelectAll,
   getStatusIcon,
   getStatusColor,
+  getDisplayStatus,
   sortColumn,
   sortDirection,
   onSort,
-  onDeleteQuotation
+  onDeleteQuotation,
+  onEditQuotation
 }) => {
   const getSortIcon = (column: string) => {
     if (sortColumn !== column) return null;
@@ -144,10 +149,14 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 </div>
               </TableCell>
               <TableCell>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
-                  {getStatusIcon(quotation.status)}
-                  <span className="ml-1 capitalize">{quotation.status}</span>
-                </span>
+                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
+                  <span className="mr-1.5 flex-shrink-0">
+                    {getStatusIcon(quotation.status)}
+                  </span>
+                  <span className="truncate">
+                    {getDisplayStatus(quotation.status)}
+                  </span>
+                </div>
               </TableCell>
               <TableCell>
                 <span className="font-sf-pro">{quotation.salesperson}</span>
@@ -160,6 +169,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                     clientEmail: quotation.clientEmail
                   }}
                   onDelete={onDeleteQuotation}
+                  onEdit={onEditQuotation}
                 />
               </TableCell>
             </TableRow>

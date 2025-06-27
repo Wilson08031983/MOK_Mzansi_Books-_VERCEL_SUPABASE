@@ -26,9 +26,10 @@ interface QuotationActionsMenuProps {
     clientEmail: string;
   };
   onDelete: (id: string) => void;
+  onEdit?: (id: string) => void;
 }
 
-const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation, onDelete }) => {
+const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation, onDelete, onEdit }) => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
 
@@ -38,8 +39,12 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation, 
   };
 
   const handleEdit = () => {
-    toast.info(`Editing ${quotation.number}`);
-    console.log(`Edit quotation: ${quotation.id}`);
+    if (onEdit) {
+      onEdit(quotation.id);
+    } else {
+      toast.info(`Editing ${quotation.number}`);
+      console.log(`Edit quotation: ${quotation.id}`);
+    }
   };
 
   const handleSend = () => {

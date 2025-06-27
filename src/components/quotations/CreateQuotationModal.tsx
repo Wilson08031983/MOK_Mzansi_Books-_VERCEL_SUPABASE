@@ -73,9 +73,10 @@ interface CreateQuotationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onQuotationSaved?: (quotation: QuotationType, allQuotations: QuotationType[]) => void;
+  quotationToEdit?: QuotationType | null;
 }
 
-const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onClose, onQuotationSaved }) => {
+const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onClose, onQuotationSaved, quotationToEdit }) => {
   const [formData, setFormData] = useState({
     clientId: '',
     quotationNumber: '',
@@ -89,18 +90,89 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
   });
 
   // Using proper typed state for line items
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    { 
-      id: crypto.randomUUID(), 
-      description: '', 
-      quantity: '', 
-      rate: '', 
-      markupPercent: '', 
-      discount: '', 
-      amount: 0,
-      vat: 0 // Default VAT to 0%
-    }
-  ]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  
+  // Initialize form data when opening modal or when quotationToEdit changes
+  useEffect(() => {
+    const initializeForm = async () => {
+      if (quotationToEdit) {
+        // Set form data from the quotation being edited
+        setFormData({
+          clientId: quotationToEdit.clientId || '',
+          quotationNumber: quotationToEdit.number || '',
+          reference: quotationToEdit.reference || '',
+          date: quotationToEdit.date || new Date().toISOString().split('T')[0],
+          expiryDate: quotationToEdit.expiryDate || '',
+          currency: quotationToEdit.currency || 'ZAR',
+          notes: quotationToEdit.notes || '',
+          terms: quotationToEdit.terms || '',
+          project: quotationToEdit.project || ''
+        });
+        
+        // Set line items if they exist
+        if (quotationToEdit.items && quotationToEdit.items.length > 0) {
+          setLineItems(quotationToEdit.items.map(item => ({
+            id: item.id || crypto.randomUUID(),
+            description: item.description || '',
+            quantity: item.quantity.toString(),
+            rate: item.rate.toString(),
+            markupPercent: '0',
+            discount: (item.discount || 0).toString(),
+            amount: item.amount || 0,
+            vat: 0
+          })));
+        } else {
+          // Default empty line item if no items exist
+          setLineItems([{
+            id: crypto.randomUUID(),
+            description: '',
+            quantity: '',
+            rate: '',
+            markupPercent: '',
+            discount: '',
+            amount: 0
+          }]);
+        }
+      } else {
+        // Get existing quotations for number generation
+        let existingQuotations: QuotationType[] = [];
+        try {
+          const quotes = getQuotations();
+          existingQuotations = Array.isArray(quotes) ? quotes : [];
+        } catch (error) {
+          console.error('Error fetching quotations:', error);
+          existingQuotations = [];
+        }
+        const newNumber = generateNextQuotationNumber(existingQuotations);
+        
+        // Reset to default for new quotation
+        setFormData({
+          clientId: '',
+          quotationNumber: newNumber,
+          reference: '',
+          date: new Date().toISOString().split('T')[0],
+          expiryDate: '',
+          currency: 'ZAR',
+          notes: '',
+          terms: '',
+          project: ''
+        });
+        
+        // Reset to single empty line item
+        setLineItems([{
+          id: crypto.randomUUID(),
+          description: '',
+          quantity: '',
+          rate: '',
+          markupPercent: '',
+          discount: '',
+          amount: 0
+        }]);
+      }
+    };
+    
+    initializeForm();
+  }, [quotationToEdit, isOpen]);
 
   const [subtotal, setSubtotal] = useState(0);
   const [vatRate, setVatRate] = useState(0);
@@ -136,28 +208,40 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     }
   };
 
-
-
   // Generate the next quotation number in format QUO-YYYY-NNN
-  const generateNextQuotationNumber = (existingQuotations: QuotationType[]): string => {
-    const year = new Date().getFullYear();
-    const prefix = `QUO-${year}-`;
-    
-    // Get all quotation numbers for the current year
-    const currentYearQuotations = existingQuotations.filter(q => q.number.startsWith(prefix));
-    
-    // Find the highest number used so far
-    let highestNumber = 0;
-    currentYearQuotations.forEach(q => {
-      const numberPart = q.number.replace(prefix, '');
-      const num = parseInt(numberPart, 10);
-      if (!isNaN(num) && num > highestNumber) {
-        highestNumber = num;
+  const generateNextQuotationNumber = (existingQuotations: QuotationType[] = []): string => {
+    try {
+      const year = new Date().getFullYear();
+      const prefix = `QUO-${year}-`;
+      
+      if (!Array.isArray(existingQuotations)) {
+        console.warn('existingQuotations is not an array, defaulting to empty array');
+        existingQuotations = [];
       }
-    });
-    
-    // Return the next number in sequence
-    return `${prefix}${String(highestNumber + 1).padStart(3, '0')}`;
+      
+      // Get all quotation numbers for the current year
+      const currentYearQuotations = existingQuotations
+        .filter(q => q && q.number && typeof q.number === 'string' && q.number.startsWith(prefix));
+      
+      // Find the highest number used so far
+      let highestNumber = 0;
+      currentYearQuotations.forEach(q => {
+        if (q && q.number) {
+          const numberPart = q.number.replace(prefix, '');
+          const num = parseInt(numberPart, 10);
+          if (!isNaN(num) && num > highestNumber) {
+            highestNumber = num;
+          }
+        }
+      });
+      
+      // Return the next number in sequence
+      return `${prefix}${String(highestNumber + 1).padStart(3, '0')}`;
+    } catch (error) {
+      console.error('Error generating quotation number:', error);
+      // Fallback to a simple timestamp-based number
+      return `QUO-${new Date().getFullYear()}-${Date.now().toString().slice(-3)}`;
+    }
   };
 
   // Handle save quotation
@@ -184,15 +268,27 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     setIsSaving(true);
     
     try {
-      // Calculate total amount
-      const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
-      const total = subtotal; // Add tax and other calculations if needed
+      // Calculate subtotal, tax, and total
+      const subtotal = lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      const taxRate = 0.15; // 15% VAT
+      const tax = subtotal * taxRate;
+      const total = subtotal + tax;
+      
+      // Get existing quotations for number generation if needed
+      let allQuotations: QuotationType[] = [];
+      try {
+        const quotes = getQuotations();
+        allQuotations = Array.isArray(quotes) ? quotes : [];
+      } catch (error) {
+        console.error('Error fetching quotations:', error);
+        allQuotations = [];
+      }
       const now = new Date().toISOString();
       
       // Create quotation data
       const quotationData: QuotationType = {
-        id: formData.quotationNumber || Date.now().toString(),
-        number: formData.quotationNumber || '',
+        id: quotationToEdit?.id || crypto.randomUUID(),
+        number: quotationToEdit?.number || generateNextQuotationNumber(allQuotations),
         reference: formData.reference || '',
         client: selectedClient?.companyName || `${selectedClient?.firstName} ${selectedClient?.lastName}`.trim(),
         clientId: formData.clientId,
