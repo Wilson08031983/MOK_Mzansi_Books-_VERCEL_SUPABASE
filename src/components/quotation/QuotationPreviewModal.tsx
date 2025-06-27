@@ -21,6 +21,29 @@ interface QuotationItem {
   vat?: number;
 }
 
+// Client interface matching the structure in clientService.ts
+interface Client {
+  id: string;
+  clientType?: string;
+  companyName?: string;
+  contactPerson?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  // Shipping address fields from clientService
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostal?: string;
+  shippingCountry?: string;
+  sameAsBilling?: boolean;
+  // Include other fields that might exist
+  [key: string]: unknown;
+}
+
 export interface QuotationData {
   id?: string;
   quotationNumber?: string;
@@ -97,6 +120,59 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   quotation,
   company,
 }) => {
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+
+  // Load client data when the modal opens
+  useEffect(() => {
+    // If we have clientInfo directly in the quotation, use that
+    if (quotation.clientInfo) {
+      console.log('Client info from quotation:', quotation.clientInfo);
+      console.log('Shipping address from quotation:', quotation.clientInfo.shippingAddress);
+      
+      // Convert clientInfo to Client format
+      const clientData = {
+        id: quotation.clientId || '',
+        companyName: quotation.clientInfo.companyName,
+        firstName: quotation.clientInfo.contactPerson?.split(' ')[0],
+        lastName: quotation.clientInfo.contactPerson?.split(' ').slice(1).join(' '),
+        email: quotation.clientInfo.email,
+        phone: quotation.clientInfo.phone,
+        billingAddress: quotation.clientInfo.billingAddress,
+        shippingAddress: quotation.clientInfo.shippingAddress
+      };
+      
+      console.log('Setting selected client to:', clientData);
+      setSelectedClient(clientData);
+      return;
+    }
+    
+    // Otherwise try to load from localStorage using clientId
+    if (open && quotation.clientId) {
+      try {
+        // Load from localStorage - use 'clients' key as that's what CreateQuotationModal uses
+        const clientsString = localStorage.getItem('clients');
+        
+        if (!clientsString) {
+          setSelectedClient(null);
+          return;
+        }
+        
+        const clients = JSON.parse(clientsString);
+        const client = clients.find((c: Client) => c.id === quotation.clientId);
+        
+        if (client) {
+          setSelectedClient(client);
+        } else {
+          setSelectedClient(null);
+        }
+      } catch (error) {
+        console.error('Error loading client data:', error);
+        setSelectedClient(null);
+      }
+    } else {
+      setSelectedClient(null);
+    }
+  }, [open, quotation.clientId, quotation.clientInfo]);
   const [companyData, setCompanyData] = useState<CompanyData>({});
   const [bankDetails, setBankDetails] = useState<Partial<CompanyData>>({});
   const [companyAssets, setCompanyAssets] = useState<Record<string, { dataUrl: string }>>({});
@@ -325,9 +401,56 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
               
               <div>
                 <h3 className="font-semibold text-sm text-slate-600 mb-1">Ship To:</h3>
-                <p className="whitespace-pre-line">
-                  {quotation.clientInfo?.shippingAddress || quotation.clientInfo?.billingAddress || 'Client Shipping Address'}
-                </p>
+                {selectedClient ? (
+                  <div className="text-sm">
+                    <p className="font-semibold">{selectedClient.companyName || 'Client Company'}</p>
+                    
+                    {/* Show contact person name */}
+                    {[selectedClient.firstName, selectedClient.lastName]
+                      .filter(Boolean)
+                      .join(' ') && (
+                      <p>
+                        {[selectedClient.firstName, selectedClient.lastName]
+                          .filter(Boolean)
+                          .join(' ')}
+                      </p>
+                    )}
+                    
+                    {/* Display shipping address */}
+                    <div>
+                      {/* Check for different shipping address formats */}
+                      {selectedClient.shippingAddress ? (
+                        // If we have a pre-formatted shipping address string, use it
+                        <p className="whitespace-pre-line">{selectedClient.shippingAddress}</p>
+                      ) : selectedClient.shippingStreet ? (
+                        // If we have individual shipping address fields, format them
+                        <div>
+                          <p>{selectedClient.shippingStreet}</p>
+                          <p>
+                            {[
+                              selectedClient.shippingCity,
+                              selectedClient.shippingState,
+                              selectedClient.shippingPostal
+                            ]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </p>
+                          {selectedClient.shippingCountry && <p>{selectedClient.shippingCountry}</p>}
+                        </div>
+                      ) : selectedClient.sameAsBilling && selectedClient.billingAddress ? (
+                        // If shipping is same as billing, use billing address
+                        <div>
+                          <p className="whitespace-pre-line">{selectedClient.billingAddress}</p>
+                          <p className="text-xs text-slate-500 italic">(Same as billing address)</p>
+                        </div>
+                      ) : (
+                        <p className="text-slate-600">No shipping address available</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-500 italic">No shipping address found</p>
+                )}
               </div>
             </div>
           </div>
