@@ -701,7 +701,40 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                   </div>
                 </div>
                 
-                {/* Company Stamp & Signature */}
+                {/* Bank Details */}
+                {(companyDetails?.bankName || companyDetails?.bankAccount || companyDetails?.accountType || companyDetails?.branchCode) && (
+                  <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Banking Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1">
+                        {companyDetails?.bankName && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Bank:</span> {companyDetails.bankName}
+                          </p>
+                        )}
+                        {companyDetails?.bankAccount && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Account #:</span> {companyDetails.bankAccount}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        {companyDetails?.accountType && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Account Type:</span> {companyDetails.accountType}
+                          </p>
+                        )}
+                        {companyDetails?.branchCode && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Branch Code:</span> {companyDetails.branchCode}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              {/* Company Stamp & Signature */}
                 <div className="mt-12 flex justify-between items-end">
                   <div>
                     {companyAssets?.Stamp?.dataUrl && (
