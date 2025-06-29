@@ -135,10 +135,34 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   // Load company details and assets from localStorage
   useEffect(() => {
     try {
-      // Load company details
+      // Default company details
+      const defaultCompanyDetails: CompanyDetails = {
+        name: 'MOKMzansi Books',
+        email: '',
+        phone: '',
+        website: '',
+        vatNumber: '',
+        regNumber: '',
+        addressLine1: '',
+        addressLine2: '',
+        addressLine3: '',
+        addressLine4: '',
+        bankName: '',
+        bankAccount: '',
+        accountType: '',
+        branchCode: '',
+        accountHolder: ''
+      };
+
+      // Load company details from localStorage
       const savedCompanyDetails = localStorage.getItem('companyDetails');
       if (savedCompanyDetails) {
-        setCompanyDetails(JSON.parse(savedCompanyDetails));
+        const parsedDetails = JSON.parse(savedCompanyDetails);
+        // Merge with defaults to ensure all fields are present
+        setCompanyDetails({ ...defaultCompanyDetails, ...parsedDetails });
+      } else {
+        // Use defaults if no saved details
+        setCompanyDetails(defaultCompanyDetails);
       }
 
       // Load company assets
@@ -522,11 +546,11 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
               <div className="flex justify-between items-start mb-12">
                 <div>
                   {companyAssets?.Logo?.dataUrl && (
-                    <div className="mb-4">
+                    <div className="mb-6 flex justify-start">
                       <img 
                         src={companyAssets.Logo.dataUrl} 
                         alt="Company Logo" 
-                        className="h-16 w-auto object-contain"
+                        className="h-24 w-auto max-w-full object-contain"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
@@ -539,16 +563,35 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                 </div>
                 
                 <div className="text-right">
-                  <h2 className="text-lg font-semibold text-gray-900">{companyDetails?.name || 'Your Company Name'}</h2>
-                  {companyDetails?.addressLine1 && <p className="text-sm text-gray-600">{companyDetails.addressLine1}</p>}
-                  {companyDetails?.addressLine2 && <p className="text-sm text-gray-600">{companyDetails.addressLine2}</p>}
-                  {companyDetails?.addressLine3 && <p className="text-sm text-gray-600">{companyDetails.addressLine3}</p>}
-                  {companyDetails?.addressLine4 && <p className="text-sm text-gray-600">{companyDetails.addressLine4}</p>}
-                  {companyDetails?.email && <p className="text-sm text-gray-600">{companyDetails.email}</p>}
-                  {companyDetails?.phone && <p className="text-sm text-gray-600">{companyDetails.phone}</p>}
-                  {companyDetails?.website && <p className="text-sm text-gray-600">{companyDetails.website}</p>}
-                  {companyDetails?.vatNumber && <p className="text-sm text-gray-600">VAT: {companyDetails.vatNumber}</p>}
-                  {companyDetails?.regNumber && <p className="text-sm text-gray-600">Reg: {companyDetails.regNumber}</p>}
+                  <h2 className="text-lg font-semibold text-gray-900">{companyDetails?.name}</h2>
+                  {companyDetails?.email && (
+                    <p className="text-sm text-gray-600">{companyDetails.email}</p>
+                  )}
+                  {companyDetails?.phone && (
+                    <p className="text-sm text-gray-600">{companyDetails.phone}</p>
+                  )}
+                  <div className="mt-2">
+                    {companyDetails?.addressLine1 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine1}</p>
+                    )}
+                    {companyDetails?.addressLine2 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine2}</p>
+                    )}
+                    {companyDetails?.addressLine3 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine3}</p>
+                    )}
+                    {companyDetails?.addressLine4 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine4}</p>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    {companyDetails?.vatNumber && (
+                      <p className="text-sm text-gray-600">VAT: {companyDetails.vatNumber}</p>
+                    )}
+                    {companyDetails?.regNumber && (
+                      <p className="text-sm text-gray-600">Reg: {companyDetails.regNumber}</p>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -662,11 +705,12 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                 <div className="mt-12 flex justify-between items-end">
                   <div>
                     {companyAssets?.Stamp?.dataUrl && (
-                      <div className="mb-4">
+                      <div className="mb-4 flex justify-center">
                         <img 
                           src={companyAssets.Stamp.dataUrl} 
                           alt="Company Stamp" 
-                          className="h-24 w-auto opacity-80"
+                          className="h-32 w-auto max-w-full object-contain opacity-80"
+                          style={{ maxHeight: '120px' }}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
