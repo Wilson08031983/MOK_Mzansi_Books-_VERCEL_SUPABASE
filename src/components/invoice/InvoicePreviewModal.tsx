@@ -311,16 +311,7 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         });
       }));
       
-      // Hide markup percentage column if it exists
-      const markupHeaders = elementToPrint.querySelectorAll('th');
-      markupHeaders.forEach(header => {
-        if (header.textContent?.includes('Mark Up %')) {
-          const index = Array.from(header.parentElement!.children).indexOf(header) + 1;
-          const cells = elementToPrint.querySelectorAll(`td:nth-child(${index})`);
-          cells.forEach(cell => cell.remove());
-          header.remove();
-        }
-      });
+      // This code was removed as we're no longer rendering the Mark Up % column at all
       
       // Set the cloned element's styles for printing
       elementToPrint.style.width = '210mm';
@@ -458,7 +449,6 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
         <td className="py-3 px-4 text-sm">{item.description}</td>
         <td className="py-3 px-4 text-sm text-right">{item.quantity}</td>
         <td className="py-3 px-4 text-sm text-right">{formatCurrency(item.rate)}</td>
-        <td className="py-3 px-4 text-sm text-right">{item.markupPercent}%</td>
         <td className="py-3 px-4 text-sm text-right">{item.discount ? formatCurrency(item.discount) : '-'}</td>
         <td className="py-3 px-4 text-sm font-medium text-right">{formatCurrency(item.amount)}</td>
       </tr>
@@ -654,7 +644,6 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Mark Up %</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                       </tr>
