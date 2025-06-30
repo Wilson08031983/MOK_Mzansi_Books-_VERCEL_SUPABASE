@@ -3,14 +3,10 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { 
   ArrowLeft,
-  Upload,
-  Download,
   RefreshCw,
   List,
   Grid3X3,
-  Settings,
-  Plus,
-  ChevronDown
+  Plus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,12 +14,14 @@ interface QuotationsHeaderProps {
   viewMode: 'table' | 'grid';
   setViewMode: (mode: 'table' | 'grid') => void;
   setIsCreateQuotationModalOpen: (open: boolean) => void;
+  onRefresh?: () => void;
 }
 
 const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
   viewMode,
   setViewMode,
-  setIsCreateQuotationModalOpen
+  setIsCreateQuotationModalOpen,
+  onRefresh
 }) => {
   const navigate = useNavigate();
 
@@ -46,33 +44,13 @@ const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
       </div>
       
       <div className="flex items-center space-x-3">
-        {/* Import/Export Actions */}
-        <div className="relative">
-          <Button
-            variant="outline"
-            className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Import
-            <ChevronDown className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-        
-        <div className="relative">
-          <Button
-            variant="outline"
-            className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export
-            <ChevronDown className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+
         
         <Button
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={() => onRefresh ? onRefresh() : window.location.reload()}
           className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
+          title="Refresh data"
         >
           <RefreshCw className="h-4 w-4" />
         </Button>
@@ -96,14 +74,6 @@ const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
             <Grid3X3 className="h-4 w-4" />
           </Button>
         </div>
-        
-        {/* Settings */}
-        <Button
-          variant="outline"
-          className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
         
         {/* Create Quotation */}
         <Button

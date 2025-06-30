@@ -12,11 +12,13 @@ import { formatCurrency, formatDate } from '@/utils/formatters';
 import QuotationCardMenu from './QuotationCardMenu';
 import QuotationCardActions from './QuotationCardActions';
 
+import { Quotation as QuotationType } from '@/services/quotationService';
+
 interface QuotationCardProps {
-  quotation: any;
+  quotation: QuotationType;
   isSelected: boolean;
   onSelect: (quotationId: string) => void;
-  onAction: (action: string, quotation: any) => void;
+  onAction: (action: string, quotation: QuotationType) => void;
   getStatusIcon: (status: string) => React.ReactNode;
   getStatusColor: (status: string) => string;
 }
@@ -72,10 +74,14 @@ const QuotationCard: React.FC<QuotationCardProps> = ({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
-              {getStatusIcon(quotation.status)}
-              <span className="ml-1 capitalize">{quotation.status}</span>
-            </span>
+            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
+              <span className="mr-1.5 flex-shrink-0">
+                {getStatusIcon(quotation.status)}
+              </span>
+              <span className="truncate">
+                {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
+              </span>
+            </div>
             <span className="text-lg font-bold text-slate-900 font-sf-pro">
               {formatCurrency(quotation.amount)}
             </span>

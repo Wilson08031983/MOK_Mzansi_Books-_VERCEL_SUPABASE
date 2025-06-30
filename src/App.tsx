@@ -8,6 +8,9 @@ import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess } from "@/services/localAuthService";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { safeExecute } from "@/utils/safeAccess";
+import { setupGlobalErrorHandlers } from "@/utils/crashPrevention";
 import Index from "./pages/Index";
 import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
@@ -42,19 +45,29 @@ import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import WelcomeBack from "./pages/WelcomeBack";
+import AuthReset from "./pages/AuthReset";
+import AuthDebug from "./pages/AuthDebug";
 
 const queryClient = new QueryClient();
 
-// Ensure Wilson's CEO account exists with full admin permissions
-ensureWilsonHasCEOAccess();
+// Initialize global error handlers for crash prevention
+setupGlobalErrorHandlers();
+
+// Safely ensure Wilson's CEO account exists with full admin permissions
+safeExecute(
+  () => ensureWilsonHasCEOAccess(),
+  undefined,
+  'CEO access initialization'
+);
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <Router>
-        <AuthProviderSelector>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <Router>
+          <AuthProviderSelector>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -73,6 +86,8 @@ const App = () => (
             <Route path="/thank-you" element={<ThankYou />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/auth-reset" element={<AuthReset />} />
+            <Route path="/auth-debug" element={<AuthDebug />} />
             <Route 
               path="/welcome-back" 
               element={
@@ -139,11 +154,12 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProviderSelector>
-      </Router>
-    </TooltipProvider>
-  </QueryClientProvider>
+            </Routes>
+          </AuthProviderSelector>
+        </Router>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

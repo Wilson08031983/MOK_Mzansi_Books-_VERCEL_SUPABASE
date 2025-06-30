@@ -13,35 +13,7 @@ import {
   FileText,
   CreditCard
 } from 'lucide-react';
-
-interface QuotationItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unit: string;
-  rate: number;
-  taxRate: number;
-  discount: number;
-  amount: number;
-}
-
-interface Quotation {
-  id: string;
-  number: string;
-  client: string;
-  clientId: string;
-  date: string;
-  expiryDate: string;
-  amount: number;
-  status: string;
-  items: QuotationItem[];
-  terms?: string;
-  notes?: string;
-  subtotal: number;
-  taxAmount: number;
-  discount: number;
-  totalAmount: number;
-}
+import { Quotation } from '@/services/quotationService';
 
 interface ConvertToInvoiceModalProps {
   isOpen: boolean;

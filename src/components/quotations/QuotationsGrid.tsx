@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 import ConvertToInvoiceModal from './ConvertToInvoiceModal';
 import DuplicateQuotationModal from './DuplicateQuotationModal';
 import QuotationCard from './QuotationCard';
+import { Quotation as QuotationType } from '@/services/quotationService';
 
 interface QuotationsGridProps {
-  quotations: any[];
+  quotations: QuotationType[];
   selectedQuotations: string[];
   onSelectQuotation: (quotationId: string) => void;
   getStatusIcon: (status: string) => React.ReactNode;
@@ -21,19 +22,19 @@ const QuotationsGrid: React.FC<QuotationsGridProps> = ({
 }) => {
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
-  const [selectedQuotationForAction, setSelectedQuotationForAction] = useState<any>(null);
+  const [selectedQuotationForAction, setSelectedQuotationForAction] = useState<QuotationType | null>(null);
 
-  const handleConvertToInvoice = (quotation: any) => {
+  const handleConvertToInvoice = (quotation: QuotationType) => {
     setSelectedQuotationForAction(quotation);
     setConvertModalOpen(true);
   };
 
-  const handleDuplicate = (quotation: any) => {
+  const handleDuplicate = (quotation: QuotationType) => {
     setSelectedQuotationForAction(quotation);
     setDuplicateModalOpen(true);
   };
 
-  const handleQuotationAction = (action: string, quotation: any) => {
+  const handleQuotationAction = (action: string, quotation: QuotationType) => {
     console.log(`Action: ${action}`, quotation);
     
     switch (action) {

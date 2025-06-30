@@ -163,7 +163,7 @@ const Invoices: React.FC = () => {
         break;
       }
       case 'overdue':
-        matchesDate = dueDate < today && invoice.balance > 0;
+        matchesDate = new Date(invoice.dueDate) < today && invoice.balance > 0;
         break;
       default:
         matchesDate = true;
@@ -209,69 +209,73 @@ const Invoices: React.FC = () => {
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <div>
+    <div className="min-h-screen">
+      <div className="space-y-6 p-4 lg:p-6">
+        <InvoicesHeader 
+          onCreateInvoice={() => setShowCreateModal(true)}
+          onRecordPayment={() => setShowPaymentModal(true)}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
 
-        <div className="p-4 lg:p-6 space-y-6">
-          <InvoicesHeader 
-            onCreateInvoice={() => setShowCreateModal(true)}
-            onRecordPayment={() => setShowPaymentModal(true)}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-          />
+        <InvoicesSummaryCards invoices={invoices} />
 
-          <InvoicesSummaryCards invoices={invoices} />
+        <InvoicesSearchAndFilters
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          dateFilter={dateFilter}
+          onDateFilterChange={setDateFilter}
+          clientFilter={clientFilter}
+          onClientFilterChange={setClientFilter}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
 
-          <InvoicesSearchAndFilters
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            dateFilter={dateFilter}
-            onDateFilterChange={setDateFilter}
-            clientFilter={clientFilter}
-            onClientFilterChange={setClientFilter}
-          />
-
-          {selectedInvoices.length > 0 && (
-            <InvoicesBulkActions
-              selectedCount={selectedInvoices.length}
-              onClearSelection={() => setSelectedInvoices([])}
-              selectedInvoices={selectedInvoices}
-              invoices={invoices}
-            />
-          )}
-
-          <InvoicesContent
-            invoices={paginatedInvoices}
-            viewMode={viewMode}
+        {selectedInvoices.length > 0 && (
+          <InvoicesBulkActions
+            selectedCount={selectedInvoices.length}
+            onClearSelection={() => setSelectedInvoices([])}
             selectedInvoices={selectedInvoices}
-            onSelectInvoice={handleSelectInvoice}
-            onSelectAll={handleSelectAll}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            onSort={(field) => {
-              if (sortField === field) {
-                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-              } else {
-                setSortField(field);
-                setSortDirection('asc');
-              }
-            }}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            itemsPerPage={itemsPerPage}
-            totalItems={sortedInvoices.length}
-            onPageChange={setCurrentPage}
-            onItemsPerPageChange={setItemsPerPage}
-            onRecordPayment={handleRecordPayment}
+            invoices={invoices}
           />
-        </div>
+        )}
+
+        <InvoicesContent
+          invoices={paginatedInvoices}
+          viewMode={viewMode}
+          selectedInvoices={selectedInvoices}
+          onSelectInvoice={handleSelectInvoice}
+          onSelectAll={handleSelectAll}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          onSort={(field) => {
+            if (sortField === field) {
+              setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+            } else {
+              setSortField(field);
+              setSortDirection('asc');
+            }
+          }}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={sortedInvoices.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+          onRecordPayment={handleRecordPayment}
+        />
       </div>
 
       <CreateInvoiceModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+        onSave={async (invoiceData) => {
+          // Handle invoice creation/update
+          console.log('Saving invoice:', invoiceData);
+          setShowCreateModal(false);
+        }}
       />
 
       <RecordPaymentModal

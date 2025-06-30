@@ -3,7 +3,7 @@ import React from 'react';
 import InvoicesTable from './InvoicesTable';
 import InvoicesGrid from './InvoicesGrid';
 import InvoicesPagination from './InvoicesPagination';
-import { Invoice } from '@/pages/Invoices';
+import { Invoice } from '@/services/invoiceService';
 
 interface InvoicesContentProps {
   invoices: Invoice[];
@@ -24,21 +24,21 @@ interface InvoicesContentProps {
 }
 
 const InvoicesContent: React.FC<InvoicesContentProps> = ({
-  invoices,
-  viewMode,
-  selectedInvoices,
-  onSelectInvoice,
-  onSelectAll,
-  sortField,
-  sortDirection,
-  onSort,
-  currentPage,
-  totalPages,
-  itemsPerPage,
-  totalItems,
-  onPageChange,
-  onItemsPerPageChange,
-  onRecordPayment
+  invoices = [],
+  viewMode = 'table',
+  selectedInvoices = [],
+  onSelectInvoice = () => {},
+  onSelectAll = () => {},
+  sortField = 'date',
+  sortDirection = 'desc',
+  onSort = () => {},
+  currentPage = 1,
+  totalPages = 1,
+  itemsPerPage = 10,
+  totalItems = 0,
+  onPageChange = () => {},
+  onItemsPerPageChange = () => {},
+  onRecordPayment = () => {}
 }) => {
   return (
     <div className="space-y-6">

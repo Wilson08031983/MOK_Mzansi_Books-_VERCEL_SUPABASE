@@ -14,7 +14,7 @@ import {
   Calendar,
   User
 } from 'lucide-react';
-import { Invoice } from '@/pages/Invoices';
+import { Invoice } from '@/services/invoiceService';
 import { formatDate } from '@/utils/formatters';
 
 interface InvoicesGridProps {
@@ -76,7 +76,7 @@ const InvoicesGrid: React.FC<InvoicesGridProps> = ({
         const isOverdue = daysUntilDue < 0;
         
         return (
-          <Card key={invoice.id} className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-lg transition-shadow">
+          <Card key={invoice.id} className="glass backdrop-blur-sm bg-white/50 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift group">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">

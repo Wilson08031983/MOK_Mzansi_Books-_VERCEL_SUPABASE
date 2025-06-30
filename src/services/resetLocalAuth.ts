@@ -1,12 +1,13 @@
 import { getAdminPermissions, getDefaultPermissions, saveUserPermissions } from "./permissionService";
 import { v4 as uuidv4 } from 'uuid';
+import { safeLocalStorage, safeGet, safeString } from '@/utils/safeAccess';
 
 // Import the UserCredentials type from localAuthService
-interface UserCredentials {
+export interface UserCredentials {
   email: string;
   password: string;
   role?: string;
-  permissions?: any;
+  permissions?: Record<string, unknown>;
   fullName?: string;
   isDefaultAdmin?: boolean;
 }
@@ -18,24 +19,24 @@ interface UserCredentials {
  */
 export const resetLocalAuth = () => {
   // Only remove other data but preserve Wilson's account if it exists
-  const existingCredentials = localStorage.getItem('userCredentials');
+  const existingCredentials = window.localStorage.getItem('userCredentials', null);
   let wilsonAccount = null;
   
   if (existingCredentials) {
-    const credentials = JSON.parse(existingCredentials);
+    const credentials = safeGet(existingCredentials, {}) as Record<string, UserCredentials>;
     // Find Wilson's account if it exists
     Object.entries(credentials).forEach(([id, cred]: [string, UserCredentials]) => {
-      if (cred.email === 'mokgethwamoabelo@gmail.com') {
+      if (safeString(cred.email) === 'mokgethwamoabelo@gmail.com') {
         wilsonAccount = { id, ...cred };
       }
     });
   }
   
   // Clear all existing data
-  localStorage.removeItem('userCredentials');
-  localStorage.removeItem('userPermissions');
-  localStorage.removeItem('mokUser');
-  localStorage.removeItem('invites');
+  window.localStorage.removeItem('userCredentials');
+  safeLocalStorage.removeItem('userPermissions');
+  safeLocalStorage.removeItem('mokUser');
+  safeLocalStorage.removeItem('invites');
 
   // Create admin user with full permissions
   const adminId = 'admin-' + Date.now();
@@ -59,7 +60,7 @@ export const resetLocalAuth = () => {
   saveUserPermissions(userId, userPermissions);
   
   // Store the user credentials
-  const credentials = {
+  const defaultCredentials = {
     [adminId]: {
       email: 'admin@mokmzansibooks.com',
       password: 'admin123',
@@ -84,7 +85,7 @@ export const resetLocalAuth = () => {
     }
   };
   
-  localStorage.setItem('userCredentials', JSON.stringify(credentials));
+  window.localStorage.setItem('userCredentials', JSON.stringify(defaultCredentials));
   console.log('Local authentication reset with admin and user accounts');
 };
 

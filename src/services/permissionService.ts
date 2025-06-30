@@ -2,6 +2,7 @@
 // This service manages page permissions for different user roles
 
 import { v4 as uuidv4 } from 'uuid';
+import { safeLocalStorage, safeGet, safeString } from '@/utils/safeAccess';
 import {
   FileText,
   Users,
@@ -90,15 +91,17 @@ export const getAdminPermissions = (): UserPermissions => {
 // Store user permissions in localStorage
 export const saveUserPermissions = (userId: string, permissions: UserPermissions): void => {
   try {
+    const safeUserId = safeString(userId);
+    
     // Get existing permissions from localStorage or initialize empty object
-    const storedPermissions = localStorage.getItem('userPermissions') || '{}';
-    const allPermissions = JSON.parse(storedPermissions);
+    const storedPermissions = safeLocalStorage.getItem('userPermissions', null);
+    const allPermissions = safeGet(storedPermissions, {}) as Record<string, UserPermissions>;
     
     // Update permissions for this user
-    allPermissions[userId] = permissions;
+    allPermissions[safeUserId] = permissions;
     
     // Save back to localStorage
-    localStorage.setItem('userPermissions', JSON.stringify(allPermissions));
+    safeLocalStorage.setItem('userPermissions', allPermissions);
   } catch (error) {
     console.error('Error saving user permissions:', error);
   }
@@ -107,14 +110,16 @@ export const saveUserPermissions = (userId: string, permissions: UserPermissions
 // Get user permissions from localStorage
 export const getUserPermissions = (userId: string): UserPermissions => {
   try {
+    const safeUserId = safeString(userId);
+    
     // Get stored permissions
-    const storedPermissions = localStorage.getItem('userPermissions');
+    const storedPermissions = safeLocalStorage.getItem('userPermissions', null);
     if (!storedPermissions) {
       return getDefaultPermissions();
     }
     
-    const allPermissions = JSON.parse(storedPermissions);
-    return allPermissions[userId] || getDefaultPermissions();
+    const allPermissions = safeGet(storedPermissions, {}) as Record<string, UserPermissions>;
+    return allPermissions[safeUserId] || getDefaultPermissions();
   } catch (error) {
     console.error('Error getting user permissions:', error);
     return getDefaultPermissions();

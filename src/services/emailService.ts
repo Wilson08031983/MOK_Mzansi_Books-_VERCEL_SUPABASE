@@ -6,6 +6,30 @@ const resend = new Resend(import.meta.env.VITE_RESEND_API_KEY || 're_AkPz7nFU_JC
 // Domain for sending emails
 const domain = import.meta.env.VITE_RESEND_DOMAIN || 'mokmzansibooks.com';
 
+// Function to safely convert data to Uint8Array
+const toUint8Array = async (data: string | ArrayBuffer): Promise<Uint8Array> => {
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+  
+  if (typeof data === 'string') {
+    // For strings, use TextEncoder which is available in all modern browsers
+    return new TextEncoder().encode(data);
+  }
+  
+  // Fallback for other types (shouldn't happen with our current usage)
+  return new Uint8Array(0);
+};
+
+interface QuotationEmailOptions {
+  to: string;
+  subject?: string;
+  quotationNumber: string;
+  clientName: string;
+  pdfAttachment: Blob;
+  pdfFileName: string;
+}
+
 interface EmailOptions {
   to: string;
   subject: string;
@@ -222,9 +246,81 @@ export const sendAccountDeletionEmail = async (options: DeletionEmailOptions): P
   }
 };
 
+/**
+ * Send a quotation email with PDF attachment
+ */
+export const sendQuotationEmail = async (options: QuotationEmailOptions): Promise<boolean> => {
+  try {
+    const { 
+      to, 
+      subject = `Quotation ${options.quotationNumber} from MOK Mzansi Books`,
+      clientName,
+      pdfAttachment,
+      pdfFileName
+    } = options;
+
+    // Convert File/Blob to base64 for email attachment
+    const arrayBuffer = await pdfAttachment.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const buffer = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
+    const base64Pdf = btoa(buffer);
+    
+    if (!base64Pdf) {
+      throw new Error('Failed to convert PDF to base64');
+    }
+
+    const { data, error } = await resend.emails.send({
+      from: `MOK Mzansi Books <quotations@${domain}>`,
+      to: [to],
+      subject,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
+          </div>
+          <h1 style="color: #4c1d95; font-size: 20px; font-weight: 600; margin-bottom: 16px;">Dear ${clientName},</h1>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+            Thank you for your interest in our services. Please find your quotation attached for your reference.
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+            Quotation Number: <strong>${options.quotationNumber}</strong>
+          </p>
+          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 32px;">
+            If you have any questions or need further clarification, please don't hesitate to contact us.
+          </p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="mailto:support@mokmzansibooks.com" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Contact Us</a>
+          </div>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #6b7280; font-size: 14px; text-align: center; margin-bottom: 8px;">This is an automated message, please do not reply directly to this email.</p>
+          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: pdfFileName,
+          content: base64Pdf,
+        },
+      ],
+    });
+
+    if (error) {
+      console.error('Failed to send quotation email:', error);
+      return false;
+    }
+    
+    console.log('Quotation email sent successfully with ID:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending quotation email:', error);
+    return false;
+  }
+};
+
 export default {
   sendConfirmationEmail,
   sendPasswordResetEmail,
   sendInvitationEmail,
+  sendQuotationEmail,
   sendAccountDeletionEmail
 };

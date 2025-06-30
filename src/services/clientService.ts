@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { safeLocalStorage, safeGet, safeArray, safeString } from '@/utils/safeAccess';
 
 export interface Client {
   id: string;
@@ -75,8 +76,13 @@ export type ClientFormData = Omit<Client, 'id' | 'avatar' | 'status' | 'type' | 
 
 // Get all clients from localStorage
 export function getClients(): Client[] {
-  const clientsString = localStorage.getItem('clients');
-  return clientsString ? JSON.parse(clientsString) : [];
+  try {
+    const clientsData = safeLocalStorage.getItem('clients', null);
+    return safeArray(clientsData) as Client[];
+  } catch (error) {
+    console.error('Error getting clients:', error);
+    return [];
+  }
 }
 
 // Get client by ID
@@ -87,7 +93,11 @@ export function getClientById(id: string): Client | undefined {
 
 // Save all clients to localStorage
 export function saveClients(clients: Client[]): void {
-  localStorage.setItem('clients', JSON.stringify(clients));
+  try {
+    safeLocalStorage.setItem('clients', clients);
+  } catch (error) {
+    console.error('Error saving clients:', error);
+  }
 }
 
 // Add a new client
@@ -346,11 +356,11 @@ export const createInvitationTemplate = (clientId: string): ClientInvitationTemp
   let contactPerson = 'Account Manager';
   
   try {
-    const companyDetails = localStorage.getItem('companyDetails');
+    const companyDetails = safeLocalStorage.getItem('companyDetails', null);
     if (companyDetails) {
-      const company = JSON.parse(companyDetails);
-      companyName = company.name || companyName;
-      contactPerson = company.contactPerson || contactPerson;
+      const company = safeGet(companyDetails, {});
+      companyName = safeString(company.name) || companyName;
+      contactPerson = safeString(company.contactPerson) || contactPerson;
     }
   } catch (error) {
     console.error('Error parsing company details:', error);

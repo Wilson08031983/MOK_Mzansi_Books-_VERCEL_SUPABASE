@@ -1,24 +1,20 @@
-import React from "react";
-import { BackendToggle } from "@/components/BackendToggle";
-import Header from '@/components/Header';
-import Hero from '@/components/Hero';
-import Features from '@/components/Features';
-import FounderSection from '@/components/FounderSection';
-import CTASection from '@/components/CTASection';
-import Footer from '@/components/Footer';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Redirect to the Invoices page
+    navigate('/invoices');
+  }, [navigate]);
+
   return (
-    <div className="min-h-screen">
-      <div className="fixed top-4 right-4 z-50">
-        <BackendToggle />
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-gray-600">Redirecting to Invoices...</p>
       </div>
-      <Header />
-      <Hero />
-      <Features />
-      <FounderSection />
-      <CTASection />
-      <Footer />
     </div>
   );
 };

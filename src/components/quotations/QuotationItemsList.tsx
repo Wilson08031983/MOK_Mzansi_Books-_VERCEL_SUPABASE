@@ -4,20 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import QuotationItemForm from './QuotationItemForm';
+import { QuotationItem as ServiceQuotationItem } from '@/services/quotationService';
 
-interface QuotationItem {
-  id: string;
-  description: string;
-  quantity: number;
+// Local interface that extends the service's QuotationItem to include unitPrice
+export interface LocalQuotationItem extends Omit<ServiceQuotationItem, 'rate'> {
   unitPrice: number;
-  taxRate: number;
-  discount: number;
 }
 
 interface QuotationItemsListProps {
-  items: QuotationItem[];
+  items: LocalQuotationItem[];
   onAddItem: () => void;
-  onUpdateItem: (itemId: string, field: keyof QuotationItem, value: string | number) => void;
+  onUpdateItem: (itemId: string, field: keyof LocalQuotationItem, value: string | number) => void;
   onRemoveItem: (itemId: string) => void;
 }
 
@@ -27,6 +24,16 @@ const QuotationItemsList: React.FC<QuotationItemsListProps> = ({
   onUpdateItem,
   onRemoveItem
 }) => {
+  // Format currency for display
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-ZA', {
+      style: 'currency',
+      currency: 'ZAR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
   const calculateTotals = () => {
     let subtotal = 0;
     let taxTotal = 0;
@@ -34,8 +41,8 @@ const QuotationItemsList: React.FC<QuotationItemsListProps> = ({
     
     items.forEach(item => {
       const itemSubtotal = item.quantity * item.unitPrice;
-      const itemDiscount = item.discount;
-      const itemTax = ((itemSubtotal - itemDiscount) * item.taxRate) / 100;
+      const itemDiscount = item.discount || 0;
+      const itemTax = item.taxRate ? (itemSubtotal * item.taxRate) / 100 : 0;
       
       subtotal += itemSubtotal;
       discountTotal += itemDiscount;
@@ -88,21 +95,21 @@ const QuotationItemsList: React.FC<QuotationItemsListProps> = ({
             <div className="w-full md:w-64">
               <div className="flex justify-between py-2">
                 <span className="text-slate-600 font-sf-pro">Subtotal:</span>
-                <span className="font-sf-pro">R {totals.subtotal.toFixed(2)}</span>
+                <span className="font-sf-pro">{formatCurrency(totals.subtotal)}</span>
               </div>
               {totals.discountTotal > 0 && (
                 <div className="flex justify-between py-2 text-slate-600">
                   <span className="font-sf-pro">Discount:</span>
-                  <span className="font-sf-pro">- R {totals.discountTotal.toFixed(2)}</span>
+                  <span className="font-sf-pro">- {formatCurrency(totals.discountTotal)}</span>
                 </div>
               )}
               <div className="flex justify-between py-2 text-slate-600">
                 <span className="font-sf-pro">Tax:</span>
-                <span className="font-sf-pro">R {totals.taxTotal.toFixed(2)}</span>
+                <span className="font-sf-pro">{formatCurrency(totals.taxTotal)}</span>
               </div>
-              <div className="flex justify-between py-2 font-bold text-lg border-t border-slate-200 mt-2 pt-2">
+              <div className="flex justify-between pt-2 mt-2 border-t border-slate-200 font-medium text-slate-900">
                 <span className="font-sf-pro">Total:</span>
-                <span className="font-sf-pro">R {totals.total.toFixed(2)}</span>
+                <span className="font-sf-pro">{formatCurrency(totals.total)}</span>
               </div>
             </div>
           </div>

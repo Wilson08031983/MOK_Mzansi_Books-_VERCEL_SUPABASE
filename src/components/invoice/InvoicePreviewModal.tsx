@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,10 +8,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X, Download, Printer, Loader2 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import InvoicePDFDocument from '@/components/pdf/InvoicePDFDocument';
+import styles from './InvoicePreviewModal.module.css';
 
 // Define interface types needed for the component
 export interface InvoiceItemPreview {
@@ -104,6 +105,24 @@ export interface InvoicePreview {
   companyDetails?: CompanyDetails;
 }
 
+interface Company {
+  name: string;
+  email?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
+  addressLine4?: string;
+  vatNumber?: string;
+  regNumber?: string;
+  website?: string;
+  bankName?: string;
+  bankAccount?: string;
+  accountType?: string;
+  branchCode?: string;
+  accountHolder?: string;
+}
+
 interface InvoicePreviewModalProps {
   open: boolean;
   onClose: () => void;
@@ -111,61 +130,132 @@ interface InvoicePreviewModalProps {
   company: Company;
 }
 
-// Helper function to safely format currency
-const formatCurrency = (amount: number | undefined): string => {
-  if (amount === undefined) return 'R 0.00';
-  return new Intl.NumberFormat('en-ZA', {
-    style: 'currency',
-    currency: 'ZAR',
-  }).format(amount);
-};
-
 const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   open,
   onClose,
-  invoice,
-  company,
+  invoice: initialInvoice,
+  company: initialCompany
 }) => {
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  // State management
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [companyDetails, setCompanyDetails] = useState<CompanyDetails | null>(null);
   const [companyAssets, setCompanyAssets] = useState<CompanyAssets | null>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-
-  // Load company details and assets from localStorage
+  const [invoice, setInvoice] = useState<InvoicePreview | null>(null);
+  const invoiceRef = useRef<HTMLDivElement>(null);
+  
+  // Initialize company details and invoice from props
   useEffect(() => {
-    try {
-      // Default company details
-      const defaultCompanyDetails: CompanyDetails = {
-        name: 'MOKMzansi Books',
-        email: '',
-        phone: '',
-        website: '',
-        vatNumber: '',
-        regNumber: '',
-        addressLine1: '',
-        addressLine2: '',
-        addressLine3: '',
-        addressLine4: '',
-        bankName: '',
-        bankAccount: '',
-        accountType: '',
-        branchCode: '',
-        accountHolder: ''
-      };
+    if (initialCompany) {
+      setCompanyDetails({
+        ...initialCompany,
+        ...initialCompany
+      });
+    }
+    
+    if (initialInvoice) {
+      setInvoice(initialInvoice);
+    }
+  }, [initialCompany, initialInvoice]);
 
+  // Helper function to safely format currency
+  const formatCurrency = (amount: number | undefined): string => {
+    const value = amount || 0;
+    return new Intl.NumberFormat('en-ZA', {
+      style: 'currency',
+      currency: 'ZAR',
+      minimumFractionDigits: 2
+    }).format(value);
+  };
+
+  // Format date helper
+  const formatDate = (date: string | Date | undefined): string => {
+    if (!date) return 'N/A';
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      return format(d, 'dd MMM yyyy');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
+
+  // Handle print
+  const handlePrint = useCallback(() => {
+    setIsPrinting(true);
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+    // Small delay to ensure print dialog appears before setting isPrinting to false
+    setTimeout(() => setIsPrinting(false), 1000);
+  }, []);
+
+  // Check if we have all required data for PDF generation
+  const hasRequiredDataForPdf = !!(invoice && companyDetails && invoiceRef.current);
+
+  // Get client shipping address
+  const getClientShippingAddress = (): string => {
+    if (!invoice?.clientInfo) return 'Same as billing address';
+    if (invoice.clientInfo.shippingAddress) return invoice.clientInfo.shippingAddress;
+    if (invoice.clientInfo.billingAddress) return invoice.clientInfo.billingAddress;
+    return 'Same as billing address';
+  };
+
+  // Check if we have all required data to display the invoice
+  const hasRequiredDataToDisplay = Boolean(
+    invoice && 
+    companyDetails && 
+    invoice.clientInfo && 
+    invoice.items?.length > 0
+  );
+
+  // Format date for display
+  const formatDisplayDate = (dateString?: string): string => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(new Date(dateString), 'dd MMM yyyy');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
+
+  // Render invoice items
+  const renderInvoiceItems = () => {
+    if (!invoice?.items?.length) return null;
+    
+    return invoice.items.map((item, index) => (
+      <tr key={item.id || index}>
+        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{item.itemNo}</td>
+        <td className="px-4 py-3 text-sm text-gray-900">{item.description}</td>
+        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+          {item.quantity}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+          {formatCurrency(item.rate)}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+          {item.discount ? formatCurrency(item.discount) : '-'}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+          {formatCurrency(item.amount)}
+        </td>
+      </tr>
+    ));
+  };
+
+  // Load company data when the modal opens
+  useEffect(() => {
+    if (!open) return;
+
+    try {
       // Load company details from localStorage
       const savedCompanyDetails = localStorage.getItem('companyDetails');
       if (savedCompanyDetails) {
-        const parsedDetails = JSON.parse(savedCompanyDetails);
-        // Merge with defaults to ensure all fields are present
-        setCompanyDetails({ ...defaultCompanyDetails, ...parsedDetails });
-      } else {
-        // Use defaults if no saved details
-        setCompanyDetails(defaultCompanyDetails);
+        setCompanyDetails(JSON.parse(savedCompanyDetails));
       }
 
-      // Load company assets
+      // Load company assets from localStorage
       const savedCompanyAssets = localStorage.getItem('companyAssets');
       if (savedCompanyAssets) {
         setCompanyAssets(JSON.parse(savedCompanyAssets));
@@ -176,362 +266,116 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
     }
   }, [open]);
 
-  const handlePrint = () => {
+  // Handle print click
+  const handlePrintClick = useCallback(() => {
     setIsPrinting(true);
-    
-    // Use a small timeout to ensure the DOM updates before printing
-    setTimeout(() => {
-      try {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-          throw new Error('Could not open print window');
-        }
-
-        // Get the HTML content to print
-        const content = document.getElementById('invoice-print-container');
-        if (!content) {
-          throw new Error('Could not find invoice content');
-        }
-
-        // Clone the content to avoid modifying the original
-        const printContent = content.cloneNode(true) as HTMLElement;
-        
-        // Create a new document
-        printWindow.document.open();
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Invoice ${invoice.number || ''}</title>
-              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-              <style>
-                @page {
-                  size: A4;
-                  margin: 0;
-                }
-                body {
-                  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                  margin: 0;
-                  padding: 0;
-                  color: #1f2937;
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                .page {
-                  width: 210mm;
-                  min-height: 297mm;
-                  padding: 20mm;
-                  margin: 0 auto;
-                  background: white;
-                  box-sizing: border-box;
-                  position: relative;
-                }
-                @media print {
-                  .no-print {
-                    display: none !important;
-                  }
-                  .page {
-                    padding: 0;
-                    margin: 0;
-                    border: none;
-                    box-shadow: none;
-                  }
-                }
-                /* Add any additional print-specific styles here */
-              </style>
-            </head>
-            <body>
-              ${printContent.outerHTML}
-              <script>
-                // Auto-print and close after printing
-                window.onload = function() {
-                  setTimeout(function() {
-                    window.print();
-                    window.onafterprint = function() {
-                      window.close();
-                    };
-                  }, 200);
-                };
-              </script>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-      } catch (error) {
-        console.error('Error printing invoice:', error);
-        toast.error('Failed to open print dialog');
-      } finally {
-        setIsPrinting(false);
-      }
-    }, 100);
-  };
-
-  const handleDownloadPdf = async () => {
-    if (!previewRef.current) return;
-    
-    try {
-      setIsGeneratingPdf(true);
-      
-      // Create a new PDF with A4 dimensions (210mm x 297mm)
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-        compress: true,
-        precision: 100 // Higher precision for better quality
-      });
-      
-      // Set document properties
-      pdf.setProperties({
-        title: `Invoice ${invoice.number || ''}`,
-        subject: 'Invoice',
-        author: companyDetails?.name || 'MOKMzansi Books',
-        creator: 'MOKMzansi Books',
-        keywords: 'invoice, billing, payment',
-      });
-      
-      // Get the preview element and clone it to avoid affecting the original
-      const element = previewRef.current;
-      const elementToPrint = element.cloneNode(true) as HTMLElement;
-      
-      // Remove elements that shouldn't be in the PDF
-      const elementsToRemove = elementToPrint.querySelectorAll('.no-print, .print-hide');
-      elementsToRemove.forEach(el => el.remove());
-      
-      // Ensure images are loaded before generating PDF
-      const images = elementToPrint.getElementsByTagName('img');
-      await Promise.all(Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => {
-            img.style.display = 'none';
-            resolve();
-          };
-        });
-      }));
-      
-      // This code was removed as we're no longer rendering the Mark Up % column at all
-      
-      // Set the cloned element's styles for printing
-      elementToPrint.style.width = '210mm';
-      elementToPrint.style.minHeight = '297mm';
-      elementToPrint.style.padding = '20mm';
-      elementToPrint.style.margin = '0';
-      elementToPrint.style.boxSizing = 'border-box';
-      elementToPrint.style.background = '#fff';
-      elementToPrint.style.boxShadow = 'none';
-      elementToPrint.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif";
-      elementToPrint.style.color = '#1f2937';
-      elementToPrint.style.lineHeight = '1.5';
-      
-      // Add the cloned element to the body
-      elementToPrint.style.position = 'absolute';
-      elementToPrint.style.left = '-9999px';
-      elementToPrint.id = 'pdf-export';
-      document.body.appendChild(elementToPrint);
-      
-      // Create a canvas and render the preview
-      const canvas = await html2canvas(elementToPrint, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
-      
-      // Clean up the cloned element
-      document.body.removeChild(elementToPrint);
-      
-      // Calculate dimensions to fit A4 with margins
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      const pdfWidth = 210; // A4 width in mm
-      const pdfHeight = 297; // A4 height in mm
-      const margin = 10; // 10mm margin on all sides
-      const contentWidth = pdfWidth - (2 * margin);
-      const contentHeight = pdfHeight - (2 * margin);
-      
-      // Calculate aspect ratio
-      const imgWidth = contentWidth;
-      let imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      // Add the first page
-      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight, undefined, 'FAST');
-      
-      // Calculate if we need additional pages
-      let heightLeft = imgHeight - (contentHeight - (imgHeight % contentHeight));
-      let position = 0;
-      
-      // Add additional pages if content is longer than one page
-      while (heightLeft >= 0) {
-        pdf.addPage();
-        position = margin - (heightLeft + margin);
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= contentHeight;
-      }
-      
-      // Save the PDF with proper filename
-      const fileName = `invoice_${invoice.number || 'draft'}.pdf`.replace(/\s+/g, '_').toLowerCase();
-      pdf.save(fileName);
-      
-      toast.success('PDF downloaded successfully');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('Failed to generate PDF. Please try again.');
-    } finally {
-      setIsGeneratingPdf(false);
+    if (typeof window !== 'undefined') {
+      window.print();
     }
-  };
+    setIsPrinting(false);
+  }, []);
+
+  // Check if we have all required data
+  const hasRequiredData = !!(invoice && companyDetails && invoiceRef.current);
 
   // Calculate totals with fallbacks to invoice values if available
-  const subtotal = invoice.subtotal || invoice.items.reduce((sum, item) => sum + item.amount, 0);
-  const vatRate = invoice.vatRate || 15; // Default to 15% if not specified
-  const vatTotal = invoice.vatTotal || subtotal * (vatRate / 100);
-  const grandTotal = invoice.grandTotal || subtotal + vatTotal;
+  const subtotal = invoice?.subtotal || (invoice?.items?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0);
+  const vatRate = invoice?.vatRate || 15; // Default to 15% if not specified
+  const vatTotal = invoice?.vatTotal || subtotal * (vatRate / 100);
+  const grandTotal = invoice?.grandTotal || subtotal + vatTotal;
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-ZA', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+  // Prepare invoice data for PDF
+  const invoiceData = {
+    ...invoice,
+    subtotal,
+    vatRate,
+    vatTotal,
+    grandTotal,
+    companyDetails: companyDetails || undefined,
   };
 
-  // Get company address as formatted string
-  const getCompanyAddress = () => {
-    const parts = [
-      company.addressLine1,
-      company.addressLine2,
-      company.addressLine3,
-      company.addressLine4,
-    ].filter(Boolean);
-    return parts.join(', ');
-  };
-
-  // Get client shipping address
-  const getClientShippingAddress = () => {
-    if (invoice.clientInfo?.shippingAddress) {
-      return invoice.clientInfo.shippingAddress;
-    }
-    
-    const client = invoice.clientInfo as unknown as Client;
-    if (client.shippingStreet || client.shippingCity) {
-      const parts = [
-        client.shippingStreet,
-        client.shippingCity,
-        client.shippingState,
-        client.shippingPostal,
-        client.shippingCountry,
-      ].filter(Boolean);
-      return parts.join(', ');
-    }
-    
-    return invoice.clientInfo?.address || 'N/A';
-  };
-
-  // Format date for display
-  const formatDisplayDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'dd MMM yyyy');
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  // Calculate page breaks for items
-  const renderInvoiceItems = () => {
-    return invoice.items.map((item, index) => (
-      <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-        <td className="py-3 px-4 text-sm text-center">{item.itemNo}</td>
-        <td className="py-3 px-4 text-sm">{item.description}</td>
-        <td className="py-3 px-4 text-sm text-right">{item.quantity}</td>
-        <td className="py-3 px-4 text-sm text-right">{formatCurrency(item.rate)}</td>
-        <td className="py-3 px-4 text-sm text-right">{item.discount ? formatCurrency(item.discount) : '-'}</td>
-        <td className="py-3 px-4 text-sm font-medium text-right">{formatCurrency(item.amount)}</td>
-      </tr>
-    ));
-  };
-
+  if (!invoice) {
+    return (
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className={styles.container}>
+          <div className="p-4 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Loading invoice data...</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0">
-        <div className="flex items-center justify-between p-6 border-b no-print">
-          <DialogTitle className="text-2xl font-bold">Invoice Preview</DialogTitle>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              disabled={isGeneratingPdf || isPrinting}
-              className="font-sf-pro flex items-center gap-2"
-            >
-              {isPrinting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Printer className="h-4 w-4" />
-              )}
-              {isPrinting ? 'Preparing...' : 'Print'}
-            </Button>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className={styles.container}>
+        <DialogHeader>
+          <DialogTitle className="text-2xl">Invoice Preview</DialogTitle>
+          <div className="flex space-x-2">
+            {hasRequiredData ? (
+              <PDFDownloadLink
+                document={<InvoicePDFDocument invoice={invoiceData} companyAssets={companyAssets || undefined} />}
+                fileName={`Invoice_${invoice.number || 'Draft'}.pdf`}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+              >
+                {({ loading }) => (
+                  <>
+                    {loading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    {loading ? 'Generating...' : 'Download PDF'}
+                  </>
+                )}
+              </PDFDownloadLink>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                title={!hasRequiredData ? 'Loading company data...' : ''}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </Button>
+            )}
+
             <Button
               variant="default"
               size="sm"
-              onClick={handleDownloadPdf}
-              disabled={isGeneratingPdf || isPrinting}
-              className="font-sf-pro flex items-center gap-2"
+              onClick={handlePrint}
+              disabled={isPrinting || !hasRequiredData}
+              title={!hasRequiredData ? 'Loading company data...' : ''}
             >
-              {isGeneratingPdf ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {isPrinting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Download className="h-4 w-4" />
+                <Printer className="mr-2 h-4 w-4" />
               )}
-              {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
+              {isPrinting ? 'Preparing...' : 'Print'}
             </Button>
+
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="sm"
               onClick={onClose}
-              disabled={isGeneratingPdf || isPrinting}
+              className="h-9 w-9 p-0"
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </Button>
           </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-          {/* Invoice Preview Content - Matches A4 paper size */}
+        </DialogHeader>
+
+        <div className={styles.content}>
           <div 
-            ref={previewRef}
-            id="invoice-print-container"
-            className="bg-white mx-auto shadow-lg print:shadow-none"
-            style={{
-              width: '210mm',
-              minHeight: '297mm',
-              padding: '20mm',
-              margin: '0 auto',
-              boxSizing: 'border-box',
-              position: 'relative',
-              background: '#fff',
-              transform: 'scale(0.95)',
-              transformOrigin: 'top center',
-              overflow: 'hidden',
-              marginBottom: '20px'
-            }}
+            ref={invoiceRef}
+            id="invoice-print-content"
+            className={styles.printContent}
           >
-            <div className="page" style={{
-              width: '100%',
-              minHeight: '100%',
-              position: 'relative',
-              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
-              color: '#1f2937',
-              lineHeight: '1.5',
-              overflow: 'visible'
-            }}>
+            <div className={styles.printContentInner}>
               {/* Header */}
               <div className="flex justify-between items-start mb-12">
                 <div>
@@ -540,7 +384,8 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                       <img 
                         src={companyAssets.Logo.dataUrl} 
                         alt="Company Logo" 
-                        className="h-24 w-auto max-w-full object-contain"
+                        className="h-32 w-auto max-w-full object-contain print:h-36"
+                        style={{ maxWidth: '300px' }}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
@@ -731,8 +576,8 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                         <img 
                           src={companyAssets.Stamp.dataUrl} 
                           alt="Company Stamp" 
-                          className="h-32 w-auto max-w-full object-contain opacity-80"
-                          style={{ maxHeight: '120px' }}
+                          className="h-40 w-auto max-w-full object-contain opacity-80 print:h-44"
+                          style={{ maxWidth: '180px' }}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
@@ -747,7 +592,8 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                         <img 
                           src={companyAssets.Signature.dataUrl} 
                           alt="Authorized Signature" 
-                          className="h-16 w-auto object-contain"
+                          className="h-20 w-auto object-contain print:h-24"
+                          style={{ maxWidth: '200px' }}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
@@ -755,7 +601,7 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
                         />
                       </div>
                     ) : (
-                      <div className="h-16 border-t border-gray-300 w-32 mb-2 mx-auto"></div>
+                      <div className="h-20 border-t border-gray-300 w-40 mb-2 mx-auto print:h-24"></div>
                     )}
                     <p className="text-sm font-medium text-gray-700">Authorized Signature</p>
                     <p className="text-xs text-gray-500">{companyDetails?.name || 'Your Company Name'}</p>
@@ -778,12 +624,29 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
               </div>
             </div>
           </div>
-        
-        <DialogFooter className="px-6 py-4 border-t bg-gray-50 no-print">
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        </DialogFooter>
+          
+          <DialogFooter className="mt-4">
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={onClose} disabled={isPrinting}>
+                Close
+              </Button>
+              <Button 
+                onClick={handlePrint} 
+                disabled={isPrinting}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isPrinting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Preparing...
+                  </>
+                ) : 'Print'}
+              </Button>
+            </div>
+          </DialogFooter>
       </DialogContent>
     </Dialog>
   );

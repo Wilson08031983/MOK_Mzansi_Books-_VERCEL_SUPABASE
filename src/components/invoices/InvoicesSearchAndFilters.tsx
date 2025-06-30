@@ -8,8 +8,15 @@ import {
   Filter, 
   ChevronDown,
   Calendar,
-  X
+  X,
+  List,
+  Grid3X3
 } from 'lucide-react';
+
+interface Client {
+  id: string;
+  name: string;
+}
 
 interface InvoicesSearchAndFiltersProps {
   searchQuery: string;
@@ -20,6 +27,11 @@ interface InvoicesSearchAndFiltersProps {
   onDateFilterChange: (date: string) => void;
   clientFilter: string;
   onClientFilterChange: (client: string) => void;
+  viewMode: 'table' | 'grid';
+  onViewModeChange: (mode: 'table' | 'grid') => void;
+  className?: string;
+  clients?: Client[];
+  onCreateInvoice?: () => void;
 }
 
 const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
@@ -30,7 +42,12 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
   dateFilter,
   onDateFilterChange,
   clientFilter,
-  onClientFilterChange
+  onClientFilterChange,
+  viewMode,
+  onViewModeChange,
+  className = '',
+  clients = [],
+  onCreateInvoice
 }) => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -65,105 +82,137 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || dateFilter !== 'all' || clientFilter !== 'all';
 
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-      <CardContent className="p-6">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search invoices by number, client, or reference"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 font-sf-pro"
-              />
-            </div>
+    <Card className={`mb-6 ${className}`}>
+      <CardContent className="p-4">
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              type="text"
+              placeholder="Search invoices..."
+              className="pl-10 w-full"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
           </div>
           
-          <div className="flex items-center gap-3">
-            <select
-              value={statusFilter}
-              onChange={(e) => onStatusFilterChange(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg font-sf-pro focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewModeChange('table')}
+              className="h-10"
             >
-              {statusOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            
-            <select
-              value={dateFilter}
-              onChange={(e) => onDateFilterChange(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg font-sf-pro focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              <List className="h-4 w-4 mr-2" />
+              Table
+            </Button>
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onViewModeChange('grid')}
+              className="h-10"
             >
-              {dateOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            
+              <Grid3X3 className="h-4 w-4 mr-2" />
+              Grid
+            </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className="font-sf-pro"
+              className="h-10"
             >
               <Filter className="h-4 w-4 mr-2" />
-              More Filters
-              <ChevronDown className="h-4 w-4 ml-2" />
+              Filters
+              {showAdvancedFilters ? (
+                <ChevronDown className="ml-2 h-4 w-4" />
+              ) : (
+                <ChevronDown className="ml-2 h-4 w-4 transform rotate-180" />
+              )}
             </Button>
-            
-            {hasActiveFilters && (
+            {onCreateInvoice && (
               <Button
-                variant="ghost"
-                onClick={clearFilters}
-                className="text-slate-500 hover:text-slate-700 font-sf-pro"
+                size="sm"
+                onClick={onCreateInvoice}
+                className="h-10 ml-2"
               >
-                <X className="h-4 w-4 mr-1" />
-                Clear
+                + New Invoice
               </Button>
             )}
           </div>
         </div>
-        
+
         {showAdvancedFilters && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
+          <div className="pt-4 border-t border-slate-100">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 font-sf-pro">
-                  Amount Range
-                </label>
-                <div className="flex items-center gap-2">
-                  <Input placeholder="Min" className="font-sf-pro" />
-                  <span className="text-slate-500">to</span>
-                  <Input placeholder="Max" className="font-sf-pro" />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">Status</label>
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => onStatusFilterChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                 </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 font-sf-pro">
-                  Client
-                </label>
-                <select className="w-full px-3 py-2 border border-slate-200 rounded-lg font-sf-pro focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                  <option value="all">All Clients</option>
-                  <option value="acme">ACME Corporation</option>
-                  <option value="tech">Tech Solutions Ltd</option>
-                </select>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">Date Range</label>
+                <div className="relative">
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => onDateFilterChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {dateOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2 font-sf-pro">
-                  Custom Date Range
-                </label>
-                <div className="flex items-center gap-2">
-                  <Input type="date" className="font-sf-pro" />
-                  <span className="text-slate-500">to</span>
-                  <Input type="date" className="font-sf-pro" />
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">Client</label>
+                <div className="relative">
+                  <select
+                    value={clientFilter}
+                    onChange={(e) => onClientFilterChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Clients</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                 </div>
               </div>
             </div>
+
+            {hasActiveFilters && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-slate-500 hover:bg-slate-100"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear all filters
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

@@ -236,6 +236,66 @@
   box-shadow: 0 40px 80px -12px rgba(0, 0, 0, 0.3);
 }
 
+/* Print styles */
+@page {
+  size: A4;
+  margin: 15mm 10mm 15mm 10mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .printable-content, .printable-content * {
+    visibility: visible;
+  }
+  
+  .printable-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0;
+    padding: 0;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .no-print, .no-print * {
+    display: none !important;
+  }
+  
+  /* Ensure page breaks work properly */
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+  
+  /* Ensure tables don't break across pages */
+  table {
+    page-break-inside: auto;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  /* Ensure images and other elements don't break across pages */
+  img, svg {
+    page-break-inside: avoid;
+  }
+  
+  /* Ensure proper spacing for printed content */
+  .printable-content > * {
+    margin: 0;
+    padding: 0;
+  }
+}
+
 /* Smooth transitions for all interactive elements */
 * {
   transition-property: transform, opacity, box-shadow, background-color, border-color, color;

@@ -4,10 +4,39 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { X, Plus, Trash2, Loader2, Save, ChevronDown, ChevronUp } from 'lucide-react';
-import { Invoice } from '@/services/invoiceService';
+import { X, Plus, Trash2, Loader2, Save, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { generateInvoiceNumber } from '@/services/invoiceService';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
+import { Link } from 'react-router-dom';
+import InvoicePreviewModal, { InvoicePreview } from '@/components/invoice/InvoicePreviewModal';
+
+// Define Invoice type locally instead of importing to avoid conflicts
+type Invoice = {
+  id: string;
+  number: string;
+  clientId: string;
+  date: string;
+  dueDate: string;
+  reference: string;
+  notes: string;
+  terms: string;
+  vatRate: number;
+  items: Array<{
+    id: string;
+    itemNo: number;
+    description: string;
+    quantity: number;
+    rate: number;
+    markupPercent: number;
+    discount: number;
+    amount: number;
+  }>;
+  status?: string;
+  subtotal?: number;
+  total?: number;
+  vatAmount?: number;
+};
 
 interface LineItem {
   id: string;
@@ -46,8 +75,10 @@ interface CreateInvoiceModalProps {
 
 const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose, onSave, editingInvoice }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [formData, setFormData] = useState({
+    invoiceNumber: '',
     clientId: '',
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
@@ -77,112 +108,328 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
     setNextItemNo(prev => prev + 1);
   }, [nextItemNo]);
 
-  // Load clients and initialize form
-  useEffect(() => {
-    const loadClients = () => {
-      try {
-        const savedClients = localStorage.getItem('clients');
-        if (savedClients) {
-          setClients(JSON.parse(savedClients));
+  // Load clients from localStorage and initialize form
+  const loadClients = useCallback((): boolean => {
+    try {
+      const savedClients = localStorage.getItem('clients');
+      if (savedClients) {
+        const parsedClients = JSON.parse(savedClients);
+        if (Array.isArray(parsedClients) && parsedClients.length > 0) {
+          setClients(parsedClients);
+          return true;
+        } else {
+          toast.info('No clients found. Please add clients first.');
         }
-      } catch (error) {
-        console.error('Error loading clients:', error);
-        toast.error('Failed to load clients');
+      } else {
+        toast.info('No clients found. Please add clients first.');
+      }
+    } catch (error) {
+      console.error('Error loading clients:', error);
+      toast.error('Failed to load clients');
+    }
+    return false;
+  }, []);
+
+  // Load client details when client is selected
+  const handleClientSelect = useCallback((clientId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      clientId
+    }));
+    
+    // Load client details if a client is selected
+    if (clientId) {
+      const selectedClient = clients.find(c => c.id === clientId);
+      if (selectedClient) {
+        // Auto-populate client data if needed
+        console.log('Selected client:', selectedClient);
+      }
+    }
+  }, [clients]);
+
+  // Memoize the client options to prevent unnecessary re-renders
+  const clientOptions = useMemo(() => {
+    return clients.map(client => ({
+      value: client.id,
+      label: client.companyName || `${client.firstName} ${client.lastName}`.trim()
+    }));
+  }, [clients]);
+
+  // Initialize form with useCallback to prevent recreation on every render
+  const initializeForm = useCallback(async () => {
+    try {
+      if (!editingInvoice) {
+        const newInvoiceNumber = await generateInvoiceNumber();
+        setFormData(prev => ({
+          ...prev,
+          invoiceNumber: newInvoiceNumber
+        }));
+        
+        // Initialize with one empty line item
+        if (items.length === 0) {
+          addItem();
+        }
+      } else {
+        // Initialize form with existing invoice data
+        setFormData({
+          invoiceNumber: editingInvoice.number,
+          clientId: editingInvoice.clientId,
+          invoiceDate: editingInvoice.date,
+          dueDate: editingInvoice.dueDate || '',
+          reference: editingInvoice.reference || '',
+          notes: editingInvoice.notes || '',
+          terms: editingInvoice.terms || 'Payment due within 30 days of invoice date.',
+          vatRate: editingInvoice.vatRate || 15
+        });
+
+        if (editingInvoice.items && editingInvoice.items.length > 0) {
+          const lineItems = editingInvoice.items.map((item, index) => ({
+            ...item,
+            id: item.id || crypto.randomUUID(),
+            itemNo: index + 1,
+            quantity: Number(item.quantity) || 0,
+            rate: Number(item.rate) || 0,
+            markupPercent: Number(item.markupPercent) || 0,
+            discount: Number(item.discount) || 0,
+            amount: Number(item.amount) || 0
+          }));
+          setItems(lineItems);
+          setNextItemNo(lineItems.length + 1);
+        } else {
+          addItem();
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing form:', error);
+      toast.error('Failed to initialize form');
+    }
+  }, [editingInvoice, items.length, addItem]);
+
+  // Load clients and initialize form on mount
+  useEffect(() => {
+    const init = async () => {
+      await loadClients();
+      await initializeForm();
+    };
+    
+    init();
+    
+    // Add event listener for storage changes to update clients list
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'clients' && e.newValue) {
+        try {
+          const updatedClients = JSON.parse(e.newValue);
+          if (Array.isArray(updatedClients)) {
+            setClients(updatedClients);
+          }
+        } catch (error) {
+          console.error('Error updating clients from storage:', error);
+        }
       }
     };
-
-    loadClients();
-
-    // Initialize with one empty line item if no editing invoice
-    if (!editingInvoice && items.length === 0) {
-      addItem();
-    }
-  }, [addItem, editingInvoice, items.length]);
-
-  // Initialize form with invoice data when editing
-  useEffect(() => {
-    if (isInitialized || !editingInvoice) return;
     
-    setFormData({
-      clientId: editingInvoice.clientId,
-      invoiceDate: editingInvoice.date,
-      dueDate: editingInvoice.dueDate || '',
-      reference: editingInvoice.reference || '',
-      notes: editingInvoice.notes || '',
-      terms: editingInvoice.terms || 'Payment due within 30 days of invoice date.',
-      vatRate: editingInvoice.vatRate || 15
-    });
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [loadClients, initializeForm]);
 
-    if (editingInvoice.items && editingInvoice.items.length > 0) {
-      const lineItems = editingInvoice.items.map((item, index) => ({
-        ...item,
-        itemNo: index + 1,
+  // Calculate totals function with proper typing
+  const calculateTotals = useCallback((lineItems: LineItem[], vatRate: number) => {
+    const subtotal = lineItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const rate = Number(item.rate) || 0;
+      const markupPercent = Number(item.markupPercent) || 0;
+      const discount = Number(item.discount) || 0;
+      
+      const grossAmount = (rate + (rate * markupPercent / 100)) * quantity;
+      const amount = grossAmount - discount;
+      
+      return sum + amount;
+    }, 0);
+    
+    const vatAmount = subtotal * (vatRate / 100);
+    const total = subtotal + vatAmount;
+    
+    return { subtotal, vatAmount, total };
+  }, []);
+
+  // Calculate totals for display
+  const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
+
+  // Get company details from localStorage
+  const getCompanyDetails = useCallback(() => {
+    try {
+      const company = localStorage.getItem('companyDetails');
+      const assets = localStorage.getItem('companyAssets');
+      let companyData = company ? JSON.parse(company) : {
+        name: 'MOKMzansi Books',
+        email: 'info@mokmzansibooks.co.za',
+        phone: '+27 11 123 4567',
+        website: 'www.mokmzansibooks.co.za',
+        vatNumber: '1234567890',
+        regNumber: '2020/123456/07',
+        addressLine1: '123 Business St',
+        addressLine2: 'Johannesburg',
+        addressLine3: 'Gauteng',
+        addressLine4: '2000, South Africa',
+        bankName: 'Example Bank',
+        bankAccount: '1234567890',
+        accountType: 'Cheque',
+        branchCode: '123456',
+        accountHolder: 'MOKMzansi Books'
+      };
+
+      // Merge with assets if available
+      if (assets) {
+        const assetsData = JSON.parse(assets);
+        companyData = {
+          ...companyData,
+          logoUrl: assetsData.Logo?.dataUrl || '',
+          stampUrl: assetsData.Stamp?.dataUrl || '',
+          signatureUrl: assetsData.Signature?.dataUrl || ''
+        };
+      }
+
+      return companyData;
+    } catch (error) {
+      console.error('Error loading company details:', error);
+      return {
+        name: 'MOKMzansi Books',
+        email: 'info@mokmzansibooks.co.za',
+        phone: '+27 11 123 4567',
+        website: 'www.mokmzansibooks.co.za',
+        vatNumber: '1234567890',
+        regNumber: '2020/123456/07',
+        addressLine1: '123 Business St',
+        addressLine2: 'Johannesburg',
+        addressLine3: 'Gauteng',
+        addressLine4: '2000, South Africa',
+        bankName: 'Example Bank',
+        bankAccount: '1234567890',
+        accountType: 'Cheque',
+        branchCode: '123456',
+        accountHolder: 'MOKMzansi Books'
+      };
+    }
+  }, []);
+
+  // Prepare invoice data for preview
+  const getInvoicePreviewData = useCallback((): InvoicePreview => {
+    const selectedClient = clients.find(c => c.id === formData.clientId);
+    
+    // Format client address
+    const formatAddress = (client: Client) => {
+      const parts = [
+        client.billingAddress,
+        client.shippingStreet,
+        client.shippingCity,
+        client.shippingState,
+        client.shippingPostal,
+        client.shippingCountry
+      ].filter(Boolean);
+      
+      return parts.join(', ');
+    };
+    
+    return {
+      number: formData.invoiceNumber,
+      date: formData.invoiceDate,
+      dueDate: formData.dueDate || new Date(new Date(formData.invoiceDate).setDate(new Date(formData.invoiceDate).getDate() + 30)).toISOString().split('T')[0],
+      reference: formData.reference,
+      clientId: formData.clientId,
+      clientInfo: selectedClient ? {
+        id: selectedClient.id,
+        companyName: selectedClient.companyName,
+        firstName: selectedClient.firstName,
+        lastName: selectedClient.lastName,
+        email: selectedClient.email,
+        phone: selectedClient.phone,
+        billingAddress: formatAddress(selectedClient),
+        shippingAddress: selectedClient.sameAsBilling 
+          ? 'Same as billing address' 
+          : formatAddress({
+              ...selectedClient,
+              billingAddress: selectedClient.shippingAddress,
+              shippingStreet: selectedClient.shippingStreet,
+              shippingCity: selectedClient.shippingCity,
+              shippingState: selectedClient.shippingState,
+              shippingPostal: selectedClient.shippingPostal,
+              shippingCountry: selectedClient.shippingCountry
+            }),
+        sameAsBilling: selectedClient.sameAsBilling || false,
+        shippingStreet: selectedClient.shippingStreet,
+        shippingCity: selectedClient.shippingCity,
+        shippingState: selectedClient.shippingState,
+        shippingPostal: selectedClient.shippingPostal,
+        shippingCountry: selectedClient.shippingCountry
+      } : undefined,
+      items: items.map(item => ({
+        id: item.id,
+        itemNo: item.itemNo,
+        description: item.description,
         quantity: Number(item.quantity) || 0,
         rate: Number(item.rate) || 0,
         markupPercent: Number(item.markupPercent) || 0,
         discount: Number(item.discount) || 0,
         amount: Number(item.amount) || 0
-      }));
-      setItems(lineItems);
-      setNextItemNo(lineItems.length + 1);
-    } else {
-      addItem();
-    }
-    
-    setIsInitialized(true);
-  }, [editingInvoice, addItem, isInitialized]);
-
-  // Helper function to calculate totals
-  const calculateTotals = useCallback((items: LineItem[], vatRate: number) => {
-    const subTotal = items.reduce((sum, item) => sum + (item.amount || 0), 0);
-    const vatAmt = (subTotal * (Number(vatRate) || 0)) / 100;
-    const totalAmt = subTotal + vatAmt;
-    
-    return {
-      subtotal: parseFloat(subTotal.toFixed(2)),
-      vatAmount: parseFloat(vatAmt.toFixed(2)),
-      total: parseFloat(totalAmt.toFixed(2))
+      })),
+      subtotal: subtotal,
+      vatRate: Number(formData.vatRate) || 15,
+      vatTotal: vatAmount,
+      grandTotal: total,
+      terms: formData.terms,
+      notes: formData.notes,
+      currency: 'ZAR',
+      status: 'draft',
+      companyDetails: getCompanyDetails()
     };
-  }, []);
-
-  // Calculate totals
-  const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
+  }, [clients, formData, items, subtotal, vatAmount, total, getCompanyDetails]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isLoading) return;
+    
+    // Validate form
+    if (!formData.clientId) {
+      toast.error('Please select a client');
+      return;
+    }
+    
+    if (!formData.invoiceDate) {
+      toast.error('Invoice date is required');
+      return;
+    }
     
     if (items.length === 0) {
       toast.error('Please add at least one line item');
       return;
     }
     
-    if (!formData.clientId) {
-      toast.error('Please select a client');
-      return;
-    }
-    
-    setIsLoading(true);
-    
     try {
-      const selectedClient = clients.find(c => c.id === formData.clientId);
-      const clientName = selectedClient 
-        ? selectedClient.companyName || `${selectedClient.firstName} ${selectedClient.lastName}`.trim()
-        : 'Unknown Client';
+      setIsLoading(true);
       
-      const newInvoice: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'> = {
-        number: editingInvoice?.number || `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      // Get the selected client
+      const selectedClient = clients.find(c => c.id === formData.clientId);
+      if (!selectedClient) {
+        toast.error('Selected client not found');
+        return;
+      }
+      
+      // Calculate totals for the current items
+      const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
+      
+      // Prepare invoice data according to the Invoice type
+      const invoiceData: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'> = {
+        number: formData.invoiceNumber,
         clientId: formData.clientId,
-        client: clientName,
         date: formData.invoiceDate,
-        dueDate: formData.dueDate || new Date(new Date(formData.invoiceDate).setDate(new Date(formData.invoiceDate).getDate() + 30)).toISOString().split('T')[0],
-        amount: total,
-        paidAmount: 0,
-        balance: total,
+        dueDate: formData.dueDate || '',
+        reference: formData.reference || '',
+        notes: formData.notes || '',
+        terms: formData.terms || 'Payment due within 30 days of invoice date.',
         status: 'draft',
-        currency: 'ZAR',
-        vatRate: Number(formData.vatRate) || 0,
-        reference: formData.reference,
+        vatRate: Number(formData.vatRate) || 15,
         items: items.map(item => ({
           id: item.id,
           itemNo: item.itemNo,
@@ -193,45 +440,44 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
           discount: Number(item.discount) || 0,
           amount: Number(item.amount) || 0
         })),
-        notes: formData.notes,
-        terms: formData.terms,
-        companyDetails: {
-          name: 'MOKMzansi Books',
-          address: '123 Business St, Johannesburg, 2000',
-          phone: '+27 11 123 4567',
-          email: 'invoices@mokmzansibooks.co.za',
-          taxNumber: '1234567890',
-          registrationNumber: '2020/123456/07'
-        }
+        subtotal,
+        vatAmount,
+        total
       };
       
-      await onSave(newInvoice);
-      toast.success(editingInvoice ? 'Invoice updated successfully' : 'Invoice created successfully');
+      // Call the onSave callback
+      await onSave(invoiceData);
+      
+      // Close the modal
       onClose();
+      
+      // Show success message
+      toast.success(editingInvoice ? 'Invoice updated successfully' : 'Invoice created successfully');
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast.error('Failed to save invoice');
     } finally {
       setIsLoading(false);
     }
-  }, [formData, items, clients, onSave, onClose, editingInvoice, total]);
+  }, [onSave, formData, items, clients, onClose, calculateTotals, editingInvoice, isLoading]);
 
-  if (!isOpen) return null;
-
-  const removeItem = (id: string) => {
+  const removeItem = useCallback((id: string) => {
     if (items.length <= 1) {
       toast.error('At least one line item is required');
       return;
     }
-    const newItems = items.filter(item => item.id !== id);
-    // Renumber items
-    const renumberedItems = newItems.map((item, index) => ({
-      ...item,
-      itemNo: index + 1
-    }));
-    setItems(renumberedItems);
-    setNextItemNo(renumberedItems.length + 1);
-  };
+    
+    setItems(prevItems => {
+      const newItems = prevItems.filter(item => item.id !== id);
+      // Renumber items
+      const renumberedItems = newItems.map((item, index) => ({
+        ...item,
+        itemNo: index + 1
+      }));
+      setNextItemNo(renumberedItems.length + 1);
+      return renumberedItems;
+    });
+  }, [items.length]);
 
   const updateItem = (id: string, field: keyof LineItem, value: string | number) => {
     // Convert string numbers to numbers for numeric fields
@@ -271,13 +517,45 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
     );
   };
 
+  // Handle click outside to close modal
+  const handleClickOutside = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  }, [onClose]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={handleClickOutside}
+    >
       <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-slate-900 font-sf-pro">Create New Invoice</h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-5 w-5" />
+          <h2 className="text-xl font-semibold text-slate-900 font-sf-pro">
+            {editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}
+          </h2>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onClose}
+            aria-label="Close"
+            className="text-slate-500 hover:bg-slate-100 rounded-full h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
         
@@ -285,13 +563,59 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2 font-sf-pro">
+                Invoice Number
+              </label>
+              <Input
+                value={formData.invoiceNumber}
+                readOnly
+                className="font-sf-pro bg-slate-50"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2 font-sf-pro">
                 Client
               </label>
-              <select className="w-full px-3 py-2 border border-slate-200 rounded-lg font-sf-pro focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="">Select a client</option>
-                <option value="acme">ACME Corporation</option>
-                <option value="tech">Tech Solutions Ltd</option>
-              </select>
+              <div className="relative">
+                <select 
+                  value={formData.clientId}
+                  onChange={(e) => handleClientSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg font-sf-pro focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white"
+                  disabled={clients.length === 0}
+                >
+                  <option value="">
+                    {clients.length === 0 ? 'No clients found' : 'Select a client'}
+                  </option>
+                  {clients.map((client) => {
+                    const displayName = client.companyName || 
+                      [client.firstName, client.lastName].filter(Boolean).join(' ').trim();
+                    return (
+                      <option key={client.id} value={client.id}>
+                        {displayName || `Client ${client.id.substring(0, 6)}`}
+                      </option>
+                    );
+                  })}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700">
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+                {clients.length === 0 && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    <Link 
+                      to="/clients" 
+                      className="text-blue-600 hover:underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onClose();
+                        // Using window.location instead of navigate to ensure full page reload
+                        window.location.href = '/clients';
+                      }}
+                    >
+                      Add a client
+                    </Link> to get started.
+                  </p>
+                )}
+              </div>
             </div>
             
             <div>
@@ -499,14 +823,52 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
           </div>
         </div>
         
-        <div className="flex justify-end gap-3 p-6 border-t">
-          <Button variant="outline" onClick={onClose} className="font-sf-pro">
-            Cancel
-          </Button>
-          <Button onClick={onClose} className="font-sf-pro">
-            Create Invoice
-          </Button>
+        <div className="flex justify-between items-center p-6 border-t">
+          <div>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsPreviewOpen(true)}
+              className="font-sf-pro flex items-center gap-2"
+              disabled={!formData.clientId || items.length === 0}
+            >
+              <Eye className="h-4 w-4" />
+              Preview
+            </Button>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onClose} className="font-sf-pro">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              className="font-sf-pro"
+              disabled={isLoading || !formData.clientId || items.length === 0}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Create Invoice'
+              )}
+            </Button>
+          </div>
         </div>
+        
+        {/* Invoice Preview Modal */}
+        <InvoicePreviewModal
+          open={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          invoice={getInvoicePreviewData()}
+          company={getCompanyDetails()}
+        />
+        
+        {/* Debug output - uncomment if needed for troubleshooting */}
+        {/* <div className="hidden">
+          <pre>{JSON.stringify(getInvoicePreviewData(), null, 2)}</pre>
+          <pre>{JSON.stringify(getCompanyDetails(), null, 2)}</pre>
+        </div> */}
       </div>
     </div>
   );

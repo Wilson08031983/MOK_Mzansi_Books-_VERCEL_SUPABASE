@@ -1,0 +1,1515 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { X, Download, Printer, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { useReactToPrint } from 'react-to-print';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import InvoicePDFDocument from '@/components/pdf/InvoicePDFDocument';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
+// Define interface types needed for the component
+export interface InvoiceItemPreview {
+  id: string;
+  itemNo: number;
+  description: string;
+  quantity: number;
+  rate: number;
+  markupPercent: number;
+  discount: number;
+  amount: number;
+  vat?: number;
+}
+
+// Client information interface
+export interface ClientInfo {
+  id: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  shippingStreet?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostal?: string;
+  shippingCountry?: string;
+  sameAsBilling?: boolean;
+}
+
+// Company details interface
+export interface CompanyDetails {
+  id?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  vatNumber?: string;
+  regNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
+  addressLine4?: string;
+  bankName?: string;
+  bankAccount?: string;
+  accountType?: string;
+  branchCode?: string;
+  accountHolder?: string;
+}
+
+// Company assets interface
+export interface CompanyAssets {
+  Logo?: {
+    name: string;
+    dataUrl: string;
+    lastModified: number;
+  };
+  Stamp?: {
+    name: string;
+    dataUrl: string;
+    lastModified: number;
+  };
+  Signature?: {
+    name: string;
+    dataUrl: string;
+    lastModified: number;
+  };
+}
+
+// Main Invoice interface
+export interface InvoicePreview {
+  id?: string;
+  number: string;
+  date: string;
+  dueDate: string;
+  reference?: string;
+  clientId?: string;
+  clientInfo?: ClientInfo;
+  items: InvoiceItemPreview[];
+  subtotal: number;
+  vatRate: number;
+  vatTotal: number;
+  grandTotal: number;
+  terms: string;
+  notes: string;
+  status?: string;
+  currency: string;
+  companyDetails?: CompanyDetails;
+}
+
+interface Company {
+  name: string;
+  email?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
+  addressLine4?: string;
+  vatNumber?: string;
+  regNumber?: string;
+  website?: string;
+  bankName?: string;
+  bankAccount?: string;
+  accountType?: string;
+  branchCode?: string;
+  accountHolder?: string;
+}
+
+interface InvoicePreviewModalProps {
+  open: boolean;
+  onClose: () => void;
+  invoice: InvoicePreview;
+  company: Company;
+}
+
+const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
+  open,
+  onClose,
+  invoice,
+  company,
+}) => {
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetails | null>(null);
+  const [companyAssets, setCompanyAssets] = useState<CompanyAssets | null>(null);
+  const invoiceRef = useRef<HTMLDivElement>(null);
+
+  // Helper function to safely format currency
+  const formatCurrency = (amount: number | undefined): string => {
+    if (amount === undefined) return 'R 0.00';
+    return new Intl.NumberFormat('en-ZA', {
+      style: 'currency',
+      currency: 'ZAR',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  // Format date for display
+  const formatDisplayDate = (dateString?: string): string => {
+    if (!dateString) return '';
+    try {
+      return new Date(dateString).toLocaleDateString('en-ZA', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateString || '';
+    }
+  };
+
+  // Render invoice items for the table
+  const renderInvoiceItems = () => {
+    if (!invoice.items || invoice.items.length === 0) {
+      return (
+        <tr>
+          <td colSpan={6} className="px-4 py-4 text-center text-sm text-gray-500">
+            No items in this invoice
+          </td>
+        </tr>
+      );
+    }
+
+    return invoice.items.map((item) => (
+      <tr key={item.id} className="hover:bg-gray-50">
+        <td className="px-4 py-3 text-sm text-gray-900">{item.itemNo}</td>
+        <td className="px-4 py-3 text-sm text-gray-900">
+          <div className="font-medium">{item.description}</div>
+        </td>
+        <td className="px-4 py-3 text-sm text-right text-gray-900">{item.quantity}</td>
+        <td className="px-4 py-3 text-sm text-right text-gray-900">
+          {formatCurrency(item.rate)}
+        </td>
+        <td className="px-4 py-3 text-sm text-right text-gray-900">
+          {item.discount ? formatCurrency(item.discount) : '-'}
+        </td>
+        <td className="px-4 py-3 text-sm font-medium text-right text-gray-900">
+          {formatCurrency(item.amount)}
+        </td>
+      </tr>
+    ));
+  };
+
+  // Handle print with styles that match the preview
+  const handlePrint = () => {
+    if (!invoiceRef.current) {
+      toast.error('Failed to load invoice content for printing');
+      return;
+    }
+
+    setIsPrinting(true);
+    
+    try {
+      // Create a new window for printing
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        throw new Error('Please allow popups for this site to print');
+      }
+
+      // Get the invoice content
+      const printContent = invoiceRef.current.innerHTML;
+      
+      // Get all styles from the current document
+      const styles = Array.from(document.styleSheets)
+        .map(sheet => {
+          try {
+            return Array.from(sheet.cssRules || []).map(rule => rule.cssText).join('\n');
+          } catch (e) {
+            return '';
+          }
+        })
+        .filter(Boolean)
+        .join('\n');
+      
+      // Create a clean HTML document with all necessary styles
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Invoice-${invoice?.number || 'Draft'}</title>
+            <style>
+              /* Reset and base styles */
+              * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+              }
+              
+              /* Import Tailwind styles */
+              @import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+              
+              /* Custom print styles */
+              @page {
+                size: A4;
+                margin: 15mm 15mm 20mm 15mm;
+              }
+              
+              body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segope UI", Roboto, sans-serif;
+                line-height: 1.5;
+                color: #333;
+                background: #fff;
+              }
+              
+              .print-container {
+                max-width: 210mm;
+                margin: 0 auto;
+                padding: 20px;
+                background: white;
+              }
+              
+              /* Ensure tables don't break across pages */
+              table {
+                page-break-inside: auto;
+                width: 100%;
+                border-collapse: collapse;
+              }
+              
+              tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+              }
+              
+              /* Header styles */
+              .invoice-header {
+                margin-bottom: 2rem;
+              }
+              
+              /* Company and client info */
+              .info-section {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 2rem;
+              }
+              
+              /* Items table */
+              .items-table {
+                width: 100%;
+                margin: 2rem 0;
+              }
+              
+              .items-table th,
+              .items-table td {
+                padding: 0.75rem;
+                border: 1px solid #e2e8f0;
+                text-align: left;
+              }
+              
+              .items-table th {
+                background-color: #f8fafc;
+                font-weight: 600;
+              }
+              
+              /* Totals section */
+              .totals-section {
+                margin-top: 2rem;
+                margin-left: auto;
+                width: 50%;
+              }
+              
+              .totals-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 0.5rem;
+              }
+              
+              /* Signature section */
+              .signature-section {
+                margin-top: 3rem;
+                page-break-inside: avoid;
+              }
+              
+              /* Print-specific styles */
+              @media print {
+                body * {
+                  visibility: hidden;
+                }
+                
+                .print-container, .print-container * {
+                  visibility: visible;
+                }
+                
+                .print-container {
+                  position: absolute;
+                  left: 0;
+                  top: 0;
+                  width: 100%;
+                  padding: 0 20px;
+                  margin: 0;
+                }
+                
+                .no-print, .no-print * {
+                  display: none !important;
+                }
+                
+                /* Ensure page breaks work properly */
+                .page-break {
+                  page-break-before: always;
+                }
+                
+                /* Keep headers with content */
+                thead {
+                  display: table-header-group;
+                }
+                
+                /* Footer positioning */
+                .footer {
+                  position: fixed;
+                  bottom: 0;
+                  width: 100%;
+                }
+              }
+              
+              /* Add any additional styles from the preview */
+              ${styles}
+            </style>
+          </head>
+          <body>
+            <div class="print-container">
+              ${printContent}
+            </div>
+            <script>
+              // Auto-print when the content is loaded
+              window.onload = function() {
+                // Small delay to ensure all styles are applied
+                setTimeout(function() {
+                  window.print();
+                  // Close the window after printing
+                  window.onafterprint = function() {
+                    window.close();
+                  };
+                  // Fallback in case onafterprint doesn't fire
+                  setTimeout(function() {
+                    window.close();
+                  }, 3000);
+                }, 500);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      
+      // Clean up
+      printWindow.document.close();
+      
+      // Reset printing state after a delay
+      setTimeout(() => {
+        setIsPrinting(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Print error:', error);
+      toast.error('Failed to print. Please try again.');
+      setIsPrinting(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!invoiceRef.current) {
+      toast.error('Invoice content not available');
+      return;
+    }
+    
+    setIsDownloading(true);
+    let printWindow: Window | null = null;
+    
+    try {
+      // Create a deep clone of the invoice content
+      const content = invoiceRef.current.cloneNode(true) as HTMLElement;
+      content.classList.add('invoice-container', 'pdf-export');
+      
+      // Remove any print-specific elements that shouldn't be in the PDF
+      const noPrintElements = content.querySelectorAll('.no-print');
+      noPrintElements.forEach(el => el.remove());
+      
+      // Create a temporary container for the content
+      const tempDiv = document.createElement('div');
+      tempDiv.style.visibility = 'hidden';
+      tempDiv.style.position = 'fixed';
+      tempDiv.style.top = '0';
+      tempDiv.style.left = '0';
+      tempDiv.style.width = '210mm';
+      tempDiv.style.minHeight = '297mm';
+      tempDiv.style.padding = '15mm';
+      tempDiv.style.margin = '0 auto';
+      tempDiv.style.backgroundColor = '#FFFFFF';
+      tempDiv.style.boxSizing = 'border-box';
+      tempDiv.style.zIndex = '9999';
+      
+      // Add the content to the temp div
+      tempDiv.appendChild(content);
+      document.body.appendChild(tempDiv);
+      
+      // Define print styles
+      const printStyles = `
+        /* Reset and base styles */
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          line-height: 1.5;
+          color: #1f2937;
+          background: #fff;
+          padding: 32px;
+          width: 210mm;
+          min-height: 297mm;
+          margin: 0 auto;
+          position: relative;
+        }
+        
+        /* Invoice container */
+        .invoice-container {
+          max-width: 100%;
+          margin: 0 auto;
+          background: #fff;
+        }
+        
+        /* Header section */
+        .invoice-header {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 2rem;
+        }
+        
+        /* Logo */
+        .logo-container {
+          margin-bottom: 1.5rem;
+        }
+        
+        .logo-container img {
+          max-height: 80px;
+          width: auto;
+          max-width: 100%;
+        }
+        
+        /* Invoice title */
+        .invoice-title {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #111827;
+          margin-bottom: 0.5rem;
+        }
+        
+        /* Company info */
+        .company-info {
+          text-align: right;
+        }
+        
+        .company-name {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #111827;
+          margin-bottom: 0.25rem;
+        }
+        
+        .company-detail {
+          font-size: 0.75rem;
+          color: #4b5563;
+          margin-bottom: 0.125rem;
+        }
+        
+        /* Client info */
+        .client-info {
+          background-color: #f9fafb;
+          padding: 1rem;
+          border-radius: 0.5rem;
+          margin-bottom: 1.5rem;
+        }
+        
+        .client-name {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #111827;
+          margin-bottom: 0.25rem;
+        }
+        
+        .client-detail {
+          font-size: 0.75rem;
+          color: #4b5563;
+          margin-bottom: 0.125rem;
+        }
+          
+          /* Invoice details */
+          .invoice-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+          }
+          
+          .detail-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+          }
+          
+          .detail-value {
+            font-size: 0.875rem;
+            color: #111827;
+          }
+          
+          /* Items table */
+          .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.75rem;
+          }
+          
+          .items-table th,
+          .items-table td {
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            text-align: left;
+          }
+          
+          .items-table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+          }
+          
+          .items-table td {
+            color: #4b5563;
+          }
+          
+          .text-right {
+            text-align: right;
+          }
+          
+          /* Totals section */
+          .totals-section {
+            margin-top: 1.5rem;
+            margin-left: auto;
+            width: 300px;
+          }
+          
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+          }
+          
+          .total-label {
+            color: #4b5563;
+          }
+          
+          .total-value {
+            font-weight: 600;
+            color: #111827;
+          }
+          
+          /* Notes and terms */
+          .notes-section,
+          .terms-section {
+            margin-top: 2rem;
+          }
+          
+          .section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.25rem;
+          }
+          
+          .section-content {
+            font-size: 0.75rem;
+            color: #4b5563;
+            white-space: pre-line;
+          }
+          
+          /* Signature and stamp */
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 3rem;
+            page-break-inside: avoid;
+          }
+          
+          .signature-box {
+            text-align: center;
+            padding: 1rem;
+            border-top: 1px solid #e5e7eb;
+            width: 45%;
+          }
+          
+          .signature-img {
+            max-height: 60px;
+            max-width: 100%;
+            margin: 0.5rem 0;
+          }
+          
+          .signature-line {
+            border-top: 1px solid #9ca3af;
+            margin: 2rem 0 0.5rem;
+            width: 100%;
+          }
+          
+          /* Print-specific styles */
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          
+          @media print {
+            body {
+              padding: 0;
+              background: white;
+            }
+            
+            .no-print {
+              display: none !important;
+            }
+            
+            /* Ensure page breaks work properly */
+            .page-break {
+              page-break-before: always;
+            }
+            
+            /* Keep headers with content */
+            thead {
+              display: table-header-group;
+            }
+            
+            /* Prevent breaking inside important elements */
+            tr, td, th, .invoice-header, .client-info, .totals-section, .signature-section {
+              page-break-inside: avoid;
+            }
+          }
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+          }
+          
+          .detail-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+          }
+          
+          .detail-value {
+            font-size: 0.875rem;
+            color: #111827;
+          }
+          
+          /* Items table */
+          .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.75rem;
+          }
+          
+          .items-table th,
+          .items-table td {
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            text-align: left;
+          }
+          
+          .items-table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+          }
+          
+          .items-table td {
+            color: #4b5563;
+          }
+          
+          .text-right {
+            text-align: right;
+          }
+          
+          /* Totals section */
+          .totals-section {
+            margin-top: 1.5rem;
+            margin-left: auto;
+            width: 300px;
+          }
+          
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+          }
+          
+          .total-label {
+            color: #4b5563;
+          }
+          
+          .total-value {
+            font-weight: 600;
+            color: #111827;
+          }
+          
+          /* Notes and terms */
+          .notes-section,
+          .terms-section {
+            margin-top: 2rem;
+          }
+          
+          .section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0.25rem;
+          }
+          
+          .section-content {
+            font-size: 0.75rem;
+            color: #4b5563;
+            white-space: pre-line;
+          }
+          
+          /* Signature and stamp */
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 3rem;
+            page-break-inside: avoid;
+          }
+          
+          .signature-box {
+            text-align: center;
+            padding: 1rem;
+            border-top: 1px solid #e5e7eb;
+            width: 45%;
+          }
+          
+          .signature-img {
+            max-height: 60px;
+            max-width: 100%;
+            margin: 0.5rem 0;
+          }
+          
+          .signature-line {
+            border-top: 1px solid #9ca3af;
+            margin: 2rem 0 0.5rem;
+            width: 100%;
+          }
+          
+          /* Print-specific styles */
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          
+          @media print {
+            body {
+              padding: 0;
+              background: white;
+            }
+            
+            .no-print {
+              display: none !important;
+            }
+            
+            /* Ensure page breaks work properly */
+            .page-break {
+              page-break-before: always;
+            }
+            
+            /* Keep headers with content */
+            thead {
+              display: table-header-group;
+            }
+            
+            /* Prevent breaking inside important elements */
+            tr, td, th, .invoice-header, .client-info, .totals-section, .signature-section {
+        }
+        
+        @media print {
+          body {
+            padding: 0;
+            background: white;
+          }
+          
+          /* Hide print button in PDF */
+          .no-print {
+            display: none !important;
+          }
+          
+          /* Ensure images scale properly */
+          img {
+            max-width: 100%;
+            height: auto;
+          }
+        </style>
+      `;
+      
+      // Create the HTML content with styles
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Invoice-${invoice?.number || 'Draft'}</title>
+            ${printStyles}
+          </head>
+          <body>
+            <div class="print-container">
+              ${content.innerHTML}
+            </div>
+          </body>
+        </html>
+      `;
+      
+      // Create a new window for PDF generation
+      printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        throw new Error('Please allow popups to generate PDF');
+      }
+      
+      // Write the content to the new window
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait for images to load
+      await new Promise<void>((resolve) => {
+        const images = printWindow.document.getElementsByTagName('img');
+        let loadedImages = 0;
+        const totalImages = images.length;
+        
+        if (totalImages === 0) {
+          setTimeout(resolve, 500);
+          return;
+        }
+        
+        const imageLoaded = () => {
+          loadedImages++;
+          if (loadedImages >= totalImages) {
+            setTimeout(resolve, 500); // Extra time for rendering
+          }
+        };
+        
+        Array.from(images).forEach(img => {
+          if (img.complete) {
+            imageLoaded();
+          } else {
+            img.onload = imageLoaded;
+            img.onerror = imageLoaded; // Continue even if some images fail to load
+          }
+        });
+      });
+      
+      // Use html2canvas to capture the content
+      const canvas = await html2canvas(printWindow.document.documentElement, {
+        scale: 2, // Higher scale for better quality
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: printWindow.document.documentElement.scrollWidth,
+        windowHeight: printWindow.document.documentElement.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+      });
+      
+      // Create PDF with proper dimensions
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+      
+      // Calculate dimensions for the PDF
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      // Add image to PDF with proper positioning
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const imgWidth = pdfWidth;
+      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      // Handle multi-page PDF if content is longer than one page
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addImage(
+          imgData,
+          'PNG',
+          0,
+          position,
+          imgWidth,
+          imgHeight,
+          undefined,
+          'FAST'
+        );
+        
+        heightLeft -= pageHeight;
+        
+        if (heightLeft > 0) {
+          pdf.addPage();
+        }
+      }
+      
+      // Generate filename with current date
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+      const filename = `Invoice-${invoice?.number || 'Draft'}-${dateStr}.pdf`;
+      
+      // Save the PDF
+      pdf.save(filename);
+      
+      toast.success('PDF downloaded successfully');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Clean up
+      if (printWindow) {
+        try {
+          printWindow.close();
+        } catch (e) {
+          console.error('Error closing print window:', e);
+        }
+      }
+      
+      // Remove temporary elements
+      const tempElements = document.querySelectorAll('.temp-pdf-export');
+      tempElements.forEach(el => {
+        try {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        } catch (e) {
+          console.error('Error removing temporary element:', e);
+        }
+      });
+      
+      setIsDownloading(false);
+    }
+  };
+
+  // Format date
+  const formatDate = useCallback((dateString: string) => {
+    if (!dateString) return '';
+    try {
+      return format(new Date(dateString), 'dd MMM yyyy');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateString;
+    }
+  }, []);
+
+  // Get client shipping address
+  const getClientShippingAddress = useCallback(() => {
+    if (invoice.clientInfo?.shippingAddress) {
+      return invoice.clientInfo.shippingAddress;
+    }
+
+    if (invoice.clientInfo?.shippingStreet || invoice.clientInfo?.shippingCity) {
+      const parts = [
+        invoice.clientInfo.shippingStreet,
+        invoice.clientInfo.shippingCity,
+        invoice.clientInfo.shippingState,
+        invoice.clientInfo.shippingPostal,
+        invoice.clientInfo.shippingCountry,
+      ].filter(Boolean);
+      return parts.join(', ');
+    }
+
+    return 'N/A';
+  }, [invoice.clientInfo]);
+
+  // Load company data when the modal opens
+  useEffect(() => {
+    if (!open) return;
+
+    try {
+      // Load company details from localStorage
+      const savedCompanyDetails = localStorage.getItem('companyDetails');
+      if (savedCompanyDetails) {
+        setCompanyDetails(JSON.parse(savedCompanyDetails));
+      }
+
+      // Load company assets from localStorage
+      const savedCompanyAssets = localStorage.getItem('companyAssets');
+      if (savedCompanyAssets) {
+        setCompanyAssets(JSON.parse(savedCompanyAssets));
+      }
+    } catch (error) {
+      console.error('Error loading company data:', error);
+      toast.error('Failed to load company information');
+    }
+  }, [open]);
+
+  // Load company details and assets from localStorage
+  useEffect(() => {
+    try {
+      // Default company details
+      const defaultCompanyDetails: CompanyDetails = {
+        name: 'MOKMzansi Books',
+        email: '',
+        phone: '',
+        website: '',
+        vatNumber: '',
+        regNumber: '',
+        addressLine1: '',
+        addressLine2: '',
+        addressLine3: '',
+        addressLine4: '',
+        bankName: '',
+        bankAccount: '',
+        accountType: '',
+        branchCode: '',
+        accountHolder: ''
+      };
+
+      // Load company details from localStorage
+      const savedCompanyDetails = localStorage.getItem('companyDetails');
+      if (savedCompanyDetails) {
+        const parsedDetails = JSON.parse(savedCompanyDetails);
+        // Merge with defaults to ensure all fields are present
+        setCompanyDetails({ ...defaultCompanyDetails, ...parsedDetails });
+      } else {
+        // Use defaults if no saved details
+        setCompanyDetails(defaultCompanyDetails);
+      }
+
+      // Load company assets
+      const savedCompanyAssets = localStorage.getItem('companyAssets');
+      if (savedCompanyAssets) {
+        setCompanyAssets(JSON.parse(savedCompanyAssets));
+      }
+    } catch (error) {
+      console.error('Error loading company data:', error);
+      toast.error('Failed to load company information');
+    }
+  }, [open]);
+
+  const handlePrintClick = () => {
+    setIsPrinting(true);
+    handlePrint();
+  };
+
+  // No need for handleDownloadPdf anymore as we're using PDFDownloadLink
+
+  // Check if we have all required data for PDF generation
+  const hasRequiredData = !!(invoice && companyDetails && invoiceRef.current);
+
+  // Get the current date for the PDF document
+  const currentDate = new Date().toISOString();
+
+  // Calculate totals with fallbacks to invoice values if available
+  const subtotal = invoice.subtotal || invoice.items.reduce((sum, item) => sum + item.amount, 0);
+  const vatRate = invoice.vatRate || 15; // Default to 15% if not specified
+  const vatTotal = invoice.vatTotal || subtotal * (vatRate / 100);
+  const grandTotal = invoice.grandTotal || subtotal + vatTotal;
+
+  // Prepare invoice data for PDF
+  const invoiceData = {
+    ...invoice,
+    subtotal,
+    vatRate,
+    vatTotal,
+    grandTotal,
+    companyDetails: companyDetails || undefined,
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <div className="flex justify-between items-center">
+            <DialogTitle className="text-2xl">Invoice Preview</DialogTitle>
+            <div className="flex space-x-2">
+              {hasRequiredData ? (
+                <PDFDownloadLink
+                  document={<InvoicePDFDocument invoice={invoiceData} companyAssets={companyAssets || undefined} />}
+                  fileName={`Invoice_${invoice.number || 'Draft'}.pdf`}
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
+                >
+                  {({ loading }) => (
+                    <>
+                      {loading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
+                      {loading ? 'Generating...' : 'Download PDF'}
+                    </>
+                  )}
+                </PDFDownloadLink>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title={!hasRequiredData ? 'Loading company data...' : ''}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download PDF
+                </Button>
+              )}
+
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handlePrintClick}
+                disabled={isPrinting || !hasRequiredData}
+                title={!hasRequiredData ? 'Loading company data...' : ''}
+              >
+                {isPrinting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="mr-2 h-4 w-4" />
+                )}
+                {isPrinting ? 'Preparing...' : 'Print'}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="h-9 w-9 p-0"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto p-6 print:p-0 bg-gray-100 print:bg-white">
+          <div 
+            ref={invoiceRef}
+            id="invoice-print-content"
+            className="bg-white p-8 shadow-sm rounded-lg border border-gray-200 mx-auto print:shadow-none print:border-0 print:rounded-none"
+            style={{
+              width: '210mm',
+              minHeight: '297mm',
+              position: 'relative',
+              margin: '0 auto',
+              boxSizing: 'border-box',
+              backgroundColor: 'white',
+              boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+              color: '#1f2937',
+              lineHeight: '1.5',
+              overflow: 'visible',
+              WebkitPrintColorAdjust: 'exact',
+              printColorAdjust: 'exact'
+            }}
+          >
+            <div className="page" style={{
+              width: '100%',
+              minHeight: 'calc(100% - 20mm)', // Account for page margins
+              position: 'relative',
+              paddingBottom: '20mm' // Space for footer
+            }}>
+              {/* Header */}
+              <div className="flex justify-between items-start mb-12">
+                <div>
+                  {companyAssets?.Logo?.dataUrl && (
+                    <div className="mb-6 flex justify-start">
+                      <img 
+                        src={companyAssets.Logo.dataUrl} 
+                        alt="Company Logo" 
+                        className="h-32 w-auto max-w-full object-contain print:h-36"
+                        style={{ maxWidth: '300px' }}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                  <h1 className="text-2xl font-bold text-gray-900">INVOICE</h1>
+                  <p className="text-sm text-gray-500">#{invoice.number}</p>
+                </div>
+                
+                <div className="text-right">
+                  <h2 className="text-lg font-semibold text-gray-900">{companyDetails?.name}</h2>
+                  {companyDetails?.email && (
+                    <p className="text-sm text-gray-600">{companyDetails.email}</p>
+                  )}
+                  {companyDetails?.phone && (
+                    <p className="text-sm text-gray-600">{companyDetails.phone}</p>
+                  )}
+                  <div className="mt-2">
+                    {companyDetails?.addressLine1 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine1}</p>
+                    )}
+                    {companyDetails?.addressLine2 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine2}</p>
+                    )}
+                    {companyDetails?.addressLine3 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine3}</p>
+                    )}
+                    {companyDetails?.addressLine4 && (
+                      <p className="text-sm text-gray-600">{companyDetails.addressLine4}</p>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    {companyDetails?.vatNumber && (
+                      <p className="text-sm text-gray-600">VAT: {companyDetails.vatNumber}</p>
+                    )}
+                    {companyDetails?.regNumber && (
+                      <p className="text-sm text-gray-600">Reg: {companyDetails.regNumber}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Invoice Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Bill To:</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="font-medium text-gray-900">
+                      {invoice.clientInfo?.companyName || `${invoice.clientInfo?.firstName || ''} ${invoice.clientInfo?.lastName || ''}`.trim()}
+                    </p>
+                    {invoice.clientInfo?.email && <p className="text-sm text-gray-600">{invoice.clientInfo.email}</p>}
+                    {invoice.clientInfo?.phone && <p className="text-sm text-gray-600">{invoice.clientInfo.phone}</p>}
+                    {invoice.clientInfo?.billingAddress && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-gray-700">Billing Address:</p>
+                        <p className="text-sm text-gray-600 whitespace-pre-line">{invoice.clientInfo.billingAddress}</p>
+                      </div>
+                    )}
+                    {invoice.clientInfo?.shippingAddress && !invoice.clientInfo?.sameAsBilling && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-gray-700">Shipping Address:</p>
+                        <p className="text-sm text-gray-600 whitespace-pre-line">{invoice.clientInfo.shippingAddress}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Invoice #</p>
+                      <p className="text-sm">{invoice.number}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Date</p>
+                      <p className="text-sm">{formatDisplayDate(invoice.date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Due Date</p>
+                      <p className="text-sm">{formatDisplayDate(invoice.dueDate)}</p>
+                    </div>
+                    {invoice.reference && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Reference</p>
+                        <p className="text-sm">{invoice.reference}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Line Items */}
+              <div className="mb-8">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {renderInvoiceItems()}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Totals */}
+                <div className="mt-8 flex justify-end">
+                  <div className="w-64">
+                    <div className="flex justify-between py-2 border-b">
+                      <span className="text-sm font-medium text-gray-700">Subtotal:</span>
+                      <span className="text-sm font-medium">{formatCurrency(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b">
+                      <span className="text-sm font-medium text-gray-700">VAT ({vatRate}%):</span>
+                      <span className="text-sm font-medium">{formatCurrency(vatTotal)}</span>
+                    </div>
+                    <div className="flex justify-between py-3 font-bold text-lg">
+                      <span>Total:</span>
+                      <span>{formatCurrency(grandTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Terms & Notes */}
+              <div className="mt-12 pt-6 border-t border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Terms & Conditions</h3>
+                    <p className="text-sm text-gray-600 whitespace-pre-line">
+                      {invoice.terms || 'Payment is due within 30 days of invoice date. Thank you for your business!'}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
+                    <p className="text-sm text-gray-600 whitespace-pre-line">
+                      {invoice.notes || 'All amounts are in South African Rand (ZAR).'}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Bank Details */}
+                {(companyDetails?.bankName || companyDetails?.bankAccount || companyDetails?.accountType || companyDetails?.branchCode) && (
+                  <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Banking Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1">
+                        {companyDetails?.bankName && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Bank:</span> {companyDetails.bankName}
+                          </p>
+                        )}
+                        {companyDetails?.bankAccount && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Account #:</span> {companyDetails.bankAccount}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        {companyDetails?.accountType && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Account Type:</span> {companyDetails.accountType}
+                          </p>
+                        )}
+                        {companyDetails?.branchCode && (
+                          <p className="text-gray-700">
+                            <span className="font-medium">Branch Code:</span> {companyDetails.branchCode}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              {/* Company Stamp & Signature */}
+                <div className="mt-12 flex justify-between items-end">
+                  <div>
+                    {companyAssets?.Stamp?.dataUrl && (
+                      <div className="mb-4 flex justify-center">
+                        <img 
+                          src={companyAssets.Stamp.dataUrl} 
+                          alt="Company Stamp" 
+                          className="h-40 w-auto max-w-full object-contain opacity-80 print:h-44"
+                          style={{ maxWidth: '180px' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    {companyAssets?.Signature?.dataUrl ? (
+                      <div className="mb-2">
+                        <img 
+                          src={companyAssets.Signature.dataUrl} 
+                          alt="Authorized Signature" 
+                          className="h-20 w-auto object-contain print:h-24"
+                          style={{ maxWidth: '200px' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-20 border-t border-gray-300 w-40 mb-2 mx-auto print:h-24"></div>
+                    )}
+                    <p className="text-sm font-medium text-gray-700">Authorized Signature</p>
+                    <p className="text-xs text-gray-500">{companyDetails?.name || 'Your Company Name'}</p>
+                  </div>
+                </div>
+              </div>
+              
+              </div>
+              
+              {/* Thank You Footer - Only shows in print */}
+              <div className="mt-12 pt-4 border-t border-gray-200 text-center text-xs text-gray-500 print-only">
+                <div className="mt-6 space-y-1">
+                  <p>Thank you for your business!</p>
+                  <p>
+                    {companyDetails?.name || 'Your Company Name'}
+                    {companyDetails?.phone && ` • ${companyDetails.phone}`}
+                    {companyDetails?.email && ` • ${companyDetails.email}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        
+        <DialogFooter className="px-6 py-4 border-t bg-gray-50 no-print" style={{ position: 'sticky', bottom: 0, zIndex: 10 }}>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={onClose} disabled={isPrinting}>
+              Close
+            </Button>
+            <Button 
+              onClick={handlePrint} 
+              disabled={isPrinting}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isPrinting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Preparing...
+                </>
+              ) : 'Print'}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default InvoicePreviewModal;

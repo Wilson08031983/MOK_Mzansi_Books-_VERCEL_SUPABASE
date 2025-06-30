@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { X } from 'lucide-react';
-import { Invoice } from '@/pages/Invoices';
+import { Invoice } from '@/services/invoiceService';
 
 interface RecordPaymentModalProps {
   isOpen: boolean;

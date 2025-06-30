@@ -10,7 +10,7 @@ import {
   Trash2,
   MoreHorizontal
 } from 'lucide-react';
-import { Invoice } from '@/pages/Invoices';
+import { Invoice } from '@/services/invoiceService';
 
 interface InvoicesBulkActionsProps {
   selectedCount: number;

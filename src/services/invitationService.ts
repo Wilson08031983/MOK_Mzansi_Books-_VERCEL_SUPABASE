@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { UserPermissions } from './permissionService';
+import { safeLocalStorage, safeGet, safeArray, safeString } from '@/utils/safeAccess';
+import { UserCredentials } from './localAuthService';
 
 export interface InvitedUser {
   email: string;
@@ -23,36 +25,46 @@ export interface InvitationDetails {
  * Creates a new invitation with a secure token
  */
 export const createInvitation = (email: string, role: string, invitedBy: string, permissions: UserPermissions): InvitationDetails => {
-  const token = uuidv4();
-  const invitedUsers = getInvitedUsers();
-  
-  // Store the invitation in localStorage
-  invitedUsers[token] = {
-    email,
-    role,
-    token,
-    invitedBy,
-    invitedAt: Date.now(),
-    permissions,
-    isAccepted: false
-  };
-  
-  localStorage.setItem('invitedUsers', JSON.stringify(invitedUsers));
-  
-  return {
-    token,
-    email,
-    role,
-    invitedBy
-  };
+  try {
+    const token = uuidv4();
+    const invitedUsers = getInvitedUsers();
+    
+    // Store the invitation in localStorage
+    invitedUsers[token] = {
+      email: safeString(email),
+      role: safeString(role),
+      token,
+      invitedBy: safeString(invitedBy),
+      invitedAt: Date.now(),
+      permissions,
+      isAccepted: false
+    };
+    
+    safeLocalStorage.setItem('invitedUsers', invitedUsers);
+    
+    return {
+      token,
+      email: safeString(email),
+      role: safeString(role),
+      invitedBy: safeString(invitedBy)
+    };
+  } catch (error) {
+    console.error('Error creating invitation:', error);
+    throw new Error('Failed to create invitation');
+  }
 };
 
 /**
  * Get all invited users
  */
 export const getInvitedUsers = (): Record<string, InvitedUser> => {
-  const stored = localStorage.getItem('invitedUsers');
-  return stored ? JSON.parse(stored) : {};
+  try {
+    const stored = safeLocalStorage.getItem('invitedUsers', null);
+    return safeGet(stored, {}) as Record<string, InvitedUser>;
+  } catch (error) {
+    console.error('Error getting invited users:', error);
+    return {};
+  }
 };
 
 /**
@@ -106,10 +118,10 @@ export const completeInvitation = (token: string, userData: {
   
   // Update invitation
   invitation.isAccepted = true;
-  localStorage.setItem('invitedUsers', JSON.stringify(invitedUsers));
+  safeLocalStorage.setItem('invitedUsers', invitedUsers);
   
   // Add the complete user to localStorage userCredentials
-  const userCredentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+  const userCredentials = safeGet(safeLocalStorage.getItem('userCredentials', null), {}) as Record<string, UserCredentials>;
   const newUserId = uuidv4();
   
   userCredentials[newUserId] = {
@@ -131,7 +143,7 @@ export const completeInvitation = (token: string, userData: {
     }
   };
   
-  localStorage.setItem('userCredentials', JSON.stringify(userCredentials));
+  safeLocalStorage.setItem('userCredentials', userCredentials);
   
   return true;
 };

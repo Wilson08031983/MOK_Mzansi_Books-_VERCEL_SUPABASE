@@ -2,20 +2,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
-
-interface QuotationItem {
-  id: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  taxRate: number;
-  discount: number;
-}
+import { LocalQuotationItem } from './QuotationItemsList';
 
 interface QuotationItemFormProps {
-  item: QuotationItem;
+  item: LocalQuotationItem;
   index: number;
-  onUpdateItem: (itemId: string, field: keyof QuotationItem, value: string | number) => void;
+  onUpdateItem: (itemId: string, field: keyof LocalQuotationItem, value: string | number) => void;
   onRemoveItem: (itemId: string) => void;
   canRemove: boolean;
 }
@@ -27,11 +19,43 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
   onRemoveItem,
   canRemove
 }) => {
-  const calculateItemTotal = () => {
-    const itemSubtotal = item.quantity * item.unitPrice;
-    const itemDiscount = item.discount;
-    const itemTax = ((itemSubtotal - itemDiscount) * item.taxRate) / 100;
-    return itemSubtotal - itemDiscount + itemTax;
+  // Calculate item total based on quantity, unit price, tax, and discount
+  const calculateItemTotal = (currentItem: LocalQuotationItem) => {
+    const subtotal = currentItem.quantity * currentItem.unitPrice;
+    const discount = currentItem.discount || 0;
+    const taxRate = currentItem.taxRate || 0;
+    const taxAmount = (subtotal * taxRate) / 100;
+    return subtotal - discount + taxAmount;
+  };
+  
+  // Format currency for display
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-ZA', {
+      style: 'currency',
+      currency: 'ZAR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+  
+  // Handle field updates and trigger parent callback
+  const handleFieldUpdate = (field: keyof LocalQuotationItem, value: string | number) => {
+    // Convert string numbers to actual numbers when needed
+    if (typeof value === 'string' && !isNaN(Number(value))) {
+      value = parseFloat(value);
+    }
+    
+    // Update the item
+    onUpdateItem(item.id, field, value);
+    
+    // If any of the price-affecting fields change, update the amount
+    if (['quantity', 'unitPrice', 'taxRate', 'discount'].includes(field)) {
+      const updatedItem = { ...item, [field]: value };
+      const newAmount = calculateItemTotal(updatedItem);
+      if (Math.abs(newAmount - (item.amount || 0)) > 0.01) { // Avoid floating point precision issues
+        onUpdateItem(item.id, 'amount', parseFloat(newAmount.toFixed(2)));
+      }
+    }
   };
 
   return (
@@ -58,7 +82,7 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
           <input
             type="text"
             value={item.description}
-            onChange={(e) => onUpdateItem(item.id, 'description', e.target.value)}
+            onChange={(e) => handleFieldUpdate('description', e.target.value)}
             required
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
             placeholder="e.g. Website Design"
@@ -74,7 +98,7 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
             min="1"
             step="1"
             value={item.quantity}
-            onChange={(e) => onUpdateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+            onChange={(e) => handleFieldUpdate('quantity', e.target.value)}
             required
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
           />
@@ -89,7 +113,7 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
             min="0"
             step="0.01"
             value={item.unitPrice}
-            onChange={(e) => onUpdateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+            onChange={(e) => handleFieldUpdate('unitPrice', e.target.value)}
             required
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
           />
@@ -99,26 +123,27 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
           <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
             Tax Rate (%)
           </label>
-          <select
-            value={item.taxRate}
-            onChange={(e) => onUpdateItem(item.id, 'taxRate', parseFloat(e.target.value))}
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={item.taxRate || ''}
+            onChange={(e) => handleFieldUpdate('taxRate', e.target.value)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
-          >
-            <option value="0">0% - No Tax</option>
-            <option value="15">15% - Standard Rate</option>
-          </select>
+          />
         </div>
         
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
-            Discount Amount (R)
+            Discount (R)
           </label>
           <input
             type="number"
             min="0"
             step="0.01"
-            value={item.discount}
-            onChange={(e) => onUpdateItem(item.id, 'discount', parseFloat(e.target.value) || 0)}
+            value={item.discount || ''}
+            onChange={(e) => handleFieldUpdate('discount', e.target.value)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
           />
         </div>
@@ -128,7 +153,7 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
         <div className="flex justify-between items-center">
           <span className="text-sm text-slate-600 font-sf-pro">Item Total:</span>
           <span className="font-medium font-sf-pro">
-            R {calculateItemTotal().toFixed(2)}
+            {formatCurrency(calculateItemTotal(item))}
           </span>
         </div>
       </div>

@@ -63,7 +63,15 @@ const Clients = () => {
 
   useEffect(() => {
     // Load clients from localStorage on component mount
-    loadClientsFromStorage();
+    const loadClients = async () => {
+      try {
+        await loadClientsFromStorage();
+      } catch (error) {
+        console.error('Failed to load clients:', error);
+      }
+    };
+    
+    loadClients();
   }, []);
 
   // Function to save current scroll position
@@ -85,44 +93,42 @@ const Clients = () => {
   };
   
   // Function to load clients from localStorage
-  const loadClientsFromStorage = (): void => {
+  const loadClientsFromStorage = async (): Promise<void> => {
     try {
-      const storedClients = localStorage.getItem('clients');
-      if (storedClients) {
-        const parsedClients = JSON.parse(storedClients);
-        setClients(parsedClients.map((client) => ({
-          id: client.id,
-          name: client.contactPerson,
-          company: client.companyName,
-          email: client.email,
-          phone: client.phone, 
-          totalValue: client.totalValue || 0,
-          lastActivity: client.lastActivity,
-          status: client.status,
-          type: client.clientType,
-          avatar: client.avatar
-        })));
+      // Import clientService using dynamic import
+      const clientService = await import('@/services/clientService');
+      let clientsToProcess: Client[] = [];
+      
+      // Try to get existing clients
+      const existingClients = clientService.getClients();
+      
+      if (existingClients && existingClients.length > 0) {
+        clientsToProcess = existingClients;
       } else {
-        // Initialize with mock clients if no clients exist in localStorage
-        import('@/services/clientService').then(({ initializeClients, getClients }) => {
-          initializeClients();
-          const initialClients = getClients();
-          setClients(initialClients.map((client) => ({
-            id: client.id,
-            name: client.contactPerson,
-            company: client.companyName,
-            email: client.email,
-            phone: client.phone,
-            totalValue: client.totalValue || 0,
-            lastActivity: client.lastActivity,
-            status: client.status,
-            type: client.clientType,
-            avatar: client.avatar
-          })));
-        });
+        // Initialize with mock clients if no clients exist
+        clientService.initializeClients();
+        clientsToProcess = clientService.getClients() || [];
       }
+      
+      // Process and set clients with proper types
+      const processedClients = clientsToProcess
+        .filter((client: Client | null | undefined): client is Client => Boolean(client))
+        .map((client: Client) => ({
+          id: client.id || '',
+          name: client.contactPerson || 'No Name',
+          company: client.companyName || 'No Company',
+          email: client.email || '',
+          phone: client.phone || '',
+          totalValue: Number(client.totalValue) || 0,
+          lastActivity: client.lastActivity || new Date().toISOString(),
+          status: client.status || 'inactive',
+          type: client.clientType || 'individual',
+          avatar: client.avatar || ''
+        }));
+      
+      setClients(processedClients);
     } catch (error) {
-      console.error('Error loading clients from localStorage:', error);
+      console.error('Error loading clients:', error);
       setClients([]);
     }
   };

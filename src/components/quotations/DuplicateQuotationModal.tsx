@@ -11,14 +11,11 @@ import {
 } from 'lucide-react';
 import QuotationDetailsForm from './QuotationDetailsForm';
 import QuotationItemsList from './QuotationItemsList';
+import { Quotation, QuotationItem as ServiceQuotationItem } from '@/services/quotationService';
 
-interface QuotationItem {
-  id: string;
-  description: string;
-  quantity: number;
+// Local interface that extends the service's QuotationItem to include unitPrice
+interface LocalQuotationItem extends Omit<ServiceQuotationItem, 'rate'> {
   unitPrice: number;
-  taxRate: number;
-  discount: number;
 }
 
 interface Client {
@@ -32,7 +29,7 @@ interface Client {
 interface DuplicateQuotationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  quotation: any;
+  quotation: Quotation | null;
 }
 
 // Sample clients for the demo
@@ -71,64 +68,104 @@ const DuplicateQuotationModal: React.FC<DuplicateQuotationModalProps> = ({
 }) => {
   // Form state
   const [quotationNumber, setQuotationNumber] = useState(generateQuotationNumber());
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [issueDate, setIssueDate] = useState(getCurrentDate());
-  const [expiryDate, setExpiryDate] = useState(getExpiryDate());
-  const [items, setItems] = useState<QuotationItem[]>([]);
-  const [terms, setTerms] = useState('');
-  const [notes, setNotes] = useState('');
-  
-  // UI state
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [items, setItems] = useState<LocalQuotationItem[]>([]);
+  const [client, setClient] = useState<Client | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [issueDate, setIssueDate] = useState<string>('');
+  const [expiryDate, setExpiryDate] = useState<string>('');
+  const [reference, setReference] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [terms, setTerms] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  // Convert service item to local item format (with unitPrice instead of rate)
+  const toLocalItem = (item: ServiceQuotationItem): LocalQuotationItem => {
+    return {
+      ...item,
+      unitPrice: item.rate, // Map rate to unitPrice for the UI
+      amount: item.amount || 0, // Ensure amount is always defined
+      taxRate: item.taxRate || 0, // Ensure taxRate is always defined
+      discount: item.discount || 0, // Ensure discount is always defined
+    };
+  };
+
+  // Convert local item back to service item format (with rate instead of unitPrice)
+  const toServiceItem = (item: LocalQuotationItem): ServiceQuotationItem => {
+    const { unitPrice, ...rest } = item;
+    return {
+      ...rest,
+      rate: unitPrice, // Map unitPrice back to rate for the service
+      amount: item.amount || 0, // Ensure amount is always defined
+      taxRate: item.taxRate || 0, // Ensure taxRate is always defined
+      discount: item.discount || 0, // Ensure discount is always defined
+    };
+  };
+
+  // Calculate item amount based on quantity, unit price, tax, and discount
+  const calculateItemAmount = (item: LocalQuotationItem): number => {
+    const subtotal = item.quantity * item.unitPrice;
+    const taxAmount = (subtotal * (item.taxRate || 0)) / 100;
+    return subtotal + taxAmount - (item.discount || 0);
+  };
 
   // Initialize form with quotation data
   useEffect(() => {
-    if (quotation && isOpen) {
+    if (isOpen && quotation) {
       setQuotationNumber(generateQuotationNumber());
+      
+      // Find the client in sampleClients if clientId is available
+      const clientFromId = quotation.clientId 
+        ? sampleClients.find(c => c.id === quotation.clientId) || null 
+        : null;
+      setClient(clientFromId);
+      
       setSelectedClientId(quotation.clientId || '');
-      setIssueDate(getCurrentDate());
-      setExpiryDate(getExpiryDate());
+      setIssueDate(quotation.date || getCurrentDate());
+      setExpiryDate(quotation.expiryDate || getExpiryDate());
       
-      // Create new items with new IDs
-      const duplicatedItems = quotation.items?.map((item: any) => ({
-        id: Math.random().toString(36).substring(7),
-        description: item.description || '',
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || 0,
-        taxRate: item.taxRate || 15,
-        discount: item.discount || 0
-      })) || [];
+      // Convert service items to local items
+      const duplicatedItems = quotation.items && Array.isArray(quotation.items)
+        ? quotation.items.map(item => toLocalItem(item))
+        : [createNewItem()];
       
-      setItems(duplicatedItems.length > 0 ? duplicatedItems : [{
-        id: Math.random().toString(36).substring(7),
-        description: '',
-        quantity: 1,
-        unitPrice: 0,
-        taxRate: 15,
-        discount: 0
-      }]);
-      
-      setTerms(quotation.terms || '');
+      setItems(duplicatedItems);
+      setReference(quotation.reference || '');
       setNotes(quotation.notes || '');
-      setError('');
+      setTerms(quotation.terms || '');
     }
-  }, [quotation, isOpen]);
+  }, [isOpen, quotation]);
+
+  // Create a new empty item with default values
+  const createNewItem = (): LocalQuotationItem => ({
+    id: Math.random().toString(36).substring(7),
+    description: '',
+    quantity: 1,
+    unitPrice: 0,
+    taxRate: 15,
+    discount: 0,
+    amount: 0,
+    unit: 'pcs',
+  });
 
   // Handle adding a new item
   const addItem = () => {
-    setItems(prev => [
-      ...prev,
-      {
-        id: Math.random().toString(36).substring(7),
-        description: '',
-        quantity: 1,
-        unitPrice: 0,
-        taxRate: 15,
-        discount: 0
-      }
-    ]);
+    setItems(prev => [...prev, createNewItem()]);
   };
+  
+  // Handle updating an item
+  const updateItem = (itemId: string, field: keyof LocalQuotationItem, value: string | number) => {
+    setItems(prev => 
+      prev.map(item => 
+        item.id === itemId 
+          ? { ...item, [field]: value, amount: calculateItemAmount({ ...item, [field]: value }) }
+          : item
+      )
+    );
+  };
+  
+
 
   // Handle removing an item
   const removeItem = (itemId: string) => {
@@ -136,15 +173,11 @@ const DuplicateQuotationModal: React.FC<DuplicateQuotationModalProps> = ({
     setItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  // Handle updating an item
-  const updateItem = (itemId: string, field: keyof QuotationItem, value: string | number) => {
-    setItems(prev =>
-      prev.map(item =>
-        item.id === itemId
-          ? { ...item, [field]: value }
-          : item
-      )
-    );
+  // Handle client selection
+  const handleClientSelect = (clientId: string) => {
+    setSelectedClientId(clientId);
+    const selectedClient = sampleClients.find(c => c.id === clientId) || null;
+    setClient(selectedClient);
   };
 
   // Form validation
@@ -177,24 +210,57 @@ const DuplicateQuotationModal: React.FC<DuplicateQuotationModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validateForm() || !quotation) return;
     
     setLoading(true);
     setError('');
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Convert local items back to service items
+      const serviceItems = items.map(item => toServiceItem(item));
       
-      console.log('Duplicating quotation:', {
+      // Calculate totals
+      const subtotal = serviceItems.reduce((sum, item) => sum + (item.rate * item.quantity), 0);
+      const taxAmount = serviceItems.reduce((sum, item) => {
+        const itemSubtotal = item.rate * item.quantity;
+        const itemTax = itemSubtotal * (item.taxRate / 100);
+        return sum + itemTax;
+      }, 0);
+      
+      const totalAmount = subtotal + taxAmount - (quotation.discount || 0);
+      
+      // Create the new quotation object
+      const newQuotation: Quotation = {
+        ...quotation, // Copy all properties from the original
+        id: Math.random().toString(36).substr(2, 9), // Generate new ID
         number: quotationNumber,
+        client: client?.name || '',
         clientId: selectedClientId,
-        issueDate,
-        expiryDate,
-        items,
-        terms,
-        notes
-      });
+        clientEmail: client?.email || '',
+        date: issueDate,
+        expiryDate: expiryDate,
+        reference: reference || `Copy of ${quotation.number}`,
+        items: serviceItems,
+        subtotal,
+        taxAmount,
+        totalAmount,
+        status: 'draft',
+        notes: notes || '',
+        terms: terms || '',
+        lastModified: new Date().toISOString(),
+        // Reset revision history for the new quotation
+        revisionHistory: [{
+          date: new Date().toISOString(),
+          changes: ['Created from quotation ' + quotation.number],
+          userId: 'system',
+          userName: 'System'
+        }]
+      };
+      
+      console.log('Duplicating quotation:', newQuotation);
+      
+      // Here you would typically save the new quotation
+      // await saveQuotation(newQuotation);
       
       onClose();
     } catch (error) {
