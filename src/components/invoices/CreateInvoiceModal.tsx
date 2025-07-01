@@ -9,7 +9,7 @@ import { generateInvoiceNumber } from '@/services/invoiceService';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Link } from 'react-router-dom';
-import InvoicePreviewModal, { InvoicePreview } from '@/components/invoice/InvoicePreviewModal';
+import InvoicePreviewModal from './InvoicePreviewModal';
 
 // Define Invoice type locally instead of importing to avoid conflicts
 type Invoice = {
@@ -75,8 +75,9 @@ interface CreateInvoiceModalProps {
 
 const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose, onSave, editingInvoice }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
   const [formData, setFormData] = useState({
     invoiceNumber: '',
     clientId: '',
@@ -255,134 +256,61 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
   // Calculate totals for display
   const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
 
-  // Get company details from localStorage
-  const getCompanyDetails = useCallback(() => {
-    try {
-      const company = localStorage.getItem('companyDetails');
-      const assets = localStorage.getItem('companyAssets');
-      let companyData = company ? JSON.parse(company) : {
-        name: 'MOKMzansi Books',
-        email: 'info@mokmzansibooks.co.za',
-        phone: '+27 11 123 4567',
-        website: 'www.mokmzansibooks.co.za',
-        vatNumber: '1234567890',
-        regNumber: '2020/123456/07',
-        addressLine1: '123 Business St',
-        addressLine2: 'Johannesburg',
-        addressLine3: 'Gauteng',
-        addressLine4: '2000, South Africa',
-        bankName: 'Example Bank',
-        bankAccount: '1234567890',
-        accountType: 'Cheque',
-        branchCode: '123456',
-        accountHolder: 'MOKMzansi Books'
-      };
-
-      // Merge with assets if available
-      if (assets) {
-        const assetsData = JSON.parse(assets);
-        companyData = {
-          ...companyData,
-          logoUrl: assetsData.Logo?.dataUrl || '',
-          stampUrl: assetsData.Stamp?.dataUrl || '',
-          signatureUrl: assetsData.Signature?.dataUrl || ''
-        };
-      }
-
-      return companyData;
-    } catch (error) {
-      console.error('Error loading company details:', error);
-      return {
-        name: 'MOKMzansi Books',
-        email: 'info@mokmzansibooks.co.za',
-        phone: '+27 11 123 4567',
-        website: 'www.mokmzansibooks.co.za',
-        vatNumber: '1234567890',
-        regNumber: '2020/123456/07',
-        addressLine1: '123 Business St',
-        addressLine2: 'Johannesburg',
-        addressLine3: 'Gauteng',
-        addressLine4: '2000, South Africa',
-        bankName: 'Example Bank',
-        bankAccount: '1234567890',
-        accountType: 'Cheque',
-        branchCode: '123456',
-        accountHolder: 'MOKMzansi Books'
-      };
-    }
-  }, []);
-
-  // Prepare invoice data for preview
-  const getInvoicePreviewData = useCallback((): InvoicePreview => {
-    const selectedClient = clients.find(c => c.id === formData.clientId);
+  // Handle preview invoice
+  const handlePreviewInvoice = () => {
+    // Get company details from localStorage
+    const storedCompany = JSON.parse(localStorage.getItem('companyDetails') || '{}');
+    const companyAssets = JSON.parse(localStorage.getItem('companyAssets') || '{}');
     
-    // Format client address
-    const formatAddress = (client: Client) => {
-      const parts = [
-        client.billingAddress,
-        client.shippingStreet,
-        client.shippingCity,
-        client.shippingState,
-        client.shippingPostal,
-        client.shippingCountry
-      ].filter(Boolean);
-      
-      return parts.join(', ');
+    // Get selected client details
+    const selectedClientObj = clients.find((client) => client.id === formData.clientId);
+    
+    if (!selectedClientObj) {
+      toast.error('Please select a client first');
+      return;
+    }
+    
+    // Prepare company details with all banking fields
+    const companyDetails = {
+      ...storedCompany,
+      logoUrl: companyAssets?.Logo?.dataUrl || '',
+      stampUrl: companyAssets?.Stamp?.dataUrl || '',
+      signatureUrl: companyAssets?.Signature?.dataUrl || '',
+      // Ensure all banking fields are included
+      bankName: storedCompany.bankName,
+      accountNumber: storedCompany.accountNumber,
+      branchCode: storedCompany.branchCode,
+      accountType: storedCompany.accountType,
     };
     
-    return {
+    // Prepare invoice data for preview
+    const invoiceInfo = {
       number: formData.invoiceNumber,
       date: formData.invoiceDate,
-      dueDate: formData.dueDate || new Date(new Date(formData.invoiceDate).setDate(new Date(formData.invoiceDate).getDate() + 30)).toISOString().split('T')[0],
+      dueDate: formData.dueDate,
       reference: formData.reference,
       clientId: formData.clientId,
-      clientInfo: selectedClient ? {
-        id: selectedClient.id,
-        companyName: selectedClient.companyName,
-        firstName: selectedClient.firstName,
-        lastName: selectedClient.lastName,
-        email: selectedClient.email,
-        phone: selectedClient.phone,
-        billingAddress: formatAddress(selectedClient),
-        shippingAddress: selectedClient.sameAsBilling 
-          ? 'Same as billing address' 
-          : formatAddress({
-              ...selectedClient,
-              billingAddress: selectedClient.shippingAddress,
-              shippingStreet: selectedClient.shippingStreet,
-              shippingCity: selectedClient.shippingCity,
-              shippingState: selectedClient.shippingState,
-              shippingPostal: selectedClient.shippingPostal,
-              shippingCountry: selectedClient.shippingCountry
-            }),
-        sameAsBilling: selectedClient.sameAsBilling || false,
-        shippingStreet: selectedClient.shippingStreet,
-        shippingCity: selectedClient.shippingCity,
-        shippingState: selectedClient.shippingState,
-        shippingPostal: selectedClient.shippingPostal,
-        shippingCountry: selectedClient.shippingCountry
-      } : undefined,
+      clientInfo: selectedClientObj,
       items: items.map(item => ({
-        id: item.id,
-        itemNo: item.itemNo,
-        description: item.description,
-        quantity: Number(item.quantity) || 0,
-        rate: Number(item.rate) || 0,
-        markupPercent: Number(item.markupPercent) || 0,
-        discount: Number(item.discount) || 0,
-        amount: Number(item.amount) || 0
+        ...item,
+        quantity: Number(item.quantity) || 0
       })),
       subtotal: subtotal,
       vatRate: Number(formData.vatRate) || 15,
       vatTotal: vatAmount,
       grandTotal: total,
-      terms: formData.terms,
       notes: formData.notes,
+      terms: formData.terms,
       currency: 'ZAR',
       status: 'draft',
-      companyDetails: getCompanyDetails()
+      companyDetails: companyDetails
     };
-  }, [clients, formData, items, subtotal, vatAmount, total, getCompanyDetails]);
+    
+    setPreviewData(invoiceInfo);
+    setShowPreviewModal(true);
+  };
+
+
 
   // Handle form submission
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -658,7 +586,12 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-slate-900 font-sf-pro">Invoice Items</h3>
-              <Button onClick={addItem} size="sm" className="font-sf-pro">
+              <Button 
+                onClick={addItem} 
+                size="sm" 
+                variant="gradient"
+                className="font-sf-pro text-white"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Item
               </Button>
@@ -823,25 +756,27 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
           </div>
         </div>
         
-        <div className="flex justify-between items-center p-6 border-t">
-          <div>
+        <div className="flex justify-end items-center p-6 border-t">
+          <div className="flex gap-3">
             <Button 
               variant="outline" 
-              onClick={() => setIsPreviewOpen(true)}
-              className="font-sf-pro flex items-center gap-2"
+              onClick={onClose} 
+              className="font-sf-pro border-slate-300 hover:bg-slate-50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePreviewInvoice}
+              className="bg-gradient-to-r from-mokm-pink-500 via-mokm-purple-500 to-mokm-blue-500 text-white px-4 py-2 rounded-xl shadow-md font-sf-pro flex items-center gap-2"
               disabled={!formData.clientId || items.length === 0}
             >
               <Eye className="h-4 w-4" />
               Preview
             </Button>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose} className="font-sf-pro">
-              Cancel
-            </Button>
             <Button 
+              variant="gradient"
               onClick={handleSubmit} 
-              className="font-sf-pro"
+              className="font-sf-pro text-white hover:opacity-90"
               disabled={isLoading || !formData.clientId || items.length === 0}
             >
               {isLoading ? (
@@ -855,21 +790,16 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
             </Button>
           </div>
         </div>
-        
-        {/* Invoice Preview Modal */}
-        <InvoicePreviewModal
-          open={isPreviewOpen}
-          onClose={() => setIsPreviewOpen(false)}
-          invoice={getInvoicePreviewData()}
-          company={getCompanyDetails()}
-        />
-        
-        {/* Debug output - uncomment if needed for troubleshooting */}
-        {/* <div className="hidden">
-          <pre>{JSON.stringify(getInvoicePreviewData(), null, 2)}</pre>
-          <pre>{JSON.stringify(getCompanyDetails(), null, 2)}</pre>
-        </div> */}
       </div>
+      
+      {/* Invoice Preview Modal */}
+      {showPreviewModal && previewData && (
+        <InvoicePreviewModal
+          open={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          data={previewData}
+        />
+      )}
     </div>
   );
 };
