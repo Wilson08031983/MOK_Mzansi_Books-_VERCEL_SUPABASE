@@ -645,9 +645,14 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
                         <Input
                           type="number"
                           min="1"
-                          value={item.quantity.toString()}
-                          onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                          className="w-full text-right font-sf-pro"
+                          value={Number(item.quantity) || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Convert to number to remove leading zeros, then back to string
+                            const numValue = value === '' ? '' : Number(value);
+                            updateItem(item.id, 'quantity', numValue);
+                          }}
+                          className="w-full text-right font-sf-pro [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -655,9 +660,13 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
                           type="number"
                           min="0"
                           step="0.01"
-                          value={item.rate}
-                          onChange={(e) => updateItem(item.id, 'rate', Number(e.target.value))}
-                          className="w-full text-right font-sf-pro"
+                          value={item.rate || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const numValue = value === '' ? 0 : parseFloat(value);
+                            updateItem(item.id, 'rate', isNaN(numValue) ? 0 : numValue);
+                          }}
+                          className="w-full text-right font-sf-pro [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -665,9 +674,13 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
                           type="number"
                           min="0"
                           step="0.1"
-                          value={item.markupPercent}
-                          onChange={(e) => updateItem(item.id, 'markupPercent', Number(e.target.value))}
-                          className="w-full text-right font-sf-pro"
+                          value={item.markupPercent || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const numValue = value === '' ? 0 : parseFloat(value);
+                            updateItem(item.id, 'markupPercent', isNaN(numValue) ? 0 : numValue);
+                          }}
+                          className="w-full text-right font-sf-pro [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -675,9 +688,13 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
                           type="number"
                           min="0"
                           step="0.01"
-                          value={item.discount}
-                          onChange={(e) => updateItem(item.id, 'discount', Number(e.target.value))}
-                          className="w-full text-right font-sf-pro"
+                          value={item.discount || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const numValue = value === '' ? 0 : parseFloat(value);
+                            updateItem(item.id, 'discount', isNaN(numValue) ? 0 : numValue);
+                          }}
+                          className="w-full text-right font-sf-pro [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-slate-900 text-right font-medium font-sf-pro">
