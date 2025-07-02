@@ -9,22 +9,37 @@ import {
   AlertTriangle,
   CheckCircle
 } from 'lucide-react';
-import { Invoice } from '@/services/invoiceService';
+import { Invoice } from '@/types/invoice';
 
 interface InvoicesSummaryCardsProps {
   invoices: Invoice[];
 }
 
 const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices }) => {
-  const totalInvoiced = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
-  const totalOutstanding = invoices.reduce((sum, invoice) => sum + invoice.balance, 0);
-  const totalPaid = invoices.reduce((sum, invoice) => sum + invoice.paidAmount, 0);
+  // Calculate total invoiced amount (excluding cancelled invoices)
+  const totalInvoiced = invoices
+    .filter(invoice => invoice.status !== 'cancelled')
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+    
+  // Calculate outstanding balance (invoices that aren't paid or cancelled)
+  const totalOutstanding = invoices
+    .filter(invoice => invoice.status !== 'paid' && invoice.status !== 'cancelled')
+    .reduce((sum, invoice) => sum + invoice.balance, 0);
+    
+  // Calculate total paid amount
+  const totalPaid = invoices
+    .filter(invoice => invoice.status === 'paid' || invoice.status === 'partial')
+    .reduce((sum, invoice) => sum + invoice.paidAmount, 0);
   
   const overdueAmount = invoices
     .filter(invoice => {
+      // Consider both the status field and the due date
       const dueDate = new Date(invoice.dueDate);
       const today = new Date();
-      return dueDate < today && invoice.balance > 0;
+      return (
+        (invoice.status === 'overdue' || (dueDate < today && invoice.balance > 0))
+        && invoice.status !== 'paid' && invoice.status !== 'cancelled'
+      );
     })
     .reduce((sum, invoice) => sum + invoice.balance, 0);
 
