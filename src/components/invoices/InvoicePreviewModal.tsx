@@ -2,6 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X, Download, Printer } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
 
 // Add global print styles to the component
@@ -166,6 +168,87 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
   
   // Track if we're in print mode
   const [isPrinting, setIsPrinting] = useState(false);
+  
+  // Function to handle print button click - simple direct approach
+  // Function to handle PDF download
+  const handleDownloadPDF = async () => {
+    if (!printContentRef.current) return;
+    
+    try {
+      // Set a flag to indicate we're preparing PDF
+      setIsPrinting(true); // We can use the same state as for printing
+      
+      // Create PDF with A4 dimensions
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      // Calculate total pages
+      const totalPagesToRender = calculateTotalPages();
+      
+      // Create a temporary container for rendering pages
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      document.body.appendChild(tempContainer);
+      
+      // For each page
+      for (let i = 1; i <= totalPagesToRender; i++) {
+        // Create the page content
+        const pageElement = document.createElement('div');
+        pageElement.innerHTML = `
+          <div style="
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            box-sizing: border-box;
+            position: relative;
+            background-color: white;
+            margin: 0;
+          ">
+            ${renderPage(i).props.children}
+          </div>
+        `;
+        
+        tempContainer.innerHTML = '';
+        tempContainer.appendChild(pageElement);
+        
+        // Convert the page to canvas
+        const canvas = await html2canvas(pageElement, {
+          scale: 2, // Higher scale for better quality
+          useCORS: true,
+          logging: false
+        });
+        
+        // Convert canvas to image
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        
+        // Add page to PDF (first page doesn't need addPage)
+        if (i > 1) {
+          pdf.addPage();
+        }
+        
+        // Add image to PDF
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+      }
+      
+      // Clean up temp container
+      document.body.removeChild(tempContainer);
+      
+      // Save PDF
+      pdf.save(`Invoice_${data.number}.pdf`);
+      
+      // Reset flag
+      setIsPrinting(false);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      setIsPrinting(false);
+      alert('There was an error generating the PDF. Please try again.');
+    }
+  };
   
   // Function to handle print button click - simple direct approach
   const handlePrint = () => {
@@ -675,15 +758,27 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
               size="sm" 
               onClick={handlePrint}
               className="flex items-center gap-1"
+              disabled={isPrinting}
             >
               <Printer className="h-4 w-4" />
               Print
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleDownloadPDF}
+              className="flex items-center gap-1"
+              disabled={isPrinting}
+            >
+              <Download className="h-4 w-4" />
+              Download
             </Button>
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={onClose}
               className="text-slate-500 hover:bg-slate-100 rounded-full h-8 w-8 p-0"
+              disabled={isPrinting}
             >
               <X className="h-4 w-4" />
             </Button>
