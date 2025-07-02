@@ -170,7 +170,7 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
   const [isPrinting, setIsPrinting] = useState(false);
   
   // Function to handle print button click - simple direct approach
-  // Function to handle PDF download
+  // Function to handle PDF download - uses the exact same rendering approach as print for consistency
   const handleDownloadPDF = async () => {
     if (!printContentRef.current) return;
     
@@ -178,73 +178,306 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
       // Set a flag to indicate we're preparing PDF
       setIsPrinting(true); // We can use the same state as for printing
       
-      // Create PDF with A4 dimensions
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      // Calculate total pages
-      const totalPagesToRender = calculateTotalPages();
-      
-      // Create a temporary container for rendering pages
-      const tempContainer = document.createElement('div');
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '-9999px';
-      document.body.appendChild(tempContainer);
-      
-      // For each page
-      for (let i = 1; i <= totalPagesToRender; i++) {
-        // Create the page content
-        const pageElement = document.createElement('div');
-        pageElement.innerHTML = `
-          <div style="
-            width: 210mm;
-            min-height: 297mm;
-            padding: 20mm;
-            box-sizing: border-box;
-            position: relative;
-            background-color: white;
-            margin: 0;
-          ">
-            ${renderPage(i).props.children}
-          </div>
-        `;
-        
-        tempContainer.innerHTML = '';
-        tempContainer.appendChild(pageElement);
-        
-        // Convert the page to canvas
-        const canvas = await html2canvas(pageElement, {
-          scale: 2, // Higher scale for better quality
-          useCORS: true,
-          logging: false
-        });
-        
-        // Convert canvas to image
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
-        
-        // Add page to PDF (first page doesn't need addPage)
-        if (i > 1) {
-          pdf.addPage();
-        }
-        
-        // Add image to PDF
-        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+      // We'll use the same approach as the print function to ensure consistency
+      // Create a new window with the exact same styles and HTML as the print function
+      // This ensures the PDF looks 100% identical to the printed version
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Please allow pop-ups to download the invoice as PDF.');
+        setIsPrinting(false);
+        return;
       }
       
-      // Clean up temp container
-      document.body.removeChild(tempContainer);
+      // Get the printable content
+      const printContent = printContentRef.current;
       
-      // Save PDF
-      pdf.save(`Invoice_${data.number}.pdf`);
+      // Set up the document with the same styles as print version
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Invoice ${data.number}</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              @page {
+                size: 210mm 297mm;
+                margin: 15mm;
+              }
+              html, body {
+                width: 210mm;
+                height: 297mm;
+                margin: 0;
+                padding: 0;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                font-size: 11px;
+                line-height: 1.2;
+                background-color: white !important;
+              }
+              .print-content {
+                width: 210mm;
+              }
+              .page {
+                page-break-after: always;
+                margin: 0 !important;
+                box-shadow: none !important;
+                width: 210mm;
+                min-height: 297mm;
+                padding: 20mm !important;
+                box-sizing: border-box !important;
+                background-color: white;
+              }
+              .page:last-child {
+                page-break-after: auto;
+              }
+              img {
+                max-width: 100%;
+                height: auto;
+              }
+              .invoice-preview-logo {
+                max-width: 150px !important;
+                height: auto !important;
+                display: block !important;
+                margin: 0 auto 1rem auto !important;
+                text-align: center !important;
+              }
+              .flex.justify-center {
+                display: flex !important;
+                justify-content: center !important;
+                width: 100% !important;
+                text-align: center !important;
+              }
+              .invoice-section {
+                padding: 6px 10px !important;
+              }
+              .invoice-table {
+                font-size: 10px !important;
+                width: 100% !important;
+                table-layout: fixed !important;
+              }
+              .invoice-table th, .invoice-table td {
+                padding: 2px 4px !important;
+                line-height: 1.1 !important;
+              }
+              .invoice-details {
+                margin-bottom: 0.5rem !important;
+              }
+              .invoice-header {
+                margin-bottom: 0.75rem !important;
+              }
+              p {
+                margin-top: 0.25rem !important;
+                margin-bottom: 0.25rem !important;
+              }
+              .font-bold {
+                font-weight: bold;
+              }
+              .text-sm {
+                font-size: 0.875rem;
+                line-height: 1.25rem;
+              }
+              .text-xs {
+                font-size: 0.75rem;
+                line-height: 1rem;
+              }
+              .text-lg {
+                font-size: 1.125rem;
+                line-height: 1.75rem;
+              }
+              .text-xl {
+                font-size: 1.25rem;
+                line-height: 1.75rem;
+              }
+              .text-2xl {
+                font-size: 1.5rem;
+              }
+              .mb-2 {
+                margin-bottom: 0.5rem;
+              }
+              .mb-4 {
+                margin-bottom: 1rem;
+              }
+              .p-4 {
+                padding: 1rem;
+              }
+              .p-6 {
+                padding: 1.5rem;
+              }
+              .bg-gray-50 {
+                background-color: #f9fafb;
+              }
+              .border-t {
+                border-top: 1px solid #e5e7eb;
+              }
+              .border-b {
+                border-bottom: 1px solid #e5e7eb;
+              }
+              .w-36 {
+                width: 9rem;
+              }
+              .h-36 {
+                height: 9rem;
+              }
+              .w-28 {
+                width: 7rem;
+              }
+              .h-20 {
+                height: 5rem;
+              }
+              .mx-auto {
+                margin-left: auto;
+                margin-right: auto;
+              }
+              .object-contain {
+                object-fit: contain;
+              }
+              .opacity-80 {
+                opacity: 0.8;
+              }
+              .opacity-90 {
+                opacity: 0.9;
+              }
+              .text-center {
+                text-align: center;
+              }
+              .flex {
+                display: flex;
+              }
+              .justify-between {
+                justify-content: space-between;
+              }
+              .mt-6 {
+                margin-top: 1.5rem;
+              }
+              .mt-8 {
+                margin-top: 2rem;
+              }
+              .mt-2 {
+                margin-top: 0.5rem;
+              }
+              .mb-1 {
+                margin-bottom: 0.25rem;
+              }
+              .text-right {
+                text-align: right;
+              }
+              table {
+                border-collapse: collapse;
+                width: 100%;
+              }
+              th {
+                font-weight: bold;
+                text-align: left;
+              }
+              .text-left {
+                text-align: left;
+              }
+              .px-2 {
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+              }
+              .py-1 {
+                padding-top: 0.25rem;
+                padding-bottom: 0.25rem;
+              }
+              .font-medium {
+                font-weight: 500;
+              }
+              .absolute {
+                position: absolute;
+              }
+              .bottom-4 {
+                bottom: 1rem;
+              }
+              .right-4 {
+                right: 1rem;
+              }
+              .text-gray-500 {
+                color: #6b7280;
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent.innerHTML}
+          </body>
+        </html>
+      `);
       
-      // Reset flag
-      setIsPrinting(false);
+      printWindow.document.close();
+      
+      // Wait for content to load
+      setTimeout(async () => {
+        try {
+          const pdfContent = printWindow.document.body;
+          
+          // Create PDF with A4 dimensions
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+            compress: true
+          });
+          
+          // Ensure proper A4 dimensions (210mm x 297mm)
+          const pageWidth = 210;
+          const pageHeight = 297;
+          
+          // Get all pages from the rendered content
+          const pages = pdfContent.querySelectorAll('.page');
+          
+          for (let i = 0; i < pages.length; i++) {
+            // If not first page, add a new page to PDF
+            if (i > 0) {
+              pdf.addPage();
+            }
+            
+            // Convert the page to canvas with high quality settings
+            const canvas = await html2canvas(pages[i] as HTMLElement, {
+              scale: 3, // Higher scale (3x) for better quality
+              useCORS: true,
+              allowTaint: true,
+              logging: false,
+              backgroundColor: '#FFFFFF',
+              imageTimeout: 0,
+              // Use the exact fonts and styling from the print version
+              onclone: (clonedDoc) => {
+                const pageStyle = clonedDoc.querySelector('.page') as HTMLElement;
+                if (pageStyle) {
+                  pageStyle.style.boxShadow = 'none';
+                  pageStyle.style.margin = '0';
+                  pageStyle.style.backgroundColor = '#FFFFFF';
+                }
+              }
+            });
+            
+            // Get image data with high quality
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+            
+            // Add image to PDF with proper A4 positioning and dimensions
+            pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
+          }
+          
+          // Close the print window when done
+          printWindow.close();
+          
+          // Save the PDF
+          pdf.save(`Invoice_${data.number}.pdf`);
+          
+          // Reset printing state
+          setIsPrinting(false);
+          
+        } catch (error) {
+          console.error('Error generating PDF:', error);
+          printWindow.close();
+          setIsPrinting(false);
+          alert('There was an error generating the PDF. Please try again.');
+        }
+      }, 1000); // Allow time for all resources to load
       
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error('Error setting up PDF generation:', error);
       setIsPrinting(false);
       alert('There was an error generating the PDF. Please try again.');
     }
