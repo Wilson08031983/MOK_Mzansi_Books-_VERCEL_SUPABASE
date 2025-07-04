@@ -555,7 +555,7 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     // Table setup
     const tableHeaders = ['#', 'Description', 'Qty', 'Rate (R)', 'Discount (R)', 'Amount (R)'];
     // Adjusted column widths to better match the reference image
-    const colWidths = [10, 90, 15, 25, 25, 30];
+    const colWidths = [10, 70, 15, 25, 25, 50];
     const colPositions = [margin];
     
     // Calculate column positions
