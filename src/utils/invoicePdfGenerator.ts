@@ -554,7 +554,8 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     
     // Table setup
     const tableHeaders = ['#', 'Description', 'Qty', 'Rate (R)', 'Discount (R)', 'Amount (R)'];
-    const colWidths = [15, 80, 20, 25, 25, 30];
+    // Adjusted column widths to better match the reference image
+    const colWidths = [10, 90, 15, 25, 25, 30];
     const colPositions = [margin];
     
     // Calculate column positions
@@ -576,7 +577,15 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     
     tableHeaders.forEach((header, index) => {
       const x = colPositions[index] + 2;
-      doc.text(header, x, yPos + 2); // Adjusted from +3 to +2
+      const maxWidth = colWidths[index] - 4;
+      
+      if (index === 0) { // Item number column - center align
+        doc.text(header, x + maxWidth/2, yPos + 2, { align: 'center' });
+      } else if (index === 1) { // Description column - left align
+        doc.text(header, x, yPos + 2);
+      } else { // Number columns - right align
+        doc.text(header, x + maxWidth, yPos + 2, { align: 'right' });
+      }
     });
     
     yPos += 8; // Reduced from 10 to 8
@@ -603,10 +612,12 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
         const x = colPositions[colIndex] + 2;
         const maxWidth = colWidths[colIndex] - 4;
         
-        if (colIndex === 1) { // Description - left align
-          doc.text(data, x, yPos + 1.5); // Adjusted from +2 to +1.5
+        if (colIndex === 0) { // Item number - center align
+          doc.text(data, x + maxWidth/2, yPos + 1.5, { align: 'center' });
+        } else if (colIndex === 1) { // Description - left align
+          doc.text(data, x, yPos + 1.5);
         } else { // Numbers - right align
-          doc.text(data, x + maxWidth, yPos + 1.5, { align: 'right' }); // Adjusted from +2 to +1.5
+          doc.text(data, x + maxWidth, yPos + 1.5, { align: 'right' });
         }
       });
       
