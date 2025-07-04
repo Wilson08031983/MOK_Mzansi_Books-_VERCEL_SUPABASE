@@ -583,7 +583,10 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
         doc.text(header, x + maxWidth/2, yPos + 2, { align: 'center' });
       } else if (index === 1) { // Description column - left align
         doc.text(header, x, yPos + 2);
-      } else { // Number columns - right align
+      } else if (index === 5) { // Amount column - special handling for last column
+        // Use a smaller right margin for the Amount column to ensure values stay within the column
+        doc.text(header, x + maxWidth - 2, yPos + 2, { align: 'right' });
+      } else { // Other number columns - right align
         doc.text(header, x + maxWidth, yPos + 2, { align: 'right' });
       }
     });
@@ -616,7 +619,10 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
           doc.text(data, x + maxWidth/2, yPos + 1.5, { align: 'center' });
         } else if (colIndex === 1) { // Description - left align
           doc.text(data, x, yPos + 1.5);
-        } else { // Numbers - right align
+        } else if (colIndex === 5) { // Amount column - special handling for last column
+          // Use a smaller right margin for the Amount column to ensure values stay within the column
+          doc.text(data, x + maxWidth - 2, yPos + 1.5, { align: 'right' });
+        } else { // Other numbers - right align
           doc.text(data, x + maxWidth, yPos + 1.5, { align: 'right' });
         }
       });
