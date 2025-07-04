@@ -634,12 +634,7 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     doc.setDrawColor(0, 0, 0);
     doc.rect(margin, tableStartY - 2.5, contentWidth, yPos - tableStartY + 2.5); // Adjusted to match new spacing
     
-    // Draw column separators
-    let xPos = margin;
-    for (let i = 0; i < colWidths.length - 1; i++) {
-      xPos += colWidths[i];
-      doc.line(xPos, tableStartY - 2.5, xPos, yPos); // Adjusted to match new spacing
-    }
+    // Column separators removed as requested
     
     yPos += 10; // Reduced from 15 to 10
     
