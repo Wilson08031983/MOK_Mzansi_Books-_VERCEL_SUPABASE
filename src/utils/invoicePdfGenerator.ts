@@ -349,7 +349,7 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     // Page dimensions and layout
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
+    const margin = 15; // Reduced margin from 20 to 15 to give more space for table
     const contentWidth = pageWidth - (margin * 2);
     const leftColumnX = margin;
     const rightColumnX = pageWidth - margin - 40; // Move banking details even further to the right
@@ -554,8 +554,8 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     
     // Table setup
     const tableHeaders = ['#', 'Description', 'Qty', 'Rate (R)', 'Discount (R)', 'Amount (R)'];
-    // Adjusted column widths to better match the reference image
-    const colWidths = [10, 70, 15, 25, 25, 50];
+    // Adjusted column widths to ensure Amount column is visible
+    const colWidths = [10, 65, 15, 25, 25, 55];
     const colPositions = [margin];
     
     // Calculate column positions
@@ -584,8 +584,8 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
       } else if (index === 1) { // Description column - left align
         doc.text(header, x, yPos + 2);
       } else if (index === 5) { // Amount column - special handling for last column
-        // Use a smaller right margin for the Amount column to ensure values stay within the column
-        doc.text(header, x + maxWidth - 2, yPos + 2, { align: 'right' });
+        // Position the Amount header with more space from the right edge
+        doc.text(header, x + maxWidth - 10, yPos + 2, { align: 'right' });
       } else { // Other number columns - right align
         doc.text(header, x + maxWidth, yPos + 2, { align: 'right' });
       }
@@ -620,8 +620,8 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
         } else if (colIndex === 1) { // Description - left align
           doc.text(data, x, yPos + 1.5);
         } else if (colIndex === 5) { // Amount column - special handling for last column
-          // Use a smaller right margin for the Amount column to ensure values stay within the column
-          doc.text(data, x + maxWidth - 2, yPos + 1.5, { align: 'right' });
+          // Position the Amount values with more space from the right edge
+          doc.text(data, x + maxWidth - 10, yPos + 1.5, { align: 'right' });
         } else { // Other numbers - right align
           doc.text(data, x + maxWidth, yPos + 1.5, { align: 'right' });
         }
