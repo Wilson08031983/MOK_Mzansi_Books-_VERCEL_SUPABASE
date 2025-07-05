@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import InvoicesHeader from '@/components/invoices/InvoicesHeader';
@@ -9,37 +9,33 @@ import InvoicesContent from '@/components/invoices/InvoicesContent';
 import InvoicesBulkActions from '@/components/invoices/InvoicesBulkActions';
 import CreateInvoiceModal from '@/components/invoices/CreateInvoiceModal';
 import RecordPaymentModal from '@/components/invoices/RecordPaymentModal';
+import InvoiceViewModal from '@/components/invoices/InvoiceViewModal';
+import { Invoice, InvoiceItem, InvoiceStatus } from '@/types/invoice';
 
-export type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'partial' | 'paid' | 'overdue' | 'cancelled';
-
-export interface Invoice {
+// Define types for the invoice modal data
+interface ModalLineItem {
   id: string;
-  number: string;
-  clientId: string;
-  clientName: string;
-  clientEmail: string;
-  invoiceDate: string;
-  dueDate: string;
+  itemNo: number;
+  description: string;
+  quantity: string | number;
+  rate: number;
+  markupPercent: number;
+  discount: number;
   amount: number;
-  paidAmount: number;
-  balance: number;
-  status: InvoiceStatus;
-  currency: string;
-  reference?: string;
-  items: InvoiceItem[];
-  notes?: string;
-  terms?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
-export interface InvoiceItem {
-  id: string;
-  description: string;
-  quantity: number;
-  rate: number;
-  amount: number;
-  taxRate?: number;
+interface ModalInvoiceData {
+  invoiceNumber?: string;
+  number?: string;
+  clientId: string;
+  invoiceDate?: string;
+  dueDate: string;
+  reference: string;
+  terms: string;
+  notes?: string;
+  vatRate: number;
+  total?: number;
+  items: ModalLineItem[];
 }
 
 const Invoices: React.FC = () => {
@@ -57,67 +53,250 @@ const Invoices: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<Invoice | null>(null);
+  const [selectedInvoiceForPreview, setSelectedInvoiceForPreview] = useState<Invoice | null>(null);
+  const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Sample data - replace with actual API calls
+  // Initialize clients data
+  const [clients, setClients] = useState<{
+    id: string;
+    companyName?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  }[]>([]);
+
+  // Company details for PDFs and emails
+  const [companyDetails, setCompanyDetails] = useState({
+    name: 'MOK Mzansi Books',
+    email: 'info@mokmzansibooks.com',
+    phone: '+27 12 345 6789',
+    addressLine1: '123 Main Street',
+    addressLine2: 'Suite 200',
+    addressLine3: 'Pretoria',
+    addressLine4: 'Gauteng 0001',
+    vatNumber: 'VAT123456789',
+    regNumber: 'REG2023/123456/07',
+    website: 'www.mokmzansibooks.com',
+    bankName: 'First National Bank',
+    accountNumber: '62123456789',
+    accountType: 'Business Account',
+    branchCode: '250655',
+    accountHolder: 'MOK Mzansi Books (Pty) Ltd',
+    logoUrl: 'https://mokmzansibooks.com/logo.png'
+  });
+
+  // Fetch clients from localStorage
   useEffect(() => {
-    // Fetch invoices from API
+    const storedClients = JSON.parse(localStorage.getItem('clients') || '[]');
+    setClients(storedClients);
+    
+    // Also load company details from localStorage if available
+    const storedCompanyDetails = localStorage.getItem('companyDetails');
+    if (storedCompanyDetails) {
+      setCompanyDetails(JSON.parse(storedCompanyDetails));
+    }
+  }, []);
+  
+  // Function to generate sample invoices
+  const generateSampleInvoices = () => {
     const sampleInvoices: Invoice[] = [
       {
         id: '1',
         number: 'INV-001',
+        client: 'ACME Corporation',
         clientId: '1',
         clientName: 'ACME Corporation',
         clientEmail: 'billing@acme.com',
+        date: '2024-01-15',
         invoiceDate: '2024-01-15',
         dueDate: '2024-02-15',
         amount: 5000,
+        total: 5000,
         paidAmount: 2500,
         balance: 2500,
         status: 'partial',
         currency: 'ZAR',
+        vatRate: 15,
         reference: 'PO-12345',
+        terms: 'Net 30 days',
         items: [
           {
             id: '1',
+            itemNo: 1,
             description: 'Consulting Services',
             quantity: 10,
             rate: 500,
-            amount: 5000
-          }
+            unitPrice: 500,
+            markupPercent: 0,
+            discount: 0,
+            amount: 5000,
+            taxRate: 15,
+            taxAmount: 750,
+          },
         ],
-        createdAt: '2024-01-15T10:00:00Z',
-        updatedAt: '2024-01-15T10:00:00Z'
       },
-      {
-        id: '2',
-        number: 'INV-002',
-        clientId: '2',
-        clientName: 'Tech Solutions Ltd',
-        clientEmail: 'finance@techsolutions.com',
-        invoiceDate: '2024-01-20',
-        dueDate: '2024-01-10',
-        amount: 7500,
-        paidAmount: 0,
-        balance: 7500,
-        status: 'overdue',
-        currency: 'ZAR',
-        items: [
-          {
-            id: '2',
-            description: 'Software Development',
-            quantity: 15,
-            rate: 500,
-            amount: 7500
-          }
-        ],
-        createdAt: '2024-01-20T10:00:00Z',
-        updatedAt: '2024-01-20T10:00:00Z'
-      }
     ];
+    
     setInvoices(sampleInvoices);
+    localStorage.setItem('invoices', JSON.stringify(sampleInvoices));
+  };
+
+  // Fetch invoices from localStorage
+  useEffect(() => {
+    setLoading(true);
+    try {
+      const storedInvoices = localStorage.getItem('invoices');
+      if (storedInvoices) {
+        try {
+          const parsedInvoices = JSON.parse(storedInvoices);
+          // Ensure parsedInvoices is an array
+          if (Array.isArray(parsedInvoices)) {
+            setInvoices(parsedInvoices);
+          } else {
+            console.error('Stored invoices is not an array:', parsedInvoices);
+            // Initialize with empty array instead of using potentially undefined data
+            setInvoices([]);
+            localStorage.setItem('invoices', JSON.stringify([]));
+          }
+        } catch (parseError) {
+          console.error('Error parsing invoices JSON:', parseError);
+          // Initialize with empty array on parse error
+          setInvoices([]);
+          localStorage.setItem('invoices', JSON.stringify([]));
+        }
+      } else {
+        // No invoices found, create sample data
+        const sampleInvoices: Invoice[] = [
+        {
+          id: '1',
+          number: 'INV-001',
+          client: 'ACME Corporation',
+          clientId: '1',
+          clientName: 'ACME Corporation',
+          clientEmail: 'billing@acme.com',
+          date: '2024-01-15',
+          invoiceDate: '2024-01-15',
+          dueDate: '2024-02-15',
+          amount: 5000,
+          total: 5000,
+          paidAmount: 2500,
+          balance: 2500,
+          status: 'partial',
+          currency: 'ZAR',
+          vatRate: 15,
+          reference: 'PO-12345',
+          terms: 'Net 30 days',
+          items: [
+            {
+              id: '1',
+              itemNo: 1,
+              description: 'Consulting Services',
+              quantity: 10,
+              rate: 500,
+              unitPrice: 500,
+              markupPercent: 0,
+              discount: 0,
+              amount: 5000,
+            },
+          ],
+          createdAt: '2024-01-15T10:00:00Z',
+          updatedAt: '2024-01-15T10:00:00Z',
+        },
+        {
+          id: '2',
+          number: 'INV-002',
+          client: 'Tech Solutions Ltd',
+          clientId: '2',
+          clientName: 'Tech Solutions Ltd',
+          clientEmail: 'finance@techsolutions.com',
+          date: '2024-01-20',
+          invoiceDate: '2024-01-20',
+          dueDate: '2024-01-10',
+          amount: 15000,
+          total: 15000,
+          paidAmount: 0,
+          balance: 15000,
+          status: 'overdue',
+          currency: 'ZAR',
+          vatRate: 15,
+          reference: 'PO-67890',
+          terms: 'Net 30 days',
+          items: [
+            {
+              id: '1',
+              itemNo: 1,
+              description: 'Software Development',
+              quantity: 20,
+              rate: 750,
+              unitPrice: 750,
+              markupPercent: 0,
+              discount: 0,
+              amount: 15000,
+            },
+          ],
+          createdAt: '2024-01-20T10:00:00Z',
+          updatedAt: '2024-01-20T10:00:00Z',
+        },
+      ];
+        setInvoices(sampleInvoices);
+        localStorage.setItem('invoices', JSON.stringify(sampleInvoices));
+      }
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+
+  // Function to save invoice to localStorage
+  const handleSaveInvoice = async (invoice: Invoice) => {
+    try {
+      // Find the client
+      const client = clients.find(c => c.id === invoice.clientId);
+      
+      // Ensure invoice number is properly set
+      // The modal uses invoiceNumber but we need to use number for storage
+      const invoiceNumber = invoice.invoiceNumber || invoice.number;
+      
+      // Generate new invoice with required fields
+      const newInvoice: Invoice = {
+        ...invoice,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: invoice.status || 'draft',
+        paidAmount: 0,
+        balance: invoice.total || 0,
+        clientName: client?.companyName || client?.firstName + ' ' + client?.lastName || 'Unknown',
+        clientEmail: client?.email || '',
+        // Ensure number is set correctly
+        number: invoiceNumber,
+      };
+      
+      console.log('Saving invoice with number:', newInvoice.number);
+      
+      // Get existing invoices from localStorage
+      const storedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]') as Invoice[];
+      
+      // Add new invoice to the array
+      const updatedInvoices = [...storedInvoices, newInvoice];
+      
+      // Save updated array back to localStorage
+      localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+      
+      // Update state
+      setInvoices(prev => [...prev, newInvoice]);
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      return Promise.reject(error);
+    }
+  };
 
   const handleSelectInvoice = (invoiceId: string) => {
     setSelectedInvoices(prev => 
@@ -127,8 +306,12 @@ const Invoices: React.FC = () => {
     );
   };
 
-  const handleSelectAll = (selected: boolean) => {
-    setSelectedInvoices(selected ? invoices.map(invoice => invoice.id) : []);
+  const handleSelectAll = () => {
+    if (selectedInvoices.length === invoices.length) {
+      setSelectedInvoices([]);
+    } else {
+      setSelectedInvoices(invoices.map(invoice => invoice.id));
+    }
   };
 
   const handleRecordPayment = (invoice: Invoice) => {
@@ -136,7 +319,95 @@ const Invoices: React.FC = () => {
     setShowPaymentModal(true);
   };
 
-  const filteredInvoices = invoices.filter(invoice => {
+  const handleDeleteInvoice = (invoiceId: string) => {
+    // Get current invoices from localStorage
+    const storedInvoicesStr = localStorage.getItem('invoices') || '[]';
+    let storedInvoices = [];
+    
+    try {
+      // Safely parse and ensure it's an array
+      const parsedInvoices = JSON.parse(storedInvoicesStr);
+      storedInvoices = Array.isArray(parsedInvoices) ? parsedInvoices : [];
+    } catch (error) {
+      console.error('Error parsing invoices from localStorage:', error);
+      storedInvoices = [];
+    }
+    
+    // Filter out the invoice to delete
+    const filteredInvoices = storedInvoices.filter(invoice => invoice?.id !== invoiceId);
+    
+    // Save back to localStorage
+    localStorage.setItem('invoices', JSON.stringify(filteredInvoices));
+    
+    // Update state - ensure prev is treated as an array
+    setInvoices(prev => {
+      const safeArray = Array.isArray(prev) ? prev : [];
+      return safeArray.filter(invoice => invoice?.id !== invoiceId);
+    });
+    
+    // Update selectedInvoices state
+    setSelectedInvoices(prev => {
+      const safeArray = Array.isArray(prev) ? prev : [];
+      return safeArray.filter(id => id !== invoiceId);
+    });
+    toast.success('Invoice deleted successfully');
+  };
+
+  // Function to update invoice status
+  const handleUpdateInvoiceStatus = (invoiceId: string, newStatus: InvoiceStatus) => {
+    // Get current invoices from localStorage
+    const storedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+    
+    // Update the invoice status
+    const updatedInvoices = storedInvoices.map(inv => {
+      if (inv.id === invoiceId) {
+        return { ...inv, status: newStatus };
+      }
+      return inv;
+    });
+    
+    // Save back to localStorage
+    localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+    
+    // Update state
+    setInvoices(prev => prev.map(invoice => {
+      if (invoice.id === invoiceId) {
+        return { ...invoice, status: newStatus };
+      }
+      return invoice;
+    }));
+    
+    toast.success(`Invoice status updated to ${newStatus}`);
+  };
+
+  const handleEditInvoice = (invoiceId: string) => {
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (invoice) {
+      setSelectedInvoiceForEdit(invoice);
+      setShowCreateModal(true);
+    }
+  };
+  
+  const handleViewInvoice = (invoice: Invoice) => {
+    setSelectedInvoiceForPreview(invoice);
+    setShowPreviewModal(true);
+  };
+  
+  // Function to get company details for PDFs and emails
+  const getCompanyDetails = () => {
+    return companyDetails;
+  };
+  
+  // Handle duplicate invoice for UI update
+  const handleDuplicateInvoice = (newInvoice: Invoice) => {
+    setInvoices(prevInvoices => [...prevInvoices, newInvoice]);
+  };
+
+  // Ensure invoices is always an array before filtering
+  const safeInvoices = Array.isArray(invoices) ? invoices : [];
+  const filteredInvoices = safeInvoices.filter(invoice => {
+    // Additional null/undefined check
+    if (!invoice) return false;
     const matchesSearch = 
       invoice.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       invoice.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -172,7 +443,10 @@ const Invoices: React.FC = () => {
     return matchesSearch && matchesStatus && matchesClient && matchesDate;
   });
 
-  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+  // Use a defensive copy to ensure we're working with an array
+  // Ensure we have a valid array before sorting
+  const safeFilteredInvoices = Array.isArray(filteredInvoices) ? filteredInvoices : [];
+  const sortedInvoices = [...safeFilteredInvoices].sort((a, b) => {
     let comparison = 0;
     
     switch (sortField) {
@@ -209,84 +483,99 @@ const Invoices: React.FC = () => {
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
 
   return (
-    <div className="min-h-screen">
-      <div className="space-y-6 p-4 lg:p-6">
-        <InvoicesHeader 
-          onCreateInvoice={() => setShowCreateModal(true)}
-          onRecordPayment={() => setShowPaymentModal(true)}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-        />
+    <>
+      <InvoicesHeader
+        onCreateInvoice={() => {
+          setSelectedInvoiceForEdit(null); // Clear any previous edit data
+          setShowCreateModal(true);
+        }}
+        onRecordPayment={() => setShowPaymentModal(true)}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
-        <InvoicesSummaryCards invoices={invoices} />
+      <InvoicesSummaryCards invoices={invoices} />
 
-        <InvoicesSearchAndFilters
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          dateFilter={dateFilter}
-          onDateFilterChange={setDateFilter}
-          clientFilter={clientFilter}
-          onClientFilterChange={setClientFilter}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-        />
+      <InvoicesSearchAndFilters
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        dateFilter={dateFilter}
+        onDateFilterChange={setDateFilter}
+        clientFilter={clientFilter}
+        onClientFilterChange={setClientFilter}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
-        {selectedInvoices.length > 0 && (
-          <InvoicesBulkActions
-            selectedCount={selectedInvoices.length}
-            onClearSelection={() => setSelectedInvoices([])}
-            selectedInvoices={selectedInvoices}
-            invoices={invoices}
-          />
-        )}
-
-        <InvoicesContent
-          invoices={paginatedInvoices}
-          viewMode={viewMode}
+      {selectedInvoices.length > 0 && (
+        <InvoicesBulkActions
+          selectedCount={selectedInvoices.length}
+          onClearSelection={() => setSelectedInvoices([])}
           selectedInvoices={selectedInvoices}
-          onSelectInvoice={handleSelectInvoice}
-          onSelectAll={handleSelectAll}
-          sortField={sortField}
-          sortDirection={sortDirection}
-          onSort={(field) => {
-            if (sortField === field) {
-              setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-            } else {
-              setSortField(field);
-              setSortDirection('asc');
-            }
-          }}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={sortedInvoices.length}
-          itemsPerPage={itemsPerPage}
-          onPageChange={setCurrentPage}
-          onItemsPerPageChange={setItemsPerPage}
-          onRecordPayment={handleRecordPayment}
+          invoices={invoices}
         />
-      </div>
+      )}
+
+      <InvoicesContent
+        invoices={paginatedInvoices}
+        viewMode={viewMode}
+        selectedInvoices={selectedInvoices}
+        onSelectInvoice={handleSelectInvoice}
+        onSelectAll={handleSelectAll}
+        sortColumn={sortField}
+        sortDirection={sortDirection}
+        onSort={(field) => {
+          if (sortField === field) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField(field);
+            setSortDirection('desc');
+          }
+        }}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        itemsPerPage={itemsPerPage}
+        totalItems={sortedInvoices.length}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={setItemsPerPage}
+        onRecordPayment={handleRecordPayment}
+        onDeleteInvoice={handleDeleteInvoice}
+        onEditInvoice={handleEditInvoice}
+        onViewInvoice={handleViewInvoice}
+        onDuplicateInvoice={handleDuplicateInvoice}
+        onUpdateStatus={handleUpdateInvoiceStatus}
+      />
 
       <CreateInvoiceModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSave={async (invoiceData) => {
-          // Handle invoice creation/update
-          console.log('Saving invoice:', invoiceData);
+        onClose={() => {
           setShowCreateModal(false);
+          setSelectedInvoiceForEdit(null);
         }}
+        onSave={handleSaveInvoice}
+        editingInvoice={selectedInvoiceForEdit}
       />
 
       <RecordPaymentModal
         isOpen={showPaymentModal}
-        onClose={() => {
-          setShowPaymentModal(false);
-          setSelectedInvoiceForPayment(null);
-        }}
+        onClose={() => setShowPaymentModal(false)}
         invoice={selectedInvoiceForPayment}
+        onSuccess={(paymentData) => {
+          console.log('Payment recorded', paymentData);
+          setShowPaymentModal(false);
+        }}
       />
-    </div>
+      
+      {/* Invoice View Modal */}
+      <InvoiceViewModal
+        invoice={selectedInvoiceForPreview}
+        open={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        getCompanyDetails={getCompanyDetails}
+      />
+    </>
   );
 };
 
