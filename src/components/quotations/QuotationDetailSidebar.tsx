@@ -11,15 +11,57 @@ import {
   Trash2
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import StatusChangeDropdown from './StatusChangeDropdown';
+
+// Define Quotation interface to match the structure in QuotationDetail.tsx
+interface QuotationItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  rate: number;
+  taxRate: number;
+  discount: number;
+  amount: number;
+}
+
+interface Quotation {
+  id: string;
+  number: string;
+  reference: string;
+  client: string;
+  clientId: string;
+  clientEmail: string;
+  clientContact: string;
+  clientPhone: string;
+  clientAddress: string;
+  date: string;
+  expiryDate: string;
+  lastModified: string;
+  amount: number;
+  currency: string;
+  status: string;
+  salesperson: string;
+  project: string;
+  items: QuotationItem[];
+  subtotal: number;
+  taxAmount: number;
+  discount: number;
+  totalAmount: number;
+  terms: string;
+  notes: string;
+}
 
 interface QuotationDetailSidebarProps {
-  quotation: any;
+  quotation: Quotation;
   actionLoading: boolean;
   handleSendEmail: () => void;
   handleDownloadPDF: () => void;
+  handleEdit?: () => void;
   setShowDeleteModal: (show: boolean) => void;
   getStatusIcon: (status: string) => React.ReactNode;
   getStatusColor: (status: string) => string;
+  handleStatusUpdate: (status: string) => void;
 }
 
 const QuotationDetailSidebar: React.FC<QuotationDetailSidebarProps> = ({
@@ -27,9 +69,11 @@ const QuotationDetailSidebar: React.FC<QuotationDetailSidebarProps> = ({
   actionLoading,
   handleSendEmail,
   handleDownloadPDF,
+  handleEdit,
   setShowDeleteModal,
   getStatusIcon,
-  getStatusColor
+  getStatusColor,
+  handleStatusUpdate
 }) => {
   const navigate = useNavigate();
 
@@ -43,10 +87,12 @@ const QuotationDetailSidebar: React.FC<QuotationDetailSidebarProps> = ({
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-slate-600 font-sf-pro">Status</span>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
-                {getStatusIcon(quotation.status)}
-                <span className="ml-1 capitalize">{quotation.status}</span>
-              </span>
+              <StatusChangeDropdown
+                currentStatus={quotation.status}
+                onStatusChange={handleStatusUpdate}
+                disabled={actionLoading}
+                size="sm"
+              />
             </div>
             
             <div className="flex justify-between">
@@ -98,7 +144,7 @@ const QuotationDetailSidebar: React.FC<QuotationDetailSidebarProps> = ({
             </Button>
             
             <Button
-              onClick={() => navigate(`/quotations/${quotation.id}/edit`)}
+              onClick={handleEdit || (() => navigate(`/quotations/${quotation.id}/edit`))}
               variant="outline"
               className="w-full border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl"
             >

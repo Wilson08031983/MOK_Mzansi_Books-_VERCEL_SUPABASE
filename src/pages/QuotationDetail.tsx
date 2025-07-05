@@ -13,6 +13,9 @@ import {
   Clock
 } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
+import { toast } from 'sonner';
+import { generateQuotationPdf, Quotation as PdfQuotation } from '@/utils/quotationPdfGenerator';
+import { updateQuotationStatus, Quotation as ServiceQuotation } from '@/services/quotationService';
 import QuotationDetailHeader from '@/components/quotations/QuotationDetailHeader';
 import QuotationDetailInfo from '@/components/quotations/QuotationDetailInfo';
 import QuotationDetailItems from '@/components/quotations/QuotationDetailItems';
@@ -24,137 +27,188 @@ const QuotationDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const [quotation, setQuotation] = useState<any>(null);
+  // Define proper interface for quotation
+  interface QuotationItem {
+    id: string;
+    description: string;
+    quantity: number;
+    unit: string;
+    rate: number;
+    taxRate: number;
+    discount: number;
+    amount: number;
+    markupPercent?: number;
+  }
+
+  interface Quotation {
+    id: string;
+    number: string;
+    reference: string;
+    client: string;
+    clientId: string;
+    clientEmail: string;
+    clientContact: string;
+    clientPhone: string;
+    clientAddress: string;
+    date: string;
+    expiryDate: string;
+    lastModified: string;
+    amount: number;
+    currency: string;
+    status: string;
+    salesperson: string;
+    project: string;
+    items: QuotationItem[];
+    subtotal: number;
+    taxAmount: number;
+    discount: number;
+    totalAmount: number;
+    terms: string;
+    notes: string;
+  }
+  
+  const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Mock quotation data - in real app, fetch from Supabase
-  const mockQuotation = {
-    id: id,
-    number: 'QUO-2024-001',
-    reference: 'PROJECT-ALPHA',
-    client: 'Tech Solutions Ltd',
-    clientId: 'client-1',
-    clientEmail: 'john@techsolutions.com',
-    clientContact: 'John Smith',
-    clientPhone: '+27 11 123 4567',
-    clientAddress: '123 Business Avenue, Sandton, 2196',
-    date: '2024-01-15',
-    expiryDate: '2024-02-15',
-    lastModified: '2024-01-16',
-    amount: 25000,
-    currency: 'ZAR',
-    status: 'sent',
-    salesperson: 'Sarah Johnson',
-    project: 'Alpha Development',
-    items: [
-      {
-        id: 'item-1',
-        description: 'Web Development Services',
-        quantity: 1,
-        unit: 'project',
-        rate: 20000,
-        taxRate: 15,
-        discount: 0,
-        amount: 20000
-      },
-      {
-        id: 'item-2',
-        description: 'UI/UX Design',
-        quantity: 1,
-        unit: 'project',
-        rate: 8000,
-        taxRate: 15,
-        discount: 1000,
-        amount: 7000
-      }
-    ],
-    subtotal: 27000,
-    taxAmount: 4050,
-    discount: 1000,
-    totalAmount: 25000,
-    terms: 'Payment due within 30 days of invoice date.',
-    notes: 'Initial development phase for Alpha project.'
-  };
+  // We'll define the correct quotation data inside the useEffect hook
 
   useEffect(() => {
     const fetchQuotation = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setQuotation(mockQuotation);
+        if (!id) {
+          toast.error('No quotation ID provided');
+          navigate('/quotations');
+          return;
+        }
+
+        // Import the service function directly
+        const { getQuotationById } = await import('@/services/quotationService');
+        const foundQuotation = getQuotationById(id);
+        
+        if (foundQuotation) {
+          console.log('Found quotation:', foundQuotation);
+          setQuotation(foundQuotation as unknown as Quotation);
+        } else {
+          console.error('Quotation not found with ID:', id);
+          toast.error(`Quotation with ID ${id} not found`);
+          navigate('/quotations');
+          return;
+        }
       } catch (error) {
         console.error('Error fetching quotation:', error);
+        toast.error('Error loading quotation details');
+        navigate('/quotations');
       } finally {
         setLoading(false);
       }
     };
 
     fetchQuotation();
-  }, [id]);
+  }, [id, navigate]);
 
   const handleStatusUpdate = async (newStatus: string) => {
     if (!quotation) return;
     
     setActionLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setQuotation({ ...quotation, status: newStatus });
+      // Update status in localStorage using the quotationService
+      const updatedQuotations = updateQuotationStatus(quotation.id, newStatus);
+      
+      // Find the updated quotation in the returned array
+      const serviceQuotation = updatedQuotations.find(q => q.id === quotation.id);
+      
+      if (serviceQuotation) {
+        // Convert the service quotation to the local quotation interface
+        const updatedQuotation: Quotation = {
+          ...quotation,
+          status: serviceQuotation.status,
+          lastModified: serviceQuotation.lastModified || quotation.lastModified
+        };
+        
+        // Update local state with the updated quotation
+        setQuotation(updatedQuotation);
+        
+        // Show success message based on the status
+        if (newStatus === 'accepted') {
+          toast.success('Quotation marked as accepted');
+        } else if (newStatus === 'rejected') {
+          toast.success('Quotation marked as rejected');
+        } else {
+          toast.success(`Quotation status updated to ${newStatus}`);
+        }
+      }
     } catch (error) {
       console.error('Error updating status:', error);
+      toast.error(`Failed to update quotation status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setActionLoading(false);
     }
   };
 
+  /**
+   * Send quotation email function
+   * Matches the functionality in the dropdown menu
+   */
   const handleSendEmail = async () => {
     setActionLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       if (quotation?.status === 'draft') {
         setQuotation({ ...quotation, status: 'sent' });
       }
-      alert('Quotation sent successfully!');
+      toast.success(`Quotation sent to ${quotation?.clientEmail || 'client'}`);
     } catch (error) {
       console.error('Error sending quotation:', error);
-      alert('Failed to send quotation');
+      toast.error('Failed to send quotation');
     } finally {
       setActionLoading(false);
     }
   };
 
+  /**
+   * Delete quotation function
+   * Matches the functionality in the dropdown menu
+   */
   const handleDelete = async () => {
     setActionLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       setShowDeleteModal(false);
+      toast.success(`Quotation ${quotation?.number} deleted`);
       navigate('/quotations');
     } catch (error) {
       console.error('Error deleting quotation:', error);
-      alert('Failed to delete quotation');
+      toast.error('Failed to delete quotation');
     } finally {
       setActionLoading(false);
     }
   };
 
+  /**
+   * FINALIZED QUOTATION PDF DOWNLOAD FUNCTION
+   * This function handles the generation and download of quotation PDFs.
+   * It matches the dropdown menu functionality in behavior and styling.
+   */
   const handleDownloadPDF = async () => {
     setActionLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      // Simulate PDF download
-      const element = document.createElement('a');
-      element.setAttribute('href', 'data:application/pdf;charset=utf-8,' + encodeURIComponent('Simulated PDF'));
-      element.setAttribute('download', `quotation-${quotation?.number}.pdf`);
-      element.style.display = 'none';
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
+      // Generate the PDF using the quotation data
+      // Cast to PdfQuotation type with required validUntil field
+      const pdfQuotation = {
+        ...quotation,
+        validUntil: quotation.expiryDate || new Date().toISOString().split('T')[0]
+      };
+      await generateQuotationPdf(pdfQuotation as PdfQuotation);
+      
+      // Success is handled by the PDF generator
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF');
+      toast.error('Failed to generate PDF. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -194,6 +248,17 @@ const QuotationDetail: React.FC = () => {
       default:
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     }
+  };
+  
+  /**
+   * Edit quotation function
+   * Matches the functionality in the dropdown menu
+   */
+  const handleEdit = () => {
+    // In a real implementation, this would open an edit modal or navigate to edit page
+    toast.info(`Editing ${quotation?.number}`);
+    console.log(`Edit quotation: ${quotation?.id}`);
+    // For now, we'll just log the action as in the dropdown menu
   };
 
   if (loading) {
@@ -254,9 +319,11 @@ const QuotationDetail: React.FC = () => {
           actionLoading={actionLoading}
           handleSendEmail={handleSendEmail}
           handleDownloadPDF={handleDownloadPDF}
+          handleEdit={handleEdit}
           setShowDeleteModal={setShowDeleteModal}
           getStatusIcon={getStatusIcon}
           getStatusColor={getStatusColor}
+          handleStatusUpdate={handleStatusUpdate}
         />
       </div>
 

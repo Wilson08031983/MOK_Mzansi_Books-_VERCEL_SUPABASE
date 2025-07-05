@@ -18,7 +18,9 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import QuotationActionsMenu from './QuotationActionsMenu';
-import { Quotation } from '@/services/quotationService';
+import { Quotation, updateQuotationStatus } from '@/services/quotationService';
+import StatusChangeDropdown from './StatusChangeDropdown';
+import { toast } from 'sonner';
 
 interface QuotationsTableProps {
   quotations: Quotation[];
@@ -33,6 +35,8 @@ interface QuotationsTableProps {
   onSort: (column: string) => void;
   onDeleteQuotation: (quotationId: string) => void;
   onEditQuotation?: (quotationId: string) => void;
+  onStatusFilter?: (status: string) => void;
+  onRefresh?: () => void; // Add refresh handler to update parent state
 }
 
 const QuotationsTable: React.FC<QuotationsTableProps> = ({
@@ -47,7 +51,9 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
   sortDirection,
   onSort,
   onDeleteQuotation,
-  onEditQuotation
+  onEditQuotation,
+  onStatusFilter,
+  onRefresh
 }) => {
   const getSortIcon = (column: string) => {
     if (sortColumn !== column) return null;
@@ -103,7 +109,15 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 {getSortIcon('amount')}
               </button>
             </TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>
+              <button
+                onClick={() => onSort('status')}
+                className="flex items-center space-x-1 font-sf-pro font-medium text-slate-600 hover:text-slate-900"
+              >
+                <span>Status</span>
+                {getSortIcon('status')}
+              </button>
+            </TableHead>
             <TableHead>Salesperson</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
@@ -149,14 +163,28 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 </div>
               </TableCell>
               <TableCell>
-                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
-                  <span className="mr-1.5 flex-shrink-0">
-                    {getStatusIcon(quotation.status)}
-                  </span>
-                  <span className="truncate">
-                    {getDisplayStatus(quotation.status)}
-                  </span>
-                </div>
+                <StatusChangeDropdown 
+                  currentStatus={quotation.status}
+                  onStatusChange={(newStatus) => {
+                    // Call update quotation status service
+                    try {
+                      // Use the already imported updateQuotationStatus function
+                      const updatedQuotations = updateQuotationStatus(quotation.id, newStatus);
+                      
+                      // Notify that a change was made
+                      toast.success(`Status updated to ${newStatus}`);
+                      
+                      // Call refresh to update the UI with the latest data
+                      if (onRefresh) {
+                        onRefresh();
+                      }
+                    } catch (error) {
+                      console.error('Error updating status:', error);
+                      toast.error('Failed to update status');
+                    }
+                  }}
+                  size="sm"
+                />
               </TableCell>
               <TableCell>
                 <span className="font-sf-pro">{quotation.salesperson}</span>
@@ -164,9 +192,9 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
               <TableCell>
                 <QuotationActionsMenu 
                   quotation={{
-                    id: quotation.id,
-                    number: quotation.number,
-                    clientEmail: quotation.clientEmail
+                    ...quotation,
+                    validUntil: quotation.expiryDate || '',
+                    client: quotation.client || { id: quotation.clientId, name: quotation.client }
                   }}
                   onDelete={onDeleteQuotation}
                   onEdit={onEditQuotation}

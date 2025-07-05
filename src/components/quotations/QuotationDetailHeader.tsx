@@ -15,9 +15,26 @@ import {
   Trash2
 } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
+import StatusChangeDropdown from './StatusChangeDropdown';
+
+interface Quotation {
+  id: string;
+  number: string;
+  reference: string;
+  client: string;
+  clientId: string;
+  clientEmail: string;
+  date: string;
+  expiryDate?: string;
+  status: string;
+  amount: number;
+  currency: string;
+  salesperson?: string;
+  lastModified?: string;
+}
 
 interface QuotationDetailHeaderProps {
-  quotation: any;
+  quotation: Quotation;
   actionLoading: boolean;
   showActionsMenu: boolean;
   setShowActionsMenu: (show: boolean) => void;
@@ -58,10 +75,12 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
         <div>
           <div className="flex items-center space-x-3">
             <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">{quotation.number}</h1>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(quotation.status)} font-sf-pro`}>
-              {getStatusIcon(quotation.status)}
-              <span className="ml-1 capitalize">{quotation.status}</span>
-            </span>
+            <StatusChangeDropdown
+              currentStatus={quotation.status}
+              onStatusChange={handleStatusUpdate}
+              disabled={actionLoading}
+              size="sm"
+            />
           </div>
           <p className="text-slate-600 font-sf-pro">Created on {formatDate(quotation.date)}</p>
         </div>
@@ -101,50 +120,6 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
             </Button>
           </>
         )}
-
-        <div className="relative">
-          <Button
-            variant="outline"
-            onClick={() => setShowActionsMenu(!showActionsMenu)}
-            className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-          
-          {showActionsMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
-              <button
-                onClick={() => navigate(`/quotations/${quotation.id}/edit`)}
-                className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-sf-pro"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-sf-pro"
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Print
-              </button>
-              <button
-                onClick={handleDownloadPDF}
-                className="flex items-center w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-sf-pro"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download PDF
-              </button>
-              <div className="border-t border-slate-200 my-1"></div>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50 font-sf-pro"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -287,6 +287,14 @@ const Quotations = () => {
     });
   };
 
+  const handleStatusFilter = (status: string) => {
+    setFilters(prev => ({
+      ...prev,
+      status: status
+    }));
+    toast.info(`Filtered by ${getDisplayStatus(status)} status`);
+  };
+
   const handleSaveFilter = () => {
     const filterName = prompt('Enter filter name:');
     if (filterName) {
@@ -379,6 +387,8 @@ const Quotations = () => {
         setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
         onDeleteQuotation={handleDeleteQuotation}
         onEditQuotation={handleEditQuotation}
+        onStatusFilter={handleStatusFilter}
+        onRefresh={handleRefresh}
       />
 
       {sortedQuotations.length > 0 && (

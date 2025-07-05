@@ -43,6 +43,8 @@ interface QuotationsContentProps {
   setIsCreateQuotationModalOpen: (open: boolean) => void;
   onDeleteQuotation: (quotationId: string) => void;
   onEditQuotation?: (quotationId: string) => void;
+  onStatusFilter?: (status: string) => void;
+  onRefresh?: () => void; // Add refresh handler
 }
 
 const QuotationsContent: React.FC<QuotationsContentProps> = ({
@@ -63,7 +65,9 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
   handleClearFilters,
   setIsCreateQuotationModalOpen,
   onDeleteQuotation,
-  onEditQuotation
+  onEditQuotation,
+  onStatusFilter,
+  onRefresh
 }) => {
   return (
     <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
@@ -133,6 +137,8 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
             onSort={handleSort}
             onDeleteQuotation={onDeleteQuotation}
             onEditQuotation={onEditQuotation}
+            onStatusFilter={onStatusFilter}
+            onRefresh={onRefresh}
           />
         ) : (
           <QuotationsGrid 
