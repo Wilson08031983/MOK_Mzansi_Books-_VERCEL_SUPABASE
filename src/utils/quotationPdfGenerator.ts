@@ -357,8 +357,9 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
       // Center the logo at the top
       if (companyAssets.Logo?.dataUrl) {
         try {
-          const logoWidth = 40; // Adjust as needed
-          const logoHeight = 20; // Adjust as needed
+          // 40mm x 40mm logo (1mm ≈ 2.83 points in PDF)
+          const logoWidth = 113; // 40mm in points
+          const logoHeight = 113; // 40mm in points
           const logoX = (pageWidth - logoWidth) / 2;
           
           doc.addImage(companyAssets.Logo.dataUrl, 'PNG', logoX, yPos, logoWidth, logoHeight);

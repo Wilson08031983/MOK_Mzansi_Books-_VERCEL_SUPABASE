@@ -461,9 +461,9 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     // 1. HEADER SECTION - Company Logo (Centered)
     if (companyAssets.Logo?.dataUrl) {
       try {
-        // Set logo dimensions to exactly 50x50mm as requested
-        const logoWidth = 50;
-        const logoHeight = 50;
+        // Set logo dimensions to exactly 40x40mm (1mm ≈ 2.83 points in PDF)
+        const logoWidth = 113; // 40mm in points
+        const logoHeight = 113; // 40mm in points
         
         // Center the logo horizontally
         const logoX = (pageWidth - logoWidth) / 2;
