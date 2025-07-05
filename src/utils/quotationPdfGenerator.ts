@@ -721,11 +721,11 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
     }
     
     // Company Stamp (Bottom Left)
-    const stampY = pageHeight - 60; // Adjusted position for larger stamp
+    const stampY = pageHeight - 80; // Further adjusted position for even larger stamp
     if (companyAssets.Stamp?.dataUrl) {
       try {
-        const stampWidth = 50;
-        const stampHeight = 50;
+        const stampWidth = 70;
+        const stampHeight = 70;
         
         doc.addImage(companyAssets.Stamp.dataUrl, 'PNG', margin, stampY, stampWidth, stampHeight);
       } catch (error) {
@@ -741,12 +741,12 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
         
         const sigX = pageWidth - margin - sigWidth;
         
-        doc.addImage(companyAssets.Signature.dataUrl, 'PNG', sigX, stampY + 15, sigWidth, sigHeight);
+        doc.addImage(companyAssets.Signature.dataUrl, 'PNG', sigX, stampY + 25, sigWidth, sigHeight);
         
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.text('Authorized Signature', sigX + (sigWidth/2), stampY + sigHeight + 19, { align: 'center' });
-        doc.text(companyDetails.name || '', sigX + (sigWidth/2), stampY + sigHeight + 23, { align: 'center' });
+        doc.text('Authorized Signature', sigX + (sigWidth/2), stampY + sigHeight + 29, { align: 'center' });
+        doc.text(companyDetails.name || '', sigX + (sigWidth/2), stampY + sigHeight + 33, { align: 'center' });
       } catch (error) {
         console.error('Error adding signature:', error);
       }
