@@ -461,14 +461,41 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     // 1. HEADER SECTION - Company Logo (Centered)
     if (companyAssets.Logo?.dataUrl) {
       try {
-        // Set logo dimensions to exactly 40x40mm (1mm ≈ 2.83 points in PDF)
-        const logoWidth = 113; // 40mm in points
-        const logoHeight = 113; // 40mm in points
+        // Set logo dimensions to exactly 50x50mm as requested
+        // Create an image element to get the original dimensions
+        const img = new Image();
+        img.src = companyAssets.Logo.dataUrl;
+        
+        // Set maximum dimensions while preserving aspect ratio
+        const maxWidth = 50;
+        const maxHeight = 30;
+        
+        // Calculate dimensions that preserve aspect ratio
+        let logoWidth, logoHeight;
+        
+        if (img.width > 0 && img.height > 0) {
+          // Use actual image dimensions if available
+          const aspectRatio = img.width / img.height;
+          
+          if (aspectRatio > 1) {
+            // Wider than tall
+            logoWidth = Math.min(maxWidth, img.width);
+            logoHeight = logoWidth / aspectRatio;
+          } else {
+            // Taller than wide or square
+            logoHeight = Math.min(maxHeight, img.height);
+            logoWidth = logoHeight * aspectRatio;
+          }
+        } else {
+          // Fallback if dimensions aren't available
+          logoWidth = maxWidth;
+          logoHeight = maxHeight / 2;
+        }
         
         // Center the logo horizontally
         const logoX = (pageWidth - logoWidth) / 2;
         
-        // Add the image with requested dimensions
+        // Add the image with aspect ratio preserved
         doc.addImage(companyAssets.Logo.dataUrl, 'PNG', logoX, yPos, logoWidth, logoHeight);
         yPos += logoHeight + 5; // Reduced spacing from 15 to 5
       } catch (error) {

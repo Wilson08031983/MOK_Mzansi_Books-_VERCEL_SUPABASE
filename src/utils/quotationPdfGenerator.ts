@@ -357,9 +357,36 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
       // Center the logo at the top
       if (companyAssets.Logo?.dataUrl) {
         try {
-          // 40mm x 40mm logo (1mm ≈ 2.83 points in PDF)
-          const logoWidth = 113; // 40mm in points
-          const logoHeight = 113; // 40mm in points
+          // Create an image element to get the original dimensions
+          const img = new Image();
+          img.src = companyAssets.Logo.dataUrl;
+          
+          // Set maximum dimensions while preserving aspect ratio
+          const maxWidth = 50;
+          const maxHeight = 30;
+          
+          // Calculate dimensions that preserve aspect ratio
+          let logoWidth, logoHeight;
+          
+          if (img.width > 0 && img.height > 0) {
+            // Use actual image dimensions if available
+            const aspectRatio = img.width / img.height;
+            
+            if (aspectRatio > 1) {
+              // Wider than tall
+              logoWidth = Math.min(maxWidth, img.width);
+              logoHeight = logoWidth / aspectRatio;
+            } else {
+              // Taller than wide or square
+              logoHeight = Math.min(maxHeight, img.height);
+              logoWidth = logoHeight * aspectRatio;
+            }
+          } else {
+            // Fallback if dimensions aren't available
+            logoWidth = maxWidth;
+            logoHeight = maxHeight / 2;
+          }
+          
           const logoX = (pageWidth - logoWidth) / 2;
           
           doc.addImage(companyAssets.Logo.dataUrl, 'PNG', logoX, yPos, logoWidth, logoHeight);
