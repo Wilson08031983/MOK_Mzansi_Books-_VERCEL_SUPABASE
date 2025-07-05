@@ -164,16 +164,18 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
   
   // Helper function to check if we need to add a new page based on current position
   const needsNewPage = (currentY: number, requiredSpace: number = 10): boolean => {
-    return currentY + requiredSpace > PAGE_HEIGHT - FOOTER_RESERVED_HEIGHT;
+    // Leave more space at the bottom for footer elements (stamp, signature, page numbers)
+    const effectivePageHeight = PAGE_HEIGHT - FOOTER_RESERVED_HEIGHT - 10;
+    return currentY + requiredSpace > effectivePageHeight;
   };
   
-  // Forward declaration of drawHeader function
+  // Forward declaration of drawHeader function to ensure it's available to addNewPage
   let drawHeader: (doc: jsPDF, pageNum: number) => number;
   
   // Helper function to add a new page and draw the header
   const addNewPage = (doc: jsPDF, pageNum: number): number => {
     doc.addPage();
-    return drawHeader(doc, pageNum + 1);
+    return drawHeader(doc, pageNum);
   };
   
   // Helper function to draw page number
@@ -352,51 +354,69 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
     
     // Helper function to draw the header section
     drawHeader = (doc: jsPDF, pageNum: number): number => {
-      let yPos = margin;
+      // Only draw the full header with logo and company info on the first page
+      // For subsequent pages, draw a simplified header
+      const headerYPos = margin;
+      const rightColumnX = pageWidth - margin - 60;
+      let rightYPos = margin + 25; // Starting position for right column content
       
-      // Center the logo at the top
-      if (companyAssets.Logo?.dataUrl) {
-        try {
-          // Create an image element to get the original dimensions
-          const img = new Image();
-          img.src = companyAssets.Logo.dataUrl;
-          
-          // Set maximum dimensions while preserving aspect ratio
-          const maxWidth = 50;
-          const maxHeight = 30;
-          
-          // Calculate dimensions that preserve aspect ratio
-          let logoWidth, logoHeight;
-          
-          if (img.width > 0 && img.height > 0) {
-            // Use actual image dimensions if available
-            const aspectRatio = img.width / img.height;
+      // Normalize client data for use throughout the function
+      const normalizedClient = normalizeClientData(clientData);
+      
+      // Variable to track current Y position as we add content
+      let currentYPos = headerYPos;
+      
+      if (pageNum === 1) {
+        // Center the logo at the top (only on first page)
+        if (companyAssets.Logo?.dataUrl) {
+          try {
+            // Create an image element to get the original dimensions
+            const img = new Image();
+            img.src = companyAssets.Logo.dataUrl;
             
-            if (aspectRatio > 1) {
-              // Wider than tall
-              logoWidth = Math.min(maxWidth, img.width);
-              logoHeight = logoWidth / aspectRatio;
+            // Set maximum dimensions while preserving aspect ratio
+            const maxWidth = 50;
+            const maxHeight = 30;
+            
+            // Calculate dimensions that preserve aspect ratio
+            let logoWidth, logoHeight;
+            
+            if (img.width > 0 && img.height > 0) {
+              // Use actual image dimensions if available
+              const aspectRatio = img.width / img.height;
+              
+              if (aspectRatio > 1) {
+                // Wider than tall
+                logoWidth = Math.min(maxWidth, img.width);
+                logoHeight = logoWidth / aspectRatio;
+              } else {
+                // Taller than wide or square
+                logoHeight = Math.min(maxHeight, img.height);
+                logoWidth = logoHeight * aspectRatio;
+              }
             } else {
-              // Taller than wide or square
-              logoHeight = Math.min(maxHeight, img.height);
-              logoWidth = logoHeight * aspectRatio;
+              // Fallback if dimensions aren't available
+              logoWidth = maxWidth;
+              logoHeight = maxHeight / 2;
             }
-          } else {
-            // Fallback if dimensions aren't available
-            logoWidth = maxWidth;
-            logoHeight = maxHeight / 2;
+            
+            const logoX = (pageWidth - logoWidth) / 2;
+            
+            doc.addImage(companyAssets.Logo.dataUrl, 'PNG', logoX, currentYPos, logoWidth, logoHeight);
+            currentYPos += logoHeight + 5;
+          } catch (error) {
+            console.error('Error adding logo:', error);
+            currentYPos += 10; // Add some space even if logo fails
           }
-          
-          const logoX = (pageWidth - logoWidth) / 2;
-          
-          doc.addImage(companyAssets.Logo.dataUrl, 'PNG', logoX, yPos, logoWidth, logoHeight);
-          yPos += logoHeight + 5;
-        } catch (error) {
-          console.error('Error adding logo:', error);
-          yPos += 10; // Add some space even if logo fails
+        } else {
+          currentYPos += 10; // Add some space if no logo
         }
       } else {
-        yPos += 10; // Add some space if no logo
+        // For continuation pages, add a simplified header
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Quotation #${quotation.number} (Continued)`, pageWidth / 2, currentYPos + 5, { align: 'center' });
+        currentYPos += 15;
       }
       
       // Format the company address
@@ -409,176 +429,185 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
       
       const formattedCompanyAddress = companyAddressParts.join(', ');
       
-      // Company details on the left
-      const leftColumnX = margin;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text(companyDetails.name || 'Company Name', leftColumnX, yPos);
-      yPos += 5;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      
-      if (companyDetails.email) {
-        doc.text(companyDetails.email, leftColumnX, yPos);
-        yPos += 4;
-      }
-      
-      if (companyDetails.phone) {
-        doc.text(companyDetails.phone, leftColumnX, yPos);
-        yPos += 4;
-      }
-      
-      if (formattedCompanyAddress) {
-        doc.text(formattedCompanyAddress, leftColumnX, yPos);
-        yPos += 4;
-      }
-      
-      // Banking details on the right
-      const rightColumnX = pageWidth - margin - 60;
-      let rightYPos = margin + 25; // Align with company details
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7); // Reduced from 9 to 7 to make banking details smaller
-      doc.text('Banking Details:', rightColumnX, rightYPos);
-      rightYPos += 4; // Reduced spacing
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6); // Reduced from 8 to 6 to make banking details smaller
-      
-      if (companyDetails.bankName) {
-        doc.text(`Bank: ${companyDetails.bankName}`, rightColumnX, rightYPos);
-        rightYPos += 3; // Reduced from 4 to 3
-      }
-      
-      if (companyDetails.accountHolder) {
-        doc.text(`Account Holder: ${companyDetails.accountHolder}`, rightColumnX, rightYPos);
-        rightYPos += 3; // Reduced from 4 to 3
-      }
-      
-      if (companyDetails.accountNumber || companyDetails.bankAccount) {
-        doc.text(`Account Number: ${companyDetails.accountNumber || companyDetails.bankAccount}`, rightColumnX, rightYPos);
-        rightYPos += 3; // Reduced from 4 to 3
-      }
-      
-      if (companyDetails.accountType) {
-        doc.text(`Account Type: ${companyDetails.accountType}`, rightColumnX, rightYPos);
-        rightYPos += 3; // Reduced from 4 to 3
-      }
-      
-      if (companyDetails.branchCode) {
-        doc.text(`Branch Code: ${companyDetails.branchCode}`, rightColumnX, rightYPos);
-        rightYPos += 3; // Reduced from 4 to 3
-      }
-      
-      // Add spacing between banking details and Quote To
-      rightYPos += 5;
-      
-      // Quote To section moved to right side under Banking Details
-      const normalizedClient = normalizeClientData(clientData);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7); // Same size as Banking Details header
-      doc.text('Quote To:', rightColumnX, rightYPos);
-      rightYPos += 4;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6); // Same size as Banking Details content
-      
-      // Company name or client name
-      const displayName = normalizedClient.companyName || normalizedClient.name || 'Unknown Client';
-      doc.text(displayName, rightColumnX, rightYPos);
-      rightYPos += 3;
-      
-      // Contact person (if different from company name)
-      if (normalizedClient.contactPerson && normalizedClient.companyName && 
-          normalizedClient.contactPerson !== normalizedClient.companyName) {
-        doc.text(`Attn: ${normalizedClient.contactPerson}`, rightColumnX, rightYPos);
-        rightYPos += 3;
-      }
-      
-      // Email
-      if (normalizedClient.email) {
-        doc.text(normalizedClient.email, rightColumnX, rightYPos);
-        rightYPos += 3;
-      }
-      
-      // Phone
-      if (normalizedClient.phone) {
-        doc.text(normalizedClient.phone, rightColumnX, rightYPos);
-        rightYPos += 3;
-      }
-      
-      // Add a horizontal line to separate header from content
-      yPos = Math.max(yPos, rightYPos) + 5;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
-      
-      // Quotation title and number
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text('QUOTATION', margin, yPos);
-      yPos += 8;
-      
-      // Quotation details
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8); // Reduced font size for quotation details
-      
-      // Left column: Quotation details
-      const detailsX = margin;
-      let detailsY = yPos;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Quotation Number:', detailsX, detailsY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(quotation.number, detailsX + 35, detailsY);
-      detailsY += 5;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Quotation Date:', detailsX, detailsY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatDate(quotation.date), detailsX + 35, detailsY);
-      detailsY += 5;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Valid Until:', detailsX, detailsY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatDate(quotation.validUntil), detailsX + 35, detailsY);
-      detailsY += 5;
-      
-      if (quotation.reference) {
+      // Only show company details and banking details on the first page
+      if (pageNum === 1) {
+        // Company details on the left
+        const leftColumnX = margin;
         doc.setFont('helvetica', 'bold');
-        doc.text('Reference:', detailsX, detailsY);
+        doc.setFontSize(12);
+        doc.text(companyDetails.name || 'Company Name', leftColumnX, currentYPos);
+        currentYPos += 5;
+        
         doc.setFont('helvetica', 'normal');
-        doc.text(quotation.reference, detailsX + 35, detailsY);
-        detailsY += 5;
-      }
-      
-      // Address handling for the client in the right column
-      const formattedAddress = formatAddress(normalizedClient);
-      if (formattedAddress) {
-        // Split address into multiple lines if needed
-        const addressLines = doc.splitTextToSize(formattedAddress, 60); // Limit width for right column
-        addressLines.forEach((line: string) => {
-          doc.text(line, rightColumnX, rightYPos);
+        doc.setFontSize(9);
+        
+        if (companyDetails.email) {
+          doc.text(companyDetails.email, leftColumnX, currentYPos);
+          currentYPos += 4;
+        }
+        
+        if (companyDetails.phone) {
+          doc.text(companyDetails.phone, leftColumnX, currentYPos);
+          currentYPos += 4;
+        }
+        
+        if (formattedCompanyAddress) {
+          doc.text(formattedCompanyAddress, leftColumnX, currentYPos);
+          currentYPos += 4;
+        }
+        
+        // Banking details on the right
+        const rightColumnX = pageWidth - margin - 60;
+        let rightYPos = currentYPos; // Align with company name (MOK Mzansi Books)
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7); // Reduced from 9 to 7 to make banking details smaller
+        doc.text('Banking Details:', rightColumnX, rightYPos);
+        rightYPos += 4; // Reduced spacing
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6); // Reduced from 8 to 6 to make banking details smaller
+        
+        if (companyDetails.bankName) {
+          doc.text(`Bank: ${companyDetails.bankName}`, rightColumnX, rightYPos);
+          rightYPos += 3; // Reduced from 4 to 3
+        }
+        
+        if (companyDetails.accountHolder) {
+          doc.text(`Account Holder: ${companyDetails.accountHolder}`, rightColumnX, rightYPos);
+          rightYPos += 3; // Reduced from 4 to 3
+        }
+        
+        if (companyDetails.accountNumber || companyDetails.bankAccount) {
+          doc.text(`Account Number: ${companyDetails.accountNumber || companyDetails.bankAccount}`, rightColumnX, rightYPos);
+          rightYPos += 3; // Reduced from 4 to 3
+        }
+        
+        if (companyDetails.accountType) {
+          doc.text(`Account Type: ${companyDetails.accountType}`, rightColumnX, rightYPos);
+          rightYPos += 3; // Reduced from 4 to 3
+        }
+        
+        if (companyDetails.branchCode) {
+          doc.text(`Branch Code: ${companyDetails.branchCode}`, rightColumnX, rightYPos);
+          rightYPos += 3; // Reduced from 4 to 3
+        }
+        
+        // Add spacing between banking details and Quote To
+        rightYPos += 5;
+        
+        // Quote To section moved to right side under Banking Details
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7); // Same size as Banking Details header
+        doc.text('Quote To:', rightColumnX, rightYPos);
+        rightYPos += 4;
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6); // Same size as Banking Details content
+        
+        // Company name or client name
+        const displayName = normalizedClient.companyName || normalizedClient.name || 'Unknown Client';
+        doc.text(displayName, rightColumnX, rightYPos);
+        rightYPos += 3;
+        
+        // Contact person (if different from company name)
+        if (normalizedClient.contactPerson && normalizedClient.companyName && 
+            normalizedClient.contactPerson !== normalizedClient.companyName) {
+          doc.text(`Attn: ${normalizedClient.contactPerson}`, rightColumnX, rightYPos);
           rightYPos += 3;
-        });
+        }
+        
+        // Email
+        if (normalizedClient.email) {
+          doc.text(normalizedClient.email, rightColumnX, rightYPos);
+          rightYPos += 3;
+        }
+        
+        // Phone
+        if (normalizedClient.phone) {
+          doc.text(normalizedClient.phone, rightColumnX, rightYPos);
+          rightYPos += 3;
+        }
+      } else {
+        // For continuation pages, add a simplified header
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Quotation #${quotation.number} (Continued)`, pageWidth / 2, currentYPos + 5, { align: 'center' });
+        currentYPos += 15;
       }
       
-      // Return the maximum Y position between details and right column sections
-      yPos = Math.max(detailsY, rightYPos) + 10;
+      // Set the Y position after header content (without drawing a horizontal line)
+      currentYPos = Math.max(currentYPos, rightYPos) + 5;
+      currentYPos += 5; // Add some spacing but less than before
+      
+      // Only show quotation title and details on the first page
+      if (pageNum === 1) {
+        // Quotation title and number
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text('QUOTATION', margin, currentYPos);
+        currentYPos += 8;
+        
+        // Quotation details
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8); // Reduced font size for quotation details
+        
+        // Left column: Quotation details
+        const detailsX = margin;
+        let detailsY = currentYPos;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('Quotation Number:', detailsX, detailsY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(quotation.number, detailsX + 35, detailsY);
+        detailsY += 5;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('Quotation Date:', detailsX, detailsY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(formatDate(quotation.date), detailsX + 35, detailsY);
+        detailsY += 5;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('Valid Until:', detailsX, detailsY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(formatDate(quotation.validUntil), detailsX + 35, detailsY);
+        detailsY += 5;
+        
+        if (quotation.reference) {
+          doc.setFont('helvetica', 'bold');
+          doc.text('Reference:', detailsX, detailsY);
+          doc.setFont('helvetica', 'normal');
+          doc.text(quotation.reference, detailsX + 35, detailsY);
+          detailsY += 5;
+        }
+        
+        // Address handling for the client in the right column
+        const formattedAddress = formatAddress(normalizedClient);
+        if (formattedAddress) {
+          // Split address into multiple lines if needed
+          const addressLines = doc.splitTextToSize(formattedAddress, 60); // Limit width for right column
+          addressLines.forEach((line: string) => {
+            doc.text(line, rightColumnX, rightYPos);
+            rightYPos += 3;
+          });
+        }
+        
+        // Set the Y position for the first page
+        currentYPos = Math.max(detailsY, rightYPos) + 10;
+      } // End of if (pageNum === 1) block
       
       // Only add page number if not the first page
       if (pageNum > 1) {
         drawPageNumber(doc, pageNum, totalPages);
       }
       
-      return yPos;
+      return currentYPos;
     };
     
     // Start drawing the document
-    let yPos = drawHeader(doc, 1);
+    let currentYPos = drawHeader(doc, 1);
     
     // Define table columns
     const tableHeaders = ['#', 'Description', 'Qty', 'Rate (R)', 'Discount (R)', 'Amount (R)'];
@@ -591,7 +620,7 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
     }
     
     // Draw table header
-    yPos = drawTableHeader(doc, yPos, margin, contentWidth, tableHeaders, colWidths, colPositions);
+    currentYPos = drawTableHeader(doc, currentYPos, margin, contentWidth, tableHeaders, colWidths, colPositions);
     
     // Draw table rows
     doc.setFont('helvetica', 'normal');
@@ -613,45 +642,53 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
       const item = items[i];
       
       // Check if we need to add a new page
-      if (needsNewPage(yPos, rowHeight)) {
+      if (needsNewPage(currentYPos, rowHeight)) {
         currentPage++;
-        yPos = addNewPage(doc, currentPage);
-        yPos = drawTableHeader(doc, yPos, margin, contentWidth, tableHeaders, colWidths, colPositions);
+        currentYPos = addNewPage(doc, currentPage);
+        currentYPos = drawTableHeader(doc, currentYPos, margin, contentWidth, tableHeaders, colWidths, colPositions);
       }
       
       // Item number
-      doc.text((i + 1).toString(), colPositions[0] + 2, yPos + 4, { align: 'left' });
+      doc.text((i + 1).toString(), colPositions[0] + 2, currentYPos + 4, { align: 'left' });
       
       // Description (with word wrap if needed)
       const descLines = doc.splitTextToSize(item.description || '', colWidths[1] - 4);
       const descHeight = descLines.length * 4;
-      doc.text(descLines, colPositions[1] + 2, yPos + 4, { align: 'left' });
+      
+      // Check if the description will fit on this page, if not, move to next page
+      if (needsNewPage(currentYPos, descHeight)) {
+        currentPage++;
+        currentYPos = addNewPage(doc, currentPage);
+        currentYPos = drawTableHeader(doc, currentYPos, margin, contentWidth, tableHeaders, colWidths, colPositions);
+      }
+      
+      doc.text(descLines, colPositions[1] + 2, currentYPos + 4, { align: 'left' });
       
       // Quantity
-      doc.text(item.quantity.toString(), colPositions[2] + colWidths[2] - 2, yPos + 4, { align: 'right' });
+      doc.text(item.quantity.toString(), colPositions[2] + colWidths[2] - 2, currentYPos + 4, { align: 'right' });
       
       // Rate
-      doc.text(formatCurrency(item.rate || 0), colPositions[3] + colWidths[3] - 2, yPos + 4, { align: 'right' });
+      doc.text(formatCurrency(item.rate || 0), colPositions[3] + colWidths[3] - 2, currentYPos + 4, { align: 'right' });
       
       // Discount
-      doc.text(formatCurrency(item.discount || 0), colPositions[4] + colWidths[4] - 2, yPos + 4, { align: 'right' });
+      doc.text(formatCurrency(item.discount || 0), colPositions[4] + colWidths[4] - 2, currentYPos + 4, { align: 'right' });
       
       // Amount
-      doc.text(formatCurrency(item.amount || 0), colPositions[5] + colWidths[5] - 2, yPos + 4, { align: 'right' });
+      doc.text(formatCurrency(item.amount || 0), colPositions[5] + colWidths[5] - 2, currentYPos + 4, { align: 'right' });
       
       // Draw horizontal line for row separation
       doc.setDrawColor(220, 220, 220);
-      yPos += Math.max(descHeight, rowHeight);
-      doc.line(margin, yPos, margin + contentWidth, yPos);
+      currentYPos += Math.max(descHeight, rowHeight);
+      doc.line(margin, currentYPos, margin + contentWidth, currentYPos);
     }
     
     // Add totals section
-    yPos += 5;
+    currentYPos += 5;
     
     // Check if we need to add a new page for totals
-    if (needsNewPage(yPos, 30)) {
+    if (needsNewPage(currentYPos, 30)) {
       currentPage++;
-      yPos = addNewPage(doc, currentPage);
+      currentYPos = addNewPage(doc, currentPage);
     }
     
     // Draw totals
@@ -661,64 +698,67 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
     // Subtotal
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text('Subtotal:', totalsX, yPos + 4);
-    doc.text(formatCurrency(subtotal), pageWidth - margin - 2, yPos + 4, { align: 'right' });
-    yPos += 6;
+    doc.text('Subtotal:', totalsX, currentYPos + 4);
+    doc.text(formatCurrency(subtotal), pageWidth - margin - 2, currentYPos + 4, { align: 'right' });
+    currentYPos += 6;
     
     // VAT
-    doc.text(`VAT (${vatRate}%):`, totalsX, yPos + 4);
-    doc.text(formatCurrency(vatTotal), pageWidth - margin - 2, yPos + 4, { align: 'right' });
-    yPos += 6;
+    doc.text(`VAT (${vatRate}%):`, totalsX, currentYPos + 4);
+    doc.text(formatCurrency(vatTotal), pageWidth - margin - 2, currentYPos + 4, { align: 'right' });
+    currentYPos += 6;
     
     // Draw line before total
     doc.setDrawColor(0, 0, 0);
-    doc.line(totalsX, yPos, pageWidth - margin, yPos);
-    yPos += 2;
+    doc.line(totalsX, currentYPos, pageWidth - margin, currentYPos);
+    currentYPos += 2;
     
     // Total
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text('Total (ZAR):', totalsX, yPos + 4);
-    doc.text(formatCurrency(grandTotal), pageWidth - margin - 2, yPos + 4, { align: 'right' });
-    yPos += 10;
+    doc.text('Total (ZAR):', totalsX, currentYPos + 4);
+    doc.text(formatCurrency(grandTotal), pageWidth - margin - 2, currentYPos + 4, { align: 'right' });
+    currentYPos += 10;
     
     // Add notes and terms
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     
     // Check if we need a new page for notes and terms
-    if (needsNewPage(yPos, 40)) {
+    if (needsNewPage(currentYPos, 40)) {
       currentPage++;
-      yPos = addNewPage(doc, currentPage);
+      currentYPos = addNewPage(doc, currentPage);
     }
     
     // Notes
     if (quotation.notes) {
-      doc.text('Notes:', margin, yPos + 4);
-      yPos += 6;
+      doc.text('Notes:', margin, currentYPos + 4);
+      currentYPos += 6;
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       
       const notesLines = doc.splitTextToSize(quotation.notes, contentWidth);
-      doc.text(notesLines, margin, yPos + 4);
-      yPos += notesLines.length * 4 + 6;
+      doc.text(notesLines, margin, currentYPos + 4);
+      currentYPos += notesLines.length * 4 + 6;
     }
     
     // Terms and conditions
     if (quotation.terms) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
-      doc.text('Terms & Conditions:', margin, yPos + 4);
-      yPos += 6;
+      doc.text('Terms & Conditions:', margin, currentYPos + 4);
+      currentYPos += 6;
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       
       const termsLines = doc.splitTextToSize(quotation.terms, contentWidth);
-      doc.text(termsLines, margin, yPos + 4);
-      yPos += termsLines.length * 4 + 10;
+      doc.text(termsLines, margin, currentYPos + 4);
+      currentYPos += termsLines.length * 4 + 10;
     }
+    
+    // Set to the last page to add stamp and signature
+    doc.setPage(totalPages - 1);
     
     // Company Stamp (Bottom Left)
     const stampY = pageHeight - 80; // Further adjusted position for even larger stamp
@@ -755,10 +795,14 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
     // Update total pages
     totalPages = currentPage;
     
-    // Add page number to the last page
-    drawPageNumber(doc, totalPages, totalPages);
+    // Go back and add page numbers to all pages
+    for (let i = 0; i < totalPages; i++) {
+      doc.setPage(i);
+      drawPageNumber(doc, i + 1, totalPages);
+    }
     
-    // Go back and update all page numbers with the correct total
+    // Return to the last page
+    doc.setPage(totalPages - 1);
     
     // Save the PDF
     doc.save(`Quotation-${quotation.number}.pdf`);
