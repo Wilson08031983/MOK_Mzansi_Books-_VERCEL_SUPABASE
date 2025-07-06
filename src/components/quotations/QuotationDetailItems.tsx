@@ -3,8 +3,28 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/utils/formatters';
 
+interface QuotationItem {
+  id: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  discount: number;
+  taxRate: number;
+  amount: number;
+}
+
+interface Quotation {
+  id: string;
+  number: string;
+  items: QuotationItem[];
+  subtotal: number;
+  discount?: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
 interface QuotationDetailItemsProps {
-  quotation: any;
+  quotation: Quotation;
 }
 
 const QuotationDetailItems: React.FC<QuotationDetailItemsProps> = ({ quotation }) => {
@@ -22,12 +42,11 @@ const QuotationDetailItems: React.FC<QuotationDetailItemsProps> = ({ quotation }
                 <th className="text-right py-3 px-4 font-medium text-slate-600 font-sf-pro">Qty</th>
                 <th className="text-right py-3 px-4 font-medium text-slate-600 font-sf-pro">Rate</th>
                 <th className="text-right py-3 px-4 font-medium text-slate-600 font-sf-pro">Discount</th>
-                <th className="text-right py-3 px-4 font-medium text-slate-600 font-sf-pro">Tax</th>
                 <th className="text-right py-3 px-4 font-medium text-slate-600 font-sf-pro">Total</th>
               </tr>
             </thead>
             <tbody>
-              {quotation.items.map((item: any) => (
+              {quotation.items.map((item) => (
                 <tr key={item.id} className="border-b border-slate-100">
                   <td className="py-4 px-4 font-sf-pro">{item.description}</td>
                   <td className="py-4 px-4 text-right font-sf-pro">{item.quantity}</td>
@@ -35,7 +54,6 @@ const QuotationDetailItems: React.FC<QuotationDetailItemsProps> = ({ quotation }
                   <td className="py-4 px-4 text-right font-sf-pro">
                     {item.discount > 0 ? formatCurrency(item.discount) : '-'}
                   </td>
-                  <td className="py-4 px-4 text-right font-sf-pro">{item.taxRate}%</td>
                   <td className="py-4 px-4 text-right font-medium font-sf-pro">{formatCurrency(item.amount)}</td>
                 </tr>
               ))}
