@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { 
   Table, 
   TableBody, 
@@ -9,21 +8,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { 
-  MoreHorizontal, 
-  Eye, 
-  Mail, 
-  FileText, 
-  Receipt 
-} from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+import { Eye } from 'lucide-react';
 import AddClientModal from './AddClientModal';
 
 interface Client {
@@ -85,7 +70,6 @@ const ClientsTable = ({
             <TableHead className="font-sf-pro">Total Value</TableHead>
             <TableHead className="font-sf-pro">Last Activity</TableHead>
             <TableHead className="font-sf-pro">Status</TableHead>
-            <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -123,39 +107,6 @@ const ClientsTable = ({
                     {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
                   </span>
                 </div>
-              </TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onSelect={() => setViewClientData(client.id)}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <a 
-                        href={`mailto:${client.email}`} 
-                        className="flex items-center cursor-pointer w-full"
-                      >
-                        <Mail className="h-4 w-4 mr-2" />
-                        Send Email
-                      </a>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => toast.info(`Create invoice for ${client.name} feature coming soon!`)}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Create Invoice
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => toast.info(`Create quotation for ${client.name} feature coming soon!`)}>
-                      <Receipt className="h-4 w-4 mr-2" />
-                      Create Quotation
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </TableCell>
             </TableRow>
           ))}
