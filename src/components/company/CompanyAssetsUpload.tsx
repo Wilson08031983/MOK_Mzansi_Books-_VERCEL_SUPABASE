@@ -8,6 +8,9 @@ interface AssetType {
   name: string;
   dataUrl: string;
   lastModified: number;
+  width?: number;
+  height?: number;
+  aspectRatio?: number;
 }
 
 const CompanyAssetsUpload = () => {
@@ -39,14 +42,71 @@ const CompanyAssetsUpload = () => {
       
       reader.onload = (loadEvent) => {
         const result = loadEvent.target?.result as string;
-        setAssets(prev => ({
-          ...prev,
-          [assetType]: {
-            name: file.name,
-            dataUrl: result,
-            lastModified: Date.now()
-          }
-        }));
+        
+        // For logo specifically, ensure proper dimensions for PDF generation
+        if (assetType === 'Logo') {
+          // Create an image to get dimensions and process
+          const img = new Image();
+          img.onload = () => {
+            // Create a canvas with proper dimensions
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            // Calculate dimensions while preserving aspect ratio
+            const maxWidth = 800; // Max width for high quality
+            const maxHeight = 600; // Max height for high quality
+            let width = img.width;
+            let height = img.height;
+            
+            // Maintain aspect ratio while sizing down if needed
+            if (width > height) {
+              if (width > maxWidth) {
+                height = height * (maxWidth / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = width * (maxHeight / height);
+                height = maxHeight;
+              }
+            }
+            
+            // Set canvas dimensions
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw image with proper dimensions
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Convert back to data URL with slightly reduced quality for size
+            const optimizedDataUrl = canvas.toDataURL('image/png', 0.9);
+            
+            // Save the processed image
+            setAssets(prev => ({
+              ...prev,
+              [assetType]: {
+                name: file.name,
+                dataUrl: optimizedDataUrl,
+                lastModified: Date.now(),
+                width: width,
+                height: height,
+                aspectRatio: width / height
+              }
+            }));
+          };
+          img.src = result;
+        } else {
+          // For other assets, just save as is
+          setAssets(prev => ({
+            ...prev,
+            [assetType]: {
+              name: file.name,
+              dataUrl: result,
+              lastModified: Date.now()
+            }
+          }));
+        }
       };
       
       reader.readAsDataURL(file);

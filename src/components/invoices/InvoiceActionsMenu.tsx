@@ -16,7 +16,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { generateInvoicePdf } from '@/utils/invoicePdfGenerator';
+import { generateInvoicePdf } from '@/utils/invoicePdfGenerator_v2';
 import { Invoice, InvoiceStatus } from '@/types/invoice';
 
 // Define a specific type for company details

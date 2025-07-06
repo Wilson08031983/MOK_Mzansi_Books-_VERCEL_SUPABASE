@@ -1,91 +1,12 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import React, { useRef, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { X, Download, Printer } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { X, Download, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
-
-// Add global print styles to the component
-const PrintStyles = () => (
-  <style>{`
-    @media print {
-      @page {
-        size: 210mm 297mm;
-        margin: 15mm;
-      }
-      html, body {
-        width: 210mm;
-        height: 297mm;
-        margin: 0;
-        padding: 0;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        color-adjust: exact !important;
-        font-size: 11px;
-        line-height: 1.2;
-        background-color: white !important;
-      }
-      .no-print {
-        display: none !important;
-      }
-      .print-content {
-        width: 210mm;
-      }
-      .page {
-        page-break-after: always;
-        margin: 0 !important;
-        box-shadow: none !important;
-        width: 210mm;
-        min-height: 297mm;
-        padding: 20mm !important;
-        box-sizing: border-box !important;
-      }
-      .page:last-child {
-        page-break-after: auto;
-      }
-      img {
-        max-width: 100%;
-        height: auto;
-      }
-      .invoice-preview-logo {
-        max-width: 150px !important;
-        height: auto !important;
-        display: block !important;
-        margin: 0 auto 1rem auto !important;
-        text-align: center !important;
-      }
-      .flex.justify-center {
-        display: flex !important;
-        justify-content: center !important;
-        width: 100% !important;
-        text-align: center !important;
-      }
-      .invoice-section {
-        padding: 6px 10px !important;
-      }
-      .invoice-table {
-        font-size: 10px !important;
-        width: 100% !important;
-        table-layout: fixed !important;
-      }
-      .invoice-table th, .invoice-table td {
-        padding: 2px 4px !important;
-        line-height: 1.1 !important;
-      }
-      .invoice-details {
-        margin-bottom: 0.5rem !important;
-      }
-      .invoice-header {
-        margin-bottom: 0.75rem !important;
-      }
-      p {
-        margin-top: 0.25rem !important;
-        margin-bottom: 0.25rem !important;
-      }
-    }
-  `}</style>
-);
+import { toast } from 'sonner';
+import { generateInvoicePdf } from '@/utils/invoicePdfGenerator_v2';
+import { Invoice } from '@/types/invoice';
+import { invoiceStyles } from './invoiceStyles';
 
 interface LineItem {
   id: string;
@@ -162,539 +83,75 @@ interface InvoicePreviewModalProps {
   data: InvoicePreviewData;
 }
 
-const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose, data }) => {
-  // Create a ref for the printable content
-  const printContentRef = useRef<HTMLDivElement>(null);
+const InvoicePreviewModal = ({ open, onClose, data }: InvoicePreviewModalProps): JSX.Element | null => {
+  // Create a ref for invoice content
+  const contentRef = useRef<HTMLDivElement>(null);
   
-  // Track if we're in print mode
-  const [isPrinting, setIsPrinting] = useState(false);
+  // Track PDF download loading state
+  const [isDownloading, setIsDownloading] = useState(false);
   
-  // Function to handle print button click - simple direct approach
-  // Function to handle PDF download - uses the exact same rendering approach as print for consistency
-  const handleDownloadPDF = async () => {
-    if (!printContentRef.current) return;
+  /**
+   * FINALIZED INVOICE PDF DOWNLOAD FUNCTIONALITY - DO NOT MODIFY
+   * ========================================================
+   * This function handles the download of invoice PDFs and has been finalized.
+   * It properly manages loading states and error handling for PDF generation.
+   * 
+   * Any modifications to this function may break the PDF generation functionality.
+   * Last updated: July 4, 2025
+   */
+  const handleDownloadPdf = async () => {
+    if (isDownloading) return; // Prevent multiple clicks
+    
+    setIsDownloading(true); // Set loading state
     
     try {
-      // Set a flag to indicate we're preparing PDF
-      setIsPrinting(true); // We can use the same state as for printing
+      // Convert the preview data to Invoice format for the PDF generator
+      const invoice = {
+        // Required fields
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        id: data.number, // Using invoice number as ID
+        number: data.number,
+        clientId: data.clientId || '',
+        clientName: data.clientInfo?.companyName || 
+                   `${data.clientInfo?.firstName || ''} ${data.clientInfo?.lastName || ''}`.trim() || 
+                   'Unknown Client',
+        clientEmail: data.clientInfo?.email,
+        // Use string client ID instead of object to avoid type conflicts
+        client: data.clientId || '',
+        date: data.date,
+        invoiceDate: data.date, // Alias for date
+        dueDate: data.dueDate,
+        amount: data.grandTotal,
+        total: data.grandTotal, // Alias for amount
+        paidAmount: 0,
+        balance: data.grandTotal,
+        status: (data.status || 'draft') as Invoice['status'],
+        currency: data.currency,
+        vatRate: data.vatRate,
+        reference: data.reference || '',
+        items: data.items.map(item => ({
+          id: item.id,
+          itemNo: item.itemNo,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          unitPrice: item.rate,
+          markupPercent: item.markupPercent,
+          discount: item.discount,
+          amount: item.amount
+        })),
+        notes: data.notes,
+        terms: data.terms
+      };
       
-      // We'll use the same approach as the print function to ensure consistency
-      // Create a new window with the exact same styles and HTML as the print function
-      // This ensures the PDF looks 100% identical to the printed version
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Please allow pop-ups to download the invoice as PDF.');
-        setIsPrinting(false);
-        return;
-      }
-      
-      // Get the printable content
-      const printContent = printContentRef.current;
-      
-      // Set up the document with the same styles as print version
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Invoice ${data.number}</title>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              @page {
-                size: 210mm 297mm;
-                margin: 15mm;
-              }
-              html, body {
-                width: 210mm;
-                height: 297mm;
-                margin: 0;
-                padding: 0;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-                font-size: 11px;
-                line-height: 1.2;
-                background-color: white !important;
-              }
-              .print-content {
-                width: 210mm;
-              }
-              .page {
-                page-break-after: always;
-                margin: 0 !important;
-                box-shadow: none !important;
-                width: 210mm;
-                min-height: 297mm;
-                padding: 20mm !important;
-                box-sizing: border-box !important;
-                background-color: white;
-              }
-              .page:last-child {
-                page-break-after: auto;
-              }
-              img {
-                max-width: 100%;
-                height: auto;
-              }
-              .invoice-preview-logo {
-                max-width: 150px !important;
-                height: auto !important;
-                display: block !important;
-                margin: 0 auto 1rem auto !important;
-                text-align: center !important;
-              }
-              .flex.justify-center {
-                display: flex !important;
-                justify-content: center !important;
-                width: 100% !important;
-                text-align: center !important;
-              }
-              .invoice-section {
-                padding: 6px 10px !important;
-              }
-              .invoice-table {
-                font-size: 10px !important;
-                width: 100% !important;
-                table-layout: fixed !important;
-              }
-              .invoice-table th, .invoice-table td {
-                padding: 2px 4px !important;
-                line-height: 1.1 !important;
-              }
-              .invoice-details {
-                margin-bottom: 0.5rem !important;
-              }
-              .invoice-header {
-                margin-bottom: 0.75rem !important;
-              }
-              p {
-                margin-top: 0.25rem !important;
-                margin-bottom: 0.25rem !important;
-              }
-              .font-bold {
-                font-weight: bold;
-              }
-              .text-sm {
-                font-size: 0.875rem;
-                line-height: 1.25rem;
-              }
-              .text-xs {
-                font-size: 0.75rem;
-                line-height: 1rem;
-              }
-              .text-lg {
-                font-size: 1.125rem;
-                line-height: 1.75rem;
-              }
-              .text-xl {
-                font-size: 1.25rem;
-                line-height: 1.75rem;
-              }
-              .text-2xl {
-                font-size: 1.5rem;
-              }
-              .mb-2 {
-                margin-bottom: 0.5rem;
-              }
-              .mb-4 {
-                margin-bottom: 1rem;
-              }
-              .p-4 {
-                padding: 1rem;
-              }
-              .p-6 {
-                padding: 1.5rem;
-              }
-              .bg-gray-50 {
-                background-color: #f9fafb;
-              }
-              .border-t {
-                border-top: 1px solid #e5e7eb;
-              }
-              .border-b {
-                border-bottom: 1px solid #e5e7eb;
-              }
-              .w-36 {
-                width: 9rem;
-              }
-              .h-36 {
-                height: 9rem;
-              }
-              .w-28 {
-                width: 7rem;
-              }
-              .h-20 {
-                height: 5rem;
-              }
-              .mx-auto {
-                margin-left: auto;
-                margin-right: auto;
-              }
-              .object-contain {
-                object-fit: contain;
-              }
-              .opacity-80 {
-                opacity: 0.8;
-              }
-              .opacity-90 {
-                opacity: 0.9;
-              }
-              .text-center {
-                text-align: center;
-              }
-              .flex {
-                display: flex;
-              }
-              .justify-between {
-                justify-content: space-between;
-              }
-              .mt-6 {
-                margin-top: 1.5rem;
-              }
-              .mt-8 {
-                margin-top: 2rem;
-              }
-              .mt-2 {
-                margin-top: 0.5rem;
-              }
-              .mb-1 {
-                margin-bottom: 0.25rem;
-              }
-              .text-right {
-                text-align: right;
-              }
-              table {
-                border-collapse: collapse;
-                width: 100%;
-              }
-              th {
-                font-weight: bold;
-                text-align: left;
-              }
-              .text-left {
-                text-align: left;
-              }
-              .px-2 {
-                padding-left: 0.5rem;
-                padding-right: 0.5rem;
-              }
-              .py-1 {
-                padding-top: 0.25rem;
-                padding-bottom: 0.25rem;
-              }
-              .font-medium {
-                font-weight: 500;
-              }
-              .absolute {
-                position: absolute;
-              }
-              .bottom-4 {
-                bottom: 1rem;
-              }
-              .right-4 {
-                right: 1rem;
-              }
-              .text-gray-500 {
-                color: #6b7280;
-              }
-            </style>
-          </head>
-          <body>
-            ${printContent.innerHTML}
-          </body>
-        </html>
-      `);
-      
-      printWindow.document.close();
-      
-      // Wait for content to load
-      setTimeout(async () => {
-        try {
-          const pdfContent = printWindow.document.body;
-          
-          // Create PDF with A4 dimensions
-          const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-            compress: true
-          });
-          
-          // Ensure proper A4 dimensions (210mm x 297mm)
-          const pageWidth = 210;
-          const pageHeight = 297;
-          
-          // Get all pages from the rendered content
-          const pages = pdfContent.querySelectorAll('.page');
-          
-          for (let i = 0; i < pages.length; i++) {
-            // If not first page, add a new page to PDF
-            if (i > 0) {
-              pdf.addPage();
-            }
-            
-            // Convert the page to canvas with high quality settings
-            const canvas = await html2canvas(pages[i] as HTMLElement, {
-              scale: 3, // Higher scale (3x) for better quality
-              useCORS: true,
-              allowTaint: true,
-              logging: false,
-              backgroundColor: '#FFFFFF',
-              imageTimeout: 0,
-              // Use the exact fonts and styling from the print version
-              onclone: (clonedDoc) => {
-                const pageStyle = clonedDoc.querySelector('.page') as HTMLElement;
-                if (pageStyle) {
-                  pageStyle.style.boxShadow = 'none';
-                  pageStyle.style.margin = '0';
-                  pageStyle.style.backgroundColor = '#FFFFFF';
-                }
-              }
-            });
-            
-            // Get image data with high quality
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            
-            // Add image to PDF with proper A4 positioning and dimensions
-            pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
-          }
-          
-          // Close the print window when done
-          printWindow.close();
-          
-          // Save the PDF
-          pdf.save(`Invoice_${data.number}.pdf`);
-          
-          // Reset printing state
-          setIsPrinting(false);
-          
-        } catch (error) {
-          console.error('Error generating PDF:', error);
-          printWindow.close();
-          setIsPrinting(false);
-          alert('There was an error generating the PDF. Please try again.');
-        }
-      }, 1000); // Allow time for all resources to load
-      
+      // Generate and download the PDF
+      await generateInvoicePdf(invoice as Invoice);
     } catch (error) {
-      console.error('Error setting up PDF generation:', error);
-      setIsPrinting(false);
-      alert('There was an error generating the PDF. Please try again.');
-    }
-  };
-  
-  // Function to handle print button click - simple direct approach
-  const handlePrint = () => {
-    // Get the printable content
-    const printContent = printContentRef.current;
-    if (!printContent) {
-      alert('Print content not ready. Please try again.');
-      return;
-    }
-    
-    try {
-      // Create a new window for printing
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Please allow pop-ups to print the invoice');
-        return;
-      }
-      
-      // Set print mode
-      setIsPrinting(true);
-      
-      // Write the print content to the new window
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Invoice-${data?.number || 'Preview'}</title>
-            <style>
-              @page {
-                size: A4;
-                margin: 0;
-              }
-              body {
-                font-family: Arial, sans-serif;
-                width: 210mm;
-                margin: 0;
-                padding: 0;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-                font-size: 11px;
-                line-height: 1.2;
-              }
-              .no-print {
-                display: none !important;
-              }
-              .print-content {
-                width: 210mm;
-                padding: 10mm;
-              }
-              .page {
-                page-break-after: always;
-                margin: 0 !important;
-                box-shadow: none !important;
-                width: 210mm;
-                min-height: 297mm;
-              }
-              .page:last-child {
-                page-break-after: auto;
-              }
-              img {
-                max-width: 100%;
-                height: auto;
-              }
-              .invoice-preview-logo {
-                max-width: 150px !important;
-                height: auto !important;
-                display: block !important;
-                margin-bottom: 1rem !important;
-              }
-              .invoice-section {
-                padding: 8px 12px !important;
-              }
-              .invoice-table th, .invoice-table td {
-                padding: 4px 6px !important;
-              }
-              .invoice-details {
-                margin-bottom: 0.5rem !important;
-              }
-              .invoice-header {
-                margin-bottom: 0.75rem !important;
-              }
-              p {
-                margin-top: 0.25rem !important;
-                margin-bottom: 0.25rem !important;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-              }
-              th, td {
-                padding: 8px;
-                text-align: left;
-                border-bottom: 1px solid #ddd;
-              }
-              .flex {
-                display: flex;
-              }
-              .justify-between {
-                justify-content: space-between;
-              }
-              .items-center {
-                align-items: center;
-              }
-              .font-bold {
-                font-weight: bold;
-              }
-              .text-right {
-                text-align: right;
-              }
-              .mt-4 {
-                margin-top: 1rem;
-              }
-              .mt-6 {
-                margin-top: 1.5rem;
-              }
-              .mt-8 {
-                margin-top: 2rem;
-              }
-              .text-xs {
-                font-size: 0.75rem;
-              }
-              .text-sm {
-                font-size: 0.875rem;
-              }
-              .text-lg {
-                font-size: 1.125rem;
-              }
-              .text-xl {
-                font-size: 1.25rem;
-              }
-              .text-2xl {
-                font-size: 1.5rem;
-              }
-              .mb-2 {
-                margin-bottom: 0.5rem;
-              }
-              .mb-4 {
-                margin-bottom: 1rem;
-              }
-              .p-4 {
-                padding: 1rem;
-              }
-              .p-6 {
-                padding: 1.5rem;
-              }
-              .bg-gray-50 {
-                background-color: #f9fafb;
-              }
-              .border-t {
-                border-top: 1px solid #e5e7eb;
-              }
-              .border-b {
-                border-bottom: 1px solid #e5e7eb;
-              }
-              .w-36 {
-                width: 9rem;
-              }
-              .h-36 {
-                height: 9rem;
-              }
-              .w-28 {
-                width: 7rem;
-              }
-              .h-20 {
-                height: 5rem;
-              }
-              .mx-auto {
-                margin-left: auto;
-                margin-right: auto;
-              }
-              .object-contain {
-                object-fit: contain;
-              }
-              .opacity-80 {
-                opacity: 0.8;
-              }
-              .opacity-90 {
-                opacity: 0.9;
-              }
-              .text-center {
-                text-align: center;
-              }
-            </style>
-          </head>
-          <body>
-            ${printContent.innerHTML}
-          </body>
-        </html>
-      `);
-      
-      // Wait for content to load and then print
-      printWindow.document.close();
-      printWindow.focus();
-      
-      // Use a timeout to ensure content is loaded before printing
-      setTimeout(() => {
-        try {
-          printWindow.print();
-          printWindow.onafterprint = () => {
-            printWindow.close();
-            setIsPrinting(false);
-          };
-        } catch (err) {
-          console.error('Error during print:', err);
-          printWindow.close();
-          setIsPrinting(false);
-        }
-      }, 1000);
-    } catch (error) {
-      console.error('Print setup error:', error);
-      setIsPrinting(false);
-      alert('There was an error setting up the print. Please try again.');
+      console.error('Error generating PDF:', error);
+      toast.error('An error occurred while generating the PDF.');
+    } finally {
+      setIsDownloading(false); // Clear loading state regardless of success or failure
     }
   };
   
@@ -749,18 +206,7 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
     }
   };
 
-  // Calculate functions
-  const calculateSubtotal = () => {
-    return data.subtotal.toFixed(2);
-  };
-
-  const calculateVat = () => {
-    return data.vatTotal.toFixed(2);
-  };
-
-  const calculateTotal = () => {
-    return data.grandTotal.toFixed(2);
-  };
+  // No need for calculate functions as we use data properties directly
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -804,24 +250,12 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
 
   // Function to render a single page
   const renderPage = (pageNumber: number) => {
-    const isFirstPage = pageNumber === 1;
-    const isLastPage = pageNumber === totalPages;
-    
-    // Get items for this specific page using our custom pagination logic
     const pageItems = getItemsForPage(pageNumber);
-    
+    const isLastPage = pageNumber === totalPages;
+    const isFirstPage = pageNumber === 1;
+
     return (
-      <div key={pageNumber} className="page" style={{
-        width: '210mm',
-        minHeight: '297mm',
-        padding: '20mm',
-        boxSizing: 'border-box',
-        pageBreakAfter: 'always',
-        backgroundColor: 'white',
-        position: 'relative',
-        margin: '0 auto 2rem auto',
-        boxShadow: isPrinting ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-      }}>
+      <div key={`page-${pageNumber}`} className="page bg-white border rounded p-6 my-4 mx-auto shadow-md w-[210mm]">
         {/* Page number */}
         <div className="absolute bottom-4 right-4 text-xs text-gray-500">
           Page {pageNumber} of {totalPages}
@@ -836,7 +270,7 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
                 <img 
                   src={data.companyDetails.logoUrl} 
                   alt="Company Logo" 
-                  className="invoice-preview-logo object-contain mx-auto" 
+                  className="invoice-content-logo object-contain mx-auto" 
                   style={{
                     maxWidth: '150px',
                     height: 'auto',
@@ -901,75 +335,81 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
         <table className="w-full border-collapse invoice-table text-xs">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-2 py-1 text-left">#</th>
-              <th className="px-2 py-1 text-left">Description</th>
-              <th className="px-2 py-1 text-right">Qty</th>
-              <th className="px-2 py-1 text-right">Rate (R)</th>
-              <th className="px-2 py-1 text-right">Discount (R)</th>
-              <th className="px-2 py-1 text-right">Amount (R)</th>
+              <th className="border border-gray-200 p-2 w-[5%]">#</th>
+              <th className="border border-gray-200 p-2 w-[45%]">Description</th>
+              <th className="border border-gray-200 p-2 w-[10%]">Qty</th>
+              <th className="border border-gray-200 p-2 w-[10%]">Rate (R)</th>
+              <th className="border border-gray-200 p-2 w-[10%]">Discount</th>
+              <th className="border border-gray-200 p-2 w-[20%]">Amount (R)</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.map((item) => (
-              <tr key={item.id} className="border-t">
-                <td className="px-2 py-1 text-left">{item.itemNo}</td>
-                <td className="px-2 py-1 text-left">{item.description}</td>
-                <td className="px-2 py-1 text-right">{item.quantity}</td>
-                <td className="px-2 py-1 text-right">{formatCurrency(item.rate)}</td>
-                <td className="px-2 py-1 text-right">{formatCurrency(item.discount)}</td>
-                <td className="px-2 py-1 text-right font-medium">{formatCurrency(item.amount)}</td>
+              <tr key={item.id}>
+                <td className="border border-gray-200 p-2 text-center">{item.itemNo}</td>
+                <td className="border border-gray-200 p-2">{item.description}</td>
+                <td className="border border-gray-200 p-2 text-center">{item.quantity}</td>
+                <td className="border border-gray-200 p-2 text-right">{formatCurrency(item.rate)}</td>
+                <td className="border border-gray-200 p-2 text-right">{formatCurrency(item.discount)}</td>
+                <td className="border border-gray-200 p-2 text-right">{formatCurrency(item.amount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
         
         {/* Only show totals and footer on last page */}
-        {pageNumber === totalPages && (
+        {isLastPage && (
           <>
             {/* Totals */}
             <div className="mt-6 text-right text-sm invoice-section">
-              <p>Subtotal: R {calculateSubtotal()}</p>
-              <p>VAT ({data.vatRate}%): R {calculateVat()}</p>
-              <p className="text-lg font-bold">Total (ZAR): R {calculateTotal()}</p>
+              <p><strong>Subtotal:</strong> R {formatCurrency(data.subtotal)}</p>
+              <p><strong>VAT ({data.vatRate}%):</strong> R {formatCurrency(data.vatTotal)}</p>
+              <p className="text-lg font-bold"><strong>Total:</strong> R {formatCurrency(data.grandTotal)}</p>
             </div>
-
-            {/* Notes & Terms */}
-            <div className="mt-6 text-xs invoice-section">
+            
+            {/* Footer with terms and notes */}
+            <div className="mt-8 text-xs border-t pt-4">
               {data.notes && (
-                <>
-                  <p className="font-bold mb-1">Notes:</p>
-                  <p>{data.notes}</p>
-                </>
+                <div className="mb-4">
+                  <p className="font-semibold">Notes:</p>
+                  <p className="whitespace-pre-line">{data.notes}</p>
+                </div>
               )}
+              
               {data.terms && (
-                <>
-                  <p className="mt-2 font-bold">Terms & Conditions:</p>
-                  <p>{data.terms}</p>
-                </>
+                <div className="mb-4">
+                  <p className="font-semibold">Terms & Conditions:</p>
+                  <p className="whitespace-pre-line">{data.terms}</p>
+                </div>
               )}
-            </div>
-
-            {/* Stamp & Signature */}
-            <div className="flex justify-between mt-8">
-              {data.companyDetails.stampUrl && (
-                <img 
-                  src={data.companyDetails.stampUrl} 
-                  alt="Company Stamp" 
-                  className="w-36 h-36 object-contain opacity-80" 
-                />
-              )}
-              <div className="text-center">
-                {data.companyDetails.signatureUrl ? (
-                  <img 
-                    src={data.companyDetails.signatureUrl} 
-                    alt="Authorized Signature" 
-                    className="w-28 h-20 object-contain opacity-90 mx-auto" 
-                  />
-                ) : (
-                  <div className="h-16 border-t border-gray-300 w-32 mb-1 mx-auto"></div>
-                )}
-                <p className="text-xs font-medium">Authorized Signature</p>
-                <p className="text-xs">{data.companyDetails.name}</p>
+              
+              {/* Company Stamp and Signature */}
+              <div className="flex justify-between mt-8">
+                <div className="w-1/3">
+                  {data.companyDetails.stampUrl && (
+                    <div className="text-center">
+                      <img 
+                        src={data.companyDetails.stampUrl} 
+                        alt="Company Stamp" 
+                        className="max-h-24 mx-auto"
+                      />
+                      <p className="mt-2 text-center text-xs">Company Stamp</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="w-1/3">
+                  {data.companyDetails.signatureUrl && (
+                    <div className="text-center">
+                      <img 
+                        src={data.companyDetails.signatureUrl} 
+                        alt="Authorized Signature" 
+                        className="max-h-24 mx-auto"
+                      />
+                      <p className="mt-2 text-center text-xs">Authorized Signature</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </>
@@ -981,37 +421,34 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-[210mm] w-full max-h-[90vh] p-0 overflow-auto">
-        {/* Move PrintStyles component before it's used */}
-        <PrintStyles />
-        <DialogHeader className="p-4 border-b sticky top-0 bg-white z-10 flex justify-between items-center no-print">
+        {/* Dialog header with title and actions */}
+        <DialogHeader className="p-4 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
           <DialogTitle className="text-xl font-semibold">Invoice Preview</DialogTitle>
           <div className="flex gap-2">
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handlePrint}
-              className="flex items-center gap-1"
-              disabled={isPrinting}
+              disabled={isDownloading} 
+              onClick={handleDownloadPdf} 
+              className="flex gap-1 items-center"
             >
-              <Printer className="h-4 w-4" />
-              Print
+              {isDownloading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  <span>Download</span>
+                </>
+              )}
             </Button>
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleDownloadPDF}
-              className="flex items-center gap-1"
-              disabled={isPrinting}
-            >
-              <Download className="h-4 w-4" />
-              Download
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onClose}
-              className="text-slate-500 hover:bg-slate-100 rounded-full h-8 w-8 p-0"
-              disabled={isPrinting}
+              onClick={onClose} 
+              className="p-2"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -1019,8 +456,8 @@ const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({ open, onClose
         </DialogHeader>
 
         <div className="p-0 overflow-auto">
-          {/* Printable content wrapped in a ref */}
-          <div ref={printContentRef} className="print-content">
+          {/* Invoice content container */}
+          <div ref={contentRef} className="invoice-content">
             {/* Render each page */}
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNumber => (
               renderPage(pageNumber)
