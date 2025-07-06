@@ -30,6 +30,24 @@ import BulkActionsBar from '@/components/clients/BulkActionsBar';
 import ClientsStats from '@/components/clients/ClientsStats';
 import { Client, getClients, initializeClients } from '@/services/clientService';
 
+// Define interfaces for invoice and payment data from localStorage
+interface InvoiceData {
+  id: string;
+  clientId: string;
+  total: number;
+  balance?: number;
+  paidAmount?: number;
+  status?: string;
+}
+
+interface PaymentData {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+}
+
 // Interface for displaying clients in the UI
 interface ClientDisplay {
   id: string;
@@ -71,7 +89,24 @@ const Clients = () => {
       }
     };
     
+    // Define the custom event handler for invoice and payment updates
+    const handleDataUpdate = () => {
+      loadClientsFromStorage();
+    };
+
+    // Execute initial load
     loadClients();
+    
+    // Add event listeners for custom events that will be dispatched when invoices or payments change
+    window.addEventListener('invoices-updated', handleDataUpdate);
+    window.addEventListener('payments-updated', handleDataUpdate);
+    
+    // Cleanup event listeners on component unmount
+    return () => {
+      window.removeEventListener('invoices-updated', handleDataUpdate);
+      window.removeEventListener('payments-updated', handleDataUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Function to save current scroll position
@@ -89,6 +124,46 @@ const Clients = () => {
           contentContainerRef.current.scrollTop = scrollPositionRef.current;
         }
       }, 10);
+    }
+  };
+  
+  // Function to calculate total value for each client based on invoices and payments
+  const calculateClientTotalValues = (clientId: string): number => {
+    try {
+      // Get all invoices from localStorage
+      const invoicesData = localStorage.getItem('invoices');
+      const invoices: InvoiceData[] = invoicesData ? JSON.parse(invoicesData) : [];
+      
+      // Get all payments from localStorage
+      const paymentsData = localStorage.getItem('payments');
+      const payments: PaymentData[] = paymentsData ? JSON.parse(paymentsData) : [];
+      
+      // Filter invoices for this client
+      const clientInvoices = invoices.filter((invoice) => invoice.clientId === clientId);
+      
+      // Calculate total invoiced amount
+      let totalInvoiced = 0;
+      let totalPaid = 0;
+      
+      // Loop through client invoices
+      clientInvoices.forEach((invoice) => {
+        // Add invoice total to the totalInvoiced
+        totalInvoiced += Number(invoice.total || 0);
+        
+        // Find payments for this invoice
+        const invoicePayments = payments.filter((payment) => payment.invoiceId === invoice.id);
+        
+        // Sum up the payments
+        invoicePayments.forEach((payment) => {
+          totalPaid += Number(payment.amount || 0);
+        });
+      });
+      
+      // Calculate remaining value (invoiced - paid)
+      return Math.max(0, totalInvoiced - totalPaid);
+    } catch (error) {
+      console.error('Error calculating client total value:', error);
+      return 0;
     }
   };
   
@@ -113,18 +188,23 @@ const Clients = () => {
       // Process and set clients with proper types
       const processedClients = clientsToProcess
         .filter((client: Client | null | undefined): client is Client => Boolean(client))
-        .map((client: Client) => ({
-          id: client.id || '',
-          name: client.contactPerson || 'No Name',
-          company: client.companyName || 'No Company',
-          email: client.email || '',
-          phone: client.phone || '',
-          totalValue: Number(client.totalValue) || 0,
-          lastActivity: client.lastActivity || new Date().toISOString(),
-          status: client.status || 'inactive',
-          type: client.clientType || 'individual',
-          avatar: client.avatar || ''
-        }));
+        .map((client: Client) => {
+          // Calculate the true total value based on invoices and payments
+          const calculatedTotalValue = calculateClientTotalValues(client.id || '');
+          
+          return {
+            id: client.id || '',
+            name: client.contactPerson || 'No Name',
+            company: client.companyName || 'No Company',
+            email: client.email || '',
+            phone: client.phone || '',
+            totalValue: calculatedTotalValue, // Use the calculated value
+            lastActivity: client.lastActivity || new Date().toISOString(),
+            status: client.status || 'inactive',
+            type: client.clientType || 'individual',
+            avatar: client.avatar || ''
+          };
+        });
       
       setClients(processedClients);
     } catch (error) {

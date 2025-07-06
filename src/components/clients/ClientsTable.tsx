@@ -95,7 +95,7 @@ const ClientsTable = ({
               <TableCell className="font-sf-pro text-slate-600">{client.email}</TableCell>
               <TableCell className="font-sf-pro text-slate-600">{client.phone}</TableCell>
               <TableCell className="font-sf-pro font-semibold text-slate-900">
-                R{client.totalValue.toLocaleString()}
+                R {client.totalValue.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </TableCell>
               <TableCell className="font-sf-pro text-slate-600">
                 {formatDate(client.lastActivity)}
