@@ -17,13 +17,14 @@ import {
   List,
   Kanban,
   DollarSign,
-  FileText
+  FileText,
+  ChevronLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
+
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import DashboardSidebarOverlay from '@/components/dashboard/DashboardSidebarOverlay';
 import ProjectsHeader from '@/components/projects/ProjectsHeader';
@@ -249,13 +250,14 @@ const Projects = () => {
       <DashboardSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
       <div className="flex-1 lg:ml-0 relative z-10">
-        <DashboardHeader 
-          setSidebarOpen={setSidebarOpen}
-          notificationsOpen={notificationsOpen}
-          setNotificationsOpen={setNotificationsOpen}
-          notifications={notifications}
-          setNotifications={setNotifications}
-        />
+        <div className="flex items-center h-20 px-8">
+          <Link to="/dashboard" className="flex items-center text-slate-600 hover:text-slate-900 transition-colors">
+            <Button variant="outline" className="flex items-center gap-2">
+              <ChevronLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </Link>
+        </div>
 
         <main className="p-8">
           <ProjectsHeader onCreateProject={() => setShowCreateModal(true)} />

@@ -1,21 +1,47 @@
 
-import React, { useState } from 'react';
-import { X, Calendar, Users, DollarSign, Tag, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Calendar, Users, DollarSign, Tag, FileText, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { getClients, Client } from '@/services/clientService';
+
+// Project data interface for better type safety
+interface ProjectData {
+  id?: number;
+  name: string;
+  description: string;
+  client: string;
+  clientId: string; 
+  manager: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  priority: string;
+  budget: string;
+  billingType: string;
+  hourlyRate: string;
+  tags: string[];
+  team: string[];
+  customFields: Record<string, unknown>;
+  code?: string;
+  progress?: number;
+  expenses?: number;
+  createdAt?: string;
+}
 
 interface CreateProjectModalProps {
   onClose: () => void;
-  onSubmit: (projectData: any) => void;
+  onSubmit: (projectData: ProjectData) => void;
 }
 
 const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubmit }) => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [projectData, setProjectData] = useState({
+  const [projectData, setProjectData] = useState<ProjectData>({
     name: '',
     description: '',
     client: '',
+    clientId: '', // Store the client ID separately
     manager: '',
     startDate: '',
     endDate: '',
@@ -31,11 +57,42 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
 
   const availableTags = ['Web Development', 'Mobile', 'UI/UX', 'Backend', 'E-commerce', 'React Native', 'API', 'Database'];
   const availableTeam = ['John Smith', 'Sarah Connor', 'Mike Johnson', 'Lisa Anderson', 'Emma Brown', 'James Wilson'];
-  const clients = ['ABC Corp', 'XYZ Inc', 'Tech Solutions', 'Digital Agency', 'StartUp Co'];
   const managers = ['John Smith', 'Sarah Connor', 'David Lee', 'Emma Brown'];
+  
+  // State for storing clients from localStorage
+  const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: string | string[] | Record<string, unknown>) => {
     setProjectData(prev => ({ ...prev, [field]: value }));
+  };
+  
+  // Special handler for client selection to store both name and ID
+  const handleClientChange = (clientId: string) => {
+    const selectedClient = clients.find(client => client.id === clientId);
+    if (selectedClient) {
+      setProjectData(prev => ({ 
+        ...prev, 
+        client: selectedClient.companyName || selectedClient.contactPerson,
+        clientId: selectedClient.id 
+      }));
+    }
+  };
+  
+  // Handle client search
+  const handleClientSearch = (searchTerm: string) => {
+    setClientSearchTerm(searchTerm);
+    if (!searchTerm) {
+      setFilteredClients(clients);
+    } else {
+      setFilteredClients(
+        clients.filter(client => 
+          (client.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()))
+        )
+      );
+    }
   };
 
   const handleTagToggle = (tag: string) => {
@@ -55,6 +112,16 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
         : [...prev.team, member]
     }));
   };
+
+  // Load clients from localStorage when component mounts
+  useEffect(() => {
+    const loadClients = () => {
+      const loadedClients = getClients();
+      setClients(loadedClients);
+      setFilteredClients(loadedClients);
+    };
+    loadClients();
+  }, []);
 
   const handleSubmit = () => {
     const newProject = {
@@ -126,17 +193,34 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Client *</label>
-                  <select
-                    value={projectData.client}
-                    onChange={(e) => handleInputChange('client', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select a client</option>
-                    {clients.map(client => (
-                      <option key={client} value={client}>{client}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search clients..."
+                      value={clientSearchTerm}
+                      onChange={(e) => handleClientSearch(e.target.value)}
+                      className="w-full pl-10 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent mb-2"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg">
+                    {filteredClients.length === 0 ? (
+                      <div className="p-3 text-center text-slate-500 text-sm">No clients found</div>
+                    ) : (
+                      filteredClients.map(client => (
+                        <div
+                          key={client.id}
+                          className={`p-3 cursor-pointer hover:bg-slate-50 ${projectData.clientId === client.id ? 'bg-mokm-purple-50 border-l-4 border-mokm-purple-500' : ''}`}
+                          onClick={() => handleClientChange(client.id)}
+                        >
+                          <div className="font-medium">{client.companyName || 'No Company'}</div>
+                          <div className="text-sm text-slate-500">{client.contactPerson}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 
