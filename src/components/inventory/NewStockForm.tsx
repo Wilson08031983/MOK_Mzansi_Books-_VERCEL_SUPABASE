@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import React, { useState, useEffect } from 'react';
+import { format } from 'date-fns';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Calendar as CalendarIcon, PackagePlus, Scan } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarIcon, PackagePlus, Scan } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { addInventoryItem } from '@/services/inventoryService';
+import { toast } from '@/components/ui/use-toast';
 
 interface NewStockFormProps {
   onClose: () => void;
@@ -32,6 +34,26 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     notes: '',
     minimumStockLevel: '5'
   });
+  
+  const [validationErrors, setValidationErrors] = useState({
+    purchaseAmount: '',
+    sellingPrice: '',
+    markup: '',
+    quantity: ''
+  });
+  
+  const [isEditingSellingPrice, setIsEditingSellingPrice] = useState(false);
+  
+  // Set the auto-generated item ID when the component mounts
+  useEffect(() => {
+    // Initial auto-generation only if itemId is empty
+    if (!formData.itemId) {
+      setFormData(prevData => ({
+        ...prevData,
+        itemId: generateItemId()
+      }));
+    }
+  }, [formData.itemId]);
   
   const [receiveDate, setReceiveDate] = useState<Date | undefined>(new Date());
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
@@ -58,55 +80,203 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     'Other'
   ];
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const validatePositiveNumber = (value: string, field: 'purchaseAmount' | 'sellingPrice' | 'markup' | 'quantity'): boolean => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: `${field === 'markup' ? 'Markup' : field === 'purchaseAmount' ? 'Purchase Amount' : field === 'sellingPrice' ? 'Selling Price' : 'Quantity'} must be a number`
+      }));
+      return false;
+    } else if (numValue < 0) {
+      setValidationErrors(prev => ({ ...prev, [field]: 'Value cannot be negative' }));
+      return false;
+    }
+    setValidationErrors(prev => ({ ...prev, [field]: '' }));
+    return true;
+  };
+  
+  // Markup (%) = ((Selling Price - Purchase Amount) / Purchase Amount) * 100
+  const calculateMarkup = (purchaseAmount: number, sellingPrice: number): string => {
+    if (purchaseAmount <= 0) {
+      return 'N/A'; // Handle divide-by-zero case
+    }
+    return (((sellingPrice - purchaseAmount) / purchaseAmount) * 100).toFixed(2);
+  };
+  
+  // Calculate selling price from purchase amount and markup percentage
+  const calculateSellingPrice = (purchaseAmount: number, markup: number): string => {
+    return (purchaseAmount * (1 + markup / 100)).toFixed(2);
+  };
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
     
-    // Calculate markup or selling price automatically when one changes
-    if (name === 'purchaseAmount' && value) {
-      const purchaseAmount = parseFloat(value);
-      const markup = parseFloat(formData.markup) || 0;
-      const sellingPrice = (purchaseAmount * (1 + markup / 100)).toFixed(2);
-      setFormData(prev => ({
-        ...prev,
-        sellingPrice
-      }));
-    } else if (name === 'sellingPrice' && value && formData.purchaseAmount) {
-      const sellingPrice = parseFloat(value);
-      const purchaseAmount = parseFloat(formData.purchaseAmount);
-      if (purchaseAmount > 0) {
-        const calculatedMarkup = ((sellingPrice / purchaseAmount) - 1) * 100;
-        setFormData(prev => ({
+    // Calculate based on which field was changed
+    if (name === 'purchaseAmount' || name === 'sellingPrice') {
+      const purchaseAmount = name === 'purchaseAmount' 
+        ? parseFloat(value) || 0 
+        : parseFloat(formData.purchaseAmount) || 0;
+        
+      const sellingPrice = name === 'sellingPrice' 
+        ? parseFloat(value) || 0 
+        : parseFloat(formData.sellingPrice) || 0;
+      
+      // Validate purchase amount to prevent divide-by-zero
+      if (purchaseAmount <= 0) {
+        setValidationErrors(prev => ({
           ...prev,
-          markup: calculatedMarkup.toFixed(2)
+          purchaseAmount: purchaseAmount === 0 ? 'Purchase Amount cannot be zero' : 'Purchase Amount must be positive'
+        }));
+        // Don't update markup if purchase amount is invalid
+        return;
+      } else {
+        setValidationErrors(prev => ({
+          ...prev,
+          purchaseAmount: ''
         }));
       }
-    } else if (name === 'markup' && value && formData.purchaseAmount) {
-      const markup = parseFloat(value);
-      const purchaseAmount = parseFloat(formData.purchaseAmount);
-      const sellingPrice = (purchaseAmount * (1 + markup / 100)).toFixed(2);
+      
+      // Validate selling price
+      if (sellingPrice < 0) {
+        setValidationErrors(prev => ({
+          ...prev,
+          sellingPrice: 'Selling Price cannot be negative'
+        }));
+        return;
+      } else {
+        setValidationErrors(prev => ({
+          ...prev,
+          sellingPrice: ''
+        }));
+      }
+      
+      // Calculate markup based on purchase amount and selling price
+      const calculatedMarkup = calculateMarkup(purchaseAmount, sellingPrice);
       setFormData(prev => ({
         ...prev,
-        sellingPrice
+        markup: calculatedMarkup
       }));
+    } else if (name === 'markup') {
+      const markup = parseFloat(value) || 0;
+      const purchaseAmount = parseFloat(formData.purchaseAmount) || 0;
+      
+      if (purchaseAmount <= 0) {
+        setValidationErrors(prev => ({
+          ...prev,
+          purchaseAmount: purchaseAmount === 0 ? 'Purchase Amount cannot be zero' : 'Purchase Amount must be positive'
+        }));
+        return;
+      }
+      
+      // Calculate selling price based on purchase amount and markup
+      const calculatedSellingPrice = calculateSellingPrice(purchaseAmount, markup);
+      setFormData(prev => ({
+        ...prev,
+        sellingPrice: calculatedSellingPrice
+      }));
+    } else if (name === 'quantity') {
+      validatePositiveNumber(value, 'quantity');
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateForm = (): boolean => {
+    const errors = {
+      purchaseAmount: '',
+      sellingPrice: '',
+      markup: '',
+      quantity: ''
+    };
+    
+    // Validate Purchase Amount
+    if (!formData.purchaseAmount) {
+      errors.purchaseAmount = 'Purchase Amount is required';
+    } else if (parseFloat(formData.purchaseAmount) <= 0) {
+      errors.purchaseAmount = 'Purchase Amount must be positive';
+    }
+    
+    // Validate Selling Price
+    if (!formData.sellingPrice) {
+      errors.sellingPrice = 'Selling Price is required';
+    } else if (parseFloat(formData.sellingPrice) < 0) {
+      errors.sellingPrice = 'Selling Price cannot be negative';
+    }
+    
+    // Validate Quantity
+    if (!formData.quantity) {
+      errors.quantity = 'Quantity is required';
+    } else if (parseFloat(formData.quantity) <= 0) {
+      errors.quantity = 'Quantity must be positive';
+    } else if (!Number.isInteger(parseFloat(formData.quantity))) {
+      errors.quantity = 'Quantity must be a whole number';
+    }
+    
+    // Check if any errors were found
+    const hasErrors = Object.values(errors).some(error => error !== '');
+    
+    if (hasErrors) {
+      setValidationErrors(errors);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Here you would normally save the data to your database
-    console.log('New Stock Data:', {
-      ...formData,
-      receiveDate,
-      expiryDate
-    });
+    // Validate form before submission
+    if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the validation errors",
+        variant: "destructive"
+      });
+      return;
+    }
     
-    // For demo purposes, just close the form
-    onClose();
+    try {
+      // Create item object matching the InventoryItem interface structure
+      // Map form fields to the expected structure in the inventory service
+      const newItem = {
+        name: formData.description, // Map description to name field
+        barcode: formData.barcode,
+        stockLevel: parseInt(formData.quantity) || 0, // Map quantity to stockLevel
+        minimumStockLevel: parseInt(formData.minimumStockLevel) || 0,
+        price: parseFloat(formData.sellingPrice) || 0, // Map sellingPrice to price
+        costPrice: parseFloat(formData.purchaseAmount) || 0, // Map purchaseAmount to costPrice
+        markup: parseFloat(formData.markup) || 0,
+        category: formData.category,
+        receiveDate: receiveDate?.toISOString() || new Date().toISOString(),
+        expiryDate: expiryDate?.toISOString() || null,
+        supplier: formData.supplier,
+        batchNo: formData.batchNo,
+        location: formData.location,
+        notes: formData.notes
+      };
+      
+      // Use the existing inventory service to add the stock item
+      await addInventoryItem(newItem);
+      
+      toast({
+        title: "Success",
+        description: "Stock item added successfully",
+        variant: "default"
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error adding stock item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add stock item",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleScanBarcode = () => {
@@ -122,20 +292,23 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
   // Generate a unique item ID based on current date and random number
   const generateItemId = () => {
     const prefix = 'INV';
-    const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, '');
+    
+    // Format: INV-YYMMDD-XXX (Year, Month, Day, Random 3-digit number)
+    const currentDate = new Date();
+    const year = currentDate.getFullYear().toString().slice(2); // Last 2 digits of year
+    const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+    const day = currentDate.getDate().toString().padStart(2, '0');
+    const datePart = `${year}${month}${day}`;
+    
+    // Generate a random 3-digit number for uniqueness
     const randomPart = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    
     return `${prefix}-${datePart}-${randomPart}`;
   };
 
-  // Generate item ID on initial render if not provided
-  React.useEffect(() => {
-    if (!formData.itemId) {
-      setFormData(prev => ({
-        ...prev,
-        itemId: generateItemId()
-      }));
-    }
-  }, []);
+
+  
+
 
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
@@ -151,14 +324,19 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             {/* Item ID */}
             <div className="space-y-2">
               <Label htmlFor="itemId">Item ID</Label>
-              <Input
-                id="itemId"
-                name="itemId"
-                value={formData.itemId}
-                onChange={handleInputChange}
-                readOnly
-                className="bg-slate-50"
-              />
+              <div className="relative">
+                <Input
+                  id="itemId"
+                  name="itemId"
+                  value={formData.itemId}
+                  onChange={handleInputChange}
+                  readOnly
+                  className="bg-slate-50 pr-8"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <span className="text-xs text-mokm-orange-500 font-medium bg-mokm-orange-50 px-1 py-0.5 rounded">Auto</span>
+                </div>
+              </div>
               <p className="text-xs text-slate-500">Auto-generated unique identifier</p>
             </div>
             
@@ -204,14 +382,17 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
               <Input
                 id="purchaseAmount"
                 name="purchaseAmount"
-                type="number"
-                min="0"
-                step="0.01"
                 value={formData.purchaseAmount}
                 onChange={handleInputChange}
-                placeholder="0.00"
-                required
+                placeholder=""
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]+(\.[0-9]+)?"
+                className={`${validationErrors.purchaseAmount ? 'border-red-500 focus-visible:ring-red-300' : ''}`}
               />
+              {validationErrors.purchaseAmount && (
+                <p className="text-xs text-red-500">{validationErrors.purchaseAmount}</p>
+              )}
             </div>
             
             {/* Selling Price */}
@@ -220,29 +401,57 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
               <Input
                 id="sellingPrice"
                 name="sellingPrice"
-                type="number"
-                min="0"
-                step="0.01"
                 value={formData.sellingPrice}
                 onChange={handleInputChange}
-                placeholder="0.00"
-                required
+                placeholder=""
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]+(\.[0-9]+)?"
+                className={`${validationErrors.sellingPrice ? 'border-red-500 focus-visible:ring-red-300' : ''}`}
+                onFocus={() => setIsEditingSellingPrice(true)}
               />
+              {validationErrors.sellingPrice ? (
+                <p className="text-xs text-red-500">{validationErrors.sellingPrice}</p>
+              ) : (
+                <p className="text-xs text-slate-500">Calculated as: Purchase Amount + Markup</p>
+              )}
             </div>
             
-            {/* Markup Percentage */}
+            {/* Markup (%) */}
             <div className="space-y-2">
-              <Label htmlFor="markup">Markup (%)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="markup">Markup (%)</Label>
+                <div className="relative group">
+                  <span className="cursor-help text-xs text-mokm-orange-500 hover:text-mokm-orange-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-help-circle">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <path d="M12 17h.01"></path>
+                    </svg>
+                  </span>
+                  <div className="absolute bottom-full mb-2 right-0 w-64 p-2 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+                    <p className="text-xs text-slate-600 font-medium">Markup (%) = ((Selling Price - Purchase Amount) ÷ Purchase Amount) × 100</p>
+                  </div>
+                </div>
+              </div>
               <Input
                 id="markup"
                 name="markup"
-                type="number"
-                min="0"
-                step="0.1"
                 value={formData.markup}
                 onChange={handleInputChange}
-                placeholder="0.0"
+                placeholder=""
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]+(\.[0-9]+)?"
+                className={`${validationErrors.markup ? 'border-red-500 focus-visible:ring-red-300' : ''}`}
               />
+              {validationErrors.markup ? (
+                <p className="text-xs text-red-500">{validationErrors.markup}</p>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Auto-calculated from Purchase Amount and Selling Price
+                </p>
+              )}
             </div>
             
             {/* Quantity */}
@@ -251,10 +460,13 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
               <Input
                 id="quantity"
                 name="quantity"
-                type="number"
-                min="1"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={formData.quantity}
                 onChange={handleInputChange}
+                placeholder=""
+                className={validationErrors.quantity ? 'border-red-500 focus-visible:ring-red-300' : ''}
                 required
               />
             </div>
