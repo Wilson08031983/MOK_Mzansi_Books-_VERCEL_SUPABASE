@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Eye, 
   Edit, 
@@ -12,14 +12,34 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import ViewProjectModal from './ViewProjectModal';
+import EditProjectModal from './EditProjectModal';
+
+interface Task {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  completed: boolean;
+}
+
+interface Expense {
+  id: string;
+  type: string;
+  amount: number;
+  date: string;
+  receipt?: string; // URL or base64 of the uploaded file
+  notes?: string;
+}
 
 interface Project {
   id: number;
   name: string;
   client: string;
+  clientId?: string;
   manager: string;
-  status: string;
-  priority: string;
+  status: 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled';
+  priority: 'High' | 'Medium' | 'Low';
   progress: number;
   budget: number;
   expenses: number;
@@ -29,19 +49,37 @@ interface Project {
   tags: string[];
   description: string;
   code: string;
+  tasks?: Task[];
+  expenseItems?: Expense[];
 }
 
 interface ProjectsGridProps {
   projects: Project[];
   getStatusColor: (status: string) => string;
   getPriorityColor: (priority: string) => string;
+  onEditProject?: (updatedProject: Project) => void;
 }
 
 const ProjectsGrid: React.FC<ProjectsGridProps> = ({
   projects,
   getStatusColor,
-  getPriorityColor
+  getPriorityColor,
+  onEditProject
 }) => {
+  const [viewingProject, setViewingProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  
+  const handleEditProject = (project: Project) => {
+    setViewingProject(null); // Close view modal if open
+    setEditingProject(project);
+  };
+  
+  const handleSaveProject = (updatedProject: Project) => {
+    if (onEditProject) {
+      onEditProject(updatedProject);
+    }
+    setEditingProject(null);
+  };
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {projects.map((project) => (
@@ -159,11 +197,21 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
 
             {/* Actions */}
             <div className="flex items-center space-x-2 pt-2 border-t border-slate-100">
-              <Button variant="outline" size="sm" className="flex-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => setViewingProject(project)}
+              >
                 <Eye className="h-4 w-4 mr-2" />
                 View
               </Button>
-              <Button variant="outline" size="sm" className="flex-1">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => setEditingProject(project)}
+              >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
@@ -179,6 +227,24 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
           </div>
           <p className="text-slate-600">No projects found</p>
         </div>
+      )}
+      
+      {/* View Project Modal */}
+      {viewingProject && (
+        <ViewProjectModal 
+          project={viewingProject}
+          onClose={() => setViewingProject(null)}
+          onEdit={handleEditProject}
+        />
+      )}
+      
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSave={handleSaveProject}
+        />
       )}
     </div>
   );

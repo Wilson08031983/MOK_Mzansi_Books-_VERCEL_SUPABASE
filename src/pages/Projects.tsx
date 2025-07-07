@@ -69,7 +69,7 @@ const Projects = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Sample projects data
-  const [projects] = useState<Project[]>([
+  const [projects, setProjects] = useState<Project[]>([
     {
       id: 1,
       name: 'Website Redesign',
@@ -170,6 +170,24 @@ const Projects = () => {
   const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0);
   const totalExpenses = projects.reduce((sum, p) => sum + p.expenses, 0);
   const totalProfit = totalBudget - totalExpenses;
+  
+  // Handler for updating a project after editing
+  const handleEditProject = (updatedProject: Project) => {
+    setProjects(prevProjects => 
+      prevProjects.map(project => 
+        project.id === updatedProject.id ? updatedProject : project
+      )
+    );
+    
+    // Store updated projects in localStorage
+    try {
+      localStorage.setItem('projects', JSON.stringify(
+        projects.map(p => p.id === updatedProject.id ? updatedProject : p)
+      ));
+    } catch (error) {
+      console.error('Error saving updated project to localStorage:', error);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -302,6 +320,7 @@ const Projects = () => {
                 projects={filteredProjects}
                 getStatusColor={getStatusColor}
                 getPriorityColor={getPriorityColor}
+                onEditProject={handleEditProject}
               />
             )}
             
@@ -325,7 +344,33 @@ const Projects = () => {
               onClose={() => setShowCreateModal(false)}
               onSubmit={(projectData) => {
                 console.log('New project:', projectData);
+                
+                // Create a new project with the correct type
+                const newProject: Project = {
+                  id: projectData.id || Date.now(),
+                  name: projectData.name,
+                  client: projectData.client,
+                  manager: projectData.manager || '',
+                  status: (projectData.status || 'Planning') as 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled',
+                  priority: (projectData.priority || 'Medium') as 'High' | 'Medium' | 'Low',
+                  progress: projectData.progress || 0,
+                  budget: parseFloat(projectData.budget) || 0,
+                  expenses: projectData.expenses || 0,
+                  startDate: projectData.startDate || '',
+                  endDate: projectData.endDate || '',
+                  team: projectData.team || [],
+                  tags: projectData.tags || [],
+                  description: projectData.description || '',
+                  code: projectData.code || `PRJ-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
+                };
+                
+                // Add the new project to the projects array
+                setProjects(prevProjects => [...prevProjects, newProject]);
+                
                 setShowCreateModal(false);
+                
+                // Show success notification (if you have a notification system)
+                // toast.success('Project created successfully');
               }}
             />
           )}
