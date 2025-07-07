@@ -85,8 +85,10 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
 }) => {
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [deleteProjectId, setDeleteProjectId] = useState<number | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  // Use projectToDelete state to track which project is being deleted
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  // Dialog state is derived from whether projectToDelete is set
+  const isDeleteDialogOpen = !!projectToDelete;
   
   const handleEditProject = (project: Project) => {
     setViewingProject(null); // Close view modal if open
@@ -100,35 +102,40 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
     setEditingProject(null);
   };
 
-  const handleDeleteProject = (projectId: number) => {
-    setDeleteProjectId(projectId);
-    setIsDeleteDialogOpen(true);
+  // Updated to set the entire project object instead of just the ID
+  const handleDeleteProject = (project: Project) => {
+    console.log('Delete project clicked for:', project.name, '(ID:', project.id, ')');
+    // Set the project to delete which will open the dialog
+    setProjectToDelete(project);
+    console.log('Delete dialog should open now');
   };
   
   const confirmDeleteProject = () => {
-    if (deleteProjectId && onEditProject) {
-      // Find the project to be deleted
-      const projectToDelete = projects.find(p => p.id === deleteProjectId);
-      if (projectToDelete) {
-        // Mark the project as deleted - in a real app, you might want to remove it entirely
-        // Here we're using the onEditProject handler to update it with a 'deleted' status
-        const deletedProject = { ...projectToDelete, status: 'Cancelled' as Project['status'] };
-        
-        // Call the onEditProject handler to update the project in the parent component
-        onEditProject(deletedProject);
-        
-        // Log for debugging
-        console.log('Project marked as cancelled:', deletedProject);
-      } else {
-        console.error('Project not found with ID:', deleteProjectId);
-      }
+    if (projectToDelete && onEditProject) {
+      // We already have the full project object, no need to find it
+      // Mark the project as cancelled
+      const deletedProject = { ...projectToDelete, status: 'Cancelled' as Project['status'] };
+      
+      // Call the onEditProject handler to update the project in the parent component
+      onEditProject(deletedProject);
+      
+      // Log for debugging
+      console.log('Project marked as cancelled:', deletedProject);
+      
+      // Add a visual confirmation toast or alert here if needed
+      alert(`Project "${projectToDelete.name}" has been marked as cancelled.`);
     } else {
-      console.error('Missing deleteProjectId or onEditProject handler');
+      console.error('Missing project to delete or onEditProject handler');
     }
     
-    // Close the dialog and reset state
-    setIsDeleteDialogOpen(false);
-    setDeleteProjectId(null);
+    // Reset the projectToDelete state which will close the dialog
+    setProjectToDelete(null);
+  };
+  
+  // Handler to cancel deletion and close dialog
+  const cancelDeleteProject = () => {
+    console.log('Delete cancelled');
+    setProjectToDelete(null);
   };
   
   return (
@@ -156,7 +163,12 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
                     <Edit className="mr-2 h-4 w-4 text-mokm-purple-500" />
                     <span className="text-mokm-purple-700">Edit Project</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="cursor-pointer text-mokm-pink-600 hover:text-mokm-pink-700 focus:text-mokm-pink-700 hover:bg-mokm-pink-50 focus:bg-mokm-pink-50">
+                  <DropdownMenuItem 
+                    onSelect={() => {
+                      handleDeleteProject(project);
+                    }} 
+                    className="cursor-pointer text-mokm-pink-600 hover:text-mokm-pink-700 focus:text-mokm-pink-700 hover:bg-mokm-pink-50 focus:bg-mokm-pink-50"
+                  >
                     <Trash2 className="mr-2 h-4 w-4" />
                     <span>Delete Project</span>
                   </DropdownMenuItem>
@@ -316,25 +328,38 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
         />
       )}
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      {/* AlertDialog is controlled by projectToDelete state */}
+      <AlertDialog 
+        open={isDeleteDialogOpen} 
+        onOpenChange={(open) => {
+          console.log('AlertDialog onOpenChange:', open);
+          // If dialog is being closed, reset projectToDelete
+          if (!open) setProjectToDelete(null);
+        }}
+      >
         <AlertDialogContent className="bg-white/95 backdrop-blur-sm border-mokm-blue-100">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-mokm-blue-900">Are you sure you want to delete this project?</AlertDialogTitle>
+            <AlertDialogTitle className="text-mokm-blue-900">
+              Are you sure you want to delete {projectToDelete?.name}?
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-mokm-blue-600">
               This action will mark the project as cancelled and cannot be easily undone.
               All associated data will be retained but the project will no longer appear in active projects.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-mokm-blue-200 text-mokm-blue-700 hover:bg-mokm-blue-50 hover:text-mokm-blue-800 hover:border-mokm-blue-300">
+            <AlertDialogCancel 
+              onClick={cancelDeleteProject}
+              className="border-mokm-blue-200 text-mokm-blue-700 hover:bg-mokm-blue-50 hover:text-mokm-blue-800 hover:border-mokm-blue-300"
+            >
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction
+            <button
               onClick={confirmDeleteProject}
-              className="bg-gradient-to-r from-mokm-pink-500 to-mokm-orange-500 hover:from-mokm-pink-600 hover:to-mokm-orange-600 text-white border-none"
+              className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-mokm-pink-500 to-mokm-orange-500 hover:from-mokm-pink-600 hover:to-mokm-orange-600 text-white border-none px-4 py-2 font-medium"
             >
               Delete Project
-            </AlertDialogAction>
+            </button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
