@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Calendar, CheckSquare, Tag, DollarSign, FileText, Trash2, Upload, Clock } from 'lucide-react';
-import {
+import { 
+  Plus, Calendar, CheckSquare, Tag, DollarSign, FileText, Clock,
+  User, Check, ChevronsUpDown, Loader2, Trash2, Upload, Eye, X
+} from 'lucide-react';
+import { 
   Dialog,
   DialogContent,
   DialogHeader,
@@ -28,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getAllTeamMembers } from '@/services/localAuthService';
 
 interface Task {
   id: string;
@@ -42,7 +46,9 @@ interface Expense {
   type: string;
   amount: number;
   date: string;
-  receipt?: string; // URL or base64 of the uploaded file
+  receipt?: string; // JSON string with file data or base64 of the uploaded file
+  receiptType?: string; // MIME type of the receipt file
+  receiptName?: string; // Original filename of the receipt
   notes?: string;
 }
 
@@ -102,8 +108,12 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
   // State for the project
   const [project, setProject] = useState<Project>({...initialProject});
   
-  // Task templates state
+  const [expensesTotal, setExpensesTotal] = useState<number>(0);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
+  const [teamMembers, setTeamMembers] = useState<{id: string; email: string; fullName: string; role: string; isAdmin: boolean}[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [isTemplateSaveModalOpen, setIsTemplateSaveModalOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -120,20 +130,44 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
 
   useEffect(() => {
     // Load task templates from localStorage
-    const storedTemplates = localStorage.getItem('taskTemplates');
-    if (storedTemplates) {
-      setTaskTemplates(JSON.parse(storedTemplates));
+    try {
+      const storedTemplates = localStorage.getItem('taskTemplates');
+      if (storedTemplates) {
+        setTaskTemplates(JSON.parse(storedTemplates));
+      }
+    } catch (e) {
+      console.error('Error loading task templates:', e);
     }
-  }, []);
 
-  // Calculate progress based on completed tasks
+    // Load team members
+    const members = getAllTeamMembers();
+    setTeamMembers(members);
+
+    // Load available tags from localStorage
+    try {
+      const storedTags = localStorage.getItem('projectTags');
+      if (storedTags) {
+        setAvailableTags(JSON.parse(storedTags));
+      } else {
+        // Default tags if none are found
+        const defaultTags = ['UI/UX', 'Development', 'Marketing', 'Finance', 'Legal', 'Research', 'Design', 'Testing'];
+        setAvailableTags(defaultTags);
+        localStorage.setItem('projectTags', JSON.stringify(defaultTags));
+      }
+    } catch (e) {
+      console.error('Error loading project tags:', e);
+    }
+  }, []); 
+
   useEffect(() => {
+    // Calculate progress based on completed tasks
     if (project.tasks && project.tasks.length > 0) {
       const completedCount = project.tasks.filter(task => task.completed).length;
       const progress = Math.round((completedCount / project.tasks.length) * 100);
       setProject(prev => ({...prev, progress}));
     }
   }, [project.tasks]);
+
   
   // Calculate total expenses
   useEffect(() => {
@@ -144,8 +178,26 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
   }, [project.expenseItems]);
 
   // Handle save button click
+  const handleCancel = () => {
+    onClose();
+  };
+
+  // Function to update project properties directly
+  const onProjectChange = <K extends keyof Project>(key: K, value: Project[K]) => {
+    setProject(prevProject => ({
+      ...prevProject,
+      [key]: value
+    }));
+  };
+
   const handleSave = () => {
-    onSave(project);
+    // Update the project with the current team members selection
+    const updatedProject: Project = {
+      ...project,
+      team: selectedTeam
+    };
+    
+    onSave(updatedProject);
     onClose();
   };
 
@@ -246,13 +298,93 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
     }));
   };
   
-  // Handle file upload
+  // State to track file upload loading state
+  const [uploadingFileId, setUploadingFileId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Handle file upload with loading state and error handling
   const handleFileUpload = (expenseId: string, file: File) => {
+    // Reset error state
+    setUploadError(null);
+    // Set loading state for this specific expense
+    setUploadingFileId(expenseId);
+    
+    // Validate file size (limit to 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File size exceeds 5MB limit');
+      setUploadingFileId(null);
+      return;
+    }
+    
     const reader = new FileReader();
+    
     reader.onloadend = () => {
-      updateExpense(expenseId, 'receipt', reader.result as string);
+      // Store file type along with content
+      const fileData = {
+        content: reader.result as string,
+        type: file.type,
+        name: file.name,
+        size: file.size
+      };
+      
+      // Store as JSON string
+      updateExpense(expenseId, 'receipt', JSON.stringify(fileData));
+      
+      // Update file type in a new field for easier access
+      updateExpense(expenseId, 'receiptType', file.type);
+      updateExpense(expenseId, 'receiptName', file.name);
+      
+      // Clear loading state
+      setUploadingFileId(null);
     };
+    
+    reader.onerror = () => {
+      setUploadError('Failed to read file');
+      setUploadingFileId(null);
+    };
+    
     reader.readAsDataURL(file);
+  };
+  
+  // Helper function to get file preview URL
+  const getFilePreviewUrl = (receipt: string): string => {
+    try {
+      const fileData = JSON.parse(receipt);
+      return fileData.content;
+    } catch (e) {
+      // For backward compatibility with old data format
+      return receipt;
+    }
+  };
+  
+  // Helper function to get file type
+  const getFileType = (receipt: string): string => {
+    try {
+      const fileData = JSON.parse(receipt);
+      return fileData.type || '';
+    } catch (e) {
+      // For backward compatibility
+      return receipt.startsWith('data:image/') ? 'image' : 'application/pdf';
+    }
+  };
+  
+  // Helper function to get file name
+  const getFileName = (receipt: string): string => {
+    try {
+      const fileData = JSON.parse(receipt);
+      return fileData.name || 'receipt';
+    } catch (e) {
+      // For backward compatibility
+      return 'receipt';
+    }
+  };
+  
+  // Handle file deletion
+  const handleFileDelete = (expenseId: string) => {
+    // Update expense with empty receipt
+    updateExpense(expenseId, 'receipt', '');
+    updateExpense(expenseId, 'receiptType', '');
+    updateExpense(expenseId, 'receiptName', '');
   };
 
   // Calculate time remaining for a task
@@ -653,7 +785,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
                           
                           <div>
                             <Label htmlFor={`expense-receipt-${expense.id}`}>Receipt/Invoice</Label>
-                            <div className="flex items-center mt-2">
+                            <div className="flex flex-col space-y-2 mt-2">
                               <Input
                                 id={`expense-receipt-${expense.id}`}
                                 type="file"
@@ -665,23 +797,80 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
                                   }
                                 }}
                               />
-                              <Button 
-                                variant="outline" 
-                                onClick={() => document.getElementById(`expense-receipt-${expense.id}`)?.click()}
-                              >
-                                <Upload className="h-4 w-4 mr-2" />
-                                Upload
-                              </Button>
                               
-                              {expense.receipt && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="ml-2"
-                                  onClick={() => window.open(expense.receipt, '_blank')}
+                              {/* File upload UI */}
+                              <div className="flex items-center space-x-2">
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => document.getElementById(`expense-receipt-${expense.id}`)?.click()}
+                                  disabled={uploadingFileId === expense.id}
                                 >
-                                  View
+                                  {uploadingFileId === expense.id ? (
+                                    <>
+                                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                                      Uploading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload className="h-4 w-4 mr-2" />
+                                      Upload
+                                    </>
+                                  )}
                                 </Button>
+                                
+                                {/* File size limit info */}
+                                <span className="text-xs text-slate-500">Max 5MB</span>
+                              </div>
+                              
+                              {/* Upload error message */}
+                              {uploadError && uploadingFileId === expense.id && (
+                                <div className="text-sm text-red-500">{uploadError}</div>
+                              )}
+                              
+                              {/* File preview area */}
+                              {expense.receipt && (
+                                <div className="flex items-center justify-between p-2 border rounded-md bg-slate-50">
+                                  <div className="flex items-center">
+                                    {/* File icon based on type */}
+                                    {getFileType(expense.receipt).includes('image') ? (
+                                      <img 
+                                        src={getFilePreviewUrl(expense.receipt)} 
+                                        alt="Receipt preview" 
+                                        className="h-8 w-8 object-cover rounded-sm mr-2" 
+                                      />
+                                    ) : (
+                                      <FileText className="h-8 w-8 text-blue-500 mr-2" />
+                                    )}
+                                    
+                                    {/* File name and size */}
+                                    <div className="text-sm truncate max-w-[150px]" title={getFileName(expense.receipt)}>
+                                      {getFileName(expense.receipt)}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex space-x-1">
+                                    {/* View button */}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-mokm-blue-600 border-mokm-blue-200 hover:bg-mokm-blue-50 hover:text-mokm-blue-700 hover:border-mokm-blue-300"
+                                      onClick={() => window.open(getFilePreviewUrl(expense.receipt), '_blank')}
+                                    >
+                                      <Eye className="h-4 w-4 mr-2 text-mokm-blue-500" />
+                                      View
+                                    </Button>
+                                    
+                                    {/* Delete button */}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-mokm-pink-600 hover:bg-mokm-pink-50 hover:text-mokm-pink-700 border-mokm-pink-200 hover:border-mokm-pink-300"
+                                      onClick={() => handleFileDelete(expense.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                    </Button>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -719,16 +908,173 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
           {/* Team & Tags Tab */}
           <TabsContent value="team">
             <div className="space-y-6">
-              {/* This would contain team member management and tags selection */}
-              <p className="text-sm text-slate-500">Team members and tags management would be implemented here</p>
+              {/* Team Members Section */}
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Team Members</h3>
+                <p className="text-sm text-slate-500 mb-4">Select team members who will work on this project.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  {teamMembers.map((member) => (
+                    <div 
+                      key={member.id} 
+                      className={`flex items-center justify-between border rounded-lg p-3 ${selectedTeam.includes(member.email) ? 'bg-slate-100 border-slate-400' : 'border-slate-200'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="bg-slate-200 h-10 w-10 rounded-full flex items-center justify-center">
+                          <User className="h-5 w-5 text-slate-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{member.fullName}</p>
+                          <p className="text-sm text-slate-500">{member.email} • {member.role}</p>
+                        </div>
+                      </div>
+                      <Checkbox
+                        id={`member-${member.id}`}
+                        checked={selectedTeam.includes(member.email)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            const newTeam = [...selectedTeam, member.email];
+                            setSelectedTeam(newTeam);
+                            onProjectChange('team', newTeam);
+                          } else {
+                            const newTeam = selectedTeam.filter(email => email !== member.email);
+                            setSelectedTeam(newTeam);
+                            onProjectChange('team', newTeam);
+                          }
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {teamMembers.length === 0 && (
+                  <div className="text-center p-8 border border-dashed rounded-lg">
+                    <p className="text-slate-500">No team members available.</p>
+                    <p className="text-sm text-slate-400">Add team members in the Company settings.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Tags Section */}
+              <div className="mt-8">
+                <h3 className="font-semibold text-lg mb-2">Project Tags</h3>
+                <p className="text-sm text-slate-500 mb-4">Add tags to categorize this project.</p>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {project?.tags?.map((tag, index) => (
+                    <div 
+                      key={index} 
+                      className="bg-slate-100 text-slate-800 rounded-full px-3 py-1 text-sm flex items-center gap-1"
+                    >
+                      {tag}
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const newTags = project.tags?.filter(t => t !== tag) || [];
+                          onProjectChange('tags', newTags);
+                        }}
+                        className="h-4 w-4 rounded-full bg-slate-300 text-slate-600 flex items-center justify-center hover:bg-slate-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {(!project?.tags || project.tags.length === 0) && (
+                    <p className="text-sm text-slate-400">No tags added yet</p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Select
+                    value={newTag}
+                    onValueChange={(value) => setNewTag(value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a tag" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTags
+                        .filter(tag => !project?.tags?.includes(tag))
+                        .map(tag => (
+                          <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                        ))
+                      }
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    type="button" 
+                    size="sm"
+                    variant="outline"
+                    className="text-mokm-purple-600 border-mokm-purple-200 hover:bg-mokm-purple-50 hover:text-mokm-purple-700 hover:border-mokm-purple-300"
+                    onClick={() => {
+                      if (newTag && !project?.tags?.includes(newTag)) {
+                        const newTags = [...(project?.tags || []), newTag];
+                        onProjectChange('tags', newTags);
+                        setNewTag('');
+                      }
+                    }}
+                    disabled={!newTag || (project?.tags?.includes(newTag) || false)}
+                  >
+                    <Plus className="h-4 w-4 mr-1 text-mokm-purple-500" />
+                    Add Tag
+                  </Button>
+                </div>
+
+                <div className="mt-4">
+                  <Label htmlFor="custom-tag">Create Custom Tag</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      id="custom-tag"
+                      placeholder="Enter a custom tag" 
+                      value={newTag} 
+                      onChange={(e) => setNewTag(e.target.value)}
+                    />
+                    <Button 
+                      type="button" 
+                      size="sm"
+                      variant="outline"
+                      className="bg-gradient-to-r from-mokm-purple-400 to-mokm-blue-500 text-white border-none hover:from-mokm-purple-500 hover:to-mokm-blue-600"
+                      onClick={() => {
+                        if (newTag && !project?.tags?.includes(newTag)) {
+                          // Add to available tags if not already there
+                          if (!availableTags.includes(newTag)) {
+                            const newAvailableTags = [...availableTags, newTag];
+                            setAvailableTags(newAvailableTags);
+                            localStorage.setItem('projectTags', JSON.stringify(newAvailableTags));
+                          }
+                          // Add to project tags
+                          const newTags = [...(project?.tags || []), newTag];
+                          onProjectChange('tags', newTags);
+                          setNewTag('');
+                        }
+                      }}
+                      disabled={!newTag || (project?.tags?.includes(newTag) || false)}
+                    >
+                      <Tag className="h-4 w-4 mr-1" />
+                      Create & Add
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
         
         <DialogFooter className="sticky bottom-0 bg-white pt-4">
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave}>Save Project</Button>
+            <Button 
+              variant="outline" 
+              onClick={onClose} 
+              className="border-mokm-blue-200 text-mokm-blue-700 hover:bg-mokm-blue-50 hover:text-mokm-blue-800 hover:border-mokm-blue-300"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 text-white border-none hover:from-mokm-blue-600 hover:to-mokm-purple-600"
+            >
+              Save Project
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

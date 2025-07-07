@@ -7,11 +7,28 @@ import {
   Users,
   Calendar,
   DollarSign,
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import ViewProjectModal from './ViewProjectModal';
 import EditProjectModal from './EditProjectModal';
 
@@ -68,6 +85,8 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
 }) => {
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deleteProjectId, setDeleteProjectId] = useState<number | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
   const handleEditProject = (project: Project) => {
     setViewingProject(null); // Close view modal if open
@@ -80,6 +99,27 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
     }
     setEditingProject(null);
   };
+
+  const handleDeleteProject = (projectId: number) => {
+    setDeleteProjectId(projectId);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const confirmDeleteProject = () => {
+    if (deleteProjectId && onEditProject) {
+      // Find the project to be deleted
+      const projectToDelete = projects.find(p => p.id === deleteProjectId);
+      if (projectToDelete) {
+        // Mark the project as deleted - in a real app, you might want to remove it entirely
+        // Here we're using the onEditProject handler to update it with a 'deleted' status
+        const deletedProject = { ...projectToDelete, status: 'Cancelled' as Project['status'] };
+        onEditProject(deletedProject);
+      }
+    }
+    setIsDeleteDialogOpen(false);
+    setDeleteProjectId(null);
+  };
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {projects.map((project) => (
@@ -90,9 +130,27 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
                 <CardTitle className="text-lg font-semibold text-slate-900">{project.name}</CardTitle>
                 <p className="text-sm text-slate-500 mt-1">{project.code}</p>
               </div>
-              <Button variant="ghost" size="sm">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="bg-gradient-to-r from-mokm-purple-400 to-mokm-blue-500 text-white border-none hover:from-mokm-purple-500 hover:to-mokm-blue-600">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 bg-white/90 backdrop-blur-sm border-mokm-blue-100">
+                  <DropdownMenuItem onClick={() => setViewingProject(project)} className="cursor-pointer hover:bg-gradient-to-r hover:from-mokm-blue-50 hover:to-mokm-purple-50 focus:bg-gradient-to-r focus:from-mokm-blue-50 focus:to-mokm-purple-50">
+                    <Eye className="mr-2 h-4 w-4 text-mokm-blue-500" />
+                    <span className="text-mokm-blue-700">View Details</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleEditProject(project)} className="cursor-pointer hover:bg-gradient-to-r hover:from-mokm-blue-50 hover:to-mokm-purple-50 focus:bg-gradient-to-r focus:from-mokm-blue-50 focus:to-mokm-purple-50">
+                    <Edit className="mr-2 h-4 w-4 text-mokm-purple-500" />
+                    <span className="text-mokm-purple-700">Edit Project</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="cursor-pointer text-mokm-pink-600 hover:text-mokm-pink-700 focus:text-mokm-pink-700 hover:bg-mokm-pink-50 focus:bg-mokm-pink-50">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Delete Project</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             
             <div className="flex flex-wrap gap-1 mt-2">
@@ -200,19 +258,19 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="flex-1"
+                className="flex-1 text-mokm-blue-600 border-mokm-blue-200 hover:bg-mokm-blue-50 hover:text-mokm-blue-700 hover:border-mokm-blue-300"
                 onClick={() => setViewingProject(project)}
               >
-                <Eye className="h-4 w-4 mr-2" />
+                <Eye className="h-4 w-4 mr-2 text-mokm-blue-500" />
                 View
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="flex-1"
+                className="flex-1 text-mokm-purple-600 border-mokm-purple-200 hover:bg-mokm-purple-50 hover:text-mokm-purple-700 hover:border-mokm-purple-300"
                 onClick={() => setEditingProject(project)}
               >
-                <Edit className="h-4 w-4 mr-2" />
+                <Edit className="h-4 w-4 mr-2 text-mokm-purple-500" />
                 Edit
               </Button>
             </div>
@@ -228,7 +286,7 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
           <p className="text-slate-600">No projects found</p>
         </div>
       )}
-      
+    
       {/* View Project Modal */}
       {viewingProject && (
         <ViewProjectModal 
@@ -246,6 +304,29 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
           onSave={handleSaveProject}
         />
       )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="bg-white/95 backdrop-blur-sm border-mokm-blue-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-mokm-blue-900">Are you sure you want to delete this project?</AlertDialogTitle>
+            <AlertDialogDescription className="text-mokm-blue-600">
+              This action will mark the project as cancelled and cannot be easily undone.
+              All associated data will be retained but the project will no longer appear in active projects.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-mokm-blue-200 text-mokm-blue-700 hover:bg-mokm-blue-50 hover:text-mokm-blue-800 hover:border-mokm-blue-300">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteProject}
+              className="bg-gradient-to-r from-mokm-pink-500 to-mokm-orange-500 hover:from-mokm-pink-600 hover:to-mokm-orange-600 text-white border-none"
+            >
+              Delete Project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

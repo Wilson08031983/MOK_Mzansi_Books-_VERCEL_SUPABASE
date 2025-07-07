@@ -124,10 +124,20 @@ const ViewProjectModal: React.FC<ViewProjectModalProps> = ({
             <div className="text-sm text-slate-500">{project.code}</div>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" onClick={() => onEdit(project)}>
+            <Button 
+              variant="outline"
+              className="text-mokm-purple-600 border-mokm-purple-200 hover:bg-mokm-purple-50 hover:text-mokm-purple-700 hover:border-mokm-purple-300"
+              onClick={() => onEdit(project)}
+            >
+              <FileText className="h-4 w-4 mr-2 text-mokm-purple-500" />
               Edit Project
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={onClose}
+              className="border-mokm-blue-200 text-mokm-blue-700 hover:bg-mokm-blue-50 hover:text-mokm-blue-800 hover:border-mokm-blue-300"
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -273,7 +283,10 @@ const ViewProjectModal: React.FC<ViewProjectModalProps> = ({
                           {new Date(task.startDate).toLocaleDateString()} - {new Date(task.endDate).toLocaleDateString()}
                         </div>
                       </div>
-                      <Badge variant={task.completed ? "success" : "outline"} className="ml-4">
+                      <Badge 
+                        variant={task.completed ? "secondary" : "outline"} 
+                        className={`ml-4 ${task.completed ? "bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 text-white border-none" : "border-mokm-blue-200 text-mokm-blue-700"}`}
+                      >
                         {task.completed ? "Completed" : "In Progress"}
                       </Badge>
                     </div>
