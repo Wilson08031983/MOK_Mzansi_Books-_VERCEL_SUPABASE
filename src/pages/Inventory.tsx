@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,9 @@ import {
   FileBarChart,
   Printer,
   AlertTriangle,
-  Scan
+  Scan,
+  Store,
+  Truck
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -24,6 +26,12 @@ import InventoryScanner from '@/components/inventory/InventoryScanner';
 import NewStockForm from '@/components/inventory/NewStockForm';
 import UpdateStockForm from '@/components/inventory/UpdateStockForm';
 import DamageStockForm from '@/components/inventory/DamageStockForm';
+import AddSupplierModal from '@/components/inventory/AddSupplierModal';
+import AddStorageModal from '@/components/inventory/AddStorageModal';
+
+// Service imports
+import { initializeSuppliers } from '@/services/supplierService';
+import { initializeStorageLocations } from '@/services/storageLocationService';
 
 // Demo inventory data
 const inventoryData = [
@@ -101,12 +109,20 @@ const Inventory = () => {
   const [showNewStockForm, setShowNewStockForm] = useState(false);
   const [showUpdateStockForm, setShowUpdateStockForm] = useState(false);
   const [showDamageStockForm, setShowDamageStockForm] = useState(false);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [showStorageModal, setShowStorageModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
   const categories = ['Electronics', 'Furniture', 'Health', 'Stationery', 'Food & Beverages'];
   const statuses = ['In Stock', 'Low Stock', 'Out of Stock', 'Expired', 'Damaged'];
+  
+  // Initialize sample data for suppliers and storage locations
+  useEffect(() => {
+    initializeSuppliers();
+    initializeStorageLocations();
+  }, []);
 
   const handleBarcodeResult = (result) => {
     // Check if barcode exists in inventory
@@ -139,6 +155,12 @@ const Inventory = () => {
       case 'scan':
         setShowScanner(true);
         break;
+      case 'supplier':
+        setShowSupplierModal(true);
+        break;
+      case 'storage':
+        setShowStorageModal(true);
+        break;
       default:
         break;
     }
@@ -148,6 +170,8 @@ const Inventory = () => {
     setShowNewStockForm(false);
     setShowUpdateStockForm(false);
     setShowDamageStockForm(false);
+    setShowSupplierModal(false);
+    setShowStorageModal(false);
     setSelectedItem(null);
   };
 
@@ -217,6 +241,22 @@ const Inventory = () => {
               onClick={() => handleActionClick('damage')}
             >
               <AlertTriangle className="h-4 w-4" /> Damage/Expired
+            </Button>
+            
+            <Button 
+              variant="outline"
+              className="flex items-center gap-2 text-green-600 border-green-200 shadow-business hover:shadow-business-lg hover-lift"
+              onClick={() => handleActionClick('supplier')}
+            >
+              <Truck className="h-4 w-4" /> Add Supplier
+            </Button>
+            
+            <Button 
+              variant="outline"
+              className="flex items-center gap-2 text-blue-600 border-blue-200 shadow-business hover:shadow-business-lg hover-lift"
+              onClick={() => handleActionClick('storage')}
+            >
+              <Store className="h-4 w-4" /> Add Storage
             </Button>
           </div>
         </div>
@@ -331,35 +371,51 @@ const Inventory = () => {
             </Tabs>
           </CardContent>
         </Card>
-
-        {/* Modal Forms */}
-        {showScanner && (
-          <InventoryScanner 
-            onClose={() => setShowScanner(false)} 
-            onResult={handleBarcodeResult}
-          />
-        )}
         
+        {/* Forms and Modals */}
         {showNewStockForm && (
           <NewStockForm 
-            onClose={handleFormClose} 
+            onClose={handleFormClose}
             initialBarcode={selectedItem?.barcode || ''}
           />
         )}
         
         {showUpdateStockForm && (
           <UpdateStockForm 
-            item={selectedItem} 
-            onClose={handleFormClose} 
+            item={selectedItem}
+            onClose={handleFormClose}
           />
         )}
         
         {showDamageStockForm && (
           <DamageStockForm 
-            item={selectedItem} 
-            onClose={handleFormClose} 
+            item={selectedItem}
+            onClose={handleFormClose}
           />
         )}
+        
+        {showScanner && (
+          <InventoryScanner 
+            onClose={() => setShowScanner(false)}
+            onResult={handleBarcodeResult}
+          />
+        )}
+        
+        <AddSupplierModal 
+          isOpen={showSupplierModal}
+          onClose={handleFormClose}
+          onSuccess={() => {
+            // Optionally refresh data or show a success message
+          }}
+        />
+
+        <AddStorageModal 
+          isOpen={showStorageModal}
+          onClose={handleFormClose}
+          onSuccess={() => {
+            // Optionally refresh data or show a success message
+          }}
+        />
       </div>
     </div>
   );
