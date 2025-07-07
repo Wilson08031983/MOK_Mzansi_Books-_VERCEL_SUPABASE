@@ -55,7 +55,48 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
     customFields: {}
   });
 
-  const availableTags = ['Web Development', 'Mobile', 'UI/UX', 'Backend', 'E-commerce', 'React Native', 'API', 'Database'];
+  const availableTags = [
+    'Web Development',
+    'Mobile App',
+    'UI/UX Design',
+    'Backend Development',
+    'E-commerce',
+    'API Integration',
+    'Database',
+    'Retail / Shop Setup',
+    'Inventory Management',
+    'Sales Campaign',
+    'Social Media Marketing',
+    'Accounting & Tax',
+    'Branding / Design',
+    'Office Renovation',
+    'Construction Project',
+    'Building Maintenance',
+    'Logistics & Delivery',
+    'Event Planning',
+    'Electrical Work',
+    'Plumbing',
+    'Landscaping',
+    'General Admin Tasks',
+    'Legal & Compliance',
+    'HR / Payroll',
+    'IT Support',
+    'Security Services',
+    'Cleaning Services',
+    'Catering Services',
+    'Municipal Services',
+    'Government Supplier',
+    'Tender Response',
+    'NGO / Non-Profit Project',
+    'Public Works',
+    'Consulting',
+    'Agriculture & Farming',
+    'Real Estate',
+    'Insurance Claims',
+    'Transport & Fleet',
+    'Education / Training',
+    'Healthcare / Medical'
+  ];
   const availableTeam = ['John Smith', 'Sarah Connor', 'Mike Johnson', 'Lisa Anderson', 'Emma Brown', 'James Wilson'];
   const managers = ['John Smith', 'Sarah Connor', 'David Lee', 'Emma Brown'];
   
@@ -63,6 +104,10 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
   const [clients, setClients] = useState<Client[]>([]);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
+  
+  // State for tag filtering
+  const [tagSearchTerm, setTagSearchTerm] = useState('');
+  const [filteredTags, setFilteredTags] = useState<string[]>(availableTags);
 
   const handleInputChange = (field: string, value: string | string[] | Record<string, unknown>) => {
     setProjectData(prev => ({ ...prev, [field]: value }));
@@ -72,11 +117,19 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
   const handleClientChange = (clientId: string) => {
     const selectedClient = clients.find(client => client.id === clientId);
     if (selectedClient) {
+      // Determine the best display name for the client
+      const clientDisplayName = selectedClient.companyName || 
+        (selectedClient.contactPerson ? `${selectedClient.contactPerson} (Individual)` : 'Client');
+      
+      // Update project data with client information
       setProjectData(prev => ({ 
         ...prev, 
-        client: selectedClient.companyName || selectedClient.contactPerson,
+        client: clientDisplayName, // Set display name as client field
         clientId: selectedClient.id 
       }));
+      
+      // Close the search dropdown by clearing the search term
+      setClientSearchTerm('');
     }
   };
   
@@ -90,6 +143,20 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
         clients.filter(client => 
           (client.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           client.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()))
+        )
+      );
+    }
+  };
+  
+  // Handle tag search
+  const handleTagSearch = (searchTerm: string) => {
+    setTagSearchTerm(searchTerm);
+    if (!searchTerm) {
+      setFilteredTags(availableTags);
+    } else {
+      setFilteredTags(
+        availableTags.filter(tag => 
+          tag.toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
     }
@@ -121,6 +188,11 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
       setFilteredClients(loadedClients);
     };
     loadClients();
+    
+    // Initialize filtered tags
+    setFilteredTags(availableTags);
+    // We only want to run this effect once on mount, availableTags is constant and doesn't change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = () => {
@@ -193,34 +265,78 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Client *</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Search className="h-4 w-4 text-gray-400" />
+                  
+                  {/* Selected client indicator */}
+                  {projectData.clientId && !clientSearchTerm && (
+                    <div className="mb-2 p-3 border border-mokm-purple-300 bg-mokm-purple-50 rounded-lg">
+                      <div className="font-medium text-mokm-purple-800">{projectData.client}</div>
+                      <div className="text-xs text-mokm-purple-600 mt-1">Selected client</div>
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Search clients..."
-                      value={clientSearchTerm}
-                      onChange={(e) => handleClientSearch(e.target.value)}
-                      className="w-full pl-10 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent mb-2"
-                    />
-                  </div>
-                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg">
-                    {filteredClients.length === 0 ? (
-                      <div className="p-3 text-center text-slate-500 text-sm">No clients found</div>
-                    ) : (
-                      filteredClients.map(client => (
-                        <div
-                          key={client.id}
-                          className={`p-3 cursor-pointer hover:bg-slate-50 ${projectData.clientId === client.id ? 'bg-mokm-purple-50 border-l-4 border-mokm-purple-500' : ''}`}
-                          onClick={() => handleClientChange(client.id)}
+                  )}
+                  
+                  {/* Only show search if no client is selected or search is active */}
+                  {(!projectData.clientId || clientSearchTerm) && (
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search clients..."
+                        value={clientSearchTerm}
+                        onChange={(e) => handleClientSearch(e.target.value)}
+                        className="w-full pl-10 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent mb-2"
+                      />
+                      {projectData.clientId && (
+                        <button 
+                          onClick={() => setClientSearchTerm('')}
+                          className="absolute inset-y-0 right-0 px-3 text-mokm-blue-500 hover:text-mokm-blue-700"
                         >
-                          <div className="font-medium">{client.companyName || 'No Company'}</div>
-                          <div className="text-sm text-slate-500">{client.contactPerson}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Change client button when client is selected */}
+                  {projectData.clientId && !clientSearchTerm && (
+                    <button 
+                      onClick={() => setClientSearchTerm(' ')} 
+                      className="text-sm text-mokm-blue-600 hover:text-mokm-blue-800 mt-1"
+                    >
+                      Change client
+                    </button>
+                  )}
+                  
+                  {/* Client search results */}
+                  {clientSearchTerm && (
+                    <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg">
+                      {filteredClients.length === 0 ? (
+                        <div className="p-3 text-center text-slate-500 text-sm">No clients found</div>
+                      ) : (
+                        filteredClients.map(client => (
+                          <div
+                            key={client.id}
+                            className={`p-3 cursor-pointer hover:bg-slate-50 ${projectData.clientId === client.id ? 'bg-mokm-purple-50 border-l-4 border-mokm-purple-500' : ''}`}
+                            onClick={() => handleClientChange(client.id)}
+                          >
+                            <div className="font-medium">
+                              {/* Display client name with fallbacks */}
+                              {client.companyName ? client.companyName : client.contactPerson ? `${client.contactPerson} (Individual)` : 'Unnamed Client'}
+                            </div>
+                            <div className="flex flex-col">
+                              {client.companyName && client.contactPerson && (
+                                <div className="text-sm text-slate-500">Contact: {client.contactPerson}</div>
+                              )}
+                              {client.email && (
+                                <div className="text-xs text-slate-400">{client.email}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -265,8 +381,20 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-3">Tags</label>
-                <div className="flex flex-wrap gap-2">
-                  {availableTags.map(tag => (
+                <div className="relative mb-3">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <Search className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search tags..."
+                    value={tagSearchTerm}
+                    onChange={(e) => handleTagSearch(e.target.value)}
+                    className="w-full pl-10 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pb-2 pr-1">
+                  {filteredTags.map(tag => (
                     <Badge
                       key={tag}
                       variant={projectData.tags.includes(tag) ? "default" : "secondary"}
@@ -280,6 +408,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                       {tag}
                     </Badge>
                   ))}
+                  {filteredTags.length === 0 && (
+                    <p className="text-sm text-gray-500">No matching tags found</p>
+                  )}
                 </div>
               </div>
             </div>
