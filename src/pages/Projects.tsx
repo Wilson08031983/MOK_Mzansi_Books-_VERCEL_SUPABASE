@@ -173,20 +173,22 @@ const Projects = () => {
   
   // Handler for updating a project after editing
   const handleEditProject = (updatedProject: Project) => {
-    setProjects(prevProjects => 
-      prevProjects.map(project => 
-        project.id === updatedProject.id ? updatedProject : project
-      )
-    );
+    console.log('Updating project:', updatedProject);
     
-    // Store updated projects in localStorage
-    try {
-      localStorage.setItem('projects', JSON.stringify(
-        projects.map(p => p.id === updatedProject.id ? updatedProject : p)
-      ));
-    } catch (error) {
-      console.error('Error saving updated project to localStorage:', error);
-    }
+    setProjects(prevProjects => {
+      const updatedProjects = prevProjects.map(project => 
+        project.id === updatedProject.id ? updatedProject : project
+      );
+      
+      // Store updated projects in localStorage
+      try {
+        localStorage.setItem('projects', JSON.stringify(updatedProjects));
+      } catch (error) {
+        console.error('Error saving updated project to localStorage:', error);
+      }
+      
+      return updatedProjects;
+    });
   };
 
   const getStatusColor = (status) => {

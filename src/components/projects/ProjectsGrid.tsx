@@ -110,12 +110,22 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
       // Find the project to be deleted
       const projectToDelete = projects.find(p => p.id === deleteProjectId);
       if (projectToDelete) {
-        // Mark the project as deleted - in a real app, you might want to remove it entirely
-        // Here we're using the onEditProject handler to update it with a 'deleted' status
+        console.log(`Deleting project: ${projectToDelete.name} (ID: ${projectToDelete.id})`);
+        
+        // Mark the project as deleted - using 'Cancelled' status for soft delete
         const deletedProject = { ...projectToDelete, status: 'Cancelled' as Project['status'] };
+        
+        // Send the updated project to the parent component
         onEditProject(deletedProject);
+        console.log('Project marked as Cancelled:', deletedProject);
+      } else {
+        console.error(`Could not find project with ID: ${deleteProjectId}`);
       }
+    } else {
+      console.error('Missing deleteProjectId or onEditProject handler');
     }
+    
+    // Close dialog and reset state regardless of outcome
     setIsDeleteDialogOpen(false);
     setDeleteProjectId(null);
   };
