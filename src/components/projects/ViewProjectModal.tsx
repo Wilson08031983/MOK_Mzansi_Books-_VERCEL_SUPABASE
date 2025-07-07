@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Users, Calendar, CheckSquare, Tag, DollarSign, FileText } from 'lucide-react';
+import { Project, Task, Expense } from '@/types/project';
 import {
   Dialog,
   DialogContent,
@@ -11,43 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
-interface Task {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  completed: boolean;
-}
-
-interface Expense {
-  id: string;
-  type: string;
-  amount: number;
-  date: string;
-  receipt?: string; // URL or base64 of the uploaded file
-  notes?: string;
-}
-
-interface Project {
-  id: number;
-  name: string;
-  client: string;
-  clientId?: string;
-  manager: string;
-  status: 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled';
-  priority: 'High' | 'Medium' | 'Low';
-  progress: number;
-  budget: number;
-  expenses: number;
-  startDate: string;
-  endDate: string;
-  team: string[];
-  tags: string[];
-  description: string;
-  code: string;
-  tasks?: Task[];
-  expenseItems?: Expense[];
-}
+// Using shared types from types/project.ts
 
 interface ViewProjectModalProps {
   project: Project;

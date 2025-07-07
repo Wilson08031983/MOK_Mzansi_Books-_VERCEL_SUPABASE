@@ -1,16 +1,21 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Eye, 
   Edit, 
   MoreVertical, 
+  Filter, 
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Trash2,
   Users,
   Calendar,
   DollarSign,
-  Clock,
-  Trash2
+  Clock
 } from 'lucide-react';
+import { Project } from '@/types/project';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -22,44 +27,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ViewProjectModal from './ViewProjectModal';
 import EditProjectModal from './EditProjectModal';
-
-interface Task {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  completed: boolean;
-}
-
-interface Expense {
-  id: string;
-  type: string;
-  amount: number;
-  date: string;
-  receipt?: string; // URL or base64 of the uploaded file
-  notes?: string;
-}
-
-interface Project {
-  id: number;
-  name: string;
-  client: string;
-  clientId?: string;
-  manager: string;
-  status: 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled';
-  priority: 'High' | 'Medium' | 'Low';
-  progress: number;
-  budget: number;
-  expenses: number;
-  startDate: string;
-  endDate: string;
-  team: string[];
-  tags: string[];
-  description: string;
-  code: string;
-  tasks?: Task[];
-  expenseItems?: Expense[];
-}
 
 interface ProjectsGridProps {
   projects: Project[];
@@ -236,6 +203,42 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
                     }`}>
                       {project.status}
                     </span>
+                  </div>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="space-y-2 mt-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium">Project Progress</span>
+                    <div className="flex items-center gap-1">
+                      <span className={`font-semibold ${
+                        project.progress >= 100 ? 'text-green-600' :
+                        project.progress >= 70 ? 'text-emerald-600' :
+                        project.progress >= 40 ? 'text-amber-600' :
+                        'text-orange-600'
+                      }`}>
+                        {project.progress}%
+                      </span>
+                      {project.progress >= 100 && <CheckCircle2 className="h-3 w-3 text-green-600" />}
+                    </div>
+                  </div>
+                  <Progress
+                    value={project.progress}
+                    className="h-2 bg-slate-200"
+                    style={{
+                      backgroundSize: '1rem 1rem',
+                      backgroundImage: project.progress < 100 ? 
+                        'linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent)' : 
+                        'none'
+                    }}
+                  />
+                  <div className="flex justify-between items-center text-xs text-slate-500">
+                    <span>{project.tasks?.length ? `${project.tasks.filter(task => task.completed).length}/${project.tasks.length} Tasks` : 'No tasks'}</span>
+                    {project.tasks?.length > 0 && (
+                      <span className="italic">
+                        Updated automatically
+                      </span>
+                    )}
                   </div>
                 </div>
                 

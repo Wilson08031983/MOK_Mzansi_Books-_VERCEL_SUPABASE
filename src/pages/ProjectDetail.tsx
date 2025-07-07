@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Project, Task } from '@/types/project';
 import {
   Calendar,
   CheckSquare,
@@ -15,16 +16,19 @@ import {
   Trash2
 } from 'lucide-react';
 
-// Project type definition
-interface Task {
-  id: string;
-  title: string;
+// Project type definition - using shared types with extensions for local needs
+import { Task as BaseTask, Project as BaseProject } from '@/types/project';
+
+// Extend the shared Task type with additional fields needed for this component
+interface TaskDetail extends Omit<BaseTask, 'name'> {
+  title: string; // Instead of name from the base Task
   description?: string;
   status: 'pending' | 'in-progress' | 'completed';
   assignedTo?: string;
   dueDate?: string;
 }
 
+// PettyCash type remains local since it's specific to this component
 interface PettyCash {
   id: string;
   amount: number;
@@ -34,19 +38,13 @@ interface PettyCash {
   taskId?: string;
 }
 
-interface Project {
-  id: string;
-  name: string;
-  client: string;
+// Extended project interface with additional fields needed for this component
+interface ProjectDetail extends Omit<BaseProject, 'status' | 'tasks'> {
   status: 'active' | 'completed' | 'on-hold' | 'cancelled';
-  progress: number;
-  startDate: string;
-  endDate: string;
-  budget: number;
-  spent: number;
-  tasks: Task[];
+  tasks: TaskDetail[];
   pettyCash: PettyCash[];
-  teamMembers: { id: string; name: string }[];
+  spent: number; // Instead of expenses
+  teamMembers: { id: string; name: string }[]; // Instead of team
 }
 
 const ProjectDetail: React.FC = () => {
@@ -56,7 +54,7 @@ const ProjectDetail: React.FC = () => {
   const [showPettyCashModal, setShowPettyCashModal] = useState(false);
   
   // Sample project data - in a real app this would be fetched from an API
-  const [project, setProject] = useState<Project>({
+  const [project, setProject] = useState<ProjectDetail>({
     id: id as string,
     name: 'Website Redesign',
     client: 'ABC Corporation',

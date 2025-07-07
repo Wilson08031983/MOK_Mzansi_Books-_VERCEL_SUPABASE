@@ -5,43 +5,32 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getClients, Client } from '@/services/clientService';
+import { Project } from '@/types/project';
 
-// Project data interface for better type safety
-interface ProjectData {
-  id?: number;
-  name: string;
-  description: string;
-  client: string;
-  clientId: string; 
-  manager: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-  priority: string;
-  budget: string;
+// Using a specialized version of Project for creating new projects
+interface ProjectData extends Omit<Project, 'budget' | 'expenses' | 'status' | 'priority'> {
+  budget: string; // String for form input, converted to number on save
+  expenses?: number;
+  status: string; // String for form input, converted to Project['status'] on save
+  priority: string; // String for form input, converted to Project['priority'] on save
   billingType: string;
   hourlyRate: string;
-  tags: string[];
-  team: string[];
   customFields: Record<string, unknown>;
-  code?: string;
-  progress?: number;
-  expenses?: number;
   createdAt?: string;
 }
 
 interface CreateProjectModalProps {
   onClose: () => void;
-  onSubmit: (projectData: ProjectData) => void;
+  onSubmit: (formState: ProjectData) => void;
 }
 
 const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubmit }) => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [projectData, setProjectData] = useState<ProjectData>({
+  const [formState, setFormState] = useState({
     name: '',
     description: '',
     client: '',
-    clientId: '', // Store the client ID separately
+    clientId: '',
     manager: '',
     startDate: '',
     endDate: '',
@@ -50,9 +39,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
     budget: '',
     billingType: 'Fixed Price',
     hourlyRate: '',
-    tags: [],
-    team: [],
-    customFields: {}
+    tags: [] as string[],
+    team: [] as string[],
+    customFields: {} as Record<string, unknown>
   });
 
   const availableTags = [
@@ -110,7 +99,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
   const [filteredTags, setFilteredTags] = useState<string[]>(availableTags);
 
   const handleInputChange = (field: string, value: string | string[] | Record<string, unknown>) => {
-    setProjectData(prev => ({ ...prev, [field]: value }));
+    setFormState(prev => ({ ...prev, [field]: value }));
   };
   
   // Special handler for client selection to store both name and ID
@@ -122,7 +111,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
         (selectedClient.contactPerson ? `${selectedClient.contactPerson} (Individual)` : 'Client');
       
       // Update project data with client information
-      setProjectData(prev => ({ 
+      setFormState(prev => ({ 
         ...prev, 
         client: clientDisplayName, // Set display name as client field
         clientId: selectedClient.id 
@@ -163,7 +152,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
   };
 
   const handleTagToggle = (tag: string) => {
-    setProjectData(prev => ({
+    setFormState(prev => ({
       ...prev,
       tags: prev.tags.includes(tag)
         ? prev.tags.filter(t => t !== tag)
@@ -172,7 +161,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
   };
 
   const handleTeamToggle = (member: string) => {
-    setProjectData(prev => ({
+    setFormState(prev => ({
       ...prev,
       team: prev.team.includes(member)
         ? prev.team.filter(m => m !== member)
@@ -196,15 +185,26 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
   }, []);
 
   const handleSubmit = () => {
-    const newProject = {
-      ...projectData,
+    // Convert budget from string to number
+    const budget = parseFloat(formState.budget) || 0;
+    
+    // Create a properly formatted Project object
+    const newProject: ProjectData = {
+      ...formState,
       id: Date.now(),
       code: `PRJ-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`,
       progress: 0,
       expenses: 0,
-      createdAt: new Date().toISOString()
+      budget: formState.budget, // Keep as string for the ProjectData interface
+      status: formState.status as 'Planning' | 'In Progress' | 'Completed' | 'On Hold' | 'Cancelled' | 'Not Started' | 'Overdue', 
+      priority: formState.priority as 'High' | 'Medium' | 'Low',
+      tasks: [], // Initialize with empty tasks array
+      createdAt: new Date().toISOString(),
+      customFields: formState.customFields
     };
+    
     onSubmit(newProject);
+    onClose();
   };
 
   const steps = [
@@ -255,7 +255,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   <label className="block text-sm font-medium text-slate-700 mb-2">Project Name *</label>
                   <input
                     type="text"
-                    value={projectData.name}
+                    value={formState.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     placeholder="Enter project name"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
@@ -267,15 +267,15 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   <label className="block text-sm font-medium text-slate-700 mb-2">Client *</label>
                   
                   {/* Selected client indicator */}
-                  {projectData.clientId && !clientSearchTerm && (
+                  {formState.clientId && !clientSearchTerm && (
                     <div className="mb-2 p-3 border border-mokm-purple-300 bg-mokm-purple-50 rounded-lg">
-                      <div className="font-medium text-mokm-purple-800">{projectData.client}</div>
+                      <div className="font-medium text-mokm-purple-800">{formState.client}</div>
                       <div className="text-xs text-mokm-purple-600 mt-1">Selected client</div>
                     </div>
                   )}
                   
                   {/* Only show search if no client is selected or search is active */}
-                  {(!projectData.clientId || clientSearchTerm) && (
+                  {(!formState.clientId || clientSearchTerm) && (
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <Search className="h-4 w-4 text-gray-400" />
@@ -287,7 +287,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                         onChange={(e) => handleClientSearch(e.target.value)}
                         className="w-full pl-10 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent mb-2"
                       />
-                      {projectData.clientId && (
+                      {formState.clientId && (
                         <button 
                           onClick={() => setClientSearchTerm('')}
                           className="absolute inset-y-0 right-0 px-3 text-mokm-blue-500 hover:text-mokm-blue-700"
@@ -299,7 +299,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   )}
                   
                   {/* Change client button when client is selected */}
-                  {projectData.clientId && !clientSearchTerm && (
+                  {formState.clientId && !clientSearchTerm && (
                     <button 
                       onClick={() => setClientSearchTerm(' ')} 
                       className="text-sm text-mokm-blue-600 hover:text-mokm-blue-800 mt-1"
@@ -317,7 +317,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                         filteredClients.map(client => (
                           <div
                             key={client.id}
-                            className={`p-3 cursor-pointer hover:bg-slate-50 ${projectData.clientId === client.id ? 'bg-mokm-purple-50 border-l-4 border-mokm-purple-500' : ''}`}
+                            className={`p-3 cursor-pointer hover:bg-slate-50 ${formState.clientId === client.id ? 'bg-mokm-purple-50 border-l-4 border-mokm-purple-500' : ''}`}
                             onClick={() => handleClientChange(client.id)}
                           >
                             <div className="font-medium">
@@ -343,7 +343,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
                 <textarea
-                  value={projectData.description}
+                  value={formState.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
                   placeholder="Enter project description"
                   rows={4}
@@ -355,7 +355,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
                   <select
-                    value={projectData.status}
+                    value={formState.status}
                     onChange={(e) => handleInputChange('status', e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
                   >
@@ -368,7 +368,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Priority</label>
                   <select
-                    value={projectData.priority}
+                    value={formState.priority}
                     onChange={(e) => handleInputChange('priority', e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
                   >
@@ -397,9 +397,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   {filteredTags.map(tag => (
                     <Badge
                       key={tag}
-                      variant={projectData.tags.includes(tag) ? "default" : "secondary"}
+                      variant={formState.tags.includes(tag) ? "default" : "secondary"}
                       className={`cursor-pointer transition-colors ${
-                        projectData.tags.includes(tag)
+                        formState.tags.includes(tag)
                           ? 'bg-mokm-purple-500 text-white'
                           : 'hover:bg-slate-200'
                       }`}
@@ -423,7 +423,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Project Manager *</label>
                   <select
-                    value={projectData.manager}
+                    value={formState.manager}
                     onChange={(e) => handleInputChange('manager', e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
                     required
@@ -443,7 +443,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                     <label key={member} className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
                       <input
                         type="checkbox"
-                        checked={projectData.team.includes(member)}
+                        checked={formState.team.includes(member)}
                         onChange={() => handleTeamToggle(member)}
                         className="rounded border-slate-300 text-mokm-purple-600 focus:ring-mokm-purple-500"
                       />
@@ -463,7 +463,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   <label className="block text-sm font-medium text-slate-700 mb-2">Start Date *</label>
                   <input
                     type="date"
-                    value={projectData.startDate}
+                    value={formState.startDate}
                     onChange={(e) => handleInputChange('startDate', e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
                     required
@@ -474,7 +474,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   <label className="block text-sm font-medium text-slate-700 mb-2">End Date *</label>
                   <input
                     type="date"
-                    value={projectData.endDate}
+                    value={formState.endDate}
                     onChange={(e) => handleInputChange('endDate', e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
                     required
@@ -491,7 +491,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Billing Type</label>
                   <select
-                    value={projectData.billingType}
+                    value={formState.billingType}
                     onChange={(e) => handleInputChange('billingType', e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
                   >
@@ -505,7 +505,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   <label className="block text-sm font-medium text-slate-700 mb-2">Total Budget *</label>
                   <input
                     type="number"
-                    value={projectData.budget}
+                    value={formState.budget}
                     onChange={(e) => handleInputChange('budget', e.target.value)}
                     placeholder="Enter budget amount"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
@@ -514,12 +514,12 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 </div>
               </div>
 
-              {projectData.billingType === 'Hourly' && (
+              {formState.billingType === 'Hourly' && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Hourly Rate</label>
                   <input
                     type="number"
-                    value={projectData.hourlyRate}
+                    value={formState.hourlyRate}
                     onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
                     placeholder="Enter hourly rate"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
@@ -532,29 +532,29 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-600">Project Name:</span>
-                    <span className="font-medium">{projectData.name || 'Not specified'}</span>
+                    <span className="font-medium">{formState.name || 'Not specified'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Client:</span>
-                    <span className="font-medium">{projectData.client || 'Not specified'}</span>
+                    <span className="font-medium">{formState.client || 'Not specified'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Manager:</span>
-                    <span className="font-medium">{projectData.manager || 'Not specified'}</span>
+                    <span className="font-medium">{formState.manager || 'Not specified'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Team Size:</span>
-                    <span className="font-medium">{projectData.team.length} members</span>
+                    <span className="font-medium">{formState.team.length} members</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Budget:</span>
-                    <span className="font-medium">R{projectData.budget ? parseInt(projectData.budget).toLocaleString() : '0'}</span>
+                    <span className="font-medium">R{formState.budget ? parseInt(formState.budget).toLocaleString() : '0'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">Duration:</span>
                     <span className="font-medium">
-                      {projectData.startDate && projectData.endDate 
-                        ? `${projectData.startDate} to ${projectData.endDate}`
+                      {formState.startDate && formState.endDate 
+                        ? `${formState.startDate} to ${formState.endDate}`
                         : 'Not specified'
                       }
                     </span>
@@ -584,8 +584,8 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   onClick={() => setCurrentStep(currentStep + 1)}
                   className="bg-mokm-purple-500 hover:bg-mokm-purple-600 text-white"
                   disabled={
-                    (currentStep === 1 && (!projectData.name || !projectData.client)) ||
-                    (currentStep === 2 && (!projectData.manager || !projectData.startDate || !projectData.endDate))
+                    (currentStep === 1 && (!formState.name || !formState.client)) ||
+                    (currentStep === 2 && (!formState.manager || !formState.startDate || !formState.endDate))
                   }
                 >
                   Next
@@ -594,7 +594,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 <Button 
                   onClick={handleSubmit}
                   className="bg-mokm-purple-500 hover:bg-mokm-purple-600 text-white"
-                  disabled={!projectData.budget}
+                  disabled={!formState.budget}
                 >
                   Create Project
                 </Button>

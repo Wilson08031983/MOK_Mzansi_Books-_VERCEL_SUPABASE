@@ -14,8 +14,6 @@ interface ProjectsSearchAndFiltersProps {
   setSortOrder: (order: 'asc' | 'desc') => void;
   handleSort: (column: string) => void;
   selectedProjects: number[];
-  viewMode: string;
-  setViewMode: (mode: string) => void;
   showFilters: boolean;
   setShowFilters: (show: boolean) => void;
 }
@@ -28,14 +26,12 @@ const ProjectsSearchAndFilters: React.FC<ProjectsSearchAndFiltersProps> = ({
   sortBy,
   handleSort,
   selectedProjects,
-  viewMode,
-  setViewMode,
   showFilters,
   setShowFilters
 }) => {
   return (
     <div className="space-y-4">
-      {/* View Mode and Filters Toggle */}
+      {/* Filters Toggle */}
       <div className="flex items-center justify-between">
         <Button 
           variant="outline" 
@@ -46,26 +42,7 @@ const ProjectsSearchAndFilters: React.FC<ProjectsSearchAndFiltersProps> = ({
           <span>Filters</span>
         </Button>
         
-        <div className="flex items-center bg-white rounded-lg border">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 rounded-l-lg ${viewMode === 'list' ? 'bg-mokm-purple-100 text-mokm-purple-600' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <List className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 ${viewMode === 'grid' ? 'bg-mokm-purple-100 text-mokm-purple-600' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <Grid3X3 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('kanban')}
-            className={`p-2 rounded-r-lg ${viewMode === 'kanban' ? 'bg-mokm-purple-100 text-mokm-purple-600' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <Kanban className="h-4 w-4" />
-          </button>
-        </div>
+        {/* View mode toggle buttons removed as requested */}
       </div>
 
       {/* Search and Filters */}

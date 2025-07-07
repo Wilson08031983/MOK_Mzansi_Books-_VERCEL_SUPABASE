@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Project } from '@/types/project';
 import { 
   Search, 
   Plus, 
@@ -37,29 +38,13 @@ import ProjectsEmptyState from '@/components/projects/ProjectsEmptyState';
 import CreateProjectModal from '@/components/projects/CreateProjectModal';
 import ProjectFilters from '@/components/projects/ProjectFilters';
 
-interface Project {
-  id: number;
-  name: string;
-  client: string;
-  manager: string;
-  status: 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled';
-  priority: 'High' | 'Medium' | 'Low';
-  progress: number;
-  budget: number;
-  expenses: number;
-  startDate: string;
-  endDate: string;
-  team: string[];
-  tags: string[];
-  description: string;
-  code: string;
-}
+// Using shared Project type from types/project.ts
 
 const Projects = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [viewMode, setViewMode] = useState('grid'); // list, grid, kanban
+  // Always using grid view as per request
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -173,22 +158,20 @@ const Projects = () => {
   
   // Handler for updating a project after editing
   const handleEditProject = (updatedProject: Project) => {
-    console.log('Updating project:', updatedProject);
-    
-    setProjects(prevProjects => {
-      const updatedProjects = prevProjects.map(project => 
+    setProjects(prevProjects => 
+      prevProjects.map(project => 
         project.id === updatedProject.id ? updatedProject : project
-      );
-      
-      // Store updated projects in localStorage
-      try {
-        localStorage.setItem('projects', JSON.stringify(updatedProjects));
-      } catch (error) {
-        console.error('Error saving updated project to localStorage:', error);
-      }
-      
-      return updatedProjects;
-    });
+      )
+    );
+    
+    // Store updated projects in localStorage
+    try {
+      localStorage.setItem('projects', JSON.stringify(
+        projects.map(p => p.id === updatedProject.id ? updatedProject : p)
+      ));
+    } catch (error) {
+      console.error('Error saving updated project to localStorage:', error);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -295,8 +278,6 @@ const Projects = () => {
             setSortOrder={setSortOrder}
             handleSort={handleSort}
             selectedProjects={selectedProjects}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
             showFilters={showFilters}
             setShowFilters={setShowFilters}
           />
@@ -307,32 +288,12 @@ const Projects = () => {
 
           {/* Projects Content */}
           <div className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business rounded-xl p-6 mt-6">
-            {viewMode === 'list' && (
-              <ProjectsList 
-                projects={filteredProjects}
-                selectedProjects={selectedProjects}
-                setSelectedProjects={setSelectedProjects}
-                getStatusColor={getStatusColor}
-                getPriorityColor={getPriorityColor}
-              />
-            )}
-            
-            {viewMode === 'grid' && (
-              <ProjectsGrid 
-                projects={filteredProjects}
-                getStatusColor={getStatusColor}
-                getPriorityColor={getPriorityColor}
-                onEditProject={handleEditProject}
-              />
-            )}
-            
-            {viewMode === 'kanban' && (
-              <ProjectsKanban 
-                projects={filteredProjects}
-                getStatusColor={getStatusColor}
-                getPriorityColor={getPriorityColor}
-              />
-            )}
+            <ProjectsGrid 
+              projects={filteredProjects}
+              getStatusColor={getStatusColor}
+              getPriorityColor={getPriorityColor}
+              onEditProject={handleEditProject}
+            />
           </div>
 
           {/* Empty State */}
@@ -349,25 +310,33 @@ const Projects = () => {
                 
                 // Create a new project with the correct type
                 const newProject: Project = {
-                  id: projectData.id || Date.now(),
-                  name: projectData.name,
-                  client: projectData.client,
-                  manager: projectData.manager || '',
-                  status: (projectData.status || 'Planning') as 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled',
-                  priority: (projectData.priority || 'Medium') as 'High' | 'Medium' | 'Low',
-                  progress: projectData.progress || 0,
-                  budget: parseFloat(projectData.budget) || 0,
-                  expenses: projectData.expenses || 0,
-                  startDate: projectData.startDate || '',
-                  endDate: projectData.endDate || '',
-                  team: projectData.team || [],
-                  tags: projectData.tags || [],
-                  description: projectData.description || '',
-                  code: projectData.code || `PRJ-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
+                  id: typeof projectData.id === 'number' ? projectData.id : Date.now(),
+                  name: typeof projectData.name === 'string' ? projectData.name : '',
+                  client: typeof projectData.client === 'string' ? projectData.client : '',
+                  manager: typeof projectData.manager === 'string' ? projectData.manager : '',
+                  status: (typeof projectData.status === 'string' ? projectData.status : 'Planning') as 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled' | 'Not Started' | 'Overdue',
+                  priority: (typeof projectData.priority === 'string' ? projectData.priority : 'Medium') as 'High' | 'Medium' | 'Low',
+                  progress: typeof projectData.progress === 'number' ? projectData.progress : 0,
+                  budget: typeof projectData.budget === 'string' ? parseFloat(projectData.budget) || 0 : 0,
+                  expenses: typeof projectData.expenses === 'number' ? projectData.expenses : 0,
+                  startDate: typeof projectData.startDate === 'string' ? projectData.startDate : '',
+                  endDate: typeof projectData.endDate === 'string' ? projectData.endDate : '',
+                  team: Array.isArray(projectData.team) ? projectData.team : [],
+                  tags: Array.isArray(projectData.tags) ? projectData.tags : [],
+                  description: typeof projectData.description === 'string' ? projectData.description : '',
+                  code: typeof projectData.code === 'string' ? projectData.code : `PRJ-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`
                 };
                 
                 // Add the new project to the projects array
-                setProjects(prevProjects => [...prevProjects, newProject]);
+                const updatedProjects = [...projects, newProject];
+                setProjects(updatedProjects);
+                
+                // Store in localStorage
+                try {
+                  localStorage.setItem('projects', JSON.stringify(updatedProjects));
+                } catch (error) {
+                  console.error('Error saving new project to localStorage:', error);
+                }
                 
                 setShowCreateModal(false);
                 

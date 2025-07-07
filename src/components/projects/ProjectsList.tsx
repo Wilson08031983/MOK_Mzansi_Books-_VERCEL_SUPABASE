@@ -11,24 +11,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-
-interface Project {
-  id: number;
-  name: string;
-  client: string;
-  manager: string;
-  status: string;
-  priority: string;
-  progress: number;
-  budget: number;
-  expenses: number;
-  startDate: string;
-  endDate: string;
-  team: string[];
-  tags: string[];
-  description: string;
-  code: string;
-}
+import { Project } from '@/types/project';
 
 interface ProjectsListProps {
   projects: Project[];

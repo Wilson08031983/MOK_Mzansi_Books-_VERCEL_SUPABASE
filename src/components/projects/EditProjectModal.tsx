@@ -3,6 +3,8 @@ import {
   Plus, Calendar, CheckSquare, Tag, DollarSign, FileText, Clock,
   User, Check, ChevronsUpDown, Loader2, Trash2, Upload, Eye, X
 } from 'lucide-react';
+import { calculateProjectStatus, calculateProjectProgress } from '@/utils/projectUtils';
+import { Project, Task, Expense, TaskTemplate } from '@/types/project';
 import { 
   Dialog,
   DialogContent,
@@ -33,51 +35,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { getAllTeamMembers } from '@/services/localAuthService';
 
-interface Task {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  completed: boolean;
-}
-
-interface Expense {
-  id: string;
-  type: string;
-  amount: number;
-  date: string;
-  receipt?: string; // JSON string with file data or base64 of the uploaded file
-  receiptType?: string; // MIME type of the receipt file
-  receiptName?: string; // Original filename of the receipt
-  notes?: string;
-}
-
-interface TaskTemplate {
-  id: string;
-  name: string;
-  tasks: Task[];
-}
-
-interface Project {
-  id: number;
-  name: string;
-  client: string;
-  clientId?: string;
-  manager: string;
-  status: 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled';
-  priority: 'High' | 'Medium' | 'Low';
-  progress: number;
-  budget: number;
-  expenses: number;
-  startDate: string;
-  endDate: string;
-  team: string[];
-  tags: string[];
-  description: string;
-  code: string;
-  tasks?: Task[];
-  expenseItems?: Expense[];
-}
+// Using shared types from types/project.ts
 
 interface EditProjectModalProps {
   project: Project;
@@ -162,11 +120,20 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
   useEffect(() => {
     // Calculate progress based on completed tasks
     if (project.tasks && project.tasks.length > 0) {
-      const completedCount = project.tasks.filter(task => task.completed).length;
-      const progress = Math.round((completedCount / project.tasks.length) * 100);
-      setProject(prev => ({...prev, progress}));
+      // Use the utility function to calculate progress
+      const progress = calculateProjectProgress(project);
+      
+      // Use the utility function to calculate status automatically based on tasks and deadlines
+      const calculatedStatus = calculateProjectStatus(project) as 'In Progress' | 'Completed' | 'Planning' | 'On Hold' | 'Cancelled' | 'Not Started' | 'Overdue';
+      
+      setProject(prev => ({
+        ...prev, 
+        progress,
+        // Only update the status automatically if it's not manually set to 'On Hold' or 'Cancelled'
+        status: prev.status === 'On Hold' || prev.status === 'Cancelled' ? prev.status : calculatedStatus
+      }));
     }
-  }, [project.tasks]);
+  }, [project]);  // Include the entire project object to properly detect all changes
 
   
   // Calculate total expenses
@@ -496,23 +463,37 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
               </div>
               
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select 
-                    value={project.status} 
-                    onValueChange={(value) => setProject({...project, status: value as Project['status']})}
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="status" className="text-sm font-medium">
+                    Status
+                    {(project.status === 'Not Started' || project.status === 'In Progress' || 
+                      project.status === 'Completed' || project.status === 'Overdue') && 
+                      <span className="ml-2 text-xs text-gray-500">(Auto-calculated)</span>
+                    }
+                  </Label>
+                  <Select
+                    value={project.status}
+                    onValueChange={(value) => onProjectChange('status', value as Project['status'])}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="Not Started">Not Started</SelectItem>
                       <SelectItem value="Planning">Planning</SelectItem>
                       <SelectItem value="In Progress">In Progress</SelectItem>
                       <SelectItem value="On Hold">On Hold</SelectItem>
                       <SelectItem value="Completed">Completed</SelectItem>
+                      <SelectItem value="Overdue">Overdue</SelectItem>
                       <SelectItem value="Cancelled">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
+                  {(project.status === 'Not Started' || project.status === 'In Progress' || 
+                    project.status === 'Completed' || project.status === 'Overdue') && 
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Status is automatically updated based on tasks and deadlines
+                    </p>
+                  }
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="priority">Priority</Label>
