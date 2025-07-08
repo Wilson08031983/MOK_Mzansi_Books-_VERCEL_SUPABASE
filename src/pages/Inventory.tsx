@@ -1,153 +1,304 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  PackageOpen, 
-  Search, 
-  ArrowLeft, 
-  Plus, 
-  RefreshCw, 
-  Download, 
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import {
+  RefreshCw,
+  PlusCircle,
+  Pencil,
+  X,
+  AlertTriangle,
+  Search,
+  Filter,
+  Map,
+  Package,
+  Warehouse,
+  QrCode,
+  Loader2,
+  PackageOpen,
+  ArrowLeft,
+  Plus,
+  Download,
   FileBarChart,
   Printer,
-  AlertTriangle,
   Scan,
   Store,
   Truck
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 // Component imports
 import InventoryTable from '@/components/inventory/InventoryTable';
 import InventoryScanner from '@/components/inventory/InventoryScanner';
 import NewStockForm from '@/components/inventory/NewStockForm';
 import UpdateStockForm from '@/components/inventory/UpdateStockForm';
+import ReceiveStockForm from '@/components/inventory/ReceiveStockForm';
+import EnhancedBarcodeScanner from '@/components/inventory/EnhancedBarcodeScanner';
 import DamageStockForm from '@/components/inventory/DamageStockForm';
 import AddSupplierModal from '@/components/inventory/AddSupplierModal';
 import AddStorageModal from '@/components/inventory/AddStorageModal';
 
 // Service imports
+import { 
+  getAllInventoryItems, 
+  getItemStockHistory, 
+  getAllStockHistory, 
+  initializeInventoryData,
+  deleteInventoryItem
+} from '@/services/inventoryService';
 import { initializeSuppliers } from '@/services/supplierService';
 import { initializeStorageLocations } from '@/services/storageLocationService';
 
-// Demo inventory data
-const inventoryData = [
-  { 
-    id: 'INV-001', 
-    name: 'Laptop HP ProBook', 
-    barcode: '8901234567890', 
-    stockLevel: 12, 
-    price: 10999.99, 
-    category: 'Electronics',
-    expiryDate: null,
-    supplier: 'HP South Africa',
-    lastUpdated: '2025-05-30',
-    location: 'Warehouse A',
-    status: 'In Stock'
-  },
-  { 
-    id: 'INV-002', 
-    name: 'Office Chair - Ergonomic', 
-    barcode: '8901234567891', 
-    stockLevel: 25, 
-    price: 1899.99, 
-    category: 'Furniture',
-    expiryDate: null,
-    supplier: 'Office Solutions Ltd',
-    lastUpdated: '2025-05-28',
-    location: 'Warehouse B',
-    status: 'In Stock'
-  },
-  { 
-    id: 'INV-003', 
-    name: 'Hand Sanitizer 500ml', 
-    barcode: '8901234567892', 
-    stockLevel: 130, 
-    price: 89.99, 
-    category: 'Health',
-    expiryDate: '2026-04-15',
-    supplier: 'MediClean SA',
-    lastUpdated: '2025-06-01',
-    location: 'Warehouse A',
-    status: 'In Stock'
-  },
-  { 
-    id: 'INV-004', 
-    name: 'Premium Paper A4 (500 sheets)', 
-    barcode: '8901234567893', 
-    stockLevel: 45, 
-    price: 149.99, 
-    category: 'Stationery',
-    expiryDate: null,
-    supplier: 'Paper Corp',
-    lastUpdated: '2025-05-20',
-    location: 'Warehouse A',
-    status: 'Low Stock'
-  },
-  { 
-    id: 'INV-005', 
-    name: 'Milk 1L', 
-    barcode: '8901234567894', 
-    stockLevel: 52, 
-    price: 24.99, 
-    category: 'Food & Beverages',
-    expiryDate: '2025-06-10',
-    supplier: 'Fresh Farms',
-    lastUpdated: '2025-06-02',
-    location: 'Store Room',
-    status: 'In Stock'
+// Helper function for history type badges
+const getHistoryTypeBadgeClass = (type: string): string => {
+  switch (type) {
+    case 'received':
+      return 'bg-green-100 text-green-800 hover:bg-green-200';
+    case 'damaged':
+      return 'bg-red-100 text-red-800 hover:bg-red-200';
+    case 'adjusted':
+      return 'bg-orange-100 text-orange-800 hover:bg-orange-200';
+    case 'sold':
+      return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
+    case 'returned':
+      return 'bg-purple-100 text-purple-800 hover:bg-purple-200';
+    case 'expired':
+      return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+    default:
+      return 'bg-slate-100 text-slate-800 hover:bg-slate-200';
   }
-];
+};
+
+// Types
+import { InventoryItem, StockHistoryEntry, STOCK_STATUS } from '@/types/inventory';
+
+
 
 const Inventory = () => {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('all-stock');
   const [searchTerm, setSearchTerm] = useState('');
   const [showScanner, setShowScanner] = useState(false);
   const [showNewStockForm, setShowNewStockForm] = useState(false);
   const [showUpdateStockForm, setShowUpdateStockForm] = useState(false);
+  const [showReceiveStockForm, setShowReceiveStockForm] = useState(false);
   const [showDamageStockForm, setShowDamageStockForm] = useState(false);
+  const [showEnhancedScanner, setShowEnhancedScanner] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'new' | 'update'>('new');
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showStorageModal, setShowStorageModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-
-  const categories = ['Electronics', 'Furniture', 'Health', 'Stationery', 'Food & Beverages'];
-  const statuses = ['In Stock', 'Low Stock', 'Out of Stock', 'Expired', 'Damaged'];
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [stockHistory, setStockHistory] = useState<StockHistoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [statuses] = useState<string[]>(Object.values(STOCK_STATUS));
   
-  // Initialize sample data for suppliers and storage locations
+  // Define loadInventoryData with useCallback to avoid dependency issues
+  const loadInventoryData = useCallback((forceRefresh = false) => {
+    try {
+      setIsLoading(true);
+      
+      // Clear localStorage cache for testing purposes if forceRefresh is true
+      if (forceRefresh) {
+        // Force the browser to re-read from localStorage
+        localStorage.removeItem('__temp_cache_clear');
+        localStorage.setItem('__temp_cache_clear', Date.now().toString());
+      }
+      
+      // Get all inventory items with a cache-busting approach
+      const items = getAllInventoryItems();
+      setInventoryItems(items);
+      
+      // Extract unique categories
+      const uniqueCategories = Array.from(new Set(items.map(item => item.category)));
+      setCategories(uniqueCategories);
+      
+      // Get stock history
+      const history = getAllStockHistory();
+      setStockHistory(history);
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error loading inventory data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load inventory data',
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+    }
+  }, [toast]);
+  
+  // Initialize data
   useEffect(() => {
-    initializeSuppliers();
-    initializeStorageLocations();
-  }, []);
+    const initData = async () => {
+      setIsLoading(true);
+      try {
+        // Initialize sample data if needed
+        initializeSuppliers();
+        initializeStorageLocations();
+        initializeInventoryData();
+        
+        // Load actual data
+        loadInventoryData();
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to load inventory data',
+          variant: 'destructive',
+        });
+        console.error('Failed to load inventory data:', error);
+      }
+    };
+    
+    initData();
+  }, [loadInventoryData, toast]);
 
-  const handleBarcodeResult = (result) => {
+  // Refresh data when forms close or when any modal is closed
+  useEffect(() => {
+    if (!showNewStockForm && !showUpdateStockForm && !showReceiveStockForm && !showDamageStockForm && 
+        !showEditModal && !showHistoryModal && !showDeleteConfirm && !showEnhancedScanner) {
+      // Force refresh when modals close to ensure we get the latest data
+      loadInventoryData(true);
+    }
+  }, [showNewStockForm, showUpdateStockForm, showReceiveStockForm, showDamageStockForm, 
+      showEditModal, showHistoryModal, showDeleteConfirm, showEnhancedScanner, loadInventoryData]);
+      
+  // Ensure we refresh data on component mount
+  useEffect(() => {
+    // Force a refresh on initial load
+    loadInventoryData(true);
+  }, [loadInventoryData]);
+
+  const handleBarcodeResult = (result: string) => {
     // Check if barcode exists in inventory
-    const item = inventoryData.find(item => item.barcode === result);
+    const item = inventoryItems.find(item => item.barcode === result);
+    
+    // Store the scanned barcode
+    setScannedBarcode(result);
+    
     if (item) {
       setSelectedItem(item);
-      setShowUpdateStockForm(true);
+      if (scannerMode === 'update') {
+        setShowReceiveStockForm(true);
+      } else {
+        setShowUpdateStockForm(true);
+      }
     } else {
       // Display form to add new item with this barcode
       setShowNewStockForm(true);
     }
+    
+    setShowEnhancedScanner(false);
     setShowScanner(false);
   };
 
-  const handleActionClick = (action, item = null) => {
+  // Helper function to add an item to an invoice or quotation
+  const addItemToCart = (item: InventoryItem, type: 'invoice' | 'quotation') => {
+    if (!item) return;
+    
+    // Get existing cart from localStorage or initialize empty one
+    const cartKey = type === 'invoice' ? 'invoiceCart' : 'quotationCart';
+    const existingCart = localStorage.getItem(cartKey);
+    const cart = existingCart ? JSON.parse(existingCart) : [];
+    
+    // Define cart item interface
+    interface CartItem {
+      id: string;
+      name: string;
+      price: number;
+      quantity: number;
+      barcode: string;
+      category: string;
+    }
+    
+    // Check if item already exists in cart
+    const existingItemIndex = cart.findIndex((cartItem: CartItem) => cartItem.id === item.id);
+    
+    if (existingItemIndex >= 0) {
+      // If item exists, increment quantity
+      cart[existingItemIndex].quantity += 1;
+    } else {
+      // If item doesn't exist, add it with quantity 1
+      cart.push({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        barcode: item.barcode,
+        category: item.category
+      });
+    }
+    
+    // Save updated cart back to localStorage
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+    
+    // Show toast notification
+    toast({
+      title: `Added to ${type}`,
+      description: `${item.name} has been added to your ${type}`,
+    });
+  };
+
+  const handleActionClick = (action: string, item: InventoryItem | null = null) => {
     if (item) {
       setSelectedItem(item);
     }
 
     switch(action) {
       case 'new':
-        setShowNewStockForm(true);
+        // Open enhanced scanner in new mode
+        setScannerMode('new');
+        setShowEnhancedScanner(true);
         break;
       case 'update':
-        setShowUpdateStockForm(true);
+        // Open enhanced scanner in update mode
+        setScannerMode('update');
+        setShowEnhancedScanner(true);
+        break;
+      case 'edit':
+        setShowEditModal(true);
+        break;
+      case 'invoice':
+        if (item) {
+          addItemToCart(item, 'invoice');
+        }
+        break;
+      case 'quotation':
+        if (item) {
+          addItemToCart(item, 'quotation');
+        }
         break;
       case 'damage':
         setShowDamageStockForm(true);
@@ -161,6 +312,21 @@ const Inventory = () => {
       case 'storage':
         setShowStorageModal(true);
         break;
+      case 'history':
+        setShowHistoryModal(true);
+        break;
+      case 'delete':
+        setShowDeleteConfirm(true);
+        break;
+      case 'refresh':
+        // Force a complete refresh of the data from localStorage
+        loadInventoryData(true);
+        toast({
+          title: 'Refreshed',
+          description: 'Inventory data has been refreshed from storage',
+          variant: 'default',
+        });
+        break;
       default:
         break;
     }
@@ -169,15 +335,54 @@ const Inventory = () => {
   const handleFormClose = () => {
     setShowNewStockForm(false);
     setShowUpdateStockForm(false);
+    setShowReceiveStockForm(false);
     setShowDamageStockForm(false);
     setShowSupplierModal(false);
     setShowStorageModal(false);
+    setShowEditModal(false);
+    setShowHistoryModal(false);
+    setShowDeleteConfirm(false);
+    setShowScanner(false);
+    setShowEnhancedScanner(false);
     setSelectedItem(null);
+    setScannedBarcode(null);
+  };
+  
+  const handleDeleteItem = () => {
+    if (selectedItem) {
+      try {
+        const success = deleteInventoryItem(selectedItem.id);
+        if (success) {
+          toast({
+            title: 'Item Deleted',
+            description: `${selectedItem.name} has been removed from inventory`,
+            variant: 'default',
+          });
+          loadInventoryData(); // Refresh the inventory list
+        } else {
+          toast({
+            title: 'Error',
+            description: 'Failed to delete item',
+            variant: 'destructive',
+          });
+        }
+      } catch (error) {
+        console.error('Error deleting item:', error);
+        toast({
+          title: 'Error',
+          description: 'An error occurred while deleting the item',
+          variant: 'destructive',
+        });
+      }
+      setShowDeleteConfirm(false);
+      setSelectedItem(null);
+    }
   };
 
-  const filteredInventory = inventoryData.filter(item => {
+  // Filter inventory based on search term, category, and status
+  const filteredInventory = inventoryItems.filter(item => {
     // Apply search filter
-    const matchesSearch = 
+    const matchesSearch = searchTerm === '' || 
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.barcode.includes(searchTerm) ||
       item.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -190,6 +395,24 @@ const Inventory = () => {
     
     return matchesSearch && matchesCategory && matchesStatus;
   });
+  
+  // For expiring soon tab - items expiring in the next 30 days
+  const expiringItems = filteredInventory.filter(item => {
+    if (!item.expiryDate) return false;
+    
+    const expiryDate = new Date(item.expiryDate);
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    
+    return expiryDate <= thirtyDaysFromNow && expiryDate >= today;
+  });
+  
+  // For low stock tab
+  const lowStockItems = filteredInventory.filter(item => item.status === STOCK_STATUS.LOW_STOCK);
+  
+  // For damaged tab
+  const damagedItems = filteredInventory.filter(item => item.status === STOCK_STATUS.DAMAGED);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -216,6 +439,7 @@ const Inventory = () => {
             <Button 
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('new')}
+              aria-label="Scan or add new stock item"
             >
               <Plus className="h-4 w-4" /> New Stock
             </Button>
@@ -223,6 +447,7 @@ const Inventory = () => {
             <Button 
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-pink-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('update')}
+              aria-label="Scan or update existing stock item"
             >
               <RefreshCw className="h-4 w-4" /> Update Stock
             </Button>
@@ -321,7 +546,7 @@ const Inventory = () => {
           </CardHeader>
           <CardContent className="p-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div className="px-6">
+              <div className="px-6 flex justify-between items-center">
                 <TabsList className="grid grid-cols-5 mb-4">
                   <TabsTrigger value="all-stock">All Stock</TabsTrigger>
                   <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
@@ -329,45 +554,110 @@ const Inventory = () => {
                   <TabsTrigger value="damaged">Damaged</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
                 </TabsList>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-1 px-2 hover:bg-slate-100"
+                  onClick={() => handleActionClick('refresh')}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="hidden md:inline">Refresh</span>
+                </Button>
               </div>
               
-              <TabsContent value="all-stock" className="m-0">
-                <InventoryTable 
-                  data={filteredInventory}
-                  onAction={handleActionClick}
-                />
-              </TabsContent>
-              
-              <TabsContent value="low-stock" className="m-0">
-                <InventoryTable 
-                  data={filteredInventory.filter(item => item.status === 'Low Stock')}
-                  onAction={handleActionClick}
-                />
-              </TabsContent>
-              
-              <TabsContent value="expiring-soon" className="m-0">
-                <InventoryTable 
-                  data={filteredInventory.filter(item => 
-                    item.expiryDate && new Date(item.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-                  )}
-                  onAction={handleActionClick}
-                />
-              </TabsContent>
-              
-              <TabsContent value="damaged" className="m-0">
-                <InventoryTable 
-                  data={filteredInventory.filter(item => item.status === 'Damaged')}
-                  onAction={handleActionClick}
-                />
-              </TabsContent>
-              
-              <TabsContent value="history" className="m-0">
-                <InventoryTable 
-                  data={filteredInventory}
-                  onAction={handleActionClick}
-                  showHistory={true}
-                />
-              </TabsContent>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2 text-mokm-purple-500" />
+                  <p className="text-slate-500">Loading inventory data...</p>
+                </div>
+              ) : (
+                <>
+                  <TabsContent value="all-stock" className="m-0">
+                    <InventoryTable 
+                      data={filteredInventory}
+                      onAction={handleActionClick}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="low-stock" className="m-0">
+                    <InventoryTable 
+                      data={lowStockItems}
+                      onAction={handleActionClick}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="expiring-soon" className="m-0">
+                    <InventoryTable 
+                      data={expiringItems}
+                      onAction={handleActionClick}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="damaged" className="m-0">
+                    <InventoryTable 
+                      data={damagedItems}
+                      onAction={handleActionClick}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="history" className="m-0">
+                    <div className="p-6">
+                      {stockHistory.length === 0 ? (
+                        <div className="text-center py-10">
+                          <p className="text-slate-500">No stock history available</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Item ID</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Quantity</TableHead>
+                                <TableHead>Notes</TableHead>
+                                <TableHead>Performed By</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {stockHistory.map((entry) => (
+                                <TableRow key={entry.id}>
+                                  <TableCell>
+                                    {new Date(entry.date).toLocaleDateString('en-ZA', { 
+                                      day: 'numeric', month: 'short', year: 'numeric' 
+                                    })}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="font-medium">{entry.inventoryItemId}</div>
+                                    {(() => {
+                                      const item = inventoryItems.find(i => i.id === entry.inventoryItemId);
+                                      return item ? <div className="text-xs text-slate-500">{item.name}</div> : null;
+                                    })()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className={getHistoryTypeBadgeClass(entry.type)}>
+                                      {entry.type}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>{entry.quantity}</TableCell>
+                                  <TableCell>{entry.notes}</TableCell>
+                                  <TableCell>{entry.performedBy}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </>
+              )}
             </Tabs>
           </CardContent>
         </Card>
@@ -376,14 +666,22 @@ const Inventory = () => {
         {showNewStockForm && (
           <NewStockForm 
             onClose={handleFormClose}
-            initialBarcode={selectedItem?.barcode || ''}
+            initialBarcode={scannedBarcode || undefined}
           />
         )}
         
-        {showUpdateStockForm && (
+        {showUpdateStockForm && selectedItem && (
           <UpdateStockForm 
-            item={selectedItem}
+            item={selectedItem} 
             onClose={handleFormClose}
+          />
+        )}
+        
+        {showReceiveStockForm && selectedItem && (
+          <ReceiveStockForm 
+            item={selectedItem} 
+            onClose={handleFormClose} 
+            initialBarcode={scannedBarcode || undefined}
           />
         )}
         
@@ -398,6 +696,17 @@ const Inventory = () => {
           <InventoryScanner 
             onClose={() => setShowScanner(false)}
             onResult={handleBarcodeResult}
+          />
+        )}
+        
+        {showEnhancedScanner && (
+          <EnhancedBarcodeScanner
+            onScanSuccess={handleBarcodeResult}
+            onClose={handleFormClose}
+            scannerTitle={scannerMode === 'new' ? "Scan for New Stock" : "Scan to Update Stock"}
+            scannerDescription={scannerMode === 'new' 
+              ? "Scan a barcode to add new inventory item or find existing one" 
+              : "Scan a barcode to update quantity of existing inventory item"}
           />
         )}
         
@@ -416,6 +725,118 @@ const Inventory = () => {
             // Optionally refresh data or show a success message
           }}
         />
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure you want to delete this item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {selectedItem && (
+                  <div className="space-y-2">
+                    <p>You are about to delete:</p>
+                    <div className="bg-slate-50 p-3 rounded-md border border-slate-200">
+                      <p className="font-medium">{selectedItem.name}</p>
+                      <p className="text-sm text-slate-500">ID: {selectedItem.id}</p>
+                      <p className="text-sm text-slate-500">Barcode: {selectedItem.barcode}</p>
+                    </div>
+                    <p className="text-red-500">This action cannot be undone.</p>
+                  </div>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteItem}
+                className="bg-red-500 hover:bg-red-600"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* View History Modal */}
+        {showHistoryModal && selectedItem && (
+          <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
+            <DialogContent className="sm:max-w-[800px]">
+              <DialogHeader>
+                <DialogTitle>Item History</DialogTitle>
+                <DialogDescription>
+                  Viewing history for {selectedItem.name} (ID: {selectedItem.id})
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[500px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead>Performed By</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stockHistory
+                      .filter(entry => entry.inventoryItemId === selectedItem.id)
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((entry, index) => (
+                        <TableRow key={`history-${index}`}>
+                          <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge className={getHistoryTypeBadgeClass(entry.type)}>
+                              {entry.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{entry.quantity}</TableCell>
+                          <TableCell>{entry.notes}</TableCell>
+                          <TableCell>{entry.performedBy}</TableCell>
+                        </TableRow>
+                      ))
+                    }
+                    {stockHistory.filter(entry => entry.inventoryItemId === selectedItem.id).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                          No history records found for this item
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setShowHistoryModal(false)} variant="outline">
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Edit Details Modal - reusing the same form as Update Stock with a different heading */}
+        {showEditModal && selectedItem && (
+          <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Edit Item Details</DialogTitle>
+                <DialogDescription>
+                  Update the details for {selectedItem.name}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                {/* In a real implementation, we would have a dedicated edit form here */}
+                {/* For now, reusing the UpdateStockForm component */}
+                <UpdateStockForm 
+                  item={selectedItem}
+                  onClose={() => setShowEditModal(false)}
+                  isEditMode={true}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </div>
   );

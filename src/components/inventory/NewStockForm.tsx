@@ -37,6 +37,9 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     minimumStockLevel: '5'
   });
   
+  // Barcode was scanned flag
+  const [barcodeWasScanned, setBarcodeWasScanned] = useState(!!initialBarcode);
+  
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [openSupplierCombobox, setOpenSupplierCombobox] = useState(false);
   
@@ -51,18 +54,21 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
   
   // Fetch suppliers and set the auto-generated item ID when the component mounts
   useEffect(() => {
-    // Load suppliers from localStorage
-    const savedSuppliers = getAllSuppliers();
-    setSuppliers(savedSuppliers);
+    const loadSuppliers = () => {
+      const allSuppliers = getAllSuppliers();
+      setSuppliers(allSuppliers);
+    };
     
-    // Initial auto-generation only if itemId is empty
-    if (!formData.itemId) {
-      setFormData(prevData => ({
-        ...prevData,
-        itemId: generateItemId()
-      }));
+    loadSuppliers();
+  }, []);
+  
+  // Update barcode if initialBarcode changes
+  useEffect(() => {
+    if (initialBarcode) {
+      setFormData(prev => ({ ...prev, barcode: initialBarcode }));
+      setBarcodeWasScanned(true);
     }
-  }, [formData.itemId]);
+  }, [initialBarcode]);
   
   const [receiveDate, setReceiveDate] = useState<Date | undefined>(new Date());
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
@@ -296,6 +302,7 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
       ...prev,
       barcode: randomBarcode
     }));
+    setBarcodeWasScanned(true);
   };
 
   // Generate a unique item ID based on current date and random number
@@ -314,9 +321,6 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     
     return `${prefix}-${datePart}-${randomPart}`;
   };
-
-
-  
 
 
   return (
@@ -353,23 +357,35 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             <div className="space-y-2">
               <Label htmlFor="barcode">Barcode</Label>
               <div className="flex gap-2">
-                <Input
-                  id="barcode"
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleInputChange}
-                  placeholder="Enter barcode number..."
-                  className="flex-1"
-                />
+                <div className="relative flex-1">
+                  <Input
+                    id="barcode"
+                    name="barcode"
+                    value={formData.barcode}
+                    onChange={handleInputChange}
+                    placeholder="Enter barcode or scan"
+                    className={`w-full shadow-business ${barcodeWasScanned ? 'border-green-500 bg-green-50' : ''}`}
+                  />
+                  {barcodeWasScanned && (
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <span className="text-green-500">
+                        <Check className="h-4 w-4" />
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={handleScanBarcode} 
-                  className="shrink-0"
+                  className="shrink-0 shadow-business hover:shadow-business-lg"
                 >
                   <Scan className="h-4 w-4" />
                 </Button>
               </div>
+              {barcodeWasScanned && (
+                <p className="text-xs text-green-600">Barcode successfully scanned</p>
+              )}
             </div>
             
             {/* Description */}
