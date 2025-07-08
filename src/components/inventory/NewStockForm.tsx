@@ -8,12 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarIcon, PackagePlus, Scan, Check, ChevronsUpDown } from 'lucide-react';
+import { Calendar as CalendarIcon, PackagePlus, Scan, Check, ChevronsUpDown, QrCode } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { addInventoryItem } from '@/services/inventoryService';
 import { getAllSuppliers, Supplier } from '@/services/supplierService';
 import { toast } from '@/components/ui/use-toast';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import BarcodeScanner from './BarcodeScanner';
 
 interface NewStockFormProps {
   onClose: () => void;
@@ -21,6 +22,8 @@ interface NewStockFormProps {
 }
 
 const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '' }) => {
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  
   const [formData, setFormData] = useState({
     itemId: '',
     description: '',
@@ -37,9 +40,6 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     minimumStockLevel: '5'
   });
   
-  // Barcode was scanned flag
-  const [barcodeWasScanned, setBarcodeWasScanned] = useState(!!initialBarcode);
-  
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [openSupplierCombobox, setOpenSupplierCombobox] = useState(false);
   
@@ -54,21 +54,18 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
   
   // Fetch suppliers and set the auto-generated item ID when the component mounts
   useEffect(() => {
-    const loadSuppliers = () => {
-      const allSuppliers = getAllSuppliers();
-      setSuppliers(allSuppliers);
-    };
+    // Load suppliers from localStorage
+    const savedSuppliers = getAllSuppliers();
+    setSuppliers(savedSuppliers);
     
-    loadSuppliers();
-  }, []);
-  
-  // Update barcode if initialBarcode changes
-  useEffect(() => {
-    if (initialBarcode) {
-      setFormData(prev => ({ ...prev, barcode: initialBarcode }));
-      setBarcodeWasScanned(true);
+    // Initial auto-generation only if itemId is empty
+    if (!formData.itemId) {
+      setFormData(prevData => ({
+        ...prevData,
+        itemId: generateItemId()
+      }));
     }
-  }, [initialBarcode]);
+  }, [formData.itemId]);
   
   const [receiveDate, setReceiveDate] = useState<Date | undefined>(new Date());
   const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
@@ -295,14 +292,20 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
   };
 
   const handleScanBarcode = () => {
-    // This would open a barcode scanner in a real implementation
-    // For this demo, we'll just simulate getting a barcode
-    const randomBarcode = Math.floor(Math.random() * 1000000000000).toString().padStart(12, '0');
+    setIsScannerOpen(true);
+  };
+  
+  const handleBarcodeDetected = (barcode: string) => {
     setFormData(prev => ({
       ...prev,
-      barcode: randomBarcode
+      barcode
     }));
-    setBarcodeWasScanned(true);
+    
+    toast({
+      title: "Barcode Detected",
+      description: `Barcode ${barcode} has been scanned and added to the form.`,
+      variant: "default"
+    });
   };
 
   // Generate a unique item ID based on current date and random number
@@ -321,6 +324,9 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     
     return `${prefix}-${datePart}-${randomPart}`;
   };
+
+
+  
 
 
   return (
@@ -357,35 +363,25 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             <div className="space-y-2">
               <Label htmlFor="barcode">Barcode</Label>
               <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    id="barcode"
-                    name="barcode"
-                    value={formData.barcode}
-                    onChange={handleInputChange}
-                    placeholder="Enter barcode or scan"
-                    className={`w-full shadow-business ${barcodeWasScanned ? 'border-green-500 bg-green-50' : ''}`}
-                  />
-                  {barcodeWasScanned && (
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                      <span className="text-green-500">
-                        <Check className="h-4 w-4" />
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <Input
+                  id="barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleInputChange}
+                  placeholder="Enter barcode number..."
+                  className="flex-1"
+                />
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={handleScanBarcode} 
-                  className="shrink-0 shadow-business hover:shadow-business-lg"
+                  className="shrink-0 flex gap-1 items-center"
+                  title="Scan Barcode"
                 >
-                  <Scan className="h-4 w-4" />
+                  <QrCode className="h-4 w-4" />
+                  <span className="hidden sm:inline">Scan</span>
                 </Button>
               </div>
-              {barcodeWasScanned && (
-                <p className="text-xs text-green-600">Barcode successfully scanned</p>
-              )}
             </div>
             
             {/* Description */}
@@ -715,6 +711,14 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             </Button>
           </DialogFooter>
         </form>
+        
+        {/* Barcode Scanner Component */}
+        <BarcodeScanner 
+          isOpen={isScannerOpen}
+          onClose={() => setIsScannerOpen(false)}
+          onBarcodeDetected={handleBarcodeDetected}
+          title="Scan Barcode for New Stock"
+        />
       </DialogContent>
     </Dialog>
   );

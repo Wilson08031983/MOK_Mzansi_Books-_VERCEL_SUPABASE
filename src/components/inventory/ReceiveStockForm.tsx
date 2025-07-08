@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,35 +8,84 @@ import { Calendar } from '@/components/ui/calendar';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Check, Loader2, PackageOpen, RefreshCw, Scan, Barcode } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, Loader2, PackageOpen, RefreshCw, QrCode, AlertCircle, ChevronsUpDown } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import { InventoryItem } from '@/types/inventory';
-import { updateInventoryItem, getInventoryItemById, getAllInventoryItems, getInventoryItemByBarcode } from '@/services/inventoryService';
+import { updateInventoryItem, getInventoryItemById } from '@/services/inventoryService';
 import { getAllSuppliers } from '@/services/supplierService';
 import { Supplier } from '@/types/supplier';
+import BarcodeScanner from './BarcodeScanner';
 
 interface ReceiveStockFormProps {
   item: InventoryItem | null;
   onClose: () => void;
-  initialBarcode?: string;
 }
 
-const ReceiveStockForm: React.FC<ReceiveStockFormProps> = ({ item: initialItem, onClose, initialBarcode }) => {
+const ReceiveStockForm: React.FC<ReceiveStockFormProps> = ({ item, onClose }) => {
   const { toast } = useToast();
-  const [item, setItem] = useState<InventoryItem | null>(initialItem);
   const [quantity, setQuantity] = useState<number>(1);
   const [referenceNumber, setReferenceNumber] = useState<string>('');
-  const [supplier, setSupplier] = useState<string>(initialItem?.supplier || '');
+  const [supplier, setSupplier] = useState<string>(item?.supplier || '');
   const [receiveDate, setReceiveDate] = useState<Date>(new Date());
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isError, setIsError] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [openSupplierDropdown, setOpenSupplierDropdown] = useState<boolean>(false);
-  const [showScanner, setShowScanner] = useState<boolean>(false);
-  const [barcode, setBarcode] = useState<string>(initialBarcode || initialItem?.barcode || '');
-  const [barcodeScanned, setBarcodeScanned] = useState<boolean>(!!initialBarcode);
+  const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
+  const [barcodeValidation, setBarcodeValidation] = useState<{
+    scanned: boolean;
+    isValid: boolean;
+    message: string;
+  }>({ scanned: false, isValid: false, message: '' });
+
+  // Handle barcode scanning
+  const handleScanBarcode = () => {
+    setIsScannerOpen(true);
+  };
+  
+  const handleBarcodeDetected = (barcode: string) => {
+    if (!item) return;
+    
+    if (item.barcode && barcode === item.barcode) {
+      // Barcode matches
+      setBarcodeValidation({
+        scanned: true,
+        isValid: true,
+        message: 'Barcode verified! This is the correct item.'
+      });
+      toast({
+        title: "Barcode Verified",
+        description: `Confirmed item: ${item.name}`,
+        variant: "default"
+      });
+    } else if (!item.barcode) {
+      // Item doesn't have a barcode stored
+      setBarcodeValidation({
+        scanned: true,
+        isValid: false,
+        message: 'This item does not have a barcode recorded. Consider updating the item details.'
+      });
+      toast({
+        title: "No Barcode Recorded",
+        description: `This item doesn't have a barcode in the system. Consider updating the item details.`,
+        variant: "default"
+      });
+    } else {
+      // Barcode mismatch
+      setBarcodeValidation({
+        scanned: true,
+        isValid: false,
+        message: `Scanned barcode (${barcode}) does not match this item's barcode (${item.barcode}).`
+      });
+      toast({
+        title: "Barcode Mismatch",
+        description: `The scanned barcode does not match this item.`,
+        variant: "destructive"
+      });
+    }
+  };
 
   // Load suppliers for dropdown
   useEffect(() => {
@@ -51,33 +100,6 @@ const ReceiveStockForm: React.FC<ReceiveStockFormProps> = ({ item: initialItem, 
     
     loadSuppliers();
   }, []);
-  
-  // Handle initial barcode if provided
-  useEffect(() => {
-    if (initialBarcode && !item) {
-      // Try to find an item with this barcode
-      const items = getAllInventoryItems();
-      const matchingItem = items.find(i => i.barcode === initialBarcode);
-      
-      if (matchingItem) {
-        setItem(matchingItem);
-        setSupplier(matchingItem.supplier || '');
-        setBarcodeScanned(true);
-        
-        toast({
-          title: "Item found",
-          description: `${matchingItem.description} has been loaded for updating`,
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Item not found",
-          description: `No inventory item found with barcode ${initialBarcode}`,
-          variant: "destructive",
-        });
-      }
-    }
-  }, [initialBarcode, toast, item]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,50 +196,70 @@ const ReceiveStockForm: React.FC<ReceiveStockFormProps> = ({ item: initialItem, 
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-            <PackageOpen className="h-5 w-5 text-mokm-orange-600" />
-            Receive Stock for {item ? item.description : 'Unknown Item'}
+          <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent">
+            Receive Stock: {item.name}
           </DialogTitle>
         </DialogHeader>
         
-        {/* Error Message */}
         {isError && (
-          <Alert variant="destructive" className="mb-4">
+          <Alert variant="destructive" className="mt-4">
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{errorMessage || 'An error occurred. Please try again.'}</AlertDescription>
-          </Alert>
-        )}
-        
-        {/* No Item Selected Message */}
-        {!item && (
-          <Alert variant="warning" className="mb-4 border-amber-300 text-amber-800 bg-amber-50">
-            <AlertTitle>No Item Selected</AlertTitle>
-            <AlertDescription className="flex justify-between items-center">
-              <span>Please scan a barcode or select an inventory item.</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowScanner(true)}
-                className="ml-2 shadow-business hover:shadow-business-lg"
-              >
-                <Scan className="h-4 w-4 mr-2" /> Scan
-              </Button>
-            </AlertDescription>
+            <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-          <div className="space-y-2">
+          {/* Item Verification Section */}
+          <div className="mb-4 p-3 bg-slate-50 rounded-lg shadow-business space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="current-stock">Current Stock</Label>
-              <span className="text-sm font-medium">{item.stockLevel} units</span>
+              <div className="flex items-center gap-2">
+                <PackageOpen className="h-4 w-4 text-mokm-pink-500" />
+                <span className="font-medium">Item Verification</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleScanBarcode}
+                className="flex gap-1 items-center h-8 px-2"
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                <span className="text-xs">Verify</span>
+              </Button>
             </div>
-            <Input 
-              id="current-stock"
-              value={item.stockLevel}
-              disabled
-              className="bg-slate-50"
-            />
+            
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-slate-500">Item ID:</span>
+                <div className="font-medium">{item.id}</div>
+              </div>
+              <div>
+                <span className="text-slate-500">Current Stock:</span>
+                <div className="font-medium">{item.stockLevel} units</div>
+              </div>
+            </div>
+            
+            {item.barcode && (
+              <div className="mt-1">
+                <span className="text-slate-500 text-sm">Barcode:</span>
+                <div className="font-medium flex items-center gap-1">
+                  {item.barcode}
+                  {barcodeValidation.scanned && (
+                    barcodeValidation.isValid ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {barcodeValidation.scanned && (
+              <div className={`text-xs p-1.5 rounded ${barcodeValidation.isValid ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {barcodeValidation.message}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -257,7 +299,7 @@ const ReceiveStockForm: React.FC<ReceiveStockFormProps> = ({ item: initialItem, 
                   {supplier
                     ? supplier
                     : "Select supplier..."}
-                  <CalendarIcon className="ml-2 h-4 w-4 opacity-50" />
+                  <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-full p-0">
@@ -320,83 +362,45 @@ const ReceiveStockForm: React.FC<ReceiveStockFormProps> = ({ item: initialItem, 
             </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row sm:justify-between sm:space-x-4">
-            <Button variant="outline" onClick={onClose}>
+          <DialogFooter className="mt-6 flex flex-col-reverse sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isLoading}
+              className="w-full sm:w-auto shadow-business"
+            >
               Cancel
             </Button>
             <Button 
-              onClick={handleReceiveStock} 
-              disabled={!item || isLoading || quantity < 1}
-              className="bg-gradient-to-r from-mokm-pink-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg"
+              type="submit" 
+              disabled={isLoading} 
+              className="w-full sm:w-auto bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 text-white shadow-colored hover:shadow-colored-lg"
             >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
+                  Updating...
                 </>
               ) : (
                 <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <PackageOpen className="mr-2 h-4 w-4" />
                   Receive Stock
                 </>
               )}
             </Button>
           </DialogFooter>
-          
-          
-          {/* Lazy load the barcode scanner component */}
-          {showScanner && (
-            <EnhancedBarcodeScannerWrapper 
-              onScanSuccess={(scannedBarcode) => {
-                setBarcode(scannedBarcode);
-                setBarcodeScanned(true);
-                setShowScanner(false);
-                
-                // Look up item by barcode
-                const foundItem = getInventoryItemByBarcode(scannedBarcode);
-                if (foundItem) {
-                  setItem(foundItem);
-                  setSupplier(foundItem.supplier || '');
-                  
-                  toast({
-                    title: "Item found",
-                    description: `${foundItem.description} has been loaded`,
-                    variant: "default",
-                  });
-                } else {
-                  toast({
-                    title: "Item not found",
-                    description: `No inventory item found with barcode ${scannedBarcode}`,
-                    variant: "destructive",
-                  });
-                }
-              }}
-              onClose={() => setShowScanner(false)}
-              scannerTitle="Scan Inventory Item"
-              scannerDescription="Scan a barcode to find and update an inventory item"
-            />
-          )}
         </form>
+        
+        {/* Barcode Scanner Component */}
+        <BarcodeScanner 
+          isOpen={isScannerOpen}
+          onClose={() => setIsScannerOpen(false)}
+          onBarcodeDetected={handleBarcodeDetected}
+          title="Verify Item Barcode"
+        />
       </DialogContent>
     </Dialog>
-  );
-};
-
-// Wrap the dynamically imported scanner component to handle Suspense properly
-const EnhancedBarcodeScanner = lazy(() => import('./EnhancedBarcodeScanner'));
-
-interface EnhancedBarcodeScannerWrapperProps {
-  onScanSuccess: (barcode: string) => void;
-  onClose: () => void;
-  scannerTitle: string;
-  scannerDescription: string;
-}
-
-const EnhancedBarcodeScannerWrapper: React.FC<EnhancedBarcodeScannerWrapperProps> = (props) => {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-mokm-pink-500" /></div>}>
-      <EnhancedBarcodeScanner {...props} />
-    </Suspense>
   );
 };
 
