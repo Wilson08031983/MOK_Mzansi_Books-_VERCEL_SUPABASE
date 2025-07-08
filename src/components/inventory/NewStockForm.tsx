@@ -8,10 +8,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarIcon, PackagePlus, Scan } from 'lucide-react';
+import { Calendar as CalendarIcon, PackagePlus, Scan, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { addInventoryItem } from '@/services/inventoryService';
+import { getAllSuppliers, Supplier } from '@/services/supplierService';
 import { toast } from '@/components/ui/use-toast';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 
 interface NewStockFormProps {
   onClose: () => void;
@@ -35,6 +37,9 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     minimumStockLevel: '5'
   });
   
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [openSupplierCombobox, setOpenSupplierCombobox] = useState(false);
+  
   const [validationErrors, setValidationErrors] = useState({
     purchaseAmount: '',
     sellingPrice: '',
@@ -44,8 +49,12 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
   
   const [isEditingSellingPrice, setIsEditingSellingPrice] = useState(false);
   
-  // Set the auto-generated item ID when the component mounts
+  // Fetch suppliers and set the auto-generated item ID when the component mounts
   useEffect(() => {
+    // Load suppliers from localStorage
+    const savedSuppliers = getAllSuppliers();
+    setSuppliers(savedSuppliers);
+    
     // Initial auto-generation only if itemId is empty
     if (!formData.itemId) {
       setFormData(prevData => ({
@@ -555,15 +564,79 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
               </Popover>
             </div>
             
-            {/* Supplier */}
+            {/* Supplier - Searchable Dropdown */}
             <div className="space-y-2">
               <Label htmlFor="supplier">Supplier</Label>
+              <Popover open={openSupplierCombobox} onOpenChange={setOpenSupplierCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openSupplierCombobox}
+                    className="w-full justify-between font-normal"
+                  >
+                    {formData.supplier || "Select or enter supplier..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search suppliers..." className="h-9" />
+                    <CommandEmpty>No supplier found. Type to add new.</CommandEmpty>
+                    <CommandGroup className="max-h-60 overflow-auto">
+                      {suppliers.map((supplier) => (
+                        <CommandItem
+                          key={supplier.id}
+                          value={supplier.name}
+                          onSelect={(currentValue) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              supplier: currentValue
+                            }));
+                            setOpenSupplierCombobox(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.supplier === supplier.name ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {supplier.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                    {/* Allow custom supplier entry */}
+                    {formData.supplier && !suppliers.some(s => s.name.toLowerCase() === formData.supplier.toLowerCase()) && (
+                      <CommandGroup>
+                        <CommandItem
+                          value={formData.supplier}
+                          onSelect={() => {
+                            setOpenSupplierCombobox(false);
+                          }}
+                          className="text-mokm-orange-500"
+                        >
+                          <span className="mr-2">+</span>
+                          Add "{formData.supplier}" as new supplier
+                        </CommandItem>
+                      </CommandGroup>
+                    )}
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <Input
                 id="supplier"
                 name="supplier"
                 value={formData.supplier}
-                onChange={handleInputChange}
-                placeholder="Enter supplier name..."
+                onChange={(e) => {
+                  handleInputChange(e);
+                  // Auto-open dropdown when typing
+                  if (!openSupplierCombobox && e.target.value) {
+                    setOpenSupplierCombobox(true);
+                  }
+                }}
+                placeholder="Or type supplier name directly..."
+                className="mt-2"
               />
             </div>
             
