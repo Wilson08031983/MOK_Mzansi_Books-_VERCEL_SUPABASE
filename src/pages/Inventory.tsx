@@ -57,10 +57,10 @@ import InventoryScanner from '@/components/inventory/InventoryScanner';
 import NewStockForm from '@/components/inventory/NewStockForm';
 import UpdateStockForm from '@/components/inventory/UpdateStockForm';
 import ReceiveStockForm from '@/components/inventory/ReceiveStockForm';
-import EnhancedBarcodeScanner from '@/components/inventory/EnhancedBarcodeScanner';
 import DamageStockForm from '@/components/inventory/DamageStockForm';
 import AddSupplierModal from '@/components/inventory/AddSupplierModal';
 import AddStorageModal from '@/components/inventory/AddStorageModal';
+import UpdateStockWithBarcodeModal from '@/components/inventory/UpdateStockWithBarcodeModal';
 
 // Service imports
 import { 
@@ -107,13 +107,11 @@ const Inventory = () => {
   const [showUpdateStockForm, setShowUpdateStockForm] = useState(false);
   const [showReceiveStockForm, setShowReceiveStockForm] = useState(false);
   const [showDamageStockForm, setShowDamageStockForm] = useState(false);
-  const [showEnhancedScanner, setShowEnhancedScanner] = useState(false);
-  const [scannerMode, setScannerMode] = useState<'new' | 'update'>('new');
-  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showStorageModal, setShowStorageModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showUpdateWithBarcodeModal, setShowUpdateWithBarcodeModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -188,12 +186,12 @@ const Inventory = () => {
   // Refresh data when forms close or when any modal is closed
   useEffect(() => {
     if (!showNewStockForm && !showUpdateStockForm && !showReceiveStockForm && !showDamageStockForm && 
-        !showEditModal && !showHistoryModal && !showDeleteConfirm && !showEnhancedScanner) {
+        !showEditModal && !showHistoryModal && !showDeleteConfirm) {
       // Force refresh when modals close to ensure we get the latest data
       loadInventoryData(true);
     }
   }, [showNewStockForm, showUpdateStockForm, showReceiveStockForm, showDamageStockForm, 
-      showEditModal, showHistoryModal, showDeleteConfirm, showEnhancedScanner, loadInventoryData]);
+      showEditModal, showHistoryModal, showDeleteConfirm, loadInventoryData]);
       
   // Ensure we refresh data on component mount
   useEffect(() => {
@@ -204,23 +202,13 @@ const Inventory = () => {
   const handleBarcodeResult = (result: string) => {
     // Check if barcode exists in inventory
     const item = inventoryItems.find(item => item.barcode === result);
-    
-    // Store the scanned barcode
-    setScannedBarcode(result);
-    
     if (item) {
       setSelectedItem(item);
-      if (scannerMode === 'update') {
-        setShowReceiveStockForm(true);
-      } else {
-        setShowUpdateStockForm(true);
-      }
+      setShowUpdateStockForm(true);
     } else {
       // Display form to add new item with this barcode
       setShowNewStockForm(true);
     }
-    
-    setShowEnhancedScanner(false);
     setShowScanner(false);
   };
 
@@ -278,14 +266,10 @@ const Inventory = () => {
 
     switch(action) {
       case 'new':
-        // Open enhanced scanner in new mode
-        setScannerMode('new');
-        setShowEnhancedScanner(true);
+        setShowNewStockForm(true);
         break;
       case 'update':
-        // Open enhanced scanner in update mode
-        setScannerMode('update');
-        setShowEnhancedScanner(true);
+        setShowUpdateWithBarcodeModal(true);
         break;
       case 'edit':
         setShowEditModal(true);
@@ -343,9 +327,7 @@ const Inventory = () => {
     setShowHistoryModal(false);
     setShowDeleteConfirm(false);
     setShowScanner(false);
-    setShowEnhancedScanner(false);
     setSelectedItem(null);
-    setScannedBarcode(null);
   };
   
   const handleDeleteItem = () => {
@@ -439,7 +421,6 @@ const Inventory = () => {
             <Button 
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('new')}
-              aria-label="Scan or add new stock item"
             >
               <Plus className="h-4 w-4" /> New Stock
             </Button>
@@ -447,7 +428,6 @@ const Inventory = () => {
             <Button 
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-pink-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('update')}
-              aria-label="Scan or update existing stock item"
             >
               <RefreshCw className="h-4 w-4" /> Update Stock
             </Button>
@@ -666,7 +646,7 @@ const Inventory = () => {
         {showNewStockForm && (
           <NewStockForm 
             onClose={handleFormClose}
-            initialBarcode={scannedBarcode || undefined}
+            initialBarcode={selectedItem?.barcode || ''}
           />
         )}
         
@@ -680,8 +660,7 @@ const Inventory = () => {
         {showReceiveStockForm && selectedItem && (
           <ReceiveStockForm 
             item={selectedItem} 
-            onClose={handleFormClose} 
-            initialBarcode={scannedBarcode || undefined}
+            onClose={handleFormClose}
           />
         )}
         
@@ -696,17 +675,6 @@ const Inventory = () => {
           <InventoryScanner 
             onClose={() => setShowScanner(false)}
             onResult={handleBarcodeResult}
-          />
-        )}
-        
-        {showEnhancedScanner && (
-          <EnhancedBarcodeScanner
-            onScanSuccess={handleBarcodeResult}
-            onClose={handleFormClose}
-            scannerTitle={scannerMode === 'new' ? "Scan for New Stock" : "Scan to Update Stock"}
-            scannerDescription={scannerMode === 'new' 
-              ? "Scan a barcode to add new inventory item or find existing one" 
-              : "Scan a barcode to update quantity of existing inventory item"}
           />
         )}
         
@@ -814,6 +782,23 @@ const Inventory = () => {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Update Stock with Barcode Modal */}
+        <UpdateStockWithBarcodeModal
+          isOpen={showUpdateWithBarcodeModal}
+          onClose={() => setShowUpdateWithBarcodeModal(false)}
+          onSuccess={(updatedItem) => {
+            // Update the local state with the updated item
+            setInventoryItems(prev => 
+              prev.map(item => item.id === updatedItem.id ? updatedItem : item)
+            );
+            setShowUpdateWithBarcodeModal(false);
+            toast({
+              title: "Stock Updated",
+              description: `${updatedItem.name} stock has been updated successfully.`,
+            });
+          }}
+        />
 
         {/* Edit Details Modal - reusing the same form as Update Stock with a different heading */}
         {showEditModal && selectedItem && (
