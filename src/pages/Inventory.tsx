@@ -54,6 +54,7 @@ import {
 // Component imports
 import InventoryTable from '@/components/inventory/InventoryTable';
 import InventoryScanner from '@/components/inventory/InventoryScanner';
+import ProductScanDetailModal from '@/components/inventory/ProductScanDetailModal';
 import NewStockForm from '@/components/inventory/NewStockForm';
 import UpdateStockForm from '@/components/inventory/UpdateStockForm';
 import ReceiveStockForm from '@/components/inventory/ReceiveStockForm';
@@ -103,6 +104,7 @@ const Inventory = () => {
   const [activeTab, setActiveTab] = useState('all-stock');
   const [searchTerm, setSearchTerm] = useState('');
   const [showScanner, setShowScanner] = useState(false);
+  const [showProductScanModal, setShowProductScanModal] = useState(false);
   const [showNewStockForm, setShowNewStockForm] = useState(false);
   const [showUpdateStockForm, setShowUpdateStockForm] = useState(false);
   const [showReceiveStockForm, setShowReceiveStockForm] = useState(false);
@@ -288,7 +290,7 @@ const Inventory = () => {
         setShowDamageStockForm(true);
         break;
       case 'scan':
-        setShowScanner(true);
+        setShowProductScanModal(true);
         break;
       case 'supplier':
         setShowSupplierModal(true);
@@ -671,10 +673,10 @@ const Inventory = () => {
           />
         )}
         
-        {showScanner && (
-          <InventoryScanner 
-            onClose={() => setShowScanner(false)}
-            onResult={handleBarcodeResult}
+        {showProductScanModal && (
+          <ProductScanDetailModal
+            isOpen={showProductScanModal}
+            onClose={() => setShowProductScanModal(false)}
           />
         )}
         
