@@ -434,13 +434,7 @@ const Inventory = () => {
               <RefreshCw className="h-4 w-4" /> Update Stock
             </Button>
             
-            <Button 
-              variant="outline" 
-              className="flex items-center gap-2 shadow-business hover:shadow-business-lg hover-lift"
-              onClick={() => handleActionClick('scan')}
-            >
-              <Scan className="h-4 w-4" /> Scan Barcode
-            </Button>
+            {/* Scan Barcode button hidden as requested */}
             
             <Button 
               variant="outline" 
