@@ -506,12 +506,7 @@ const Inventory = () => {
                 <span className="sm:hidden">Reports</span>
               </Button>
             </Link>
-            <Button variant="outline" className="flex items-center px-3 shadow-business hover:shadow-business-lg">
-              <Download className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" className="flex items-center px-3 shadow-business hover:shadow-business-lg">
-              <Printer className="h-4 w-4" />
-            </Button>
+            {/* Download and Print buttons removed as requested */}
           </div>
         </div>
 
