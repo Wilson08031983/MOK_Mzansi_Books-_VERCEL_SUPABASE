@@ -8,13 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarIcon, PackagePlus, Scan, Check, ChevronsUpDown, QrCode } from 'lucide-react';
+import { Calendar as CalendarIcon, PackagePlus, Scan, Check, ChevronsUpDown, QrCode, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { addInventoryItem } from '@/services/inventoryService';
 import { getAllSuppliers, Supplier } from '@/services/supplierService';
 import { toast } from '@/components/ui/use-toast';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import BarcodeScanner from './BarcodeScanner';
+import { playBeepSound } from '@/utils/audioUtils';
+import ImageUpload from './ImageUpload';
 
 interface NewStockFormProps {
   onClose: () => void;
@@ -39,6 +41,9 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     notes: '',
     minimumStockLevel: '5'
   });
+  
+  // State for product images
+  const [productImages, setProductImages] = useState<string[]>([]);
   
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [openSupplierCombobox, setOpenSupplierCombobox] = useState(false);
@@ -197,6 +202,19 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     }
   };
 
+  // Generate a random ID for the item
+  const generateItemId = () => {
+    const timestamp = new Date().getTime();
+    const random = Math.floor(Math.random() * 9000) + 1000;
+    return `ITEM-${timestamp}-${random}`;
+  };
+
+  const handleBarcodeDetected = (barcode: string) => {
+    playBeepSound();
+    setFormData(prev => ({ ...prev, barcode }));
+    setIsScannerOpen(false);
+  };
+  
   const validateForm = (): boolean => {
     const errors = {
       purchaseAmount: '',
@@ -238,103 +256,71 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
     
     return true;
   };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form before submission
     if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the validation errors",
-        variant: "destructive"
-      });
       return;
     }
     
     try {
-      // Create item object matching the InventoryItem interface structure
-      // Map form fields to the expected structure in the inventory service
+      // Create new inventory item with product images
+      // Generate ID if empty, otherwise use user's input
+      const itemIdToUse = formData.itemId || generateItemId();
+      
       const newItem = {
-        name: formData.description, // Map description to name field
+        name: formData.description,
+        id: itemIdToUse, // Use this as the primary ID
+        itemId: itemIdToUse, // Keep for backward compatibility
+        description: formData.description,
         barcode: formData.barcode,
-        stockLevel: parseInt(formData.quantity) || 0, // Map quantity to stockLevel
-        minimumStockLevel: parseInt(formData.minimumStockLevel) || 0,
-        price: parseFloat(formData.sellingPrice) || 0, // Map sellingPrice to price
-        costPrice: parseFloat(formData.purchaseAmount) || 0, // Map purchaseAmount to costPrice
-        markup: parseFloat(formData.markup) || 0,
+        purchaseAmount: parseFloat(formData.purchaseAmount),
+        sellingPrice: parseFloat(formData.sellingPrice),
+        markup: parseFloat(formData.markup),
+        quantity: parseInt(formData.quantity),
         category: formData.category,
-        receiveDate: receiveDate?.toISOString() || new Date().toISOString(),
-        expiryDate: expiryDate?.toISOString() || null,
-        supplier: formData.supplier,
         batchNo: formData.batchNo,
+        supplier: formData.supplier,
         location: formData.location,
-        notes: formData.notes
+        notes: formData.notes,
+        minimumStockLevel: parseInt(formData.minimumStockLevel),
+        receiveDate: receiveDate ? format(receiveDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+        expiryDate: expiryDate ? format(expiryDate, 'yyyy-MM-dd') : undefined,
+        // Required fields for the inventory service
+        stockLevel: parseInt(formData.quantity),
+        price: parseFloat(formData.sellingPrice),
+        costPrice: parseFloat(formData.purchaseAmount),
+        // Add the product images to the inventory item
+        images: productImages.length > 0 ? productImages : undefined
       };
       
-      // Use the existing inventory service to add the stock item
-      await addInventoryItem(newItem);
+      addInventoryItem(newItem);
       
       toast({
         title: "Success",
-        description: "Stock item added successfully",
-        variant: "default"
+        description: "New inventory item added successfully",
       });
+      
+      // Close dialog
       onClose();
     } catch (error) {
-      console.error('Error adding stock item:', error);
       toast({
         title: "Error",
-        description: "Failed to add stock item",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
         variant: "destructive"
       });
     }
   };
 
-  const handleScanBarcode = () => {
-    setIsScannerOpen(true);
-  };
-  
-  const handleBarcodeDetected = (barcode: string) => {
-    setFormData(prev => ({
-      ...prev,
-      barcode
-    }));
-    
-    toast({
-      title: "Barcode Detected",
-      description: `Barcode ${barcode} has been scanned and added to the form.`,
-      variant: "default"
-    });
-  };
-
-  // Generate a unique item ID based on current date and random number
-  const generateItemId = () => {
-    const prefix = 'INV';
-    
-    // Format: INV-YYMMDD-XXX (Year, Month, Day, Random 3-digit number)
-    const currentDate = new Date();
-    const year = currentDate.getFullYear().toString().slice(2); // Last 2 digits of year
-    const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
-    const day = currentDate.getDate().toString().padStart(2, '0');
-    const datePart = `${year}${month}${day}`;
-    
-    // Generate a random 3-digit number for uniqueness
-    const randomPart = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    
-    return `${prefix}-${datePart}-${randomPart}`;
-  };
-
-
-  
-
 
   return (
-    <Dialog open={true} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+    <Dialog open onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <PackagePlus className="h-5 w-5" /> Add New Stock
+            <PackagePlus className="h-5 w-5 text-mokm-orange-500" />
+            Add New Stock Item
           </DialogTitle>
         </DialogHeader>
         
@@ -343,162 +329,130 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             {/* Item ID */}
             <div className="space-y-2">
               <Label htmlFor="itemId">Item ID</Label>
-              <div className="relative">
-                <Input
-                  id="itemId"
-                  name="itemId"
-                  value={formData.itemId}
-                  onChange={handleInputChange}
-                  readOnly
-                  className="bg-slate-50 pr-8"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <span className="text-xs text-mokm-orange-500 font-medium bg-mokm-orange-50 px-1 py-0.5 rounded">Auto</span>
-                </div>
-              </div>
-              <p className="text-xs text-slate-500">Auto-generated unique identifier</p>
+              <Input
+                id="itemId"
+                name="itemId"
+                value={formData.itemId || ''}
+                onChange={handleInputChange}
+                placeholder="Auto-generated if left empty"
+              />
             </div>
             
-            {/* Barcode */}
+            {/* Barcode with Scanner Button */}
             <div className="space-y-2">
-              <Label htmlFor="barcode">Barcode</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="barcode"
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleInputChange}
-                  placeholder="Enter barcode number..."
-                  className="flex-1"
-                />
+              <div className="flex items-center gap-2">
+                <Label htmlFor="barcode">Barcode</Label>
                 <Button 
                   type="button" 
-                  variant="outline" 
-                  onClick={handleScanBarcode} 
-                  className="shrink-0 flex gap-1 items-center"
-                  title="Scan Barcode"
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setIsScannerOpen(true)}
+                  className="px-2 h-6"
                 >
-                  <QrCode className="h-4 w-4" />
-                  <span className="hidden sm:inline">Scan</span>
+                  <Scan className="h-3.5 w-3.5 text-mokm-orange-500" />
+                  <span className="text-xs ml-1">Scan</span>
                 </Button>
               </div>
+              <Input
+                id="barcode"
+                name="barcode"
+                value={formData.barcode}
+                onChange={handleInputChange}
+                placeholder="Barcode or SKU"
+              />
             </div>
             
             {/* Description */}
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="description">Item Description</Label>
+              <Label htmlFor="description">Description</Label>
               <Input
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Enter detailed item description..."
+                placeholder="Item description"
                 required
               />
             </div>
             
             {/* Purchase Amount */}
             <div className="space-y-2">
-              <Label htmlFor="purchaseAmount">Purchase Amount (ZAR)</Label>
+              <Label htmlFor="purchaseAmount">Purchase Amount (R)</Label>
               <Input
                 id="purchaseAmount"
                 name="purchaseAmount"
+                type="number"
+                step="0.01"
                 value={formData.purchaseAmount}
                 onChange={handleInputChange}
-                placeholder=""
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]+(\.[0-9]+)?"
-                className={`${validationErrors.purchaseAmount ? 'border-red-500 focus-visible:ring-red-300' : ''}`}
+                placeholder="0.00"
+                required
+                className={validationErrors.purchaseAmount ? 'border-red-500' : ''}
               />
               {validationErrors.purchaseAmount && (
-                <p className="text-xs text-red-500">{validationErrors.purchaseAmount}</p>
+                <p className="text-red-500 text-xs">{validationErrors.purchaseAmount}</p>
               )}
             </div>
             
             {/* Selling Price */}
             <div className="space-y-2">
-              <Label htmlFor="sellingPrice">Selling Price (ZAR)</Label>
+              <Label htmlFor="sellingPrice">Selling Price (R)</Label>
               <Input
                 id="sellingPrice"
                 name="sellingPrice"
+                type="number"
+                step="0.01"
                 value={formData.sellingPrice}
                 onChange={handleInputChange}
-                placeholder=""
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]+(\.[0-9]+)?"
-                className={`${validationErrors.sellingPrice ? 'border-red-500 focus-visible:ring-red-300' : ''}`}
-                onFocus={() => setIsEditingSellingPrice(true)}
+                placeholder="0.00"
+                required
+                className={validationErrors.sellingPrice ? 'border-red-500' : ''}
               />
-              {validationErrors.sellingPrice ? (
-                <p className="text-xs text-red-500">{validationErrors.sellingPrice}</p>
-              ) : (
-                <p className="text-xs text-slate-500">Calculated as: Purchase Amount + Markup</p>
+              {validationErrors.sellingPrice && (
+                <p className="text-red-500 text-xs">{validationErrors.sellingPrice}</p>
               )}
             </div>
             
-            {/* Markup (%) */}
+            {/* Markup */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="markup">Markup (%)</Label>
-                <div className="relative group">
-                  <span className="cursor-help text-xs text-mokm-orange-500 hover:text-mokm-orange-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-help-circle">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                      <path d="M12 17h.01"></path>
-                    </svg>
-                  </span>
-                  <div className="absolute bottom-full mb-2 right-0 w-64 p-2 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
-                    <p className="text-xs text-slate-600 font-medium">Markup (%) = ((Selling Price - Purchase Amount) ÷ Purchase Amount) × 100</p>
-                  </div>
-                </div>
-              </div>
+              <Label htmlFor="markup">Markup (%)</Label>
               <Input
                 id="markup"
                 name="markup"
+                type="number"
+                step="0.01"
                 value={formData.markup}
                 onChange={handleInputChange}
-                placeholder=""
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]+(\.[0-9]+)?"
-                className={`${validationErrors.markup ? 'border-red-500 focus-visible:ring-red-300' : ''}`}
+                placeholder="0.00"
+                className={validationErrors.markup ? 'border-red-500' : ''}
               />
-              {validationErrors.markup ? (
-                <p className="text-xs text-red-500">{validationErrors.markup}</p>
-              ) : (
-                <p className="text-xs text-slate-500">
-                  Auto-calculated from Purchase Amount and Selling Price
-                </p>
+              {validationErrors.markup && (
+                <p className="text-red-500 text-xs">{validationErrors.markup}</p>
               )}
             </div>
             
             {/* Quantity */}
             <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity Received</Label>
+              <Label htmlFor="quantity">Quantity</Label>
               <Input
                 id="quantity"
                 name="quantity"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                type="number"
                 value={formData.quantity}
                 onChange={handleInputChange}
-                placeholder=""
-                className={validationErrors.quantity ? 'border-red-500 focus-visible:ring-red-300' : ''}
+                placeholder="1"
                 required
+                className={validationErrors.quantity ? 'border-red-500' : ''}
               />
+              {validationErrors.quantity && (
+                <p className="text-red-500 text-xs">{validationErrors.quantity}</p>
+              )}
             </div>
             
             {/* Category */}
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select 
-                value={formData.category}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
-              >
+              <Select name="category" value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -510,25 +464,102 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
               </Select>
             </div>
             
-            {/* Batch Number */}
+            {/* Minimum Stock Level */}
             <div className="space-y-2">
-              <Label htmlFor="batchNo">Batch No.</Label>
+              <Label htmlFor="minimumStockLevel">Minimum Stock Level</Label>
+              <Input
+                id="minimumStockLevel"
+                name="minimumStockLevel"
+                type="number"
+                value={formData.minimumStockLevel}
+                onChange={handleInputChange}
+                placeholder="5"
+              />
+            </div>
+            
+            {/* Supplier - Combobox */}
+            <div className="space-y-2">
+              <Label>Supplier</Label>
+              <Popover open={openSupplierCombobox} onOpenChange={setOpenSupplierCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openSupplierCombobox}
+                    className="w-full justify-between"
+                  >
+                    {formData.supplier
+                      ? suppliers.find((supplier) => supplier.name === formData.supplier)?.name
+                      : "Select supplier"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput placeholder="Search supplier..." />
+                    <CommandEmpty>No supplier found.</CommandEmpty>
+                    <CommandGroup>
+                      {suppliers.map((supplier) => (
+                        <CommandItem
+                          key={supplier.id}
+                          value={supplier.name}
+                          onSelect={(currentValue) => {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              supplier: currentValue === formData.supplier ? "" : currentValue
+                            }));
+                            setOpenSupplierCombobox(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.supplier === supplier.name ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {supplier.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            {/* Location */}
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Select name="location" value={formData.location} onValueChange={(value) => setFormData(prev => ({ ...prev, location: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={location} value={location}>{location}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Batch No */}
+            <div className="space-y-2">
+              <Label htmlFor="batchNo">Batch No</Label>
               <Input
                 id="batchNo"
                 name="batchNo"
                 value={formData.batchNo}
                 onChange={handleInputChange}
-                placeholder="Enter batch number..."
+                placeholder="Batch number if applicable"
               />
             </div>
             
             {/* Receive Date */}
             <div className="space-y-2">
-              <Label>Date Received</Label>
+              <Label>Receive Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant={"outline"}
                     className={cn(
                       "w-full justify-start text-left font-normal",
                       !receiveDate && "text-muted-foreground"
@@ -551,18 +582,18 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             
             {/* Expiry Date */}
             <div className="space-y-2">
-              <Label>Expiry Date (if applicable)</Label>
+              <Label>Expiry Date (Optional)</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant={"outline"}
                     className={cn(
                       "w-full justify-start text-left font-normal",
                       !expiryDate && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {expiryDate ? format(expiryDate, "PPP") : <span>No expiry date</span>}
+                    {expiryDate ? format(expiryDate, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
@@ -576,115 +607,6 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
               </Popover>
             </div>
             
-            {/* Supplier - Searchable Dropdown */}
-            <div className="space-y-2">
-              <Label htmlFor="supplier">Supplier</Label>
-              <Popover open={openSupplierCombobox} onOpenChange={setOpenSupplierCombobox}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openSupplierCombobox}
-                    className="w-full justify-between font-normal"
-                  >
-                    {formData.supplier || "Select or enter supplier..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search suppliers..." className="h-9" />
-                    <CommandEmpty>No supplier found. Type to add new.</CommandEmpty>
-                    <CommandGroup className="max-h-60 overflow-auto">
-                      {suppliers.map((supplier) => (
-                        <CommandItem
-                          key={supplier.id}
-                          value={supplier.name}
-                          onSelect={(currentValue) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              supplier: currentValue
-                            }));
-                            setOpenSupplierCombobox(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              formData.supplier === supplier.name ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {supplier.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                    {/* Allow custom supplier entry */}
-                    {formData.supplier && !suppliers.some(s => s.name.toLowerCase() === formData.supplier.toLowerCase()) && (
-                      <CommandGroup>
-                        <CommandItem
-                          value={formData.supplier}
-                          onSelect={() => {
-                            setOpenSupplierCombobox(false);
-                          }}
-                          className="text-mokm-orange-500"
-                        >
-                          <span className="mr-2">+</span>
-                          Add "{formData.supplier}" as new supplier
-                        </CommandItem>
-                      </CommandGroup>
-                    )}
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <Input
-                id="supplier"
-                name="supplier"
-                value={formData.supplier}
-                onChange={(e) => {
-                  handleInputChange(e);
-                  // Auto-open dropdown when typing
-                  if (!openSupplierCombobox && e.target.value) {
-                    setOpenSupplierCombobox(true);
-                  }
-                }}
-                placeholder="Or type supplier name directly..."
-                className="mt-2"
-              />
-            </div>
-            
-            {/* Location */}
-            <div className="space-y-2">
-              <Label htmlFor="location">Storage Location</Label>
-              <Select 
-                value={formData.location}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((location) => (
-                    <SelectItem key={location} value={location}>{location}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Minimum Stock Level */}
-            <div className="space-y-2">
-              <Label htmlFor="minimumStockLevel">Minimum Stock Level</Label>
-              <Input
-                id="minimumStockLevel"
-                name="minimumStockLevel"
-                type="number"
-                min="0"
-                value={formData.minimumStockLevel}
-                onChange={handleInputChange}
-                placeholder="5"
-              />
-              <p className="text-xs text-slate-500">Alert when stock falls below this level</p>
-            </div>
-            
             {/* Notes */}
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="notes">Notes</Label>
@@ -693,9 +615,23 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
-                placeholder="Add any additional notes about this item..."
-                rows={3}
+                placeholder="Additional notes about this item..."
+                className="resize-none h-24"
               />
+            </div>
+            
+            {/* Product Images */}
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-mokm-orange-600" />
+                <Label>Product Images</Label>
+              </div>
+              <ImageUpload 
+                onImageChange={(images) => setProductImages(images)}
+                existingImages={productImages}
+                maxImages={5}
+              />
+              <p className="text-xs text-slate-500">Upload up to 5 product images or take photos with your camera</p>
             </div>
           </div>
           
@@ -717,7 +653,6 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
           isOpen={isScannerOpen}
           onClose={() => setIsScannerOpen(false)}
           onBarcodeDetected={handleBarcodeDetected}
-          title="Scan Barcode for New Stock"
         />
       </DialogContent>
     </Dialog>
