@@ -670,6 +670,13 @@ const Inventory = () => {
           <DamageStockForm 
             item={selectedItem}
             onClose={handleFormClose}
+            onSubmitSuccess={() => {
+              // Refresh inventory data to update UI immediately
+              loadInventoryData();
+              
+              // Also refresh stock history to show new damage/expiry records
+              setStockHistory(getAllStockHistory());
+            }}
           />
         )}
         

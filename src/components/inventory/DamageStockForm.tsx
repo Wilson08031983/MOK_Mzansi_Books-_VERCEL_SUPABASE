@@ -11,6 +11,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/components/ui/use-toast';
+import { markItemAsDamaged, markItemAsExpired } from '@/services/inventoryService';
 
 interface InventoryItem {
   id: string;
@@ -29,9 +31,11 @@ interface InventoryItem {
 interface DamageStockFormProps {
   item: InventoryItem | null;
   onClose: () => void;
+  onSubmitSuccess?: () => void; // Optional callback to refresh parent component
 }
 
-const DamageStockForm: React.FC<DamageStockFormProps> = ({ item, onClose }) => {
+const DamageStockForm: React.FC<DamageStockFormProps> = ({ item, onClose, onSubmitSuccess }) => {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     type: 'damaged', // damaged or expired
     quantity: '1',
@@ -72,19 +76,79 @@ const DamageStockForm: React.FC<DamageStockFormProps> = ({ item, onClose }) => {
     }));
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!item) return;
     
-    // Here you would normally save the data to your database
-    console.log('Damage/Expiry Report:', {
-      itemId: item?.id,
-      itemName: item?.name,
-      ...formData,
-      reportDate
-    });
+    setIsSubmitting(true);
+    setError(null);
     
-    // For demo purposes, just close the form
-    onClose();
+    try {
+      const quantity = parseInt(formData.quantity, 10);
+      
+      // Validation
+      if (quantity <= 0) {
+        throw new Error('Quantity must be greater than zero');
+      }
+      
+      if (quantity > item.stockLevel) {
+        throw new Error('Cannot mark more than available stock as damaged or expired');
+      }
+      
+      if (formData.type === 'damaged') {
+        // Mark as damaged
+        markItemAsDamaged(
+          item.id,
+          quantity,
+          formData.reason,
+          formData.notes,
+          formData.actionTaken,
+          formData.location
+        );
+        
+        toast({
+          title: 'Stock Updated',
+          description: `${quantity} unit(s) of ${item.name} marked as damaged.`,
+          variant: 'default',
+        });
+      } else {
+        // Mark as expired
+        markItemAsExpired(
+          item.id,
+          quantity,
+          formData.reason,
+          formData.notes,
+          formData.actionTaken,
+          formData.location
+        );
+        
+        toast({
+          title: 'Stock Updated',
+          description: `${quantity} unit(s) of ${item.name} marked as expired.`,
+          variant: 'default',
+        });
+      }
+      
+      // Call the callback to refresh parent component if provided
+      if (onSubmitSuccess) {
+        onSubmitSuccess();
+      }
+      
+      // Close the form
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update inventory',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   if (!item) {
@@ -96,8 +160,22 @@ const DamageStockForm: React.FC<DamageStockFormProps> = ({ item, onClose }) => {
           </DialogHeader>
           <p>Please select an inventory item to report as damaged or expired.</p>
           <DialogFooter>
-            <Button onClick={onClose}>Close</Button>
+            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Processing...' : 'Submit Report'}
+            </Button>
           </DialogFooter>
+          <div className="mt-4">
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-md flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              <p className="text-sm">
+                <span className="font-medium">Important:</span> Reporting items as damaged or expired will impact your inventory valuation and financial reports. This action cannot be undone.
+              </p>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     );
@@ -105,12 +183,20 @@ const DamageStockForm: React.FC<DamageStockFormProps> = ({ item, onClose }) => {
 
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-600" /> Report Damaged/Expired Stock
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Report Damaged/Expired Stock
           </DialogTitle>
         </DialogHeader>
+        
+        {error && (
+          <div className="bg-destructive/15 border border-destructive text-destructive px-4 py-2 rounded-md flex items-start gap-2 mb-4">
+            <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+            <p>{error}</p>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
@@ -181,20 +267,23 @@ const DamageStockForm: React.FC<DamageStockFormProps> = ({ item, onClose }) => {
             </RadioGroup>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="space-y-2">
               <Label htmlFor="quantity">Affected Quantity</Label>
               <Input
+                type="number"
                 id="quantity"
                 name="quantity"
-                type="number"
+                placeholder="Number of items affected"
                 min="1"
-                max={item.stockLevel}
+                max={item?.stockLevel || 1}
                 value={formData.quantity}
                 onChange={handleInputChange}
-                required
+                className="w-full"
               />
-              <p className="text-xs text-slate-500">Number of items affected</p>
+              <p className="text-xs text-muted-foreground">
+                Maximum: {item?.stockLevel || 0} available
+              </p>
             </div>
             
             <div className="space-y-2">
