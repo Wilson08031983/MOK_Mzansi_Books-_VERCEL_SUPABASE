@@ -366,10 +366,15 @@ const Inventory = () => {
   // Filter inventory based on search term, category, and status
   const filteredInventory = inventoryItems.filter(item => {
     // Apply search filter
+    const searchTermLower = searchTerm.toLowerCase();
     const matchesSearch = searchTerm === '' || 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.barcode.includes(searchTerm) ||
-      item.id.toLowerCase().includes(searchTerm.toLowerCase());
+      item.name.toLowerCase().includes(searchTermLower) ||
+      item.barcode.toLowerCase().includes(searchTermLower) ||
+      item.id.toLowerCase().includes(searchTermLower) ||
+      (item.notes || '').toLowerCase().includes(searchTermLower) ||
+      item.supplier.toLowerCase().includes(searchTermLower) ||
+      item.category.toLowerCase().includes(searchTermLower) ||
+      item.batchNo.toLowerCase().includes(searchTermLower);
     
     // Apply category filter
     const matchesCategory = categoryFilter === 'all' ? true : item.category === categoryFilter;
@@ -467,7 +472,7 @@ const Inventory = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
-              placeholder="Search by name, ID, or barcode..." 
+              placeholder="Search by name, ID, barcode, supplier, description..." 
               className="pl-10 shadow-business"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
