@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Scanner</title>
+    <!-- Add QuaggaJS for barcode detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.2/dist/quagga.min.js"></script>
+    <!-- Ensure script is loaded -->
+    <script>
+        // Check if Quagga loaded correctly, otherwise try to reload
+        window.addEventListener('load', function() {
+            if (typeof Quagga === 'undefined') {
+                console.error('Quagga library not loaded. Attempting to reload...');
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.2/dist/quagga.min.js';
+                script.onload = function() {
+                    console.log('Quagga library loaded successfully on retry');
+                    // Initialize scanner when available
+                    if (document.getElementById('btn-scan')) {
+                        initializeScannerEvents();
+                    }
+                };
+                document.head.appendChild(script);
+            }
+        });
+    </script>
+    <style>
+        /* Define Apple Sequoia theme colors */
+        :root {
+            --mokm-pink-500: #ff73fa;
+            --mokm-purple-500: #8c52ff;
+            --success-green: #4caf50;
+            --error-red: #f44336;
+            --light-bg: #f8f9fa;
+            --border-color: #f0f0f0;
+            --button-height: 48px;
+        }
+        body, html {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background-color: white;
+            position: relative; /* Establish a stacking context */
+            z-index: 1; /* Base stacking context */
+        }
+        
+        .scanner-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            overflow: hidden;
+        }
+        
+        /* Video container takes most of the space */
+        .video-container {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+            background-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #interactive.viewport {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        #interactive.viewport > canvas, #interactive.viewport > video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .scanner-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 30%;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.15);
+        }
+        
+        .scanner-corners {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: #ff73fa;
+            border-style: solid;
+            border-width: 4px;
+            box-shadow: 0 0 10px rgba(140, 82, 255, 0.6);
+        }
+        
+        .top-left {
+            top: -2px;
+            left: -2px;
+            border-right: none;
+            border-bottom: none;
+            border-top-left-radius: 8px;
+        }
+        
+        .top-right {
+            top: -2px;
+            right: -2px;
+            border-left: none;
+            border-bottom: none;
+            border-top-right-radius: 8px;
+        }
+        
+        .bottom-left {
+            bottom: -2px;
+            left: -2px;
+            border-right: none;
+            border-top: none;
+            border-bottom-left-radius: 8px;
+        }
+        
+        .bottom-right {
+            bottom: -2px;
+            right: -2px;
+            border-left: none;
+            border-top: none;
+            border-bottom-right-radius: 8px;
+        }
+        
+        .scanner-laser {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, #ff73fa, #8c52ff);
+            transform: translateY(-50%);
+            animation: scan 2s infinite ease-in-out;
+            box-shadow: 0 0 8px rgba(140, 82, 255, 0.8);
+        }
+        
+        @keyframes scan {
+            0% { top: 35%; opacity: 0.6; }
+            50% { top: 65%; opacity: 1; }
+            100% { top: 35%; opacity: 0.6; }
+        }
+        
+        /* Controls section */
+        .scanner-controls {
+            padding: 20px;
+            background-color: var(--light-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 50; /* Higher z-index than overlay */
+            position: relative; /* Create stacking context */
+        }
+        
+        .scanner-status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            background-color: #f7f7f9;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            text-align: center;
+            font-weight: 500;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .scanner-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 100; /* Ensure buttons are at highest stacking level */
+            min-height: var(--button-height);
+            pointer-events: auto; /* Explicitly enable pointer events */
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px; /* Apple Sequoia-style rounded buttons */
+            background: linear-gradient(135deg, #ff73fa, #8c52ff);
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(140, 82, 255, 0.3);
+            min-width: 130px;
+            text-align: center;
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+            user-select: none; /* Prevent text selection */
+            -webkit-user-select: none;
+            -webkit-touch-callout: none; /* Prevent callout to copy image on iOS */
+            appearance: none; /* Remove default button styling */
+            -webkit-appearance: none;
+            touch-action: manipulation; /* Optimization for touch interactions */
+            position: relative; /* Enable proper stacking */
+            z-index: 100; /* High z-index to ensure clickability */
+            height: var(--button-height);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(140, 82, 255, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+            opacity: 0.9;
+        }
+        
+        .btn-close {
+            background: #f1f1f3;
+            color: #333;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .camera-error {
+            padding: 20px;
+            margin: 20px;
+            text-align: center;
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .scanner-target.success {
+            border-color: var(--success-green);
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.05), 0 0 15px rgba(76, 175, 80, 0.8);
+            animation: success-pulse 1s ease-in-out;
+        }
+        
+        @keyframes success-pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.05); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="scanner-container">
+        <!-- Main camera view -->
+        <div class="video-container">
+            <div id="interactive" class="viewport"></div>
+            
+            <div class="scanner-overlay">
+                <div class="scanner-target">
+                    <div class="scanner-corners top-left"></div>
+                    <div class="scanner-corners top-right"></div>
+                    <div class="scanner-corners bottom-left"></div>
+                    <div class="scanner-corners bottom-right"></div>
+                    <div class="scanner-laser"></div>
+                </div>
+            </div>
+            
+            <!-- Camera error message -->
+            <div id="camera-error" class="camera-error hidden">
+                <p>Camera access denied or not available.</p>
+                <p>Please check your browser permissions or use a USB scanner.</p>
+                <button id="retry-camera" class="btn">Retry Camera Access</button>
+            </div>
+        </div>
+        
+        <!-- Controls section -->
+        <div class="scanner-controls">
+            <div id="scanner-status" class="scanner-status">Click "Start Scanning" to begin</div>
+            <div class="scanner-buttons">
+                <button id="btn-scan" class="btn">Start Scanning</button>
+                <button id="btn-close" class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add beep sound for successful scan -->
+    <audio id="beep-sound" src="/beep.mp3" preload="auto"></audio>
+    
+    <!-- Fallback audio data URI in case external file is missing -->
+    <script>
+        // Create fallback audio element with data URI
+        const fallbackBeep = document.createElement('audio');
+        fallbackBeep.id = 'fallback-beep';
+        // This is a simple beep sound encoded as base64 data URI
+        fallbackBeep.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAuLi4uLi4uLi4uLi4uLi4uLi42NjY2NjY2NjY2NjY2NjY2NjY2Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+P////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAcFgQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/jWMQAEvpwXihCEOYCgDAMDj3c7HMYHAYJl+fP/5wGCGHHGCQCgMEgEIRv5hzbv/wOAgQBgpBQZbf/BgYDAoUFhosGP//xcGAYDAYDAYDAAH///8MODgMBgzlQKxr//+MEhoGAwGCgw3/EwYMGcMGDH/1g4QP//qBwawoGAwGIRBQZgwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGAwGP/8YGDABQKBQKBQKAP/8BgMBgMBgAH//BgMBgMBgMB//wYDAYDAYDA//+YMGDPAgQJkCZP/+DAYDAYDAf//mDCBzlPmKiIR//8wYMGDBgwYMGD//wYMGDBgwYMGD//wYMGDBgwYMGD//wYMGDBgwYMGD//5gwYMGDBgx///mDBgwYMGDBn//+YMGDBgwYMGf//5gwYMGDBgwZ///hwYMGDBgwYQ=';;
+        document.body.appendChild(fallbackBeep);
+    </script>
+
+    <script>
+        // Scanner state
+        let isScanning = false;
+        let quaggaInitialized = false;
+        
+        // Make sure we initialize both when DOM loads and when window loads (whichever happens first)
+        let eventsInitialized = false;
+        
+        function initIfReady() {
+            if (!eventsInitialized) {
+                console.log('Initializing scanner events');
+                eventsInitialized = true;
+                initializeScannerEvents();
+            }
+        }
+        
+        // Multiple initialization points to ensure we catch all possible ready states
+        
+        // Wait for DOM content to be fully loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initIfReady);
+        } else {
+            // DOM already loaded, initialize immediately
+            initIfReady();
+        }
+        
+        // Also try on window load as a fallback
+        window.addEventListener('load', initIfReady);
+        
+        // Third fallback using setTimeout to ensure initialization in edge cases
+        setTimeout(initIfReady, 500);
+        
+        // Additional event handler for potential focus issues
+        window.addEventListener('focus', function() {
+            console.log('Window received focus - ensuring scanner is ready');
+            initIfReady();
+        });
+        
+        // Handle visibility changes (when tab becomes visible again)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                console.log('Document became visible - ensuring scanner is ready');
+                initIfReady();
+            }
+        });
+        
+        function initializeScannerEvents() {
+            // DOM Elements
+            const btnScan = document.getElementById('btn-scan');
+            const btnClose = document.getElementById('btn-close');
+            const btnRetryCamera = document.getElementById('retry-camera');
+            const scannerStatus = document.getElementById('scanner-status');
+            const cameraError = document.getElementById('camera-error');
+            const beepSound = document.getElementById('beep-sound');
+            
+            if (!btnScan || !btnClose) {
+                console.error('Scanner buttons not found!');
+                return;
+            }
+            
+            console.log('Scanner buttons found, attaching event listeners');
+            
+            // Initialize Quagga when Start Scanning is clicked - use both onclick and addEventListener for maximum compatibility
+            function handleScanClick(e) {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+                console.log('Start/stop scan button clicked. Current state:', isScanning);
+                if (!isScanning) {
+                    startScanner();
+                } else {
+                    stopScanner();
+                }
+                return false;
+            }
+            
+            // Use multiple event binding methods for maximum compatibility
+            btnScan.onclick = handleScanClick;
+            btnScan.addEventListener('click', handleScanClick, {capture: true});
+            btnScan.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                handleScanClick(e);
+            }, {capture: true});
+            
+            // Close button event handler - use both onclick and addEventListener for maximum compatibility
+            function handleCloseClick(e) {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+                console.log('Close button clicked');
+                stopScanner();
+                if (window.parent) {
+                    window.parent.postMessage({ type: 'SCANNER_CLOSED' }, '*');
+                }
+                return false;
+            }
+            
+            btnClose.onclick = handleCloseClick;
+            btnClose.addEventListener('click', handleCloseClick, {capture: true});
+            btnClose.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                handleCloseClick(e);
+            }, {capture: true});
+            
+            // Retry camera button
+            if (btnRetryCamera) {
+                btnRetryCamera.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    cameraError.classList.add('hidden');
+                    startScanner();
+                });
+            }
+            
+            // Listen for messages from parent window
+            window.addEventListener('message', function(event) {
+                if (event.data?.type === 'START_SCANNER' && !isScanning) {
+                    startScanner();
+                } else if (event.data?.type === 'STOP_SCANNER' && isScanning) {
+                    stopScanner();
+                }
+            });
+            
+            // Signal to parent that scanner is ready
+            if (window.parent) {
+                window.parent.postMessage({ type: 'SCANNER_READY' }, '*');
+            }
+        }
+        
+        // Show camera error and revert UI state
+        function showCameraError() {
+            const cameraError = document.getElementById('camera-error');
+            const scannerStatus = document.getElementById('scanner-status');
+            const btnScan = document.getElementById('btn-scan');
+            
+            if (cameraError) {
+                cameraError.classList.remove('hidden');
+            }
+            
+            if (scannerStatus) {
+                scannerStatus.textContent = 'Camera error! Click "Retry Camera Access"';
+                scannerStatus.style.color = '#f44336';
+            }
+            
+            if (btnScan) {
+                btnScan.textContent = 'Start Scanning';
+                btnScan.style.backgroundColor = '';
+                btnScan.style.background = 'linear-gradient(135deg, #ff73fa, #8c52ff)';
+            }
+            
+            isScanning = false;
+        }
+        
+        // Start the barcode scanner
+        function startScanner() {
+            console.log('Starting scanner...');
+            const scannerStatus = document.getElementById('scanner-status');
+            const btnScan = document.getElementById('btn-scan');
+            const cameraError = document.getElementById('camera-error');
+            
+            if (!scannerStatus || !btnScan) {
+                console.error('Required elements not found');
+                return;
+            }
+            
+            // Hide any previous error
+            if (cameraError) {
+                cameraError.classList.add('hidden');
+            }
+            
+            scannerStatus.textContent = 'Accessing camera...';
+            btnScan.textContent = 'Stop Scanning';
+            btnScan.style.backgroundColor = '#f44336';
+            btnScan.style.background = 'linear-gradient(135deg, #ff3333, #ff0000)';
+            isScanning = true;
+            
+            // Check if Quagga exists
+            if (typeof Quagga === 'undefined') {
+                console.error('Quagga is not defined!');
+                scannerStatus.textContent = 'Error: Scanner library not loaded';
+                showCameraError();
+                return;
+            }
+            
+            try {
+                // If already initialized, just start
+                if (quaggaInitialized) {
+                    try {
+                        Quagga.start();
+                        scannerStatus.textContent = 'Scanning for barcodes...';
+                        return;
+                    } catch (e) {
+                        console.log('Failed to restart Quagga, reinitializing:', e);
+                        quaggaInitialized = false;
+                    }
+                }
+                
+                // Configure Quagga with improved settings
+                Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        width: { min: 640, ideal: 1280, max: 1920 },
+                        height: { min: 480, ideal: 720, max: 1080 },
+                        facingMode: "environment",
+                        aspectRatio: { min: 1, max: 2 }
+                    }
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: navigator.hardwareConcurrency ? Math.min(4, navigator.hardwareConcurrency) : 2,
+                frequency: 15,
+                decoder: {
+                    readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "code_39_vin_reader", "codabar_reader", "upc_reader", "upc_e_reader", "i2of5_reader", "2of5_reader"]
+                },
+                locate: true,
+                debug: false
+            }, function(err) {
+                const scannerStatus = document.getElementById('scanner-status');
+                
+                if (err) {
+                    console.error("Quagga initialization failed:", err);
+                    if (scannerStatus) {
+                        scannerStatus.textContent = 'Camera error: ' + (err.name || 'Unknown error');
+                    }
+                    showCameraError();
+                    return;
+                }
+                
+                console.log("Quagga initialization succeeded");
+                quaggaInitialized = true;
+                Quagga.start();
+                if (scannerStatus) {
+                    scannerStatus.textContent = 'Scanning for barcodes...';
+                }
+                
+                // Notify parent that scanner is now active
+                if (window.parent) {
+                    window.parent.postMessage({ type: 'SCANNER_ACTIVE' }, '*');
+                }
+            });
+            } catch (e) {
+                console.error('Error initializing Quagga:', e);
+                if (scannerStatus) {
+                    scannerStatus.textContent = 'Failed to initialize scanner: ' + e.message;
+                }
+                showCameraError();
+            }
+            
+            // Set up barcode detection
+            Quagga.onDetected(handleBarcodeDetection);
+            
+            // Debug mode can simulate barcode scans
+            const debugMode = false;
+            if (debugMode) {
+                // For demo purposes, simulate a barcode after 5 seconds if no real detection
+                setTimeout(() => {
+                    // Only simulate if we're still scanning and haven't detected a real barcode yet
+                    if (isScanning) {
+                        simulateBarcodeScan();
+                    }
+                }, 5000);
+            }
+        }
+        
+        // Stop the scanner - critical for buttons to work properly
+        function stopScanner() {
+            console.log('Stopping scanner...');
+            const btnScan = document.getElementById('btn-scan');
+            const scannerStatus = document.getElementById('scanner-status');
+            const videoElement = document.querySelector('#interactive video');
+            
+            // Always attempt to stop Quagga, even if state doesn't think we're scanning
+            try {
+                if (typeof Quagga !== 'undefined' && Quagga) {
+                    // Stop tracking first
+                    if (Quagga.canvas && Quagga.canvas.ctx) {
+                        try {
+                            Quagga.canvas.ctx.drawImage = function() {}; // Prevent further drawing
+                        } catch (err) {
+                            console.log('Could not stop canvas drawing');
+                        }
+                    }
+                    
+                    // Then stop Quagga
+                    try {
+                        Quagga.stop();
+                        console.log('Quagga stopped successfully');
+                    } catch (err) {
+                        console.error('Error during Quagga.stop():', err);
+                    }
+                    
+                    // Notify parent that scanner is now stopped
+                    if (window.parent) {
+                        window.parent.postMessage({ type: 'SCANNER_STOPPED' }, '*');
+                    }
+                }
+            } catch (e) {
+                console.error('Error stopping Quagga:', e);
+            }
+            
+            // Also stop any video streams manually
+            if (videoElement && videoElement.srcObject) {
+                try {
+                    const tracks = videoElement.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                    console.log('Video stream tracks stopped');
+                } catch (e) {
+                    console.error('Error stopping video tracks:', e);
+                }
+            }
+            
+            // Reset UI elements
+            if (btnScan) {
+                btnScan.textContent = 'Start Scanning';
+                btnScan.style.backgroundColor = '';
+                btnScan.style.background = 'linear-gradient(135deg, #ff73fa, #8c52ff)';
+            }
+            
+            if (scannerStatus) {
+                scannerStatus.textContent = 'Click "Start Scanning" to begin';
+                scannerStatus.style.color = '';
+            }
+            
+            // Always reset scanning state
+            isScanning = false;
+        }
+        
+        // Handle barcode detection
+        function handleBarcodeDetection(result) {
+            // Only process if we have a good confidence level
+            if (!result || !result.codeResult || result.codeResult.decodedCodes.length === 0) return;
+            
+            // Calculate confidence level
+            const confidence = result.codeResult.decodedCodes.reduce((avg, code) => avg + (code.error || 0), 0) / result.codeResult.decodedCodes.length;
+            
+            // Only accept codes with reasonable confidence
+            if (confidence > 0.2) return;
+            
+            // Play beep sound
+            try {
+                beepSound.play().catch(e => {
+                    console.log('Primary beep failed, trying fallback:', e);
+                    // Try fallback audio
+                    const fallbackBeep = document.getElementById('fallback-beep');
+                    if (fallbackBeep) fallbackBeep.play().catch(e => console.log('Fallback beep also failed:', e));
+                });
+            } catch (e) {
+                console.log('Audio playback error:', e);
+            }
+            
+            const code = result.codeResult.code;
+            console.log("Barcode detected:", code, "confidence:", confidence);
+            
+            // Add success animation to scanner UI
+            document.querySelector('.scanner-target').classList.add('success');
+            
+            // Update status
+            scannerStatus.textContent = `Success! Barcode: ${code}`;
+            scannerStatus.style.color = '#4caf50';
+            
+            // Stop scanning
+            stopScanner();
+            
+            // Send result to parent window
+            if (window.parent) {
+                window.parent.postMessage({
+                    type: 'BARCODE_DETECTED',
+                    value: code
+                }, '*');
+                
+                // Close scanner after success
+                setTimeout(() => {
+                    window.parent.postMessage({ type: 'SCANNER_CLOSED' }, '*');
+                }, 1000);
+            }
+        }
+        
+        // Simulate barcode scan for demo purposes
+        function simulateBarcodeScan() {
+            console.log("Simulating barcode scan");
+            handleBarcodeDetection({
+                codeResult: {
+                    code: "INV-001"
+                }
+            });
+        }
+        
+        // Show camera error UI
+        function showCameraError() {
+            console.log('Showing camera error UI');
+            const btnScan = document.getElementById('btn-scan');
+            const cameraError = document.getElementById('camera-error');
+            
+            isScanning = false;
+            
+            if (btnScan) {
+                btnScan.textContent = 'Start Scanning';
+                btnScan.style.background = 'linear-gradient(135deg, #ff73fa, #8c52ff)';
+            }
+            
+            if (cameraError) {
+                cameraError.classList.remove('hidden');
+            }
+        }
+        
+        // Handle messages from parent window
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'STOP_SCANNER') {
+                stopScanner();
+            }
+        });
+    </script>
+</body>
+</html>
