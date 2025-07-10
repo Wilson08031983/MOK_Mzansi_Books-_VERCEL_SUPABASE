@@ -3,16 +3,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Package, Printer, FileText, FileCheck, Truck, Search, X, Minus, Plus, Camera, ShoppingCart, Trash2, Percent } from 'lucide-react';
+import { Package, Printer, FileText, FileCheck, Truck, Search, X, Minus, Plus, Camera, ShoppingCart, Trash2, Percent, Check, ChevronsUpDown, UserIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getAllInventoryItems, updateInventoryItem, getInventoryItemByBarcode, saveInventoryItems } from '@/services/inventoryService';
 import { getClients, Client as ClientType } from '@/services/clientService';
 import companyService from '@/services/companyService';
+import { generateQuotationNumber, saveQuotation } from '@/services/quotationService';
+import { generateInvoiceNumber } from '@/services/invoiceService';
 import BarcodeScanner from '@/components/inventory/BarcodeScanner';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
 
 // Use the imported Client type as ClientType
@@ -101,42 +105,20 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         const loadedClients = getClients();
         setClients(loadedClients);
         
-        // Direct localStorage access for company information as backup
-        const directCompanyData = localStorage.getItem('mokMzansiBooks_company');
-        const directCompanyAssets = localStorage.getItem('mokMzansiBooks_company_assets');
-        
-        // Parse data and set state
-        if (directCompanyData) {
-          const parsedCompany = JSON.parse(directCompanyData);
-          setCompanyInfo(parsedCompany);
-          console.log('Direct company data loaded:', parsedCompany);
-        } else {
-          // Fallback to service
-          const company = companyService.getCompany();
-          setCompanyInfo(company);
-          console.log('Service company data loaded:', company);
-        }
-        
-        // Parse assets and set logo
-        if (directCompanyAssets) {
-          const parsedAssets = JSON.parse(directCompanyAssets);
-          if (parsedAssets && parsedAssets.logo) {
-            setCompanyLogo(parsedAssets.logo);
-            console.log('Direct company logo loaded:', parsedAssets.logo);
-          }
-        } else {
-          // Fallback to service
-          const assets = companyService.getCompanyAssets();
-          if (assets && assets.logo) {
-            setCompanyLogo(assets.logo);
-            console.log('Service company logo loaded:', assets.logo);
-          }
-        }
+        // Load company info
+        const companyData = companyService.getCompany();
+        setCompanyInfo(companyData);
+        setCompanyLogo(companyData?.logo || '');
       } catch (error) {
-        console.error('Error loading company data:', error);
+        console.error('Error loading data:', error);
+        toast({
+          title: "Error loading clients",
+          description: "Could not load client data. Please try again.",
+          variant: "destructive"
+        });
       }
     }
-  }, [isOpen]);
+  }, [isOpen, toast]);
 
   // Calculate subtotal, VAT, and total amount whenever salesItems or vatPercentage changes
   useEffect(() => {
@@ -368,53 +350,73 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    if (!selectedClientId) {
+    try {
+      // Generate a proper quotation number using the sequence
+      const quotationNumber = generateQuotationNumber();
+      const now = new Date();
+      const selectedClient = clients.find(client => client.id === selectedClientId);
+      
+      // Create new quotation with proper structure
+      const newQuotation = {
+        id: `quotation_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        number: quotationNumber,
+        reference: `SALE-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`,
+        clientId: selectedClientId,
+        client: selectedClient?.companyName || selectedClient?.contactPerson || 'Unknown Client',
+        clientName: selectedClient?.companyName || selectedClient?.contactPerson || 'Unknown Client',
+        clientEmail: selectedClient?.email || '',
+        clientContact: selectedClient?.contactPerson || '',
+        date: now.toISOString(),
+        expiryDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        status: 'draft' as 'draft' | 'saved' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'cancelled',
+        currency: 'ZAR',
+        amount: totalAmount,
+        items: salesItems.map((item, index) => ({
+          id: `item-${Date.now()}-${index}`,
+          description: item.name,
+          quantity: item.quantity,
+          unit: 'each',
+          rate: item.price,
+          taxRate: vatPercentage || 0,
+          discount: 0,
+          amount: item.total,
+          markupPercent: 0
+        })),
+        subtotal: subtotalAmount,
+        taxRate: vatPercentage,
+        taxAmount: vatAmount,
+        totalAmount: totalAmount,
+        terms: 'Payment due within 30 days',
+        notes: '',
+        lastModified: now.toISOString(),
+        revisionHistory: [{
+          date: now.toISOString(),
+          changes: ['Created from Sales'],
+          userId: 'system',
+          userName: 'System'
+        }]
+      };
+
+      // Save the quotation using the service function
+      saveQuotation(newQuotation);
+
+      // Update inventory quantities
+      updateInventoryQuantities();
+
       toast({
-        title: "No client selected",
-        description: "Please select a client before sending to quotation",
+        title: "Quotation created",
+        description: `Quotation ${quotationNumber} created successfully`,
+      });
+
+      onClose();
+    } catch (error) {
+      console.error('Error creating quotation:', error);
+      toast({
+        title: "Error creating quotation",
+        description: "An error occurred while creating the quotation",
         variant: "destructive"
       });
-      return;
     }
-
-    // Get existing quotations or initialize empty array
-    const existingQuotations = JSON.parse(localStorage.getItem('quotations') || '[]');
-    
-    // Create new quotation
-    const newQuotation = {
-      id: `QUO-${Date.now()}`,
-      clientId: selectedClientId,
-      client: clients.find(client => client.id === selectedClientId)?.companyName || clients.find(client => client.id === selectedClientId)?.contactPerson || 'Unknown Client',
-      date: new Date().toISOString(),
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-      status: 'draft',
-      items: salesItems.map(item => ({
-        itemNo: item.itemId,
-        description: item.name,
-        quantity: item.quantity,
-        rate: item.price,
-        markupPercent: 0,
-        discount: 0,
-        amount: item.total
-      })),
-      subtotal: subtotalAmount,
-      tax: vatAmount,
-      total: totalAmount,
-      vatPercentage: vatPercentage
-    };
-
-    // Save updated quotations to localStorage
-    localStorage.setItem('quotations', JSON.stringify([...existingQuotations, newQuotation]));
-
-    // Update inventory quantities
-    updateInventoryQuantities();
-
-    toast({
-      title: "Quotation created",
-      description: `Quotation ${newQuotation.id} created successfully`,
-    });
-
-    onClose();
   };
 
   // Handle send to invoice action
@@ -437,44 +439,69 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    // Get existing invoices or initialize empty array
-    const existingInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-    
-    // Create new invoice
-    const newInvoice = {
-      id: `INV-${Date.now()}`,
-      clientId: selectedClientId,
-      client: clients.find(client => client.id === selectedClientId)?.companyName || clients.find(client => client.id === selectedClientId)?.contactPerson || 'Unknown Client',
-      date: new Date().toISOString(),
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-      status: 'pending',
-      items: salesItems.map(item => ({
-        itemNo: item.itemId,
-        description: item.name,
-        quantity: item.quantity,
-        rate: item.price,
-        markupPercent: 0,
-        discount: 0,
-        amount: item.total
-      })),
-      subtotal: subtotalAmount,
-      tax: vatAmount,
-      total: totalAmount,
-      vatPercentage: vatPercentage
-    };
+    try {
+      // Get existing invoices or initialize empty array
+      const existingInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+      
+      // Generate proper invoice number using the sequence
+      const invoiceNumber = generateInvoiceNumber();
+      const now = new Date();
+      const selectedClient = clients.find(client => client.id === selectedClientId);
+      
+      // Create new invoice with proper structure matching Invoice interface
+      const newInvoice = {
+        id: `invoice_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        number: invoiceNumber,
+        client: selectedClientId,
+        clientId: selectedClientId,
+        clientName: selectedClient?.companyName || selectedClient?.contactPerson || 'Unknown Client',
+        clientEmail: selectedClient?.email || '',
+        date: now.toISOString(),
+        invoiceDate: now.toISOString(),
+        dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        amount: totalAmount,
+        total: totalAmount,
+        paidAmount: 0,
+        balance: totalAmount,
+        status: 'pending',
+        currency: 'ZAR',
+        vatRate: vatPercentage || 0,
+        reference: `SALE-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`,
+        terms: 'Payment due within 30 days',
+        items: salesItems.map((item, index) => ({
+          id: `item-${Date.now()}-${index}`,
+          itemNo: index + 1,
+          description: item.name,
+          quantity: item.quantity,
+          rate: item.price,
+          taxRate: vatPercentage || 0,
+          discount: 0,
+          amount: item.total
+        })),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      };
 
-    // Save updated invoices to localStorage
-    localStorage.setItem('invoices', JSON.stringify([...existingInvoices, newInvoice]));
+      // Save updated invoices to localStorage
+      localStorage.setItem('invoices', JSON.stringify([...existingInvoices, newInvoice]));
 
-    // Update inventory quantities
-    updateInventoryQuantities();
+      // Update inventory quantities
+      updateInventoryQuantities();
 
-    toast({
-      title: "Invoice created",
-      description: `Invoice ${newInvoice.id} created successfully`,
-    });
+      toast({
+        title: "Invoice created",
+        description: `Invoice ${invoiceNumber} created successfully`,
+      });
 
-    onClose();
+      onClose();
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      toast({
+        title: "Error creating invoice",
+        description: "An error occurred while creating the invoice",
+        variant: "destructive"
+      });
+    }
   };
 
   // Handle delivery note action
@@ -1320,18 +1347,69 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               {salesItems.length > 0 && (
                 <div className="mt-4">
                   <Label htmlFor="clientSelect">Select Client (for Quotation/Invoice)</Label>
-                  <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                    <SelectTrigger id="clientSelect">
-                      <SelectValue placeholder="Select a client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.companyName || client.contactPerson}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        id="clientSelect"
+                        className="w-full justify-between font-normal"
+                      >
+                        {selectedClientId
+                          ? clients.find((client) => client.id === selectedClientId)?.companyName || 
+                            clients.find((client) => client.id === selectedClientId)?.contactPerson ||
+                            "Select Client for this Sale"
+                          : "Select Client for this Sale"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search clients..." />
+                        <CommandEmpty>
+                          <div className="flex flex-col items-center justify-center py-6 text-center">
+                            <UserIcon className="h-10 w-10 text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground mb-1">No clients found.</p>
+                            <p className="text-xs text-muted-foreground">⚠️ Please add clients from the Clients Page.</p>
+                          </div>
+                        </CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-auto">
+                          {clients.map((client) => (
+                            <CommandItem
+                              key={client.id}
+                              value={client.id}
+                              onSelect={() => {
+                                setSelectedClientId(client.id);
+                              }}
+                              className="flex items-center gap-2 py-3"
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                <div className="w-8 h-8 bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 rounded-xl flex items-center justify-center shadow-colored">
+                                  <span className="text-white font-semibold text-sm">
+                                    {client.contactPerson?.substring(0, 2) || client.companyName?.substring(0, 2) || "CL"}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {client.companyName || client.contactPerson}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {client.email || client.phone || "No contact info"}
+                                  </span>
+                                </div>
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-auto h-4 w-4",
+                                  selectedClientId === client.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
               
