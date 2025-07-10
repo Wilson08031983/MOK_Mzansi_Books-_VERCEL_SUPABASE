@@ -3,49 +3,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Package, Printer, FileText, FileCheck, Truck, Search, X, Minus, Plus, Camera, ShoppingCart, Trash2 } from 'lucide-react';
+import { Package, Printer, FileText, FileCheck, Truck, Search, X, Minus, Plus, Camera, ShoppingCart, Trash2, Percent } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getAllInventoryItems, updateInventoryItem, getInventoryItemByBarcode } from '@/services/inventoryService';
-import { getClients } from '@/services/clientService';
+import { getAllInventoryItems, updateInventoryItem, getInventoryItemByBarcode, saveInventoryItems } from '@/services/inventoryService';
+import { getClients, Client as ClientType } from '@/services/clientService';
 import companyService from '@/services/companyService';
 import BarcodeScanner from '@/components/inventory/BarcodeScanner';
 import { formatCurrency } from '@/lib/utils';
+import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
 
-// Client type definition
-interface Client {
-  id: string;
-  name: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-  billingAddress?: string;
-  shippingAddress?: string;
-  billingStreet?: string;
-  billingCity?: string;
-  billingState?: string;
-  billingPostal?: string;
-  billingCountry?: string;
-  contactPerson?: string;
-}
+// Use the imported Client type as ClientType
 
-// Enhanced InventoryItem type with sales-related properties
-interface InventoryItem {
-  id: string;
-  name: string;
-  barcode?: string;
-  description?: string;
-  category?: string;
-  purchasePrice?: number;
-  sellingPrice?: number;
-  quantity?: number;
-  reorderLevel?: number;
-  supplier?: string;
-  imageUrl?: string;
-  itemId?: string;
-  salesHistory?: SaleRecord[];
+// Sale record type for tracking sales history
+interface SaleRecord {
+  date: string;
+  quantity: number;
+  price: number;
+  clientId?: string;
 }
 
 // Define the SaleRecord interface for sales history tracking
@@ -92,12 +69,17 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   const [salesItems, setSalesItems] = useState<SalesItem[]>([]);
   const [manualBarcode, setManualBarcode] = useState('');
   const [totalAmount, setTotalAmount] = useState(0);
+  const [subtotalAmount, setSubtotalAmount] = useState(0);
+  const [vatPercentage, setVatPercentage] = useState(0); // Default VAT percentage is 0%
+  const [vatAmount, setVatAmount] = useState(0);
   const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
   const [printingSlip, setPrintingSlip] = useState(false);
   const [showPrintSlip, setShowPrintSlip] = useState(false);
   const [showDeliveryNote, setShowDeliveryNote] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientType[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [companyInfo, setCompanyInfo] = useState<import('@/types/company').Company | null>(null);
+  const [companyLogo, setCompanyLogo] = useState<string>('');
   const [deliveryNote, setDeliveryNote] = useState<DeliveryNote>({
     customerName: '',
     customerSurname: '',
@@ -111,19 +93,61 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   });
   const { toast } = useToast();
 
-  // Load clients on component mount
+  // Load clients and company information on component mount
   useEffect(() => {
     if (isOpen) {
-      const loadedClients = getClients();
-      setClients(loadedClients);
+      try {
+        // Load clients
+        const loadedClients = getClients();
+        setClients(loadedClients);
+        
+        // Direct localStorage access for company information as backup
+        const directCompanyData = localStorage.getItem('mokMzansiBooks_company');
+        const directCompanyAssets = localStorage.getItem('mokMzansiBooks_company_assets');
+        
+        // Parse data and set state
+        if (directCompanyData) {
+          const parsedCompany = JSON.parse(directCompanyData);
+          setCompanyInfo(parsedCompany);
+          console.log('Direct company data loaded:', parsedCompany);
+        } else {
+          // Fallback to service
+          const company = companyService.getCompany();
+          setCompanyInfo(company);
+          console.log('Service company data loaded:', company);
+        }
+        
+        // Parse assets and set logo
+        if (directCompanyAssets) {
+          const parsedAssets = JSON.parse(directCompanyAssets);
+          if (parsedAssets && parsedAssets.logo) {
+            setCompanyLogo(parsedAssets.logo);
+            console.log('Direct company logo loaded:', parsedAssets.logo);
+          }
+        } else {
+          // Fallback to service
+          const assets = companyService.getCompanyAssets();
+          if (assets && assets.logo) {
+            setCompanyLogo(assets.logo);
+            console.log('Service company logo loaded:', assets.logo);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading company data:', error);
+      }
     }
   }, [isOpen]);
 
-  // Calculate total amount whenever salesItems changes
+  // Calculate subtotal, VAT, and total amount whenever salesItems or vatPercentage changes
   useEffect(() => {
-    const total = salesItems.reduce((sum, item) => sum + item.total, 0);
+    const subtotal = salesItems.reduce((sum, item) => sum + item.total, 0);
+    const vat = subtotal * (vatPercentage / 100);
+    const total = subtotal + vat;
+    
+    setSubtotalAmount(subtotal);
+    setVatAmount(vat);
     setTotalAmount(total);
-  }, [salesItems]);
+  }, [salesItems, vatPercentage]);
 
   // Handle barcode scan result
   const handleScanResult = (result: string) => {
@@ -151,38 +175,34 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   const addItemByBarcode = (barcode: string) => {
     const item = inventoryData.find(item => 
       item.barcode === barcode || 
-      item.itemId === barcode || 
       item.id === barcode
     );
-
+    
     if (!item) {
-      toast({
-        title: "Item not found",
-        description: `No item found with barcode/ID: ${barcode}`,
-        variant: "destructive"
-      });
+      toast({ title: "Item not found", description: `No item found with barcode/ID: ${barcode}`, variant: "destructive" });
       return;
     }
-
-    // Check if item already exists in the sales list
-    const existingItemIndex = salesItems.findIndex(salesItem => salesItem.id === item.id);
-
+    
+    const existingItemIndex = salesItems.findIndex(salesItem => salesItem.itemId === item.id);
+    
     if (existingItemIndex >= 0) {
-      // Item exists, increment quantity
       const updatedItems = [...salesItems];
       updatedItems[existingItemIndex].quantity += 1;
       updatedItems[existingItemIndex].total = updatedItems[existingItemIndex].quantity * updatedItems[existingItemIndex].price;
       setSalesItems(updatedItems);
     } else {
+      // Make sure we have a valid price
+      const itemPrice = item.price || 0;
+      
       // Item doesn't exist, add new item
       const newSalesItem: SalesItem = {
-        id: item.id,
-        itemId: item.itemId || item.id,
+        id: `sales-${Date.now()}`,
+        itemId: item.id,
         name: item.name,
-        image: item.image || '',
+        image: item.image || '', // Use item.image instead of imageUrl
         quantity: 1,
-        price: parseFloat(item.sellingPrice) || 0,
-        total: parseFloat(item.sellingPrice) || 0
+        price: itemPrice,
+        total: itemPrice
       };
       setSalesItems([...salesItems, newSalesItem]);
     }
@@ -191,6 +211,10 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
       title: "Item added",
       description: `${item.name} added to sales list`,
     });
+    
+    // Play beep sound
+    const audio = new Audio('/beep.mp3');
+    audio.play();
   };
 
   // Update item quantity
@@ -228,9 +252,112 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     
     // Get company details for the slip
     const companyDetails = companyService.getCompany();
+    
+    // Allow time for the print view to fully render
+    setTimeout(() => {
+      try {
+        // NEW PRINT APPROACH: Create a temporary iframe with only our print content
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '80mm';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+        
+        // Get the print target content
+        const printTarget = document.getElementById('print-target');
+        if (!printTarget) {
+          throw new Error('Print target not found');
+        }
+        
+        const printSlip = printTarget.querySelector('.print-slip');
+        if (!printSlip) {
+          throw new Error('Print slip content not found');
+        }
+        
+        // Write our print styles and content directly to the iframe
+        const iframeDocument = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDocument) {
+          iframeDocument.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Print Slip</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: white; }
+                .print-container { width: 80mm; margin: 0 auto; background: white; padding: 5mm; }
+                .print-slip { width: 100%; }
+                .print-slip h2 { font-size: 14px; text-align: center; margin-bottom: 4px; }
+                .print-slip p { font-size: 10px; text-align: center; margin: 2px 0; }
+                .print-slip .border-t { border-top: 1px solid black; margin-top: 4px; padding-top: 4px; }
+                .print-slip .border-b { border-bottom: 1px solid black; margin-bottom: 4px; padding-bottom: 4px; }
+                
+                /* Item layout */
+                .print-item-row { display: flex; width: 100%; margin-bottom: 4px; }
+                .print-item-name { width: 40%; text-align: left; font-size: 10px; }
+                .print-item-qty { width: 10%; text-align: center; font-size: 10px; }
+                .print-item-price { width: 25%; text-align: right; font-size: 10px; }
+                .print-item-total { width: 25%; text-align: right; font-size: 10px; }
+                
+                /* Flex layouts */
+                .flex { display: flex; width: 100%; }
+                .justify-between { justify-content: space-between; }
+                .font-medium { font-weight: 500; }
+                .text-xs, .text-[10px] { font-size: 10px !important; }
+                .text-center { text-align: center; }
+                .mt-3 { margin-top: 12px; }
+                .pt-2 { padding-top: 8px; }
+                .mt-4 { margin-top: 16px; }
+                .mb-3 { margin-bottom: 12px; }
+                .pt-3 { padding-top: 12px; }
+                .font-bold { font-weight: 700; }
+                
+                /* Ensure totals have consistent font size */
+                .font-bold, .font-medium { font-size: 10px !important; }
+              </style>
+            </head>
+            <body>
+              <div class="print-container">
+                ${printSlip.outerHTML}
+              </div>
+            </body>
+            </html>
+          `);
+          iframeDocument.close();
+          
+          // Wait for content to load then print
+          setTimeout(() => {
+            // Print the iframe content
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+            
+            // Remove the iframe after printing
+            setTimeout(() => {
+              document.body.removeChild(iframe);
+            }, 1000);
+            
+            // Show success message
+            toast({
+              title: "Print Initiated",
+              description: "The print slip has been sent to your printer.",
+              variant: "default"
+            });
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Print error:', error);
+        toast({
+          title: "Print error",
+          description: "There was an error printing the slip: " + (error as Error).message,
+          variant: "destructive"
+        });
+      }
+    }, 800);
   };
 
-  // Handle send to quotation action
+  // Function to send sales items to a new quotation
   const handleSendToQuotation = () => {
     if (salesItems.length === 0) {
       toast({
@@ -257,7 +384,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     const newQuotation = {
       id: `QUO-${Date.now()}`,
       clientId: selectedClientId,
-      client: clients.find(client => client.id === selectedClientId)?.name || 'Unknown Client',
+      client: clients.find(client => client.id === selectedClientId)?.companyName || clients.find(client => client.id === selectedClientId)?.contactPerson || 'Unknown Client',
       date: new Date().toISOString(),
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
       status: 'draft',
@@ -270,9 +397,10 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         discount: 0,
         amount: item.total
       })),
-      subtotal: totalAmount,
-      tax: totalAmount * 0.15, // 15% VAT
-      total: totalAmount * 1.15
+      subtotal: subtotalAmount,
+      tax: vatAmount,
+      total: totalAmount,
+      vatPercentage: vatPercentage
     };
 
     // Save updated quotations to localStorage
@@ -316,7 +444,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     const newInvoice = {
       id: `INV-${Date.now()}`,
       clientId: selectedClientId,
-      client: clients.find(client => client.id === selectedClientId)?.name || 'Unknown Client',
+      client: clients.find(client => client.id === selectedClientId)?.companyName || clients.find(client => client.id === selectedClientId)?.contactPerson || 'Unknown Client',
       date: new Date().toISOString(),
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
       status: 'pending',
@@ -329,9 +457,10 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         discount: 0,
         amount: item.total
       })),
-      subtotal: totalAmount,
-      tax: totalAmount * 0.15, // 15% VAT
-      total: totalAmount * 1.15
+      subtotal: subtotalAmount,
+      tax: vatAmount,
+      total: totalAmount,
+      vatPercentage: vatPercentage
     };
 
     // Save updated invoices to localStorage
@@ -382,7 +511,9 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
       location: deliveryNote.location,
       signature: deliveryNote.signature,
       items: salesItems,
-      subtotal: totalAmount,
+      subtotal: subtotalAmount,
+      vatAmount: vatAmount,
+      vatPercentage: vatPercentage,
       total: totalAmount + deliveryNote.deliveryCost
     };
 
@@ -405,34 +536,52 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   const updateInventoryQuantities = () => {
     const inventoryItems = getAllInventoryItems();
     salesItems.forEach(salesItem => {
-      const inventoryItemIndex = inventoryItems.findIndex(item => item.id === salesItem.id);
+      const inventoryItemIndex = inventoryItems.findIndex(item => item.id === salesItem.itemId);
       
       if (inventoryItemIndex >= 0) {
         const inventoryItem = inventoryItems[inventoryItemIndex];
-        // Parse quantity safely with fallback to 0
-        const currentQuantity = inventoryItem.quantity ? 
-          (typeof inventoryItem.quantity === 'string' ? parseInt(inventoryItem.quantity) : inventoryItem.quantity) : 0;
+        const currentQuantity = inventoryItem.stockLevel || 0;
         const newQuantity = Math.max(0, currentQuantity - salesItem.quantity);
         
-        // Update the inventory item with new values
+        // Update inventory item with new quantity
         inventoryItems[inventoryItemIndex] = {
           ...inventoryItem,
-          quantity: newQuantity,
-          salesHistory: [
-            ...(inventoryItem.salesHistory || []),
-            {
-              date: new Date().toISOString(),
-              quantity: salesItem.quantity,
-              price: salesItem.price,
-              clientId: selectedClientId || undefined
-            } as SaleRecord
-          ]
+          stockLevel: newQuantity,
+          lastUpdated: new Date().toISOString()
         };
+        
+        // Add a stock history entry for this sale
+        const historyEntry: StockHistoryEntry = {
+          id: `hist-${Date.now()}-${salesItem.itemId}`,
+          inventoryItemId: salesItem.itemId,
+          date: new Date().toISOString(),
+          type: 'sold',
+          quantity: salesItem.quantity,
+          notes: `Sold in sales transaction`,
+          performedBy: 'Sales Staff'
+        };
+        
+        // We would add this to stock history if we had that function
+        // addStockHistoryEntry(historyEntry);
       }
     });
     
-    // Update localStorage with updated inventory items
-    localStorage.setItem('inventoryItems', JSON.stringify(inventoryItems));
+    // Save updated inventory items
+    saveInventoryItems(inventoryItems);
+    
+    // Reset sales items
+    setSalesItems([]);
+    setVatPercentage(0);
+    setSelectedClientId('');
+    
+    // Close modal
+    onClose();
+    
+    // Show success message
+    toast({
+      title: "Sale completed",
+      description: "Sale has been completed successfully",
+    });
   };
 
   // Handle cancel action
@@ -469,61 +618,265 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
           </DialogTitle>
         </DialogHeader>
 
+        {/* Basic styling for print slip */}
+        {/* Print Styles - Essential for printing */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* Normal display styles for items */
+          .print-item-row {
+            display: flex;
+            width: 100%;
+            margin-bottom: 6px;
+            align-items: center;
+          }
+          .print-item-name { width: 40%; text-align: left; }
+          .print-item-qty { width: 10%; text-align: center; }
+          .print-item-price { width: 25%; text-align: right; }
+          .print-item-total { width: 25%; text-align: right; }
+          
+          /* Critical Print Settings - LAST RESORT APPROACH */
+          @media print {
+            /* Basic page setup */
+            @page { margin: 0mm !important; size: 80mm auto !important; }
+            
+            /* Hide everything by default */
+            html, body * {
+              display: none;
+            }
+            
+            /* Show only our print container */
+            #print-target {
+              display: block !important;
+              position: absolute !important;
+              top: 0 !important;
+              left: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              z-index: 9999 !important;
+              overflow: visible !important;
+            }
+            
+            /* Show all contents of the print slip */
+            .print-slip {
+              display: block !important;
+              width: 80mm !important;
+              background: white !important;
+              color: black !important;
+              padding: 5mm !important;
+              margin: 0 auto !important;
+              font-family: Arial, sans-serif !important;
+              box-shadow: none !important;
+              overflow: visible !important;
+              height: auto !important;
+            }
+            
+            /* Force display of ALL elements inside slip */
+            .print-slip * {
+              display: block !important;
+              visibility: visible !important;
+              opacity: 1 !important;
+            }
+            
+            /* Special handling for flex items */
+            .print-item-row {
+              display: flex !important;
+              width: 100% !important;
+              margin-bottom: 3px !important;
+            }
+            
+            /* Format columns */
+            .print-item-name { 
+              width: 40% !important; 
+              text-align: left !important; 
+              display: inline-block !important;
+            }
+            .print-item-qty { 
+              width: 10% !important; 
+              text-align: center !important; 
+              display: inline-block !important;
+            }
+            .print-item-price, .print-item-total { 
+              width: 25% !important; 
+              text-align: right !important; 
+              display: inline-block !important;
+            }
+            
+            /* Force proper text display */
+            .print-slip h2 { 
+              font-size: 14px !important; 
+              font-weight: bold !important;
+              text-align: center !important;
+              margin-bottom: 4px !important;
+            }
+            
+            .print-slip p, .print-slip .text-xs { 
+              font-size: 10px !important; 
+              margin-bottom: 2px !important;
+              text-align: center !important;
+            }
+            
+            /* Border styles */
+            .print-slip .border-t {
+              border-top: 1px solid black !important;
+              padding-top: 2px !important;
+              margin-top: 2px !important;
+            }
+            
+            .print-slip .border-b {
+              border-bottom: 1px solid black !important;
+              padding-bottom: 2px !important;
+              margin-bottom: 2px !important;
+            }
+            
+            /* Fix flexbox layouts */
+            .print-slip .flex {
+              display: flex !important;
+              width: 100% !important;
+            }
+            
+            .print-slip .flex.justify-between {
+              justify-content: space-between !important;
+            }
+            
+            /* Center text where needed */
+            .print-slip .text-center {
+              text-align: center !important;
+            }
+            
+            /* Hide buttons */
+            button, [class*="print:hidden"], [class*="print-hidden"] {
+              display: none !important;
+            }
+          }
+        `}} />
+
         {/* Print Slip View */}
         {printingSlip ? (
-          <div className="print-container">
-            <div className="print-slip" style={{ width: '80mm', margin: '0 auto' }}>
-              <div className="text-center mb-4">
-                <h2 className="font-bold">{companyService.getCompany()?.name || 'Company Name'}</h2>
-                <p className="text-sm">{companyService.getCompany()?.email || 'company@example.com'}</p>
-                <p className="text-sm">{companyService.getCompany()?.phone || '(123) 456-7890'}</p>
-                <p className="text-sm">{companyService.getCompany()?.addressLine1 || '123 Business St'}</p>
-                <p className="text-sm">{new Date().toLocaleString()}</p>
+          <div id="print-target" className="print-container">
+            <div className="print-slip print:w-80 w-[80mm]" style={{ margin: '0 auto', padding: '8px', backgroundColor: 'white' }}>
+              {/* Company Logo */}
+              <div className="text-center mb-3">
+                {companyLogo && (
+                  <div className="flex justify-center mb-2">
+                    <img 
+                      src={companyLogo} 
+                      alt="Company Logo" 
+                      className="h-14 object-contain"
+                      style={{ maxWidth: '80%', margin: '0 auto' }}
+                    />
+                  </div>
+                )}
+                
+                {/* Company Information */}
+                <h2 className="font-bold text-base mb-0.5">
+                  {companyInfo?.name || 'Morwa Moabelo (PTY) Ltd'}
+                </h2>
+                <p className="text-xs mb-0.5">
+                  {companyInfo?.email || 'admin@mokmzansibooks.com'}
+                </p>
+                <p className="text-xs mb-0.5">
+                  {companyInfo?.phone || '+27 64 550 4029'}
+                </p>
+                <p className="text-xs mb-0.5">
+                  {companyInfo?.addressLine1 || '123 Business Street'}
+                </p>
+                {(companyInfo?.postalCode || companyInfo?.country) && (
+                  <p className="text-xs mb-0.5">
+                    {companyInfo?.city && `${companyInfo.city}, `}
+                    {companyInfo?.postalCode && `${companyInfo.postalCode} `}
+                    {companyInfo?.country || 'Johannesburg, 2000'}
+                  </p>
+                )}
+                <p className="text-xs mt-1 mb-1">{new Date().toLocaleString()}</p>
               </div>
               
-              <div className="border-t border-b py-2 mb-2">
-                <div className="grid grid-cols-12 text-xs font-bold">
-                  <div className="col-span-6">Item</div>
-                  <div className="col-span-2 text-right">Qty</div>
-                  <div className="col-span-2 text-right">Price</div>
-                  <div className="col-span-2 text-right">Total</div>
+              {/* Items Header */}
+              <div className="border-t border-b py-1 mb-2">
+                <div className="print-item-row text-xs font-bold">
+                  <div className="print-item-name">Item</div>
+                  <div className="print-item-qty">Qty</div>
+                  <div className="print-item-price">Price</div>
+                  <div className="print-item-total">Total</div>
                 </div>
               </div>
               
+              {/* Sales Items */}
               {salesItems.map((item) => (
-                <div key={item.id} className="grid grid-cols-12 text-xs mb-1">
-                  <div className="col-span-6">{item.name}</div>
-                  <div className="col-span-2 text-right">{item.quantity}</div>
-                  <div className="col-span-2 text-right">{formatCurrency(item.price)}</div>
-                  <div className="col-span-2 text-right">{formatCurrency(item.total)}</div>
+                <div key={item.id} className="print-item-row text-[10px]">
+                  <div className="print-item-name">{item.name}</div>
+                  <div className="print-item-qty">{item.quantity}</div>
+                  <div className="print-item-price">{formatCurrency(item.price)}</div>
+                  <div className="print-item-total">{formatCurrency(item.total)}</div>
                 </div>
               ))}
               
-              <div className="border-t mt-2 pt-2">
-                <div className="flex justify-between text-xs">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(totalAmount)}</span>
+              <div className="border-t mt-3 pt-2">
+                <div className="flex justify-between text-[10px] mb-1">
+                  <div className="text-[10px] font-medium">Subtotal:</div>
+                  <div className="text-[10px] font-medium">{formatCurrency(subtotalAmount)}</div>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span>VAT (15%):</span>
-                  <span>{formatCurrency(totalAmount * 0.15)}</span>
-                </div>
-                <div className="flex justify-between font-bold mt-1">
-                  <span>Total:</span>
-                  <span>{formatCurrency(totalAmount * 1.15)}</span>
+                
+                {vatPercentage > 0 && (
+                  <div className="flex justify-between text-[10px] mb-1">
+                    <div className="text-[10px] font-medium">VAT ({vatPercentage}%):</div>
+                    <div className="text-[10px] font-medium">{formatCurrency(vatAmount)}</div>
+                  </div>
+                )}
+                
+                <div className="flex justify-between font-bold text-[10px] border-t mt-2 pt-2">
+                  <div className="text-[10px]">Total:</div>
+                  <div className="text-[10px]">{formatCurrency(totalAmount)}</div>
                 </div>
               </div>
               
-              <div className="text-center text-xs mt-4">
-                <p>Thank you for your business!</p>
+              <div className="text-center text-[10px] mt-4 mb-3 border-t pt-3">
+                <p className="font-medium">Thank you for your business!</p>
+                {companyInfo?.invoiceNotes && (
+                  <p className="mt-1">{companyInfo.invoiceNotes}</p>
+                )}
               </div>
             </div>
             
-            <div className="flex justify-between mt-4">
+            <div className="flex justify-between mt-4 print:hidden">
               <Button variant="outline" onClick={() => setPrintingSlip(false)}>
                 Back
               </Button>
-              <Button onClick={() => window.print()}>
+              <Button onClick={() => {
+                // Use the same improved print method as handlePrintSlip
+                setTimeout(() => {
+                  try {
+                    // Make sure the print target exists and is visible
+                    const printTarget = document.getElementById('print-target');
+                    if (!printTarget) {
+                      throw new Error('Print target not found');
+                    }
+                    
+                    // Force browser to recognize content before printing
+                    const printSlip = printTarget.querySelector('.print-slip') as HTMLElement;
+                    if (printSlip) {
+                      // Force reflow
+                      void printSlip.offsetHeight;
+                    }
+                    
+                    // Log and print
+                    console.log('Print layout ready, executing print from preview button');
+                    window.print();
+                    
+                    // Success message
+                    toast({
+                      title: "Print Initiated",
+                      description: "The print slip has been sent to your printer.",
+                      variant: "default"
+                    });
+                  } catch (error) {
+                    console.error('Print error:', error);
+                    toast({
+                      title: "Print error",
+                      description: "There was an error printing the slip: " + (error as Error).message,
+                      variant: "destructive"
+                    });
+                  }
+                }, 800); // Use same longer delay for consistent behavior
+              }}>
                 <Printer className="h-4 w-4 mr-2" /> Print
               </Button>
             </div>
@@ -612,6 +965,27 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               <div className="border rounded-md p-4 h-32 flex items-center justify-center bg-gray-50">
                 <p className="text-gray-400">Customer Acknowledgement of Goods Received</p>
                 {/* In a real app, you would implement a signature pad here */}
+              </div>
+            </div>
+            
+            <div className="mb-4 border rounded-md p-4 bg-gray-50">
+              <h3 className="font-medium mb-2">Order Summary</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>Subtotal:</div>
+                <div className="text-right">{formatCurrency(subtotalAmount)}</div>
+                
+                {vatPercentage > 0 && (
+                  <>
+                    <div>VAT ({vatPercentage}%):</div>
+                    <div className="text-right">{formatCurrency(vatAmount)}</div>
+                  </>
+                )}
+                
+                <div>Delivery Cost:</div>
+                <div className="text-right">{formatCurrency(deliveryNote.deliveryCost)}</div>
+                
+                <div className="font-medium">Total:</div>
+                <div className="text-right font-medium">{formatCurrency(totalAmount + deliveryNote.deliveryCost)}</div>
               </div>
             </div>
             
@@ -910,6 +1284,29 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
                     </tbody>
                     <tfoot className="bg-gray-50">
                       <tr>
+                        <td colSpan={4} className="px-4 py-2 text-right font-medium">Subtotal:</td>
+                        <td className="px-4 py-2 text-right font-medium">{formatCurrency(subtotalAmount)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} className="px-4 py-2 text-right font-medium">VAT (%):</td>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center justify-end gap-2">
+                            <Input 
+                              type="number" 
+                              min="0" 
+                              max="100" 
+                              value={vatPercentage} 
+                              onChange={(e) => setVatPercentage(parseFloat(e.target.value) || 0)}
+                              className="w-20 text-right" 
+                            />
+                            <Percent className="h-4 w-4 text-gray-500" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-medium">{formatCurrency(vatAmount)}</td>
+                        <td></td>
+                      </tr>
+                      <tr className="border-t">
                         <td colSpan={4} className="px-4 py-2 text-right font-medium">Total:</td>
                         <td className="px-4 py-2 text-right font-bold">{formatCurrency(totalAmount)}</td>
                         <td></td>
@@ -930,7 +1327,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
                     <SelectContent>
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
-                          {client.name}
+                          {client.companyName || client.contactPerson}
                         </SelectItem>
                       ))}
                     </SelectContent>
