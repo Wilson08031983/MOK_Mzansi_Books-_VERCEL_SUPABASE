@@ -17,6 +17,18 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from '@/lib/utils';
 
+// Define a type for accessing jsPDF internal APIs that aren't properly typed
+type InternalPDFType = jsPDF & {
+  internal: {
+    pages: number[];
+    pageSize: { width: number; height: number };
+    getCurrentPageInfo?: () => {
+      pageNumber: number;
+      pageContext: Record<string, unknown>;
+    };
+  };
+};
+
 // Define interfaces
 interface Address {
   line1?: string;
@@ -117,6 +129,7 @@ interface DeliveryNoteData {
   postalCode?: string;
   addressLine1?: string;
   addressLine2?: string;
+  deliveryLocation?: string;
   deliveryCost: number;
   items: SalesItem[];
   subtotal: number;
@@ -349,7 +362,10 @@ export async function generateDeliveryNotePdf(
     const now = new Date();
     // Format date as DD/MM/YYYY
     const dateFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-    const timeFormatted = now.toLocaleTimeString();
+    // Format time with AM/PM
+    const timeFormatted = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+    // Generate a random reference number for this delivery note
+    const randomRef = `DN-${Math.floor(100000 + Math.random() * 900000)}`;
     
     // Get company details
     const companyDetails = getCompanyDetails();
@@ -444,47 +460,9 @@ export async function generateDeliveryNotePdf(
       y += 5;
     }
     
-    // Add date and reference on right
-    pdf.setFontSize(10);
-    pdf.text(`Date: ${dateFormatted}`, pageWidth - margin - 50, y - 15);
-    pdf.text(`Time: ${timeFormatted}`, pageWidth - margin - 50, y - 10);
-    // Generate a random reference number for this delivery note
-    const randomRef = `DN-${Math.floor(100000 + Math.random() * 900000)}`;
-    pdf.text(`Ref: ${randomRef}`, pageWidth - margin - 50, y - 5);
-    
-    y += 10; // Extra space after company section
-    
-    // Add horizontal line
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
-    
-    // Add customer information section - title with increased visibility
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('DELIVER TO:', margin, y);
-    pdf.setFont('helvetica', 'normal');
-    y += 10; // Increased spacing after title
-    
-    // Customer details
-    pdf.setFontSize(10);
-    pdf.text(client.name, margin, y);
-    y += 5;
-    
-    if (client.contactPerson && client.contactPerson !== client.name) {
-      pdf.text(`Attn: ${client.contactPerson}`, margin, y);
-      y += 5;
-    }
-    
-    if (client.phone) {
-      pdf.text(`Tel: ${client.phone}`, margin, y);
-      y += 5;
-    }
-    
-    if (client.email) {
-      pdf.text(`Email: ${client.email}`, margin, y);
-      y += 5;
-    }
+    // We've moved the date/time/reference variables to the top of the function
+    // This section is intentionally left blank as we'll reposition the customer details 
+    // after drawing the page header
     
     // Delivery address
     let deliveryAddress: string[];
@@ -516,19 +494,8 @@ export async function generateDeliveryNotePdf(
       deliveryAddress = ['No delivery address provided'];
     }
     
-    // Add client name first
-    if (client.name) {
-      pdf.text(client.name, margin + 5, y);
-      y += 5;
-    }
-    
-    // Then add delivery address with appropriate formatting
-    deliveryAddress.forEach(line => {
-      pdf.text(line, margin + 5, y);
-      y += 5;
-    });
-    
-    y += 30; // Increased space before items table to ensure DELIVER TO: section is visible
+    // We've already added the client name and delivery address in the DELIVER TO section above
+    // This section has been intentionally removed to prevent duplication
     
     // Items table
     const tableHeaders = [
@@ -617,8 +584,63 @@ export async function generateDeliveryNotePdf(
       }
     };
     
-    // First draw the table header
-    const tableStartY = drawPageHeader(1, 1) + 20; // Increased from 5 to 20 for better spacing
+    // First draw the page header
+    let currentY = drawPageHeader(1, 1) + 15; // Added extra spacing to prevent overlap with company address
+    
+    // Add spacing between company info and DELIVER TO section (no horizontal line)
+    currentY += 5; // Add spacing to maintain layout
+    
+    // Add DELIVER TO section on the first page only, right after the header
+    // Add customer information section - title with increased visibility
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('DELIVER TO:', margin, currentY);
+    pdf.setFont('helvetica', 'normal');
+    currentY += 10; // Increased spacing after title
+    
+    // Customer details
+    pdf.setFontSize(10);
+    pdf.text(client.name, margin, currentY);
+    currentY += 5;
+    
+    if (client.contactPerson && client.contactPerson !== client.name) {
+      pdf.text(`Attn: ${client.contactPerson}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (client.phone) {
+      pdf.text(`Tel: ${client.phone}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (client.email) {
+      pdf.text(`Email: ${client.email}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    // Delivery address
+    if (deliveryAddress && deliveryAddress.length > 0) {
+      // Ensure we display each line with proper spacing
+      deliveryAddress.forEach(line => {
+        if (line && line.trim()) {
+          pdf.text(line.trim(), margin, currentY);
+          currentY += 5;
+        }
+      });
+    }
+    
+    // Display delivery location if provided and not already in address
+    if (data.deliveryLocation && 
+        !deliveryAddress.some(line => line && line.includes(data.deliveryLocation))) {
+      pdf.text(`Delivery Location: ${data.deliveryLocation}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    // Add some extra space before the table
+    currentY += 15;
+    
+    // Set table start position after the customer details
+    const tableStartY = currentY;
     
     // Track total pages for pagination
     let totalPagesEstimate = 1;
@@ -645,8 +667,16 @@ export async function generateDeliveryNotePdf(
       didDrawPage: (data) => {
         // When a new page is created
         // Access internal pages array to get total number of pages
-        // Need to use as any because jsPDF types are incomplete
-        totalPagesEstimate = (pdf.internal as any).pages.length - 1; // -1 because jsPDF counts from 1
+        // Use a type assertion for internal jsPDF APIs since they're not fully typed
+        // This avoids ESLint 'any' warnings while maintaining type safety as much as possible
+        type InternalPDFType = jsPDF & {
+          internal: {
+            pages: number[];
+            pageSize: { width: number; height: number };
+          };
+        };
+        
+        totalPagesEstimate = (pdf as InternalPDFType).internal.pages.length - 1; // -1 because jsPDF counts from 1
         
         // Add header with company info
         if (data.pageNumber > 1) { // Only redraw header on pages after first
@@ -667,8 +697,8 @@ export async function generateDeliveryNotePdf(
     const remainingSpace = pdf.internal.pageSize.height - y - margin;
     if (remainingSpace < 120) { // Need about 120mm for totals and signatures
       pdf.addPage();
-      // Need to use as any because jsPDF types are incomplete
-      const newPageNumber = (pdf.internal as any).pages.length - 1;
+      // Using our custom type for jsPDF internal APIs
+      const newPageNumber = (pdf as InternalPDFType).internal.pages.length - 1;
       totalPagesEstimate = newPageNumber;
       
       // Draw header on the new page
@@ -763,15 +793,12 @@ export async function generateDeliveryNotePdf(
     pdf.line(rightColX + 25, fieldY, rightColX + 25 + lineLength, fieldY);
     fieldY += 10;
     
-    // Add a disclaimer and page number at the bottom of the last page
+    // Space for the footer section
     y = fieldY + 5;
-    pdf.setFontSize(8);
-    pdf.setTextColor(100, 100, 100);
-    pdf.text("This delivery note confirms receipt of goods in good condition.", margin, y);
     
     // Update the final page count and redraw all footers to ensure accurate page numbers
-    // Need to use as any because jsPDF types are incomplete
-    totalPagesEstimate = (pdf.internal as any).pages.length - 1;
+    // Using our custom type for jsPDF internal APIs
+    totalPagesEstimate = (pdf as InternalPDFType).internal.pages.length - 1;
     
     // Draw footer on the last page
     drawPageFooter(totalPagesEstimate, totalPagesEstimate);
