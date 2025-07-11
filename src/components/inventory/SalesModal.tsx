@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Package, Printer, FileText, FileCheck, Truck, Search, X, Minus, Plus, Camera, ShoppingCart, Trash2, Percent, Check, ChevronsUpDown, UserIcon } from 'lucide-react';
+import { Package, Printer, FileText, FileCheck, Truck, Search, X, Plus, Check, Trash, Download, ShoppingCart, CreditCard, UserRound, Phone, Map, Home, Minus, Camera, Trash2, Percent, ChevronsUpDown, UserIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,7 @@ import { generateQuotationNumber, saveQuotation } from '@/services/quotationServ
 import { generateInvoiceNumber } from '@/services/invoiceService';
 import BarcodeScanner from '@/components/inventory/BarcodeScanner';
 import { formatCurrency, cn } from '@/lib/utils';
+import { generateDeliveryNotePdf } from '@/utils/deliveryNotePdfGenerator';
 import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
 
 // Use the imported Client type as ClientType
@@ -80,6 +81,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   const [printingSlip, setPrintingSlip] = useState(false);
   const [showPrintSlip, setShowPrintSlip] = useState(false);
   const [showDeliveryNote, setShowDeliveryNote] = useState(false);
+  const [printingDeliveryNote, setPrintingDeliveryNote] = useState(false);
   const [clients, setClients] = useState<ClientType[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [companyInfo, setCompanyInfo] = useState<import('@/types/company').Company | null>(null);
@@ -517,48 +519,6 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     setShowDeliveryNote(true);
   };
 
-  // Handle delivery note form submission
-  const handleDeliveryNoteSubmit = () => {
-    // Get existing delivery notes or initialize empty array
-    const existingDeliveryNotes = JSON.parse(localStorage.getItem('deliveryNotes') || '[]');
-    
-    // Create new delivery note
-    const newDeliveryNote = {
-      id: `DN-${Date.now()}`,
-      date: new Date().toISOString(),
-      customer: {
-        name: deliveryNote.customerName,
-        surname: deliveryNote.customerSurname,
-        addressLine1: deliveryNote.addressLine1,
-        addressLine2: deliveryNote.addressLine2,
-        addressLine3: deliveryNote.addressLine3,
-        addressLine4: deliveryNote.addressLine4,
-      },
-      deliveryCost: deliveryNote.deliveryCost,
-      location: deliveryNote.location,
-      signature: deliveryNote.signature,
-      items: salesItems,
-      subtotal: subtotalAmount,
-      vatAmount: vatAmount,
-      vatPercentage: vatPercentage,
-      total: totalAmount + deliveryNote.deliveryCost
-    };
-
-    // Save updated delivery notes to localStorage
-    localStorage.setItem('deliveryNotes', JSON.stringify([...existingDeliveryNotes, newDeliveryNote]));
-
-    // Update inventory quantities
-    updateInventoryQuantities();
-
-    toast({
-      title: "Delivery note created",
-      description: `Delivery note created successfully`,
-    });
-
-    setShowDeliveryNote(false);
-    onClose();
-  };
-
   // Update inventory quantities after a sale
   const updateInventoryQuantities = () => {
     const inventoryItems = getAllInventoryItems();
@@ -595,20 +555,75 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     
     // Save updated inventory items
     saveInventoryItems(inventoryItems);
-    
-    // Reset sales items
-    setSalesItems([]);
-    setVatPercentage(0);
-    setSelectedClientId('');
-    
-    // Close modal
-    onClose();
-    
-    // Show success message
-    toast({
-      title: "Sale completed",
-      description: "Sale has been completed successfully",
-    });
+  };
+
+  // Handle delivery note form submission
+  const handleDeliveryNoteSubmit = () => {
+    try {
+      // Find selected client
+      const selectedClient = clients.find(client => client.id === selectedClientId);
+      
+      // Get existing delivery notes or initialize empty array
+      const existingDeliveryNotes = JSON.parse(localStorage.getItem('deliveryNotes') || '[]');
+      
+      // Create new delivery note
+      const newDeliveryNote = {
+        id: `DN-${Date.now()}`,
+        date: new Date().toISOString(),
+        customer: {
+          name: deliveryNote.customerName,
+          surname: deliveryNote.customerSurname,
+          addressLine1: deliveryNote.addressLine1,
+          addressLine2: deliveryNote.addressLine2,
+          addressLine3: deliveryNote.addressLine3,
+          addressLine4: deliveryNote.addressLine4,
+        },
+        deliveryCost: deliveryNote.deliveryCost,
+        location: deliveryNote.location,
+        signature: deliveryNote.signature,
+        items: salesItems,
+        subtotal: subtotalAmount,
+        vatAmount: vatAmount,
+        vatPercentage: vatPercentage,
+        total: totalAmount + deliveryNote.deliveryCost
+      };
+
+      // Save updated delivery notes to localStorage
+      localStorage.setItem('deliveryNotes', JSON.stringify([...existingDeliveryNotes, newDeliveryNote]));
+
+      // Update inventory quantities
+      updateInventoryQuantities();
+      
+      // Generate and download PDF
+      generateDeliveryNotePdf({
+        customerName: deliveryNote.customerName,
+        customerSurname: deliveryNote.customerSurname,
+        contactPerson: selectedClient?.contactPerson,
+        phone: selectedClient?.phone || '',
+        location: deliveryNote.location,
+        city: selectedClient?.billingCity || '',
+        postalCode: selectedClient?.billingPostal || '',
+        addressLine1: deliveryNote.addressLine1 || selectedClient?.billingStreet || '',
+        addressLine2: deliveryNote.addressLine2 || '',
+        deliveryCost: deliveryNote.deliveryCost,
+        items: salesItems,
+        subtotal: subtotalAmount,
+        vatAmount: vatAmount,
+        vatPercentage: vatPercentage,
+        total: totalAmount
+      }, selectedClientId);
+
+      toast.success("Delivery note created", {
+        description: "Delivery note created and PDF downloaded",
+      });
+
+      onClose();
+    } catch (error) {
+      console.error('Error creating delivery note:', error);
+      toast.error("Error creating delivery note", {
+        description: "An error occurred while creating the delivery note",
+      });
+    }
   };
 
   // Handle cancel action
@@ -645,7 +660,6 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
           </DialogTitle>
         </DialogHeader>
 
-        {/* Basic styling for print slip */}
         {/* Print Styles - Essential for printing */}
         <style dangerouslySetInnerHTML={{ __html: `
           /* Normal display styles for items */
@@ -660,9 +674,9 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
           .print-item-price { width: 25%; text-align: right; }
           .print-item-total { width: 25%; text-align: right; }
           
-          /* Critical Print Settings - LAST RESORT APPROACH */
+          /* Shared print styles for both Sales Slip and Delivery Note */
           @media print {
-            /* Basic page setup */
+            /* Basic page setup for thermal printer (80mm) */
             @page { margin: 0mm !important; size: 80mm auto !important; }
             
             /* Hide everything by default */
@@ -671,7 +685,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
             }
             
             /* Show only our print container */
-            #print-target {
+            #print-target, #delivery-note-print-target {
               display: block !important;
               position: absolute !important;
               top: 0 !important;
@@ -682,102 +696,268 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               overflow: visible !important;
             }
             
-            /* Show all contents of the print slip */
-            .print-slip {
+            /* Show all contents of the printable elements */
+            .print-slip, .delivery-note-print {
               display: block !important;
-              width: 80mm !important;
+              width: 72mm !important; /* Actual printable width for 80mm thermal printer */
               background: white !important;
               color: black !important;
-              padding: 5mm !important;
+              padding: 2mm !important;
               margin: 0 auto !important;
-              font-family: Arial, sans-serif !important;
+              font-family: monospace !important; /* Better for thermal printers */
               box-shadow: none !important;
               overflow: visible !important;
               height: auto !important;
+              font-size: 10px !important; /* Consistent font size for thermal printing */
             }
             
-            /* Force display of ALL elements inside slip */
-            .print-slip * {
+            /* Force display of ALL elements inside printable areas */
+            .print-slip *, .delivery-note-print * {
               display: block !important;
               visibility: visible !important;
               opacity: 1 !important;
             }
             
-            /* Special handling for flex items */
-            .print-item-row {
-              display: flex !important;
+            /* Format tables for thermal printing */
+            .delivery-note-print table {
               width: 100% !important;
-              margin-bottom: 3px !important;
+              border-collapse: collapse !important;
+              margin: 2mm 0 !important;
             }
             
-            /* Format columns */
-            .print-item-name { 
-              width: 40% !important; 
-              text-align: left !important; 
-              display: inline-block !important;
-            }
-            .print-item-qty { 
-              width: 10% !important; 
-              text-align: center !important; 
-              display: inline-block !important;
-            }
-            .print-item-price, .print-item-total { 
-              width: 25% !important; 
-              text-align: right !important; 
-              display: inline-block !important;
+            .delivery-note-print th {
+              font-size: 10px !important;
+              text-align: left !important;
+              border-bottom: 1px solid black !important;
+              padding: 1mm 0 !important;
             }
             
-            /* Force proper text display */
-            .print-slip h2 { 
-              font-size: 14px !important; 
+            .delivery-note-print td {
+              font-size: 10px !important;
+              padding: 1mm 0 !important;
+            }
+            
+            .delivery-note-print .item-name { width: 40% !important; text-align: left !important; }
+            .delivery-note-print .item-qty { width: 15% !important; text-align: center !important; }
+            .delivery-note-print .item-price { width: 20% !important; text-align: right !important; }
+            .delivery-note-print .item-total { width: 25% !important; text-align: right !important; }
+            
+            /* Headers and footers */
+            .delivery-note-print h2, .print-slip h2 { 
+              font-size: 12px !important; 
               font-weight: bold !important;
               text-align: center !important;
-              margin-bottom: 4px !important;
+              margin: 1mm 0 !important;
             }
             
-            .print-slip p, .print-slip .text-xs { 
+            .delivery-note-print h3, .print-slip h3 { 
+              font-size: 11px !important; 
+              font-weight: bold !important;
+              margin: 1mm 0 !important;
+            }
+            
+            .delivery-note-print p, .print-slip p, .delivery-note-print .text-xs, .print-slip .text-xs { 
               font-size: 10px !important; 
-              margin-bottom: 2px !important;
-              text-align: center !important;
+              margin: 0.5mm 0 !important;
             }
             
-            /* Border styles */
-            .print-slip .border-t {
+            /* Customer details section */
+            .delivery-note-print .customer-details {
+              border: 1px solid black !important;
+              padding: 2mm !important;
+              margin: 2mm 0 !important;
+            }
+            
+            .delivery-note-print .customer-label {
+              font-weight: bold !important;
+              display: inline-block !important;
+              width: 35% !important;
+            }
+            
+            /* Totals section */
+            .delivery-note-print .totals-section {
               border-top: 1px solid black !important;
-              padding-top: 2px !important;
-              margin-top: 2px !important;
+              margin-top: 2mm !important;
+              padding-top: 2mm !important;
             }
             
-            .print-slip .border-b {
-              border-bottom: 1px solid black !important;
-              padding-bottom: 2px !important;
-              margin-bottom: 2px !important;
-            }
-            
-            /* Fix flexbox layouts */
-            .print-slip .flex {
+            .delivery-note-print .totals-row {
               display: flex !important;
-              width: 100% !important;
-            }
-            
-            .print-slip .flex.justify-between {
               justify-content: space-between !important;
+              margin: 0.5mm 0 !important;
             }
             
-            /* Center text where needed */
-            .print-slip .text-center {
+            .delivery-note-print .grand-total {
+              font-weight: bold !important;
+              border-top: 1px solid black !important;
+              padding-top: 1mm !important;
+              margin-top: 1mm !important;
+            }
+            
+            /* Signature area */
+            .delivery-note-print .signature-area {
+              border-top: 1px dashed black !important;
+              margin-top: 4mm !important;
+              padding-top: 2mm !important;
               text-align: center !important;
             }
             
-            /* Hide buttons */
-            button, [class*="print:hidden"], [class*="print-hidden"] {
+            /* Hide all non-printable elements */
+            button, .dialog-header, .dialog-footer, [class*="print:hidden"], .print-hidden {
               display: none !important;
             }
           }
         `}} />
 
         {/* Print Slip View */}
-        {printingSlip ? (
+        {printingDeliveryNote ? (
+          <div id="delivery-note-print-target" className="print-container">
+            <div className="delivery-note-print print:w-80 w-[80mm]" style={{ margin: '0 auto', padding: '8px', backgroundColor: 'white' }}>
+              {/* Company Logo */}
+              <div className="text-center mb-3">
+                {companyLogo && (
+                  <div className="flex justify-center mb-2">
+                    <img 
+                      src={companyLogo} 
+                      alt="Company Logo" 
+                      className="h-14 object-contain"
+                      style={{ maxWidth: '80%', margin: '0 auto' }}
+                    />
+                  </div>
+                )}
+                
+                {/* Company Information */}
+                <h2 className="font-bold text-base mb-0.5">DELIVERY NOTE</h2>
+                <h3 className="text-sm mb-0.5">
+                  {companyInfo?.name || 'MOK MZANSI BOOKS'}
+                </h3>
+                <p className="text-xs mb-0.5">
+                  {companyInfo?.email || 'admin@mokmzansibooks.com'}
+                </p>
+                <p className="text-xs mb-0.5">
+                  {companyInfo?.phone || '+27 64 550 4029'}
+                </p>
+                <p className="text-xs mb-0.5">
+                  {companyInfo?.addressLine1 || '123 Business Street'}
+                </p>
+                {(companyInfo?.postalCode || companyInfo?.country) && (
+                  <p className="text-xs mb-0.5">
+                    {companyInfo?.city && `${companyInfo.city}, `}
+                    {companyInfo?.postalCode && `${companyInfo.postalCode} `}
+                    {companyInfo?.country || 'Johannesburg, 2000'}
+                  </p>
+                )}
+                <p className="text-xs mt-1 mb-1">{new Date().toLocaleDateString()}</p>
+              </div>
+              
+              {/* Customer Details */}
+              <div className="border p-2 mb-3 text-xs">
+                <h3 className="font-bold mb-1">Customer Details:</h3>
+                <p><span className="font-medium">Name:</span> {selectedClient?.name || deliveryNote.customerName || 'Walk-in Customer'}</p>
+                {(selectedClient?.contactPerson || deliveryNote.contactPerson) && (
+                  <p><span className="font-medium">Contact:</span> {selectedClient?.contactPerson || deliveryNote.contactPerson}</p>
+                )}
+                <p><span className="font-medium">Tel:</span> {selectedClient?.phone || deliveryNote.phone || 'N/A'}</p>
+                
+                <h3 className="font-bold mt-2 mb-1">Delivery Address:</h3>
+                <p>{deliveryNote.location || (selectedClient ? 
+                  [selectedClient.billingStreet, 
+                  selectedClient.billingCity, 
+                  selectedClient.billingState, 
+                  selectedClient.billingPostal, 
+                  selectedClient.billingCountry]
+                  .filter(Boolean).join(', ') : 'N/A')}</p>
+              </div>
+              
+              {/* Items Header */}
+              <div className="border-t border-b py-1 mb-2">
+                <div className="flex text-xs font-bold">
+                  <div className="w-5/12 text-left">Item</div>
+                  <div className="w-2/12 text-center">Qty</div>
+                  <div className="w-2/12 text-right">Price</div>
+                  <div className="w-3/12 text-right">Total</div>
+                </div>
+              </div>
+              
+              {/* Sales Items */}
+              {salesItems.map((item) => (
+                <div key={item.id} className="flex text-[10px] mb-1">
+                  <div className="w-5/12 text-left">{item.name}</div>
+                  <div className="w-2/12 text-center">{item.quantity}</div>
+                  <div className="w-2/12 text-right">{formatCurrency(item.price)}</div>
+                  <div className="w-3/12 text-right">{formatCurrency(item.total)}</div>
+                </div>
+              ))}
+              
+              {/* Totals */}
+              <div className="mt-3 pt-2 border-t">
+                <div className="flex justify-between text-[10px]">
+                  <div>Subtotal:</div>
+                  <div>{formatCurrency(subtotalAmount)}</div>
+                </div>
+                
+                {vatAmount > 0 && (
+                  <div className="flex justify-between text-[10px]">
+                    <div>VAT ({vatPercentage}%):</div>
+                    <div>{formatCurrency(vatAmount)}</div>
+                  </div>
+                )}
+                
+                <div className="flex justify-between text-[10px]">
+                  <div>Delivery Cost:</div>
+                  <div>{formatCurrency(deliveryNote.deliveryCost)}</div>
+                </div>
+                
+                <div className="flex justify-between font-bold text-[10px] border-t mt-2 pt-1">
+                  <div>TOTAL:</div>
+                  <div>{formatCurrency(totalAmount + deliveryNote.deliveryCost)}</div>
+                </div>
+              </div>
+              
+              {/* Signature Area */}
+              <div className="mt-6 pt-2 border-t border-dashed text-center text-[10px]">
+                <p>Received in good order and condition.</p>
+                <div style={{ height: '30px' }}></div>
+                <p>_______________________</p>
+                <p>Customer Signature</p>
+                <p className="text-[9px] mt-1">Date: {new Date().toLocaleDateString()}</p>
+              </div>
+              
+              <div className="text-center text-[10px] mt-4 mb-2">
+                <p>Thank you for your business!</p>
+              </div>
+            </div>
+            
+            <div className="flex justify-between mt-4 print:hidden">
+              <Button variant="outline" onClick={() => setPrintingDeliveryNote(false)}>
+                Back
+              </Button>
+              <Button onClick={() => {
+                // Print the delivery note
+                setTimeout(() => {
+                  try {
+                    console.log('Delivery note print layout ready');
+                    window.print();
+                    toast({
+                      title: "Print Initiated",
+                      description: "The delivery note has been sent to your printer.",
+                      variant: "default"
+                    });
+                  } catch (error) {
+                    console.error('Print error:', error);
+                    toast({
+                      title: "Print error",
+                      description: "There was an error printing: " + (error as Error).message,
+                      variant: "destructive"
+                    });
+                  }
+                }, 800);
+              }}>
+                <Printer className="h-4 w-4 mr-2" /> Print
+              </Button>
+            </div>
+          </div>
+        ) : printingSlip ? (
           <div id="print-target" className="print-container">
             <div className="print-slip print:w-80 w-[80mm]" style={{ margin: '0 auto', padding: '8px', backgroundColor: 'white' }}>
               {/* Company Logo */}
@@ -910,119 +1090,221 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
           </div>
         ) : showDeliveryNote ? (
           /* Delivery Note Form */
-          <div className="delivery-note-form">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <Label htmlFor="customerName">Customer Name</Label>
-                <Input 
-                  id="customerName" 
-                  name="customerName" 
-                  value={deliveryNote.customerName} 
-                  onChange={handleDeliveryNoteChange} 
-                />
+          <div className="delivery-note-form space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <Truck className="h-5 w-5 text-mokm-purple-500" /> 
+                Delivery Note
+              </h2>
+              <p className="text-sm text-gray-500">
+                Date: {new Date().toLocaleDateString()}
+              </p>
+            </div>
+            
+            {/* Client Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="customerName" className="text-sm font-medium">Customer Name</Label>
+                  <Input 
+                    id="customerName" 
+                    name="customerName" 
+                    value={deliveryNote.customerName} 
+                    onChange={handleDeliveryNoteChange} 
+                    className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                    placeholder="Enter customer name"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="customerSurname" className="text-sm font-medium">Customer Surname</Label>
+                  <Input 
+                    id="customerSurname" 
+                    name="customerSurname" 
+                    value={deliveryNote.customerSurname} 
+                    onChange={handleDeliveryNoteChange} 
+                    className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                    placeholder="Enter customer surname"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="location" className="text-sm font-medium">Delivery Location</Label>
+                  <Input 
+                    id="location" 
+                    name="location" 
+                    value={deliveryNote.location} 
+                    onChange={handleDeliveryNoteChange} 
+                    className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                    placeholder="Enter delivery location"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="deliveryCost" className="text-sm font-medium flex items-center">
+                    <Truck className="h-4 w-4 mr-1 text-mokm-pink-500" /> 
+                    Delivery Cost (ZAR)
+                  </Label>
+                  <Input 
+                    id="deliveryCost" 
+                    name="deliveryCost" 
+                    type="number" 
+                    min="0"
+                    step="0.01"
+                    value={deliveryNote.deliveryCost} 
+                    onChange={handleDeliveryNoteChange} 
+                    className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="customerSurname">Customer Surname</Label>
-                <Input 
-                  id="customerSurname" 
-                  name="customerSurname" 
-                  value={deliveryNote.customerSurname} 
-                  onChange={handleDeliveryNoteChange} 
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressLine1">Address Line 1</Label>
-                <Input 
-                  id="addressLine1" 
-                  name="addressLine1" 
-                  value={deliveryNote.addressLine1} 
-                  onChange={handleDeliveryNoteChange} 
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressLine2">Address Line 2</Label>
-                <Input 
-                  id="addressLine2" 
-                  name="addressLine2" 
-                  value={deliveryNote.addressLine2} 
-                  onChange={handleDeliveryNoteChange} 
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressLine3">Address Line 3</Label>
-                <Input 
-                  id="addressLine3" 
-                  name="addressLine3" 
-                  value={deliveryNote.addressLine3} 
-                  onChange={handleDeliveryNoteChange} 
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressLine4">Address Line 4</Label>
-                <Input 
-                  id="addressLine4" 
-                  name="addressLine4" 
-                  value={deliveryNote.addressLine4} 
-                  onChange={handleDeliveryNoteChange} 
-                />
-              </div>
-              <div>
-                <Label htmlFor="deliveryCost">Delivery Cost (ZAR)</Label>
-                <Input 
-                  id="deliveryCost" 
-                  name="deliveryCost" 
-                  type="number" 
-                  value={deliveryNote.deliveryCost} 
-                  onChange={handleDeliveryNoteChange} 
-                />
-              </div>
-              <div>
-                <Label htmlFor="location">Location</Label>
-                <Input 
-                  id="location" 
-                  name="location" 
-                  value={deliveryNote.location} 
-                  onChange={handleDeliveryNoteChange} 
-                />
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="addressLine1" className="text-sm font-medium">Address Line 1</Label>
+                  <Input 
+                    id="addressLine1" 
+                    name="addressLine1" 
+                    value={deliveryNote.addressLine1} 
+                    onChange={handleDeliveryNoteChange} 
+                    className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                    placeholder="Street address"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="addressLine2" className="text-sm font-medium">Address Line 2</Label>
+                  <Input 
+                    id="addressLine2" 
+                    name="addressLine2" 
+                    value={deliveryNote.addressLine2} 
+                    onChange={handleDeliveryNoteChange} 
+                    className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                    placeholder="Apartment, suite, etc."
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="addressLine3" className="text-sm font-medium">City</Label>
+                    <Input 
+                      id="addressLine3" 
+                      name="addressLine3" 
+                      value={deliveryNote.addressLine3} 
+                      onChange={handleDeliveryNoteChange} 
+                      className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                      placeholder="City"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="addressLine4" className="text-sm font-medium">Postal Code</Label>
+                    <Input 
+                      id="addressLine4" 
+                      name="addressLine4" 
+                      value={deliveryNote.addressLine4} 
+                      onChange={handleDeliveryNoteChange} 
+                      className="shadow-sm focus:ring-2 focus:ring-mokm-pink-500"
+                      placeholder="Postal code"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="mb-4">
-              <Label htmlFor="signature">Customer Signature</Label>
+            {/* Sales Items Table */}
+            <div className="space-y-3">
+              <h3 className="text-md font-medium text-gray-700 border-b pb-2">Items for Delivery</h3>
+              
+              {salesItems.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-md">
+                  No items added yet. Add items to the sales list first.
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price (ZAR)</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total (ZAR)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {salesItems.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-800">{item.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-800 text-center">{item.quantity}</td>
+                          <td className="px-4 py-3 text-sm text-gray-800 text-right">{formatCurrency(item.price)}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-800 text-right">{formatCurrency(item.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            
+            {/* Customer Signature Section */}
+            <div className="space-y-2">
+              <Label htmlFor="signature" className="text-sm font-medium">Customer Signature</Label>
               <div className="border rounded-md p-4 h-32 flex items-center justify-center bg-gray-50">
-                <p className="text-gray-400">Customer Acknowledgement of Goods Received</p>
-                {/* In a real app, you would implement a signature pad here */}
+                <p className="text-gray-400 text-center">
+                  Customer Acknowledgement of Goods Received
+                  <br />
+                  <span className="text-xs mt-1 block">In a production app, a signature capture component would be implemented here</span>
+                </p>
               </div>
             </div>
             
-            <div className="mb-4 border rounded-md p-4 bg-gray-50">
-              <h3 className="font-medium mb-2">Order Summary</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>Subtotal:</div>
-                <div className="text-right">{formatCurrency(subtotalAmount)}</div>
-                
-                {vatPercentage > 0 && (
-                  <>
-                    <div>VAT ({vatPercentage}%):</div>
-                    <div className="text-right">{formatCurrency(vatAmount)}</div>
-                  </>
-                )}
-                
-                <div>Delivery Cost:</div>
-                <div className="text-right">{formatCurrency(deliveryNote.deliveryCost)}</div>
-                
-                <div className="font-medium">Total:</div>
-                <div className="text-right font-medium">{formatCurrency(totalAmount + deliveryNote.deliveryCost)}</div>
+            {/* Total Section with enhanced styling */}
+            <div className="rounded-lg border overflow-hidden">
+              <div className="bg-gray-50 p-4">
+                <h3 className="font-medium text-gray-700 mb-2">Order Summary</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Items Subtotal:</span>
+                    <span className="font-medium">{formatCurrency(subtotalAmount)}</span>
+                  </div>
+                  
+                  {vatPercentage > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">VAT ({vatPercentage}%):</span>
+                      <span>{formatCurrency(vatAmount)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Delivery Cost:</span>
+                    <span>{formatCurrency(deliveryNote.deliveryCost)}</span>
+                  </div>
+                  
+                  <div className="pt-2 mt-2 border-t flex justify-between">
+                    <span className="font-semibold">Grand Total:</span>
+                    <span className="font-semibold text-mokm-purple-600">{formatCurrency(totalAmount + deliveryNote.deliveryCost)}</span>
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setShowDeliveryNote(false)}>
-                Back
+            <div className="flex justify-between pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowDeliveryNote(false)}
+                className="px-4"
+              >
+                <X className="h-4 w-4 mr-2" /> Back
               </Button>
-              <Button onClick={handleDeliveryNoteSubmit}>
-                Create Delivery Note
-              </Button>
+              
+              <div className="space-x-3">
+                <Button 
+                  onClick={handleDeliveryNoteSubmit}
+                  className="bg-gradient-to-r from-mokm-pink-500 to-mokm-purple-500 text-white hover:opacity-90"
+                >
+                  <Download className="h-4 w-4 mr-2" /> Create Delivery Note PDF
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
