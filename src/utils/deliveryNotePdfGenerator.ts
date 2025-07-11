@@ -613,7 +613,7 @@ export async function generateDeliveryNotePdf(
     };
     
     // First draw the table header
-    const tableStartY = drawPageHeader(1, 1) + 5;
+    const tableStartY = drawPageHeader(1, 1) + 20; // Increased from 5 to 20 for better spacing
     
     // Track total pages for pagination
     let totalPagesEstimate = 1;
