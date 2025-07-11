@@ -459,12 +459,12 @@ export async function generateDeliveryNotePdf(
     pdf.line(margin, y, pageWidth - margin, y);
     y += 10;
     
-    // Add customer information section - title
+    // Add customer information section - title with increased visibility
     pdf.setFontSize(12);
     pdf.setFont('helvetica', 'bold');
     pdf.text('DELIVER TO:', margin, y);
     pdf.setFont('helvetica', 'normal');
-    y += 7;
+    y += 10; // Increased spacing after title
     
     // Customer details
     pdf.setFontSize(10);
@@ -516,15 +516,19 @@ export async function generateDeliveryNotePdf(
       deliveryAddress = ['No delivery address provided'];
     }
     
-    pdf.text('Delivery Address:', margin, y);
-    y += 5;
+    // Add client name first
+    if (client.name) {
+      pdf.text(client.name, margin + 5, y);
+      y += 5;
+    }
     
+    // Then add delivery address with appropriate formatting
     deliveryAddress.forEach(line => {
       pdf.text(line, margin + 5, y);
       y += 5;
     });
     
-    y += 10; // Space before items table
+    y += 30; // Increased space before items table to ensure DELIVER TO: section is visible
     
     // Items table
     const tableHeaders = [
@@ -582,11 +586,12 @@ export async function generateDeliveryNotePdf(
       
       // Only show these elements on the first page
       if (pageNumber === 1) {
-        // Add date, time and reference info
+        // Add date, time and reference info with significantly more spacing
         pdf.setFontSize(10);
-        pdf.text(`Date: ${dateFormatted}`, pageWidth - margin - 50, headerY - 10);
-        pdf.text(`Time: ${timeFormatted}`, pageWidth - margin - 50, headerY - 5);
-        pdf.text(`Ref: ${randomRef}`, pageWidth - margin - 50, headerY);
+        // Added even more space between DELIVERY NOTE title and date information
+        pdf.text(`Date: ${dateFormatted}`, pageWidth - margin - 50, headerY + 5); // Adjusted for more spacing
+        pdf.text(`Time: ${timeFormatted}`, pageWidth - margin - 50, headerY + 10); // Increased spacing
+        pdf.text(`Ref: ${randomRef}`, pageWidth - margin - 50, headerY + 15); // Increased spacing
       }
       
       // Return the new Y position after header
