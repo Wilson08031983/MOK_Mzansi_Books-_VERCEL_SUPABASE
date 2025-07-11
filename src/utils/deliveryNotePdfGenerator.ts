@@ -11,7 +11,7 @@
  * Last updated: July 11, 2025
  */
 
-import { SalesItem } from '@/types/sales';
+import { SalesItem } from '../types/sales';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -347,7 +347,8 @@ export async function generateDeliveryNotePdf(
 ): Promise<void> {
   try {
     const now = new Date();
-    const dateFormatted = now.toLocaleDateString();
+    // Format date as DD/MM/YYYY
+    const dateFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
     const timeFormatted = now.toLocaleTimeString();
     
     // Get company details
@@ -447,7 +448,9 @@ export async function generateDeliveryNotePdf(
     pdf.setFontSize(10);
     pdf.text(`Date: ${dateFormatted}`, pageWidth - margin - 50, y - 15);
     pdf.text(`Time: ${timeFormatted}`, pageWidth - margin - 50, y - 10);
-    pdf.text(`Ref: DN-${now.getTime().toString().slice(-8)}`, pageWidth - margin - 50, y - 5);
+    // Generate a random reference number for this delivery note
+    const randomRef = `DN-${Math.floor(100000 + Math.random() * 900000)}`;
+    pdf.text(`Ref: ${randomRef}`, pageWidth - margin - 50, y - 5);
     
     y += 10; // Extra space after company section
     
@@ -538,9 +541,86 @@ export async function generateDeliveryNotePdf(
       total: formatCurrency(item.price * item.quantity)
     }));
     
-    // Generate the items table
+    // Function to draw page header (company info)
+    const drawPageHeader = (pageNumber: number, totalPages: number) => {
+      // Reset cursor position for the header
+      let headerY = 20;
+      
+      // Add company logo if available
+      if (companyAssets.Logo?.dataUrl) {
+        try {
+          pdf.addImage(
+            companyAssets.Logo.dataUrl,
+            'PNG',
+            margin,
+            headerY,
+            40,
+            20
+          );
+          headerY += 22; // Adjust y position after logo
+        } catch (error) {
+          console.error('Error adding logo:', error);
+          // Continue without logo
+          pdf.setFontSize(24);
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(companyDetails.name, margin, headerY);
+          headerY += 10;
+        }
+      } else {
+        // No logo, just add company name as title
+        pdf.setFontSize(24);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(companyDetails.name, margin, headerY);
+        headerY += 10;
+      }
+      
+      // Add DELIVERY NOTE title on the right
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('DELIVERY NOTE', pageWidth - margin - pdf.getTextWidth('DELIVERY NOTE'), headerY - 15);
+      pdf.setFont('helvetica', 'normal');
+      
+      // Only show these elements on the first page
+      if (pageNumber === 1) {
+        // Add date, time and reference info
+        pdf.setFontSize(10);
+        pdf.text(`Date: ${dateFormatted}`, pageWidth - margin - 50, headerY - 10);
+        pdf.text(`Time: ${timeFormatted}`, pageWidth - margin - 50, headerY - 5);
+        pdf.text(`Ref: ${randomRef}`, pageWidth - margin - 50, headerY);
+      }
+      
+      // Return the new Y position after header
+      return headerY + 15;
+    };
+    
+    // Function to draw page footer
+    const drawPageFooter = (pageNumber: number, totalPages: number) => {
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(
+        `Page ${pageNumber} of ${totalPages}`, 
+        pageWidth / 2, 
+        pdf.internal.pageSize.height - 10, 
+        { align: 'center' }
+      );
+      
+      // Add company info at the bottom of each page except last
+      if (pageNumber !== totalPages) {
+        pdf.setFontSize(8);
+        pdf.text(companyDetails.name, margin, pdf.internal.pageSize.height - 15);
+        pdf.text(companyDetails.phone || '', margin, pdf.internal.pageSize.height - 10);
+      }
+    };
+    
+    // First draw the table header
+    const tableStartY = drawPageHeader(1, 1) + 5;
+    
+    // Track total pages for pagination
+    let totalPagesEstimate = 1;
+    
+    // Generate the items table with multi-page support
     autoTable(pdf, {
-      startY: y,
+      startY: tableStartY,
       head: [['Item', 'Qty', 'Price (ZAR)', 'Total (ZAR)']],
       body: data.items.map(item => [
         item.name || item.title,
@@ -557,15 +637,44 @@ export async function generateDeliveryNotePdf(
         2: { cellWidth: 30, halign: 'right' },
         3: { cellWidth: 30, halign: 'right' }
       },
-      didDrawPage: () => {
-        // Reset Y position when a new page is created
-        y = margin;
+      didDrawPage: (data) => {
+        // When a new page is created
+        // Access internal pages array to get total number of pages
+        // Need to use as any because jsPDF types are incomplete
+        totalPagesEstimate = (pdf.internal as any).pages.length - 1; // -1 because jsPDF counts from 1
+        
+        // Add header with company info
+        if (data.pageNumber > 1) { // Only redraw header on pages after first
+          drawPageHeader(data.pageNumber, totalPagesEstimate);
+        }
+        
+        // Add footer with page number
+        drawPageFooter(data.pageNumber, totalPagesEstimate);
       }
     });
     
     // Update y position after the table
     // @ts-expect-error - jspdf-autotable adds this property
     y = pdf.lastAutoTable.finalY + 10;
+    
+    // If we're not on the last page or y position is too close to bottom of page,
+    // add a new page for totals and signature section
+    const remainingSpace = pdf.internal.pageSize.height - y - margin;
+    if (remainingSpace < 120) { // Need about 120mm for totals and signatures
+      pdf.addPage();
+      // Need to use as any because jsPDF types are incomplete
+      const newPageNumber = (pdf.internal as any).pages.length - 1;
+      totalPagesEstimate = newPageNumber;
+      
+      // Draw header on the new page
+      drawPageHeader(newPageNumber, totalPagesEstimate);
+      
+      // Draw footer on the new page
+      drawPageFooter(newPageNumber, totalPagesEstimate);
+      
+      // Reset y position for totals section
+      y = tableStartY;
+    }
     
     // Add totals section
     pdf.setFont('helvetica', 'normal');
@@ -600,46 +709,67 @@ export async function generateDeliveryNotePdf(
     
     y += 15; // Space before signature section
     
-    // Add signature section
+    // Add signature section with proper alignment
     pdf.setDrawColor(100, 100, 100);
     
-    // Left side - Driver's signature
+    // Store the starting Y position for the signature section
+    const signatureSectionY = y;
+    
+    // Calculate column positions for better alignment
+    const leftColX = margin;
+    const rightColX = pageWidth / 2 + 5;
+    const lineLength = 60;
+    
+    // Left side - Driver's details
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
-    pdf.text("DRIVER'S DETAILS", margin, y);
+    pdf.text("DRIVER'S DETAILS", leftColX, signatureSectionY);
     pdf.setFont('helvetica', 'normal');
-    y += 6;
     
-    pdf.text("Name:", margin, y);
-    pdf.line(margin + 25, y, margin + 85, y);
-    y += 10;
-    
-    pdf.text("Signature:", margin, y);
-    pdf.line(margin + 25, y, margin + 85, y);
-    y += 10;
-    
-    pdf.text("Date & Time:", margin, y);
-    pdf.line(margin + 25, y, margin + 85, y);
-    
-    // Right side - Receiver's signature
-    const rightColX = pageWidth / 2 + 10;
-    y -= 20; // Reset y for the right column
-    
+    // Right side - Receiver's details header
     pdf.setFont('helvetica', 'bold');
-    pdf.text("RECEIVER'S DETAILS", rightColX, y);
+    pdf.text("RECEIVER'S DETAILS", rightColX, signatureSectionY);
     pdf.setFont('helvetica', 'normal');
-    y += 6;
     
-    pdf.text("Name:", rightColX, y);
-    pdf.line(rightColX + 25, y, rightColX + 85, y);
-    y += 10;
+    // Driver details fields
+    let fieldY = signatureSectionY + 8;
     
-    pdf.text("Signature:", rightColX, y);
-    pdf.line(rightColX + 25, y, rightColX + 85, y);
-    y += 10;
+    // Name fields
+    pdf.text("Name:", leftColX, fieldY);
+    pdf.line(leftColX + 25, fieldY, leftColX + 25 + lineLength, fieldY);
     
-    pdf.text("Date & Time:", rightColX, y);
-    pdf.line(rightColX + 25, y, rightColX + 85, y);
+    pdf.text("Name:", rightColX, fieldY);
+    pdf.line(rightColX + 25, fieldY, rightColX + 25 + lineLength, fieldY);
+    fieldY += 10;
+    
+    // Signature fields
+    pdf.text("Signature:", leftColX, fieldY);
+    pdf.line(leftColX + 25, fieldY, leftColX + 25 + lineLength, fieldY);
+    
+    pdf.text("Signature:", rightColX, fieldY);
+    pdf.line(rightColX + 25, fieldY, rightColX + 25 + lineLength, fieldY);
+    fieldY += 10;
+    
+    // Date & Time fields
+    pdf.text("Date & Time:", leftColX, fieldY);
+    pdf.line(leftColX + 25, fieldY, leftColX + 25 + lineLength, fieldY);
+    
+    pdf.text("Date & Time:", rightColX, fieldY);
+    pdf.line(rightColX + 25, fieldY, rightColX + 25 + lineLength, fieldY);
+    fieldY += 10;
+    
+    // Add a disclaimer and page number at the bottom of the last page
+    y = fieldY + 5;
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text("This delivery note confirms receipt of goods in good condition.", margin, y);
+    
+    // Update the final page count and redraw all footers to ensure accurate page numbers
+    // Need to use as any because jsPDF types are incomplete
+    totalPagesEstimate = (pdf.internal as any).pages.length - 1;
+    
+    // Draw footer on the last page
+    drawPageFooter(totalPagesEstimate, totalPagesEstimate);
     
     y += 20; // Space before notes
     
