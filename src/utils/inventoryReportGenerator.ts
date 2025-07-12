@@ -355,10 +355,12 @@ export const generateInventoryReport = (): void => {
         if (assets && assets.Logo && assets.Logo.dataUrl && 
             typeof assets.Logo.dataUrl === 'string' && 
             assets.Logo.dataUrl.startsWith('data:')) {
-          const logoWidth = 40;
-          const logoHeight = 15;
-          const logoX = (pageWidth - logoWidth) / 2;
-          doc.addImage(assets.Logo.dataUrl, 'AUTO', logoX, margin, logoWidth, logoHeight);
+          // Set logo dimensions to exactly 20mm x 20mm (converted to points: 1mm = 2.83465pt)
+          const mmToPt = 2.83465; // conversion factor from mm to points
+          const logoSize = 20 * mmToPt; // 20mm converted to points (~56.693)
+          const logoX = (pageWidth - logoSize) / 2; // Center horizontally
+          // Using the correct number of parameters for addImage to create square logo
+          doc.addImage(assets.Logo.dataUrl, 'AUTO', logoX, margin, logoSize, logoSize);
           console.log('Logo added successfully');
         } else {
           console.log('No valid logo found, skipping');
@@ -377,7 +379,7 @@ export const generateInventoryReport = (): void => {
       doc.setFontSize(normalFontSize);
       doc.setFont('helvetica', 'normal');
       doc.text(
-        `Report Date: ${new Date().toLocaleDateString()}`,
+        `Report Date: ${new Date().toLocaleDateString('en-GB')}`,
         pageWidth / 2,
         margin + 30,
         { align: 'center' }
