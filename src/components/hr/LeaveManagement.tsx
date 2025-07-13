@@ -1,5 +1,5 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { format, addMonths } from 'date-fns';
 import { 
   Search,
   Plus,
@@ -15,54 +15,80 @@ import {
   Heart,
   Gift,
   Users,
-  AlertCircle
+  AlertCircle,
+  X,
+  Info,
+  Edit,
+  Trash2,
+  Palmtree,
+  Stethoscope,
+  Flower
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import NextPublicHolidayDisplay from './NextPublicHolidayDisplay';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
-
-interface LeaveRequest {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  employeePosition: string;
-  leaveType: 'annual' | 'sick' | 'maternity' | 'paternity' | 'personal' | 'emergency';
-  startDate: string;
-  endDate: string;
-  days: number;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  requestDate: string;
-  managerId?: string;
-  managerName?: string;
-  approvedDate?: string;
-  rejectedReason?: string;
-}
-
-interface LeaveBalance {
-  employeeId: string;
-  employeeName: string;
-  department: string;
-  annual: { total: number; used: number; remaining: number };
-  sick: { total: number; used: number; remaining: number };
-  personal: { total: number; used: number; remaining: number };
-}
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Employee } from '@/services/employeeService';
+import LeaveRequestModal from './LeaveRequestModal';
+import { 
+  LeaveRequest, 
+  LeaveTypes, 
+  calculateBusinessDaysExcludingHolidays,
+  LeaveBalance
+} from './LeaveManagementTypes';
 
 interface LeaveManagementProps {
   leaveRequests: LeaveRequest[];
   setLeaveRequests: React.Dispatch<React.SetStateAction<LeaveRequest[]>>;
   leaveBalances: LeaveBalance[];
   hrMetrics: { onLeaveToday: number };
+  employees?: Employee[];
 }
 
 const LeaveManagement: React.FC<LeaveManagementProps> = ({ 
   leaveRequests, 
   setLeaveRequests, 
   leaveBalances,
-  hrMetrics 
+  hrMetrics,
+  employees = [] 
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [leaveStatusFilter, setLeaveStatusFilter] = useState('all');
-  const [leaveTypeFilter, setLeaveTypeFilter] = useState('all');
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState<string | LeaveTypes>('all');
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [rejectModal, setRejectModalOpen] = useState<{ isOpen: boolean; requestId: string }>({ isOpen: false, requestId: '' });
+  
+  // Load leave requests and balances from localStorage if available
+  useEffect(() => {
+    try {
+      const storedRequests = localStorage.getItem('leaveRequests');
+      const storedBalances = localStorage.getItem('leaveBalances');
+      
+      if (storedRequests) {
+        const parsedRequests = JSON.parse(storedRequests);
+        setLeaveRequests(parsedRequests);
+      } else {
+        // Initialize localStorage with current state if empty
+        localStorage.setItem('leaveRequests', JSON.stringify(leaveRequests));
+      }
+      
+      if (storedBalances) {
+        // In a real implementation, we would update the leaveBalances state here
+        // For this demo, we're using the prop passed from the parent
+      } else {
+        // Initialize localStorage with current state if empty
+        localStorage.setItem('leaveBalances', JSON.stringify(leaveBalances));
+      }
+    } catch (error) {
+      console.error('Error loading leave data from localStorage:', error);
+    }
+  }, [leaveRequests, leaveBalances, setLeaveRequests]);  // Added missing dependencies
 
   // Filter leave requests
   const filteredLeaveRequests = leaveRequests.filter(request => {
@@ -91,55 +117,319 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
     }
   };
 
-  const getLeaveTypeColor = (type: LeaveRequest['leaveType']) => {
-    switch (type) {
-      case 'annual':
-        return 'bg-blue-100 text-blue-800';
-      case 'sick':
-        return 'bg-red-100 text-red-800';
-      case 'maternity':
-        return 'bg-pink-100 text-pink-800';
-      case 'paternity':
-        return 'bg-indigo-100 text-indigo-800';
-      case 'personal':
-        return 'bg-purple-100 text-purple-800';
-      case 'emergency':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const getLeaveTypeIcon = (type: LeaveRequest['leaveType']) => {
     switch (type) {
-      case 'annual':
-        return <Plane className="h-4 w-4" />;
-      case 'sick':
-        return <Heart className="h-4 w-4" />;
-      case 'maternity':
-      case 'paternity':
+      case LeaveTypes.Annual:
+        return <Palmtree className="h-4 w-4" />;
+      case LeaveTypes.Sick:
+        return <Stethoscope className="h-4 w-4" />;
+      case LeaveTypes.Bereavement:
+        return <Flower className="h-4 w-4" />;
+      case LeaveTypes.Maternity:
+      case LeaveTypes.Parental:
         return <Gift className="h-4 w-4" />;
-      case 'personal':
+      case LeaveTypes.FamilyResponsibility:
         return <Users className="h-4 w-4" />;
-      case 'emergency':
-        return <AlertCircle className="h-4 w-4" />;
+      case LeaveTypes.Unpaid:
+      case LeaveTypes.Study:
+      case LeaveTypes.Religious:
+        return <Calendar className="h-4 w-4" />;
       default:
         return <Calendar className="h-4 w-4" />;
     }
   };
 
+  const getLeaveTypeColor = (type: LeaveRequest['leaveType']) => {
+    switch (type) {
+      case LeaveTypes.Annual:
+        return 'bg-green-100 text-green-800';
+      case LeaveTypes.Sick:
+        return 'bg-red-100 text-red-800';
+      case LeaveTypes.Bereavement:
+        return 'bg-purple-100 text-purple-800';
+      case LeaveTypes.Maternity:
+      case LeaveTypes.Parental:
+        return 'bg-blue-100 text-blue-800';
+      case LeaveTypes.FamilyResponsibility:
+        return 'bg-orange-100 text-orange-800';
+      case LeaveTypes.Unpaid:
+        return 'bg-gray-100 text-gray-800';
+      case LeaveTypes.Study:
+        return 'bg-cyan-100 text-cyan-800';
+      case LeaveTypes.Religious:
+        return 'bg-amber-100 text-amber-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // State for leave balances
+  const [balances, setBalances] = useState<LeaveBalance[]>(leaveBalances);
+  
+  // Effect to update localStorage when leave balances change
+  useEffect(() => {
+    try {
+      localStorage.setItem('leaveBalances', JSON.stringify(balances));
+    } catch (error) {
+      console.error('Error saving leave balances:', error);
+    }
+  }, [balances]);
+
+  // Calculate business days excluding public holidays between two dates
+  const calculateLeaveWorkingDays = (startDate: string, endDate: string): number => {
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return calculateBusinessDaysExcludingHolidays(start, end);
+    } catch (error) {
+      console.error('Error calculating working days:', error);
+      return 0;
+    }
+  };
+
   // Handle leave approval/rejection
   const handleLeaveAction = (requestId: string, action: 'approve' | 'reject', reason?: string) => {
-    setLeaveRequests(prev => prev.map(request => 
+    // Find the leave request
+    const leaveRequest = leaveRequests.find(request => request.id === requestId);
+    if (!leaveRequest) return;
+    
+    // Update the leave request status
+    const updatedRequests = leaveRequests.map(request => 
       request.id === requestId 
         ? { 
             ...request, 
-            status: action === 'approve' ? 'approved' : 'rejected',
+            status: action === 'approve' ? 'approved' as const : 'rejected' as const,
             approvedDate: action === 'approve' ? new Date().toISOString().split('T')[0] : undefined,
             rejectedReason: action === 'reject' ? reason : undefined
           }
         : request
-    ));
+    );
+    
+    setLeaveRequests(updatedRequests);
+    
+    // Save to localStorage
+    localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
+    
+    // If approving the leave request, update leave balances
+    if (action === 'approve') {
+      // Re-calculate business days excluding public holidays
+      const actualLeaveDays = calculateLeaveWorkingDays(
+        leaveRequest.startDate,
+        leaveRequest.endDate
+      );
+      
+      // Update employee leave balance
+      setBalances(currentBalances => {        
+        const updatedBalances = [...currentBalances];
+        const employeeBalanceIndex = updatedBalances.findIndex(
+          balance => balance.employeeId === leaveRequest.employeeId
+        );
+        
+        if (employeeBalanceIndex !== -1) {
+          const balance = { ...updatedBalances[employeeBalanceIndex] };
+          
+          // Apply balance updates based on leave type
+          switch(leaveRequest.leaveType) {
+            case LeaveTypes.Annual:
+              if (balance.annual.remaining >= actualLeaveDays) {
+                balance.annual.used += actualLeaveDays;
+                balance.annual.remaining -= actualLeaveDays;
+                toast.success(`Annual leave approved. ${actualLeaveDays} days deducted from balance.`);
+              } else if (balance.annual.remaining > 0) {
+                const unpaidDays = actualLeaveDays - balance.annual.remaining;
+                balance.annual.used += balance.annual.remaining;
+                balance.annual.remaining = 0;
+                balance.unpaid.days += unpaidDays;
+                toast.info(`Partial annual leave approved. ${balance.annual.remaining} days of paid leave and ${unpaidDays} days of unpaid leave.`);
+              } else {
+                balance.unpaid.days += actualLeaveDays;
+                toast.info(`No annual leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
+              }
+              break;
+              
+            case LeaveTypes.Sick:
+              if (balance.sick.remaining >= actualLeaveDays) {
+                balance.sick.used += actualLeaveDays;
+                balance.sick.remaining -= actualLeaveDays;
+                toast.success(`Sick leave approved. ${actualLeaveDays} days deducted from balance.`);
+              } else {
+                balance.unpaid.days += actualLeaveDays;
+                toast.info(`No sick leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
+              }
+              break;
+              
+            case LeaveTypes.FamilyResponsibility:
+              if (balance.familyResponsibility.remaining >= actualLeaveDays) {
+                balance.familyResponsibility.used += actualLeaveDays;
+                balance.familyResponsibility.remaining -= actualLeaveDays;
+                toast.success(`Family responsibility leave approved. ${actualLeaveDays} days deducted from balance.`);
+              } else {
+                balance.unpaid.days += actualLeaveDays;
+                toast.info(`No family responsibility leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
+              }
+              break;
+              
+            case LeaveTypes.Maternity:
+              if (balance.maternity && balance.maternity.remaining >= actualLeaveDays) {
+                balance.maternity.used += actualLeaveDays;
+                balance.maternity.remaining -= actualLeaveDays;
+                toast.success(`Maternity leave approved. ${actualLeaveDays} days deducted from balance.`);
+              } else if (balance.maternity && balance.maternity.remaining > 0) {
+                const unpaidDays = actualLeaveDays - balance.maternity.remaining;
+                balance.maternity.used += balance.maternity.remaining;
+                balance.maternity.remaining = 0;
+                balance.unpaid.days += unpaidDays;
+                toast.info(`Partial maternity leave approved with ${unpaidDays} days as unpaid leave.`);
+              } else {
+                balance.unpaid.days += actualLeaveDays;
+                toast.info(`No maternity leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
+              }
+              break;
+              
+            case LeaveTypes.Parental:
+              if (balance.parental && balance.parental.remaining >= actualLeaveDays) {
+                balance.parental.used += actualLeaveDays;
+                balance.parental.remaining -= actualLeaveDays;
+                toast.success(`Parental leave approved. ${actualLeaveDays} days deducted from balance.`);
+              } else if (balance.parental && balance.parental.remaining > 0) {
+                const unpaidDays = actualLeaveDays - balance.parental.remaining;
+                balance.parental.used += balance.parental.remaining;
+                balance.parental.remaining = 0;
+                balance.unpaid.days += unpaidDays;
+                toast.info(`Partial parental leave approved with ${unpaidDays} days as unpaid leave.`);
+              } else {
+                balance.unpaid.days += actualLeaveDays;
+                toast.info(`No parental leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
+              }
+              break;
+              
+            case LeaveTypes.Bereavement:
+              if (balance.familyResponsibility.remaining >= actualLeaveDays) {
+                balance.familyResponsibility.used += actualLeaveDays;
+                balance.familyResponsibility.remaining -= actualLeaveDays;
+                toast.success(`Bereavement leave approved. ${actualLeaveDays} days deducted from family responsibility leave.`);
+              } else {
+                balance.unpaid.days += actualLeaveDays;
+                toast.info(`No family responsibility leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
+              }
+              break;
+              
+            // Additional case for other leave types can be added here
+              
+            case LeaveTypes.Unpaid:
+              // Unpaid leave just tracks days
+              balance.unpaid.days += actualLeaveDays;
+              toast.success(`Unpaid leave approved for ${actualLeaveDays} days.`);
+              break;
+              
+            // Handle other leave types...
+            default:
+              toast.info(`Leave approved but no balance deduction for ${leaveRequest.leaveType}.`);
+              break;
+          }
+          
+          updatedBalances[employeeBalanceIndex] = balance;
+        } else {
+          toast.error(`Could not find leave balance for employee ID: ${leaveRequest.employeeId}`);
+        }
+        
+        // Save updated balances to localStorage
+        localStorage.setItem('leaveBalances', JSON.stringify(updatedBalances));
+        return updatedBalances;
+      });
+    } else if (action === 'reject' && leaveRequest.status === 'approved') {
+      // If rejecting a previously approved leave request, restore the leave balance
+      const actualLeaveDays = calculateLeaveWorkingDays(
+        leaveRequest.startDate,
+        leaveRequest.endDate
+      );
+      
+      // Restore employee leave balance
+      setBalances(currentBalances => {
+        const updatedBalances = [...currentBalances];
+        const employeeBalanceIndex = updatedBalances.findIndex(
+          balance => balance.employeeId === leaveRequest.employeeId
+        );
+        
+        if (employeeBalanceIndex !== -1) {
+          const balance = { ...updatedBalances[employeeBalanceIndex] };
+          
+          // Restore balance based on leave type
+          switch(leaveRequest.leaveType) {
+            case LeaveTypes.Annual:
+              balance.annual.used -= actualLeaveDays;
+              balance.annual.remaining += actualLeaveDays;
+              toast.info(`Leave rejected. ${actualLeaveDays} days restored to annual leave balance.`);
+              break;
+              
+            case LeaveTypes.Sick:
+              balance.sick.used -= actualLeaveDays;
+              balance.sick.remaining += actualLeaveDays;
+              toast.info(`Leave rejected. ${actualLeaveDays} days restored to sick leave balance.`);
+              break;
+              
+            case LeaveTypes.FamilyResponsibility:
+              balance.familyResponsibility.used -= actualLeaveDays;
+              balance.familyResponsibility.remaining += actualLeaveDays;
+              toast.info(`Leave rejected. ${actualLeaveDays} days restored to family responsibility leave balance.`);
+              break;
+              
+            case LeaveTypes.Maternity:
+              if (balance.maternity) {
+                balance.maternity.used -= actualLeaveDays;
+                balance.maternity.remaining += actualLeaveDays;
+                toast.info(`Leave rejected. ${actualLeaveDays} days restored to maternity leave balance.`);
+              }
+              break;
+              
+            case LeaveTypes.Parental:
+              if (balance.parental) {
+                balance.parental.used -= actualLeaveDays;
+                balance.parental.remaining += actualLeaveDays;
+                toast.info(`Leave rejected. ${actualLeaveDays} days restored to parental leave balance.`);
+              }
+              break;
+              
+            case LeaveTypes.Bereavement:
+              if (balance.bereavement) {
+                balance.bereavement.used -= actualLeaveDays;
+                balance.bereavement.remaining += actualLeaveDays;
+                toast.info(`Leave rejected. ${actualLeaveDays} days restored to bereavement leave balance.`);
+              } else {
+                // If no specific bereavement balance, it might have been from family responsibility
+                balance.familyResponsibility.used -= actualLeaveDays;
+                balance.familyResponsibility.remaining += actualLeaveDays;
+                toast.info(`Leave rejected. ${actualLeaveDays} days restored to family responsibility leave balance.`);
+              }
+              break;
+              
+            case LeaveTypes.Unpaid:
+              balance.unpaid.days -= actualLeaveDays;
+              toast.info(`Unpaid leave rejected.`);
+              break;
+              
+            case LeaveTypes.Study:
+            case LeaveTypes.Religious:
+              // These typically come from annual leave
+              balance.annual.used -= actualLeaveDays;
+              balance.annual.remaining += actualLeaveDays;
+              toast.info(`Leave rejected. ${actualLeaveDays} days restored to annual leave balance.`);
+              break;
+          }
+          
+          // Update the employee's balance in the array
+          updatedBalances[employeeBalanceIndex] = balance;
+        }
+        
+        // Save updated balances to localStorage
+        localStorage.setItem('leaveBalances', JSON.stringify(updatedBalances));
+        return updatedBalances;
+      });
+      
+      toast.info(`Leave request rejected: ${reason || 'No reason provided'}`);
+    } else if (action === 'reject') {
+      toast.info(`Leave request rejected: ${reason || 'No reason provided'}`);
+    }
   };
 
   // Format date for display
@@ -152,6 +442,98 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
     return name.split(' ').map(n => n[0]).join('');
   };
 
+  // Handle adding a new leave request
+  const handleLeaveAdded = (newLeave: LeaveRequest) => {
+    setLeaveRequests(prev => [...prev, newLeave]);
+    // Save to localStorage
+    const updatedRequests = [...leaveRequests, newLeave];
+    localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
+  };
+  
+  // Handle deleting a leave request
+  const handleDeleteLeaveRequest = (requestId: string) => {
+    // Find the leave request to be deleted
+    const leaveRequest = leaveRequests.find(request => request.id === requestId);
+    
+    if (leaveRequest && leaveRequest.status === 'approved') {
+      // If deleting an approved leave request, restore the leave balance
+      const actualLeaveDays = calculateLeaveWorkingDays(
+        leaveRequest.startDate,
+        leaveRequest.endDate
+      );
+      
+      // Restore employee leave balance similar to rejection
+      setBalances(currentBalances => {
+        const updatedBalances = [...currentBalances];
+        const employeeBalanceIndex = updatedBalances.findIndex(
+          balance => balance.employeeId === leaveRequest.employeeId
+        );
+        
+        if (employeeBalanceIndex !== -1) {
+          const balance = { ...updatedBalances[employeeBalanceIndex] };
+          
+          // Restore balance based on leave type (similar to rejection logic)
+          switch(leaveRequest.leaveType) {
+            case LeaveTypes.Annual:
+              balance.annual.used -= actualLeaveDays;
+              balance.annual.remaining += actualLeaveDays;
+              break;
+            case LeaveTypes.Sick:
+              balance.sick.used -= actualLeaveDays;
+              balance.sick.remaining += actualLeaveDays;
+              break;
+            case LeaveTypes.FamilyResponsibility:
+              balance.familyResponsibility.used -= actualLeaveDays;
+              balance.familyResponsibility.remaining += actualLeaveDays;
+              break;
+            case LeaveTypes.Maternity:
+              if (balance.maternity) {
+                balance.maternity.used -= actualLeaveDays;
+                balance.maternity.remaining += actualLeaveDays;
+              }
+              break;
+            case LeaveTypes.Parental:
+              if (balance.parental) {
+                balance.parental.used -= actualLeaveDays;
+                balance.parental.remaining += actualLeaveDays;
+              }
+              break;
+            case LeaveTypes.Bereavement:
+              if (balance.bereavement) {
+                balance.bereavement.used -= actualLeaveDays;
+                balance.bereavement.remaining += actualLeaveDays;
+              } else {
+                balance.familyResponsibility.used -= actualLeaveDays;
+                balance.familyResponsibility.remaining += actualLeaveDays;
+              }
+              break;
+            case LeaveTypes.Unpaid:
+              balance.unpaid.days -= actualLeaveDays;
+              break;
+            case LeaveTypes.Study:
+            case LeaveTypes.Religious:
+              balance.annual.used -= actualLeaveDays;
+              balance.annual.remaining += actualLeaveDays;
+              break;
+          }
+          
+          // Update the employee's balance in the array
+          updatedBalances[employeeBalanceIndex] = balance;
+        }
+        
+        // Save updated balances to localStorage
+        localStorage.setItem('leaveBalances', JSON.stringify(updatedBalances));
+        return updatedBalances;
+      });
+    }
+    
+    // Remove the leave request from state and localStorage
+    const updatedRequests = leaveRequests.filter(request => request.id !== requestId);
+    setLeaveRequests(updatedRequests);
+    localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
+    toast.success('Leave request deleted successfully');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -160,7 +542,10 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
           <p className="text-slate-600 font-sf-pro">Manage employee leave requests and balances</p>
         </div>
         
-        <Button className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro">
+        <Button 
+          onClick={() => setIsLeaveModalOpen(true)}
+          className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro transition-all hover:scale-105"
+        >
           <Plus className="h-4 w-4 mr-2" />
           New Leave Request
         </Button>
@@ -354,8 +739,12 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                             size="sm"
                             variant="outline"
                             className="text-red-600 hover:text-red-700 font-sf-pro"
-                            onClick={() => handleLeaveAction(request.id, 'reject', 'Insufficient leave balance')}
+                            onClick={() => setRejectModalOpen({
+                              isOpen: true,
+                              requestId: request.id
+                            })}
                           >
+                            <X className="h-4 w-4 mr-1" />
                             Reject
                           </Button>
                         </>
@@ -407,6 +796,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                 </div>
                 
                 <div className="space-y-3">
+                  {/* Annual Leave */}
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-slate-700 font-sf-pro">Annual Leave</span>
                     <span className="text-sm font-bold text-slate-900 font-sf-pro">
@@ -420,6 +810,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                     ></div>
                   </div>
                   
+                  {/* Sick Leave */}
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-slate-700 font-sf-pro">Sick Leave</span>
                     <span className="text-sm font-bold text-slate-900 font-sf-pro">
@@ -433,18 +824,101 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                     ></div>
                   </div>
                   
+                  {/* Family Responsibility Leave */}
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-slate-700 font-sf-pro">Personal Leave</span>
+                    <span className="text-sm font-medium text-slate-700 font-sf-pro">Family Responsibility</span>
                     <span className="text-sm font-bold text-slate-900 font-sf-pro">
-                      {balance.personal.remaining}/{balance.personal.total}
+                      {balance.familyResponsibility.remaining}/{balance.familyResponsibility.total}
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
                       className="bg-purple-500 h-2 rounded-full" 
-                      style={{ width: `${(balance.personal.remaining / balance.personal.total) * 100}%` }}
+                      style={{ width: `${(balance.familyResponsibility.remaining / balance.familyResponsibility.total) * 100}%` }}
                     ></div>
                   </div>
+                  
+                  {/* Maternity Leave */}
+                  {balance.maternity && balance.maternity.total > 0 && (
+                    <>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-sm font-medium text-slate-700 font-sf-pro">Maternity Leave</span>
+                        {balance.maternity.used > 0 ? (
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-pink-100 text-pink-800">
+                            On Maternity Leave
+                          </span>
+                        ) : (
+                          <span className="text-sm font-bold text-slate-900 font-sf-pro">
+                            {balance.maternity.remaining}/{balance.maternity.total}
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-pink-500 h-2 rounded-full" 
+                          style={{ width: `${(balance.maternity.remaining / balance.maternity.total) * 100}%` }}
+                        ></div>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Parental Leave */}
+                  {balance.parental && balance.parental.total > 0 && (
+                    <>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-sm font-medium text-slate-700 font-sf-pro">Parental Leave</span>
+                        <span className="text-sm font-bold text-slate-900 font-sf-pro">
+                          {balance.parental.remaining}/{balance.parental.total}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-indigo-500 h-2 rounded-full" 
+                          style={{ width: `${(balance.parental.remaining / balance.parental.total) * 100}%` }}
+                        ></div>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Other Leave Types - Shown only if used */}
+                  {(balance.bereavement?.used > 0 || 
+                   balance.unpaid?.days > 0) && (
+                    <div className="mt-3">
+                      <details className="group">
+                        <summary className="flex justify-between items-center cursor-pointer list-none">
+                          <span className="text-sm font-medium text-slate-800 font-sf-pro">Other Leave Types</span>
+                          <span className="text-sm text-slate-500">
+                            <svg className="h-4 w-4 transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </span>
+                        </summary>
+                        <div className="mt-2 space-y-2 pl-2 border-l-2 border-slate-200">
+                          {/* Bereavement Leave */}
+                          {balance.bereavement?.used > 0 && (
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-xs font-medium text-slate-700 font-sf-pro">Bereavement:</span>
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                {balance.bereavement.used} days used
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Unpaid Leave */}
+                          {balance.unpaid?.days > 0 && (
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-xs font-medium text-slate-700 font-sf-pro">Unpaid:</span>
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                {balance.unpaid.days} days
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Add other leave types here when used */}
+                        </div>
+                      </details>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -452,7 +926,10 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
         </CardContent>
       </Card>
 
-      {/* Leave Actions */}
+      {/* Next Public Holiday */}
+      <NextPublicHolidayDisplay />
+
+      {/* Leave Management Actions */}
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
         <CardHeader>
           <CardTitle className="text-slate-900 font-sf-pro">Leave Management Actions</CardTitle>
@@ -476,6 +953,70 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
           </div>
         </CardContent>
       </Card>
+      
+      {/* Leave Request Modal */}
+      <LeaveRequestModal
+        isOpen={isLeaveModalOpen}
+        onClose={() => setIsLeaveModalOpen(false)}
+        employees={employees}
+        onLeaveAdded={handleLeaveAdded}
+        leaveBalances={leaveBalances}
+      />
+      
+      {/* Reject Modal */}
+      <Dialog open={rejectModal.isOpen} onOpenChange={(open) => {
+        if (!open) setRejectModalOpen({ isOpen: false, requestId: '' });
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold font-sf-pro">Reject Leave Request</DialogTitle>
+            <DialogDescription className="text-gray-600 font-sf-pro">
+              Please provide a reason for rejecting this leave request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="rejectReason" className="text-right font-sf-pro">
+                Reason
+              </Label>
+              <Textarea
+                id="rejectReason"
+                className="col-span-3 font-sf-pro"
+                placeholder="Provide rejection reason"
+                rows={4}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const target = e.target as HTMLTextAreaElement;
+                    handleLeaveAction(rejectModal.requestId, 'reject', target.value);
+                    setRejectModalOpen({ isOpen: false, requestId: '' });
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setRejectModalOpen({ isOpen: false, requestId: '' })}
+              className="font-sf-pro"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={(e) => {
+                const reasonInput = (e.target as HTMLButtonElement)?.form?.querySelector('#rejectReason') as HTMLTextAreaElement;
+                const reason = reasonInput?.value || 'No reason provided';
+                handleLeaveAction(rejectModal.requestId, 'reject', reason);
+                setRejectModalOpen({ isOpen: false, requestId: '' });
+              }}
+              className="bg-red-600 hover:bg-red-700 font-sf-pro"
+            >
+              Reject Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -7,6 +7,7 @@ import WelcomeSection from '@/components/dashboard/WelcomeSection';
 import StatsGrid from '@/components/dashboard/StatsGrid';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import TaskList from '@/components/dashboard/TaskList';
+import InfoBanner from '@/components/dashboard/InfoBanner';
 
 type StatItem = {
   name: string;
@@ -57,6 +58,9 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
     <main className="p-8">
       {/* Welcome Message and Controls */}
       <WelcomeSection period={period} setPeriod={setPeriod} />
+      
+      {/* Info Banner - Next Public Holiday */}
+      <InfoBanner />
 
       {/* Stats Grid */}
       <StatsGrid stats={stats} />
@@ -64,7 +68,15 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
       {/* Quick Actions */}
       <div className="mb-10 animate-fade-in delay-400">
         <h3 className="text-2xl font-bold text-slate-900 mb-6 font-sf-pro">Quick Actions</h3>
-        <QuickActions />
+        <QuickActions 
+          employees={window.localStorage.getItem('employees') ? JSON.parse(window.localStorage.getItem('employees') || '[]') : []} 
+          leaveBalances={window.localStorage.getItem('leaveBalances') ? JSON.parse(window.localStorage.getItem('leaveBalances') || '[]') : []}
+          setLeaveRequests={(newLeaveRequests) => {
+            if (window.localStorage.getItem('leaveRequests')) {
+              window.localStorage.setItem('leaveRequests', JSON.stringify(newLeaveRequests));
+            }
+          }}
+        />
       </div>
 
       {/* Charts and Activity Grid */}

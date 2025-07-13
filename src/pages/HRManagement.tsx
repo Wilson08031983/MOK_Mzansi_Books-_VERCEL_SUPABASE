@@ -22,33 +22,9 @@ import PayrollManagement from '@/components/hr/PayrollManagement';
 import TrainingManagement from '@/components/hr/TrainingManagement';
 import ModulePlaceholder from '@/components/hr/ModulePlaceholder';
 import { Employee, getAllEmployees } from '@/services/employeeService';
+import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
 
-interface LeaveRequest {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  employeePosition: string;
-  leaveType: 'annual' | 'sick' | 'maternity' | 'paternity' | 'personal' | 'emergency';
-  startDate: string;
-  endDate: string;
-  days: number;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  requestDate: string;
-  managerId?: string;
-  managerName?: string;
-  approvedDate?: string;
-  rejectedReason?: string;
-}
-
-interface LeaveBalance {
-  employeeId: string;
-  employeeName: string;
-  department: string;
-  annual: { total: number; used: number; remaining: number };
-  sick: { total: number; used: number; remaining: number };
-  personal: { total: number; used: number; remaining: number };
-}
+// Using shared types from LeaveManagementTypes
 
 const HRManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'payroll'>('dashboard');
@@ -256,104 +232,181 @@ const HRManagement: React.FC = () => {
 
   // Sample leave requests
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-    {
-      id: 'LR001',
-      employeeId: 'EMP001',
-      employeeName: 'Sarah Parker',
-      employeePosition: 'Senior Developer',
-      leaveType: 'annual',
-      startDate: '2024-03-15',
-      endDate: '2024-03-22',
-      days: 6,
-      reason: 'Family vacation',
-      status: 'pending',
-      requestDate: '2024-02-20',
-      managerId: 'MGR001',
-      managerName: 'John Smith'
-    },
-    {
-      id: 'LR002',
-      employeeId: 'EMP002',
-      employeeName: 'Michael Johnson',
-      employeePosition: 'UX Designer',
-      leaveType: 'sick',
-      startDate: '2024-02-28',
-      endDate: '2024-03-01',
-      days: 2,
-      reason: 'Flu symptoms',
-      status: 'approved',
-      requestDate: '2024-02-27',
-      managerId: 'MGR002',
-      managerName: 'Jane Doe',
-      approvedDate: '2024-02-27'
-    },
-    {
-      id: 'LR003',
-      employeeId: 'EMP003',
-      employeeName: 'Lisa Williams',
-      employeePosition: 'Project Manager',
-      leaveType: 'maternity',
-      startDate: '2024-04-01',
-      endDate: '2024-07-01',
-      days: 90,
-      reason: 'Maternity leave',
-      status: 'approved',
-      requestDate: '2024-01-15',
-      managerId: 'MGR001',
-      managerName: 'John Smith',
-      approvedDate: '2024-01-16'
-    },
-    {
-      id: 'LR004',
-      employeeId: 'EMP004',
-      employeeName: 'David Brown',
-      employeePosition: 'Finance Officer',
-      leaveType: 'personal',
-      startDate: '2024-03-10',
-      endDate: '2024-03-12',
-      days: 3,
-      reason: 'Personal matters',
-      status: 'rejected',
-      requestDate: '2024-03-05',
-      managerId: 'MGR003',
-      managerName: 'Robert Johnson',
-      rejectedReason: 'Critical project deadline'
-    }
+  {
+    id: 'LR003',
+    employeeId: employees[2]?.id || 'EMP003',
+    employeeNumber: employees[2]?.employeeNumber || 'LM0323003',
+    employeeName: `${employees[2]?.firstName || 'Lisa'} ${employees[2]?.surname || 'Mbatha'}`,
+    employeePosition: 'HR Specialist',
+    leaveType: LeaveTypes.FamilyResponsibility,
+    startDate: '2025-07-29',
+    endDate: '2025-07-29',
+    days: 1,
+    reason: 'Family matter',
+    status: 'pending',
+    requestDate: '2025-07-25'
+  },
+  {
+    id: 'LR001',
+    employeeId: employees[0]?.id || 'EMP001',
+    employeeNumber: employees[0]?.employeeNumber || 'SP0323001',
+    employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
+    employeePosition: 'Accountant',
+    leaveType: LeaveTypes.Annual,
+    startDate: '2025-08-10',
+    endDate: '2025-08-15',
+    days: 5,
+    reason: 'Family vacation',
+    status: 'approved',
+    requestDate: '2025-07-25'
+  },
+  {
+    id: 'LR004',
+    employeeId: employees[1]?.id || 'EMP002',
+    employeeNumber: employees[1]?.employeeNumber || 'JR0323002',
+    employeeName: `${employees[1]?.firstName || 'John'} ${employees[1]?.surname || 'Rodriguez'}`,
+    employeePosition: 'Developer',
+    leaveType: LeaveTypes.Maternity,
+    startDate: '2025-09-01',
+    endDate: '2025-12-31',
+    days: 86,
+    reason: 'Maternity Leave',
+    status: 'rejected',
+    requestDate: '2025-07-15',
+    rejectedReason: 'Please apply for paternity leave instead'
+  },
+  {
+    id: 'LR002',
+    employeeId: employees[1]?.id || 'EMP002',
+    employeeNumber: employees[1]?.employeeNumber || 'JR0323002',
+    employeeName: `${employees[1]?.firstName || 'John'} ${employees[1]?.surname || 'Rodriguez'}`,
+    employeePosition: 'Developer',
+    leaveType: LeaveTypes.Sick,
+    startDate: '2025-07-18',
+    endDate: '2025-07-19',
+    days: 2,
+    reason: 'Flu',
+    status: 'approved',
+    requestDate: '2025-07-17'
+  },
+  {
+    id: 'LR005',
+    employeeId: employees[3]?.id || 'EMP004',
+    employeeNumber: employees[3]?.employeeNumber || 'DM0323004',
+    employeeName: `${employees[3]?.firstName || 'David'} ${employees[3]?.surname || 'Mhlanga'}`,
+    employeePosition: 'Marketing Specialist',
+    leaveType: LeaveTypes.Religious,
+    startDate: '2025-07-30',
+    endDate: '2025-08-01',
+    days: 3,
+    reason: 'Personal matters',
+    status: 'rejected',
+    requestDate: '2025-07-05',
+    rejectedReason: 'Critical project deadline'
+  }
   ]);
 
-  // Sample leave balances
+  // Sample leave balances based on South African BCEA laws
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([
     {
-      employeeId: 'EMP001',
-      employeeName: 'Sarah Parker',
+      employeeId: employees[0]?.id || 'EMP001',
+      employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
       department: 'Development',
-      annual: { total: 21, used: 5, remaining: 16 },
-      sick: { total: 10, used: 2, remaining: 8 },
-      personal: { total: 5, used: 1, remaining: 4 }
+      // Standard leave types
+      annual: { total: 21, used: 5, remaining: 16, accrued: 21 },
+      sick: { total: 30, used: 2, remaining: 28 },
+      familyResponsibility: { total: 3, used: 1, remaining: 2 },
+      maternity: { total: 120, used: 0, remaining: 120 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 2, used: 0, remaining: 2 },  // Religious observance leave
+      study: { total: 5, used: 0, remaining: 5 },      // Study leave
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2023-01-01',
+      employmentLengthMonths: 18,
+      leaveAnniversaryDate: '2025-01-01'
     },
     {
       employeeId: 'EMP002',
       employeeName: 'Michael Johnson',
       department: 'Design',
-      annual: { total: 21, used: 8, remaining: 13 },
-      sick: { total: 10, used: 4, remaining: 6 },
-      personal: { total: 5, used: 0, remaining: 5 }
+      // Standard leave types
+      annual: { total: 21, used: 8, remaining: 13, accrued: 21 },
+      sick: { total: 30, used: 4, remaining: 26 },
+      familyResponsibility: { total: 3, used: 0, remaining: 3 },
+      maternity: { total: 0, used: 0, remaining: 0 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 0, used: 0, remaining: 0 },
+      study: { total: 3, used: 2, remaining: 1 },      // Study leave partially used
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2022-05-15',
+      employmentLengthMonths: 26,
+      leaveAnniversaryDate: '2025-05-15'
     },
     {
       employeeId: 'EMP003',
       employeeName: 'Lisa Williams',
       department: 'Management',
-      annual: { total: 25, used: 12, remaining: 13 },
-      sick: { total: 15, used: 3, remaining: 12 },
-      personal: { total: 7, used: 2, remaining: 5 }
+      // Standard leave types
+      annual: { total: 25, used: 12, remaining: 13, accrued: 25 },
+      sick: { total: 30, used: 3, remaining: 27 },
+      familyResponsibility: { total: 3, used: 2, remaining: 1 },
+      maternity: { total: 120, used: 0, remaining: 120 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 2, used: 1, remaining: 1 },  // Religious leave partially used
+      study: { total: 0, used: 0, remaining: 0 },
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2022-11-10',
+      employmentLengthMonths: 20,
+      leaveAnniversaryDate: '2025-11-10'
     },
     {
       employeeId: 'EMP004',
       employeeName: 'David Brown',
       department: 'Finance',
-      annual: { total: 21, used: 3, remaining: 18 },
-      sick: { total: 10, used: 1, remaining: 9 },
-      personal: { total: 5, used: 0, remaining: 5 }
+      // Standard leave types
+      annual: { total: 21, used: 3, remaining: 18, accrued: 21 },
+      sick: { total: 30, used: 1, remaining: 29 },
+      familyResponsibility: { total: 3, used: 0, remaining: 3 },
+      maternity: { total: 0, used: 0, remaining: 0 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 3, used: 0, remaining: 3 },  // Religious observance leave
+      study: { total: 2, used: 0, remaining: 2 },      // Study leave
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2023-03-01',
+      employmentLengthMonths: 16,
+      leaveAnniversaryDate: '2025-03-01'
     }
   ]);
 
@@ -408,7 +461,14 @@ const HRManagement: React.FC = () => {
 
         {/* Content */}
         <div className="animate-fade-in">
-          {activeTab === 'dashboard' && <HRDashboard metrics={hrMetrics} employees={employees} setEmployees={setEmployees} />}
+          {activeTab === 'dashboard' && <HRDashboard 
+            metrics={hrMetrics} 
+            employees={employees} 
+            setEmployees={setEmployees} 
+            leaveRequests={leaveRequests}
+            setLeaveRequests={setLeaveRequests}
+            leaveBalances={leaveBalances}
+          />}
           {activeTab === 'employees' && <EmployeeManagement employees={employees} setEmployees={setEmployees} />}
           {activeTab === 'directory' && <EmployeeDirectory employees={employees} />}
           {activeTab === 'leave' && (
@@ -417,6 +477,7 @@ const HRManagement: React.FC = () => {
               setLeaveRequests={setLeaveRequests}
               leaveBalances={leaveBalances}
               hrMetrics={hrMetrics}
+              employees={employees}
             />
           )}
           {activeTab === 'attendance' && (
