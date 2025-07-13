@@ -265,7 +265,7 @@ const HRManagement: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="flex flex-wrap gap-2 mb-8">
           {[
-            { id: 'dashboard', label: 'Dashboard', icon: <Users className="h-4 w-4" /> },
+            { id: 'dashboard', label: 'HRM Dashboard', icon: <Users className="h-4 w-4" /> },
             { id: 'employees', label: 'Employees', icon: <Users className="h-4 w-4" /> },
             { id: 'directory', label: 'Employee Directory', icon: <Users className="h-4 w-4" /> },
             { id: 'leave', label: 'Leave Management', icon: <Calendar className="h-4 w-4" /> },
@@ -276,7 +276,7 @@ const HRManagement: React.FC = () => {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as "dashboard" | "employees" | "directory" | "leave" | "attendance" | "recruitment" | "performance" | "payroll")}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-sf-pro ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored'
@@ -284,7 +284,9 @@ const HRManagement: React.FC = () => {
               }`}
             >
               {tab.icon}
-              {tab.label}
+              <span className={tab.id === 'dashboard' ? 'text-xs' : ''}>
+                {tab.label}
+              </span>
             </button>
           ))}
         </div>
