@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft,
   Users,
   Calendar,
   Clock,
-  UserPlus,
+  GraduationCap,
   Target,
   DollarSign,
   FileText,
@@ -19,21 +19,9 @@ import EmployeeManagement from '@/components/hr/EmployeeManagement';
 import EmployeeDirectory from '@/components/hr/EmployeeDirectory';
 import LeaveManagement from '@/components/hr/LeaveManagement';
 import PayrollManagement from '@/components/hr/PayrollManagement';
+import TrainingManagement from '@/components/hr/TrainingManagement';
 import ModulePlaceholder from '@/components/hr/ModulePlaceholder';
-
-interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  position: string;
-  department: string;
-  startDate: string;
-  status: 'active' | 'on-leave' | 'terminated';
-  location: string;
-  employmentType: 'full-time' | 'part-time' | 'contract' | 'intern';
-  avatar?: string;
-}
+import { Employee, getAllEmployees } from '@/services/employeeService';
 
 interface LeaveRequest {
   id: string;
@@ -63,7 +51,7 @@ interface LeaveBalance {
 }
 
 const HRManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'recruitment' | 'performance' | 'payroll'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'payroll'>('dashboard');
 
   // Sample data
   const hrMetrics = {
@@ -75,69 +63,196 @@ const HRManagement: React.FC = () => {
     turnoverRate: 2.3
   };
 
-  // Updated employees data structure
-  const [employees, setEmployees] = useState<Employee[]>([
+  // Initialize with sample employees data structure
+  const [employees, setEmployees] = useState<Employee[]>([]); 
+  
+  // Load employees from localStorage on component mount
+  useEffect(() => {
+    const storedEmployees = getAllEmployees();
+    if (storedEmployees && storedEmployees.length > 0) {
+      setEmployees(storedEmployees);
+    } else {
+      // Fallback to sample data if no data in localStorage
+      setEmployees([
     {
       id: 'EMP001',
-      name: 'Sarah Parker',
+      employeeNumber: 'SP0323001',
+      firstName: 'Sarah',
+      surname: 'Parker',
+      idType: 'ID Number',
+      idValue: '8801156789123',
       email: 'sarah.parker@mokbooks.co.za',
-      phone: '071 234 5678',
+      contactNumber: '071 234 5678',
       position: 'Senior Developer',
       department: 'Development',
       startDate: '2023-03-15',
+      taxPercentage: 25,
       status: 'active',
       location: 'Johannesburg',
-      employmentType: 'full-time'
+      employmentType: 'Full Time',
+      dateOfBirth: '1988-01-15',
+      addressLine1: '123 Main Street',
+      addressLine2: 'Sandton',
+      addressLine3: 'Johannesburg, Gauteng',
+      addressLine4: '2196, South Africa',
+      kinName: 'James',
+      kinSurname: 'Parker',
+      kinRelationship: 'Spouse',
+      kinContactNumber: '072 123 4567',
+      dayShift: true,
+      nightShift: false,
+      flexibleShift: false,
+      accountHolderName: 'Sarah Parker',
+      salary: 45000,
+      paymentCycle: 'Monthly',
+      bankName: 'First National Bank',
+      accountNumber: '62123456789',
+      branchCode: '250655'
     },
     {
       id: 'EMP002',
-      name: 'Michael Johnson',
+      employeeNumber: 'MJ0523001',
+      firstName: 'Michael',
+      surname: 'Johnson',
+      idType: 'ID Number',
+      idValue: '9103215678912',
       email: 'michael.johnson@mokbooks.co.za',
-      phone: '082 345 6789',
+      contactNumber: '082 345 6789',
       position: 'UX Designer',
       department: 'Design',
       startDate: '2023-05-20',
+      taxPercentage: 22,
       status: 'active',
       location: 'Cape Town',
-      employmentType: 'full-time'
+      employmentType: 'Full Time',
+      dateOfBirth: '1991-03-21',
+      addressLine1: '45 Beach Road',
+      addressLine2: 'Sea Point',
+      addressLine3: 'Cape Town, Western Cape',
+      addressLine4: '8001, South Africa',
+      kinName: 'Sarah',
+      kinSurname: 'Johnson',
+      kinRelationship: 'Wife',
+      kinContactNumber: '083 987 6543',
+      dayShift: true,
+      nightShift: false,
+      flexibleShift: true,
+      accountHolderName: 'Michael Johnson',
+      salary: 38000,
+      paymentCycle: 'Monthly',
+      bankName: 'Standard Bank',
+      accountNumber: '102345678',
+      branchCode: '051001'
     },
     {
       id: 'EMP003',
-      name: 'Lisa Williams',
+      employeeNumber: 'LW1122001',
+      firstName: 'Lisa',
+      surname: 'Williams',
+      idType: 'ID Number',
+      idValue: '8506128901234',
       email: 'lisa.williams@mokbooks.co.za',
-      phone: '073 456 7890',
+      contactNumber: '073 456 7890',
       position: 'Project Manager',
       department: 'Management',
       startDate: '2022-11-10',
+      taxPercentage: 28,
       status: 'on-leave',
       location: 'Durban',
-      employmentType: 'full-time'
+      employmentType: 'Full Time',
+      dateOfBirth: '1985-06-12',
+      addressLine1: '78 Umhlanga Rocks Drive',
+      addressLine2: 'Umhlanga',
+      addressLine3: 'Durban, KwaZulu-Natal',
+      addressLine4: '4320, South Africa',
+      kinName: 'Robert',
+      kinSurname: 'Williams',
+      kinRelationship: 'Husband',
+      kinContactNumber: '074 111 2222',
+      dayShift: false,
+      nightShift: false,
+      flexibleShift: true,
+      accountHolderName: 'Lisa Williams',
+      salary: 52000,
+      paymentCycle: 'Monthly',
+      bankName: 'ABSA',
+      accountNumber: '4056781234',
+      branchCode: '632005'
     },
     {
       id: 'EMP004',
-      name: 'David Brown',
+      employeeNumber: 'DB0124001',
+      firstName: 'David',
+      surname: 'Brown',
+      idType: 'ID Number',
+      idValue: '9012115678123',
       email: 'david.brown@mokbooks.co.za',
-      phone: '061 567 8901',
+      contactNumber: '061 567 8901',
       position: 'Finance Officer',
       department: 'Finance',
       startDate: '2024-01-05',
+      taxPercentage: 18,
       status: 'active',
       location: 'Johannesburg',
-      employmentType: 'full-time'
+      employmentType: 'Full Time',
+      dateOfBirth: '1990-12-11',
+      addressLine1: '56 Oxford Road',
+      addressLine2: 'Rosebank',
+      addressLine3: 'Johannesburg, Gauteng',
+      addressLine4: '2196, South Africa',
+      kinName: 'Maria',
+      kinSurname: 'Brown',
+      kinRelationship: 'Mother',
+      kinContactNumber: '082 333 4444',
+      dayShift: true,
+      nightShift: false,
+      flexibleShift: false,
+      accountHolderName: 'David Brown',
+      salary: 35000,
+      paymentCycle: 'Monthly',
+      bankName: 'Nedbank',
+      accountNumber: '1122334455',
+      branchCode: '198765'
     },
     {
       id: 'EMP005',
-      name: 'Emma Wilson',
+      employeeNumber: 'EW0823001',
+      firstName: 'Emma',
+      surname: 'Wilson',
+      idType: 'ID Number',
+      idValue: '9204235678912',
       email: 'emma.wilson@mokbooks.co.za',
-      phone: '084 678 9012',
+      contactNumber: '084 678 9012',
       position: 'Marketing Specialist',
       department: 'Marketing',
       startDate: '2023-08-12',
+      endDate: '2024-06-30',
+      taxPercentage: 15,
       status: 'terminated',
       location: 'Cape Town',
-      employmentType: 'part-time'
+      employmentType: 'Part Time',
+      dateOfBirth: '1992-04-23',
+      addressLine1: '12 Long Street',
+      addressLine2: 'City Centre',
+      addressLine3: 'Cape Town, Western Cape',
+      addressLine4: '8001, South Africa',
+      kinName: 'John',
+      kinSurname: 'Wilson',
+      kinRelationship: 'Father',
+      kinContactNumber: '083 555 6666',
+      dayShift: false,
+      nightShift: true,
+      flexibleShift: false,
+      accountHolderName: 'Emma Wilson',
+      salary: 18000,
+      paymentCycle: 'Monthly',
+      bankName: 'Capitec',
+      accountNumber: '1598753245',
+      branchCode: '470010'
     }
-  ]);
+      ]);
+    }
+  }, []);
 
   // Sample leave requests
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
@@ -270,13 +385,13 @@ const HRManagement: React.FC = () => {
             { id: 'directory', label: 'Employee Directory', icon: <Users className="h-4 w-4" /> },
             { id: 'leave', label: 'Leave Management', icon: <Calendar className="h-4 w-4" /> },
             { id: 'attendance', label: 'Time & Attendance', icon: <Clock className="h-4 w-4" /> },
-            { id: 'recruitment', label: 'Recruitment', icon: <UserPlus className="h-4 w-4" /> },
+            { id: 'training', label: 'Training', icon: <GraduationCap className="h-4 w-4" /> },
             { id: 'performance', label: 'Performance', icon: <Target className="h-4 w-4" /> },
             { id: 'payroll', label: 'Payroll', icon: <DollarSign className="h-4 w-4" /> }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as "dashboard" | "employees" | "directory" | "leave" | "attendance" | "recruitment" | "performance" | "payroll")}
+              onClick={() => setActiveTab(tab.id as "dashboard" | "employees" | "directory" | "leave" | "attendance" | "training" | "performance" | "payroll")}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-sf-pro ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored'
@@ -293,9 +408,9 @@ const HRManagement: React.FC = () => {
 
         {/* Content */}
         <div className="animate-fade-in">
-          {activeTab === 'dashboard' && <HRDashboard metrics={hrMetrics} />}
+          {activeTab === 'dashboard' && <HRDashboard metrics={hrMetrics} employees={employees} setEmployees={setEmployees} />}
           {activeTab === 'employees' && <EmployeeManagement employees={employees} setEmployees={setEmployees} />}
-          {activeTab === 'directory' && <EmployeeDirectory />}
+          {activeTab === 'directory' && <EmployeeDirectory employees={employees} />}
           {activeTab === 'leave' && (
             <LeaveManagement 
               leaveRequests={leaveRequests} 
@@ -311,11 +426,10 @@ const HRManagement: React.FC = () => {
               icon={<Clock className="h-8 w-8 text-white" />}
             />
           )}
-          {activeTab === 'recruitment' && (
-            <ModulePlaceholder
-              title="Recruitment"
-              description="Manage job postings, track candidates, and streamline the hiring process."
-              icon={<UserPlus className="h-8 w-8 text-white" />}
+          {activeTab === 'training' && (
+            <TrainingManagement
+              employees={employees}
+              setEmployees={setEmployees}
             />
           )}
           {activeTab === 'performance' && (
