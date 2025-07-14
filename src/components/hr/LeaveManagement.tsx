@@ -29,6 +29,7 @@ import {
   BriefcaseBusiness
 } from 'lucide-react';
 import NextPublicHolidayDisplay from './NextPublicHolidayDisplay';
+import NewLeaveRequestModal from './NewLeaveRequestModal';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -134,9 +135,10 @@ interface ViewDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   leaveRequest: LeaveRequest | null;
+  onDownload: (attachmentUrl: string | undefined, attachmentName: string | undefined) => void;
 }
 
-const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, leaveRequest }) => {
+const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, leaveRequest, onDownload }) => {
   if (!leaveRequest) return null;
   
   return (
@@ -215,6 +217,23 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, le
               <p className="mt-1 text-red-600 font-sf-pro p-3 bg-red-50 rounded-md border border-red-100">{leaveRequest.rejectedReason}</p>
             </div>
           )}
+          
+          {leaveRequest.attachmentUrl && (
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Attachment</Label>
+              <div className="mt-1 flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="font-sf-pro text-blue-600 hover:text-blue-700 flex items-center space-x-2"
+                  onClick={() => onDownload(leaveRequest.attachmentUrl, leaveRequest.attachmentName)}
+                >
+                  <Download className="h-4 w-4" />
+                  <span>{leaveRequest.attachmentName || 'Download Attachment'}</span>
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         
         <DialogFooter>
@@ -250,6 +269,28 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
       .split(' ')
       .map(word => word.charAt(0).toUpperCase())
       .join('');
+  };
+  
+  // Function to handle file download
+  const handleDownload = (attachmentUrl: string | undefined, attachmentName: string | undefined) => {
+    if (!attachmentUrl) {
+      toast.error('No attachment available');
+      return;
+    }
+    
+    // Create an anchor element and set properties
+    const link = document.createElement('a');
+    link.href = attachmentUrl;
+    link.download = attachmentName || 'attachment';
+    
+    // Append to the document
+    document.body.appendChild(link);
+    
+    // Trigger click
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
   };
   
   // State management
@@ -792,6 +833,18 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                         </>
                       )}
                       
+                      {request.attachmentUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="font-sf-pro text-blue-600 hover:text-blue-700"
+                          onClick={() => handleDownload(request.attachmentUrl, request.attachmentName)}
+                          title="Download Attachment"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -970,6 +1023,8 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                   
                   {/* Other Leave Types - Shown only if used */}
                   {(balance.bereavement?.used > 0 || 
+                   balance.religious?.used > 0 ||
+                   balance.study?.used > 0 ||
                    balance.unpaid?.days > 0) && (
                     <div className="mt-3">
                       <details className="group">
@@ -992,6 +1047,26 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                             </div>
                           )}
                           
+                          {/* Religious Leave */}
+                          {balance.religious?.used > 0 && (
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-xs font-medium text-slate-700 font-sf-pro">Religious:</span>
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                {balance.religious.used} days used
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Study Leave */}
+                          {balance.study?.used > 0 && (
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-xs font-medium text-slate-700 font-sf-pro">Study:</span>
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                {balance.study.used} days used
+                              </span>
+                            </div>
+                          )}
+                          
                           {/* Unpaid Leave */}
                           {balance.unpaid?.days > 0 && (
                             <div className="flex items-center justify-between py-1">
@@ -1001,8 +1076,6 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                               </span>
                             </div>
                           )}
-                          
-                          {/* Add other leave types here when used */}
                         </div>
                       </details>
                     </div>
@@ -1042,29 +1115,23 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
         </CardContent>
       </Card>
       
-      {/* Leave Request Modal - Placeholder component that will be implemented separately */}
-      {isLeaveModalOpen && (
-        <Dialog open={isLeaveModalOpen} onOpenChange={(open) => {
-          if (!open) setIsLeaveModalOpen(false);
-        }}>
-          <DialogContent className="sm:max-w-[600px] bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-slate-900 font-sf-pro">New Leave Request</DialogTitle>
-              <DialogDescription className="text-slate-600 font-sf-pro">
-                Create a new leave request for an employee
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              {/* Placeholder for leave request form - will be implemented separately */}
-              <p className="text-slate-700 font-sf-pro">Leave request form to be implemented separately</p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsLeaveModalOpen(false)} className="font-sf-pro">Cancel</Button>
-              <Button onClick={() => setIsLeaveModalOpen(false)} className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 font-sf-pro">Submit</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* New Leave Request Modal */}
+      <NewLeaveRequestModal 
+        isOpen={isLeaveModalOpen} 
+        onClose={() => setIsLeaveModalOpen(false)}
+        employees={employees || []}
+        onSubmit={(newLeaveRequest) => {
+          // Add the new leave request to the state
+          const updatedRequests = [...leaveRequests, newLeaveRequest];
+          setLeaveRequests(updatedRequests);
+          
+          // Save to localStorage
+          localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
+          
+          // Show success message
+          toast.success('Leave request submitted successfully');
+        }}
+      />
       
       {/* Reject Modal */}
       <Dialog open={rejectModalOpen.isOpen} onOpenChange={(open) => {
@@ -1120,6 +1187,14 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* View Details Modal */}
+      <ViewDetailsModal
+        isOpen={viewDetailsModal.isOpen}
+        onClose={() => setViewDetailsModal({ isOpen: false, leaveRequest: null })}
+        leaveRequest={viewDetailsModal.leaveRequest}
+        onDownload={handleDownload}
+      />
     </div>
   );
 };
