@@ -22,7 +22,11 @@ import {
   Trash2,
   Palmtree,
   Stethoscope,
-  Flower
+  Flower,
+  BookOpen,
+  Book, // Using Book instead of PrayingHands
+  Baby,
+  BriefcaseBusiness
 } from 'lucide-react';
 import NextPublicHolidayDisplay from './NextPublicHolidayDisplay';
 import { toast } from 'sonner';
@@ -35,13 +39,191 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Employee } from '@/services/employeeService';
-import LeaveRequestModal from './LeaveRequestModal';
 import { 
   LeaveRequest, 
   LeaveTypes, 
   calculateBusinessDaysExcludingHolidays,
   LeaveBalance
 } from './LeaveManagementTypes';
+import { LeaveBalanceService } from './LeaveBalanceService';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+// Helper functions for leave management
+const getLeaveTypeIcon = (leaveType: LeaveTypes) => {
+  switch (leaveType) {
+    case LeaveTypes.Annual:
+      return <Palmtree className="h-4 w-4 text-blue-600" />;
+    case LeaveTypes.Sick:
+      return <Stethoscope className="h-4 w-4 text-red-600" />;
+    case LeaveTypes.FamilyResponsibility:
+      return <Users className="h-4 w-4 text-green-600" />;
+    case LeaveTypes.Maternity:
+      return <Baby className="h-4 w-4 text-pink-600" />;
+    case LeaveTypes.Parental:
+      return <Heart className="h-4 w-4 text-purple-600" />;
+    case LeaveTypes.Bereavement:
+      return <Flower className="h-4 w-4 text-slate-600" />;
+    case LeaveTypes.Religious:
+      return <Book className="h-4 w-4 text-yellow-600" />;
+    case LeaveTypes.Study:
+      return <BookOpen className="h-4 w-4 text-orange-600" />;
+    case LeaveTypes.Unpaid:
+      return <AlertCircle className="h-4 w-4 text-gray-600" />;
+    default:
+      return <Calendar className="h-4 w-4 text-slate-600" />;
+  }
+};
+
+const getLeaveTypeColor = (leaveType: LeaveTypes) => {
+  switch (leaveType) {
+    case LeaveTypes.Annual:
+      return 'bg-blue-100 text-blue-800';
+    case LeaveTypes.Sick:
+      return 'bg-red-100 text-red-800';
+    case LeaveTypes.FamilyResponsibility:
+      return 'bg-green-100 text-green-800';
+    case LeaveTypes.Maternity:
+      return 'bg-pink-100 text-pink-800';
+    case LeaveTypes.Parental:
+      return 'bg-purple-100 text-purple-800';
+    case LeaveTypes.Bereavement:
+      return 'bg-slate-100 text-slate-800';
+    case LeaveTypes.Religious:
+      return 'bg-yellow-100 text-yellow-800';
+    case LeaveTypes.Study:
+      return 'bg-orange-100 text-orange-800';
+    case LeaveTypes.Unpaid:
+      return 'bg-gray-100 text-gray-800';
+    default:
+      return 'bg-slate-100 text-slate-800';
+  }
+};
+
+// Get status color for leave request status badges
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'pending':
+      return 'bg-amber-100 text-amber-800';
+    case 'approved':
+      return 'bg-green-100 text-green-800';
+    case 'rejected':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+// Calculate leave working days (excluding weekends and public holidays)
+const calculateLeaveWorkingDays = (startDateString: string, endDateString: string): number => {
+  const startDate = new Date(startDateString);
+  const endDate = new Date(endDateString);
+  return calculateBusinessDaysExcludingHolidays(startDate, endDate);
+};
+
+
+
+// View Details Modal Component
+interface ViewDetailsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  leaveRequest: LeaveRequest | null;
+}
+
+const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, leaveRequest }) => {
+  if (!leaveRequest) return null;
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-slate-900 font-sf-pro">Leave Request Details</DialogTitle>
+          <DialogDescription className="text-slate-600 font-sf-pro">
+            Complete information about this leave request
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <div className="flex flex-col space-y-1.5">
+            <Label className="text-sm font-medium text-slate-700 font-sf-pro">Employee</Label>
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-medium font-sf-pro">
+                {leaveRequest.employeeName?.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div>
+                <p className="font-medium text-slate-900 font-sf-pro">{leaveRequest.employeeName}</p>
+                <p className="text-sm text-slate-600 font-sf-pro">{leaveRequest.employeePosition}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Leave Type</Label>
+              <div className="mt-1 flex items-center space-x-2">
+                {getLeaveTypeIcon(leaveRequest.leaveType)}
+                <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getLeaveTypeColor(leaveRequest.leaveType)}`}>
+                  {leaveRequest.leaveType.charAt(0).toUpperCase() + leaveRequest.leaveType.slice(1)}
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Status</Label>
+              <div className="mt-1">
+                <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getStatusColor(leaveRequest.status)}`}>
+                  {leaveRequest.status.charAt(0).toUpperCase() + leaveRequest.status.slice(1)}
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Start Date</Label>
+              <p className="mt-1 text-slate-800 font-sf-pro">{new Date(leaveRequest.startDate).toLocaleDateString()}</p>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">End Date</Label>
+              <p className="mt-1 text-slate-800 font-sf-pro">{new Date(leaveRequest.endDate).toLocaleDateString()}</p>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Days Requested</Label>
+              <p className="mt-1 text-slate-800 font-sf-pro">{leaveRequest.days} days</p>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Submission Date</Label>
+              <p className="mt-1 text-slate-800 font-sf-pro">{new Date(leaveRequest.requestDate).toLocaleDateString()}</p>
+            </div>
+          </div>
+          
+          <div>
+            <Label className="text-sm font-medium text-slate-700 font-sf-pro">Reason for Leave</Label>
+            <p className="mt-1 text-slate-800 font-sf-pro p-3 bg-white/50 rounded-md border border-slate-200">{leaveRequest.reason}</p>
+          </div>
+          
+          {leaveRequest.rejectedReason && (
+            <div>
+              <Label className="text-sm font-medium text-red-700 font-sf-pro">Rejection Reason</Label>
+              <p className="mt-1 text-red-600 font-sf-pro p-3 bg-red-50 rounded-md border border-red-100">{leaveRequest.rejectedReason}</p>
+            </div>
+          )}
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} className="font-sf-pro">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 interface LeaveManagementProps {
   leaveRequests: LeaveRequest[];
@@ -57,12 +239,38 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
   leaveBalances,
   hrMetrics,
   employees = [] 
-}) => {
+}): JSX.Element => {
+  // Helper functions inside component scope
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('');
+  };
+  
+  // State management
   const [searchQuery, setSearchQuery] = useState('');
   const [leaveStatusFilter, setLeaveStatusFilter] = useState('all');
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<string | LeaveTypes>('all');
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
-  const [rejectModal, setRejectModalOpen] = useState<{ isOpen: boolean; requestId: string }>({ isOpen: false, requestId: '' });
+  
+  // State for reject modal
+  const [rejectModalOpen, setRejectModalOpen] = useState<{
+    isOpen: boolean;
+    requestId: string;
+  }>({ isOpen: false, requestId: '' });
+  
+  // State for view details modal
+  const [viewDetailsModal, setViewDetailsModal] = useState<{
+    isOpen: boolean;
+    leaveRequest: LeaveRequest | null;
+  }>({ isOpen: false, leaveRequest: null });
+  
+  // Using the already defined getStatusColor function above
   
   // Load leave requests and balances from localStorage if available
   useEffect(() => {
@@ -177,17 +385,10 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
 
   // Calculate business days excluding public holidays between two dates
   const calculateLeaveWorkingDays = (startDate: string, endDate: string): number => {
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      return calculateBusinessDaysExcludingHolidays(start, end);
-    } catch (error) {
-      console.error('Error calculating working days:', error);
-      return 0;
-    }
+    return LeaveBalanceService.calculateLeaveWorkingDays(startDate, endDate);
   };
 
-  // Handle leave approval/rejection
+  // Handle leave approval/rejection using LeaveBalanceService
   const handleLeaveAction = (requestId: string, action: 'approve' | 'reject', reason?: string) => {
     // Find the leave request
     const leaveRequest = leaveRequests.find(request => request.id === requestId);
@@ -210,13 +411,18 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
     // Save to localStorage
     localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
     
-    // If approving the leave request, update leave balances
+    // If approving the leave request, update leave balances per South African BCEA rules
     if (action === 'approve') {
-      // Re-calculate business days excluding public holidays
-      const actualLeaveDays = calculateLeaveWorkingDays(
+      // Calculate actual working days (excluding weekends and public holidays)
+      const actualLeaveDays = LeaveBalanceService.calculateLeaveWorkingDays(
         leaveRequest.startDate,
         leaveRequest.endDate
       );
+      
+      if (actualLeaveDays <= 0) {
+        toast.info("No working days in this leave period (all days are weekends or public holidays)");
+        return;
+      }
       
       // Update employee leave balance
       setBalances(currentBalances => {        
@@ -225,113 +431,34 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
           balance => balance.employeeId === leaveRequest.employeeId
         );
         
-        if (employeeBalanceIndex !== -1) {
-          const balance = { ...updatedBalances[employeeBalanceIndex] };
-          
-          // Apply balance updates based on leave type
-          switch(leaveRequest.leaveType) {
-            case LeaveTypes.Annual:
-              if (balance.annual.remaining >= actualLeaveDays) {
-                balance.annual.used += actualLeaveDays;
-                balance.annual.remaining -= actualLeaveDays;
-                toast.success(`Annual leave approved. ${actualLeaveDays} days deducted from balance.`);
-              } else if (balance.annual.remaining > 0) {
-                const unpaidDays = actualLeaveDays - balance.annual.remaining;
-                balance.annual.used += balance.annual.remaining;
-                balance.annual.remaining = 0;
-                balance.unpaid.days += unpaidDays;
-                toast.info(`Partial annual leave approved. ${balance.annual.remaining} days of paid leave and ${unpaidDays} days of unpaid leave.`);
-              } else {
-                balance.unpaid.days += actualLeaveDays;
-                toast.info(`No annual leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
-              }
-              break;
-              
-            case LeaveTypes.Sick:
-              if (balance.sick.remaining >= actualLeaveDays) {
-                balance.sick.used += actualLeaveDays;
-                balance.sick.remaining -= actualLeaveDays;
-                toast.success(`Sick leave approved. ${actualLeaveDays} days deducted from balance.`);
-              } else {
-                balance.unpaid.days += actualLeaveDays;
-                toast.info(`No sick leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
-              }
-              break;
-              
-            case LeaveTypes.FamilyResponsibility:
-              if (balance.familyResponsibility.remaining >= actualLeaveDays) {
-                balance.familyResponsibility.used += actualLeaveDays;
-                balance.familyResponsibility.remaining -= actualLeaveDays;
-                toast.success(`Family responsibility leave approved. ${actualLeaveDays} days deducted from balance.`);
-              } else {
-                balance.unpaid.days += actualLeaveDays;
-                toast.info(`No family responsibility leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
-              }
-              break;
-              
-            case LeaveTypes.Maternity:
-              if (balance.maternity && balance.maternity.remaining >= actualLeaveDays) {
-                balance.maternity.used += actualLeaveDays;
-                balance.maternity.remaining -= actualLeaveDays;
-                toast.success(`Maternity leave approved. ${actualLeaveDays} days deducted from balance.`);
-              } else if (balance.maternity && balance.maternity.remaining > 0) {
-                const unpaidDays = actualLeaveDays - balance.maternity.remaining;
-                balance.maternity.used += balance.maternity.remaining;
-                balance.maternity.remaining = 0;
-                balance.unpaid.days += unpaidDays;
-                toast.info(`Partial maternity leave approved with ${unpaidDays} days as unpaid leave.`);
-              } else {
-                balance.unpaid.days += actualLeaveDays;
-                toast.info(`No maternity leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
-              }
-              break;
-              
-            case LeaveTypes.Parental:
-              if (balance.parental && balance.parental.remaining >= actualLeaveDays) {
-                balance.parental.used += actualLeaveDays;
-                balance.parental.remaining -= actualLeaveDays;
-                toast.success(`Parental leave approved. ${actualLeaveDays} days deducted from balance.`);
-              } else if (balance.parental && balance.parental.remaining > 0) {
-                const unpaidDays = actualLeaveDays - balance.parental.remaining;
-                balance.parental.used += balance.parental.remaining;
-                balance.parental.remaining = 0;
-                balance.unpaid.days += unpaidDays;
-                toast.info(`Partial parental leave approved with ${unpaidDays} days as unpaid leave.`);
-              } else {
-                balance.unpaid.days += actualLeaveDays;
-                toast.info(`No parental leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
-              }
-              break;
-              
-            case LeaveTypes.Bereavement:
-              if (balance.familyResponsibility.remaining >= actualLeaveDays) {
-                balance.familyResponsibility.used += actualLeaveDays;
-                balance.familyResponsibility.remaining -= actualLeaveDays;
-                toast.success(`Bereavement leave approved. ${actualLeaveDays} days deducted from family responsibility leave.`);
-              } else {
-                balance.unpaid.days += actualLeaveDays;
-                toast.info(`No family responsibility leave balance. Approved as ${actualLeaveDays} days of unpaid leave.`);
-              }
-              break;
-              
-            // Additional case for other leave types can be added here
-              
-            case LeaveTypes.Unpaid:
-              // Unpaid leave just tracks days
-              balance.unpaid.days += actualLeaveDays;
-              toast.success(`Unpaid leave approved for ${actualLeaveDays} days.`);
-              break;
-              
-            // Handle other leave types...
-            default:
-              toast.info(`Leave approved but no balance deduction for ${leaveRequest.leaveType}.`);
-              break;
-          }
-          
-          updatedBalances[employeeBalanceIndex] = balance;
-        } else {
-          toast.error(`Could not find leave balance for employee ID: ${leaveRequest.employeeId}`);
+        if (employeeBalanceIndex === -1) {
+          toast.error(`Could not find leave balance for employee ${leaveRequest.employeeName}`);
+          return currentBalances;
         }
+        
+        // First validate if the leave can be approved based on available balance
+        const employeeBalance = updatedBalances[employeeBalanceIndex];
+        const validation = LeaveBalanceService.validateLeaveBalance(leaveRequest, employeeBalance);
+        
+        // If there's insufficient balance and strict validation is required, reject the leave
+        // For now, we're allowing it to proceed with warnings for user flexibility
+        if (!validation.isValid) {
+          // Show warning but still process the leave
+          toast.warning(validation.message);
+        }
+        
+        // Update the leave balance using the service
+        const updatedBalance = LeaveBalanceService.updateLeaveBalances(
+          leaveRequest,
+          employeeBalance,
+          actualLeaveDays
+        );
+        
+        // Also automatically accrue any pending annual leave
+        const balanceWithAccrual = LeaveBalanceService.accrueAnnualLeave(updatedBalance);
+        
+        // Update the employee's balance in the array
+        updatedBalances[employeeBalanceIndex] = balanceWithAccrual;
         
         // Save updated balances to localStorage
         localStorage.setItem('leaveBalances', JSON.stringify(updatedBalances));
@@ -339,12 +466,6 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
       });
     } else if (action === 'reject' && leaveRequest.status === 'approved') {
       // If rejecting a previously approved leave request, restore the leave balance
-      const actualLeaveDays = calculateLeaveWorkingDays(
-        leaveRequest.startDate,
-        leaveRequest.endDate
-      );
-      
-      // Restore employee leave balance
       setBalances(currentBalances => {
         const updatedBalances = [...currentBalances];
         const employeeBalanceIndex = updatedBalances.findIndex(
@@ -352,73 +473,14 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
         );
         
         if (employeeBalanceIndex !== -1) {
-          const balance = { ...updatedBalances[employeeBalanceIndex] };
-          
-          // Restore balance based on leave type
-          switch(leaveRequest.leaveType) {
-            case LeaveTypes.Annual:
-              balance.annual.used -= actualLeaveDays;
-              balance.annual.remaining += actualLeaveDays;
-              toast.info(`Leave rejected. ${actualLeaveDays} days restored to annual leave balance.`);
-              break;
-              
-            case LeaveTypes.Sick:
-              balance.sick.used -= actualLeaveDays;
-              balance.sick.remaining += actualLeaveDays;
-              toast.info(`Leave rejected. ${actualLeaveDays} days restored to sick leave balance.`);
-              break;
-              
-            case LeaveTypes.FamilyResponsibility:
-              balance.familyResponsibility.used -= actualLeaveDays;
-              balance.familyResponsibility.remaining += actualLeaveDays;
-              toast.info(`Leave rejected. ${actualLeaveDays} days restored to family responsibility leave balance.`);
-              break;
-              
-            case LeaveTypes.Maternity:
-              if (balance.maternity) {
-                balance.maternity.used -= actualLeaveDays;
-                balance.maternity.remaining += actualLeaveDays;
-                toast.info(`Leave rejected. ${actualLeaveDays} days restored to maternity leave balance.`);
-              }
-              break;
-              
-            case LeaveTypes.Parental:
-              if (balance.parental) {
-                balance.parental.used -= actualLeaveDays;
-                balance.parental.remaining += actualLeaveDays;
-                toast.info(`Leave rejected. ${actualLeaveDays} days restored to parental leave balance.`);
-              }
-              break;
-              
-            case LeaveTypes.Bereavement:
-              if (balance.bereavement) {
-                balance.bereavement.used -= actualLeaveDays;
-                balance.bereavement.remaining += actualLeaveDays;
-                toast.info(`Leave rejected. ${actualLeaveDays} days restored to bereavement leave balance.`);
-              } else {
-                // If no specific bereavement balance, it might have been from family responsibility
-                balance.familyResponsibility.used -= actualLeaveDays;
-                balance.familyResponsibility.remaining += actualLeaveDays;
-                toast.info(`Leave rejected. ${actualLeaveDays} days restored to family responsibility leave balance.`);
-              }
-              break;
-              
-            case LeaveTypes.Unpaid:
-              balance.unpaid.days -= actualLeaveDays;
-              toast.info(`Unpaid leave rejected.`);
-              break;
-              
-            case LeaveTypes.Study:
-            case LeaveTypes.Religious:
-              // These typically come from annual leave
-              balance.annual.used -= actualLeaveDays;
-              balance.annual.remaining += actualLeaveDays;
-              toast.info(`Leave rejected. ${actualLeaveDays} days restored to annual leave balance.`);
-              break;
-          }
+          // Use the service to restore the balance
+          const updatedBalance = LeaveBalanceService.restoreLeaveBalance(
+            leaveRequest,
+            updatedBalances[employeeBalanceIndex]
+          );
           
           // Update the employee's balance in the array
-          updatedBalances[employeeBalanceIndex] = balance;
+          updatedBalances[employeeBalanceIndex] = updatedBalance;
         }
         
         // Save updated balances to localStorage
@@ -427,27 +489,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
       });
       
       toast.info(`Leave request rejected: ${reason || 'No reason provided'}`);
-    } else if (action === 'reject') {
-      toast.info(`Leave request rejected: ${reason || 'No reason provided'}`);
     }
-  };
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  // Get initials from name
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('');
-  };
-
-  // Handle adding a new leave request
-  const handleLeaveAdded = (newLeave: LeaveRequest) => {
-    setLeaveRequests(prev => [...prev, newLeave]);
-    // Save to localStorage
-    const updatedRequests = [...leaveRequests, newLeave];
-    localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
   };
   
   // Handle deleting a leave request
@@ -750,13 +792,59 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                         </>
                       )}
                       
-                      <Button variant="outline" size="sm" className="font-sf-pro">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="font-sf-pro"
+                        onClick={() => setViewDetailsModal({ isOpen: true, leaveRequest: request })}
+                      >
                         <FileText className="h-4 w-4" />
                       </Button>
                       
-                      <Button variant="outline" size="sm" className="font-sf-pro">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="font-sf-pro">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[180px] bg-white/90 backdrop-blur-lg border border-slate-200 shadow-md rounded-lg">
+                          <DropdownMenuItem
+                            onClick={() => setViewDetailsModal({ isOpen: true, leaveRequest: request })}
+                            className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-slate-700"
+                          >
+                            <Info className="mr-2 h-4 w-4" />
+                            View Full Details
+                          </DropdownMenuItem>
+                          
+                          {request.status === 'pending' && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() => handleLeaveAction(request.id, 'approve')}
+                                className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-green-700"
+                              >
+                                <Check className="mr-2 h-4 w-4" />
+                                Approve Leave
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem
+                                onClick={() => setRejectModalOpen({ isOpen: true, requestId: request.id })}
+                                className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-red-700"
+                              >
+                                <X className="mr-2 h-4 w-4" />
+                                Decline Leave
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteLeaveRequest(request.id)}
+                            className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-red-700"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Request
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
@@ -954,24 +1042,39 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
         </CardContent>
       </Card>
       
-      {/* Leave Request Modal */}
-      <LeaveRequestModal
-        isOpen={isLeaveModalOpen}
-        onClose={() => setIsLeaveModalOpen(false)}
-        employees={employees}
-        onLeaveAdded={handleLeaveAdded}
-        leaveBalances={leaveBalances}
-      />
+      {/* Leave Request Modal - Placeholder component that will be implemented separately */}
+      {isLeaveModalOpen && (
+        <Dialog open={isLeaveModalOpen} onOpenChange={(open) => {
+          if (!open) setIsLeaveModalOpen(false);
+        }}>
+          <DialogContent className="sm:max-w-[600px] bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-slate-900 font-sf-pro">New Leave Request</DialogTitle>
+              <DialogDescription className="text-slate-600 font-sf-pro">
+                Create a new leave request for an employee
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {/* Placeholder for leave request form - will be implemented separately */}
+              <p className="text-slate-700 font-sf-pro">Leave request form to be implemented separately</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsLeaveModalOpen(false)} className="font-sf-pro">Cancel</Button>
+              <Button onClick={() => setIsLeaveModalOpen(false)} className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 font-sf-pro">Submit</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       
       {/* Reject Modal */}
-      <Dialog open={rejectModal.isOpen} onOpenChange={(open) => {
+      <Dialog open={rejectModalOpen.isOpen} onOpenChange={(open) => {
         if (!open) setRejectModalOpen({ isOpen: false, requestId: '' });
       }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold font-sf-pro">Reject Leave Request</DialogTitle>
+            <DialogTitle className="text-xl font-bold font-sf-pro">Decline Leave Request</DialogTitle>
             <DialogDescription className="text-gray-600 font-sf-pro">
-              Please provide a reason for rejecting this leave request.
+              Please provide a reason for declining this leave request.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -988,7 +1091,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     const target = e.target as HTMLTextAreaElement;
-                    handleLeaveAction(rejectModal.requestId, 'reject', target.value);
+                    handleLeaveAction(rejectModalOpen.requestId, 'reject', target.value);
                     setRejectModalOpen({ isOpen: false, requestId: '' });
                   }
                 }}
@@ -1007,7 +1110,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
               onClick={(e) => {
                 const reasonInput = (e.target as HTMLButtonElement)?.form?.querySelector('#rejectReason') as HTMLTextAreaElement;
                 const reason = reasonInput?.value || 'No reason provided';
-                handleLeaveAction(rejectModal.requestId, 'reject', reason);
+                handleLeaveAction(rejectModalOpen.requestId, 'reject', reason);
                 setRejectModalOpen({ isOpen: false, requestId: '' });
               }}
               className="bg-red-600 hover:bg-red-700 font-sf-pro"
