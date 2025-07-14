@@ -99,12 +99,12 @@ export enum LeaveTypes {
   FamilyResponsibility = "Family Responsibility Leave",
   Maternity = "Maternity Leave",
   Parental = "Parental Leave",
-  Adoption = "Adoption Leave",
-  CommissioningParental = "Commissioning Parental Leave",
-  Unpaid = "Unpaid Leave",
-  Bereavement = "Bereavement Leave",
+  Bereavement = "Bereavement Leave", 
   Religious = "Religious Leave",
   Study = "Study Leave",
+  Unpaid = "Unpaid Leave",
+  Adoption = "Adoption Leave",
+  CommissioningParental = "Commissioning Parental Leave",
   Jury = "Jury Service",
   Compensatory = "Compensatory Leave"
 }
@@ -173,7 +173,10 @@ export interface LeaveBalance {
   
   // Status trackers
   onMaternityLeave?: boolean;        // Whether employee is currently on maternity leave
-  jobReserved?: boolean;             // Flag for job reservation during extended leave
+  jobReserved?: boolean;             // Whether job is reserved during maternity leave
+  
+  // Leave accrual tracking
+  lastLeaveAccrualDate?: string;     // Date of last leave accrual calculation
   
   // Employment information for leave accrual calculations
   employmentStartDate: string;       // YYYY-MM-DD format
@@ -209,35 +212,79 @@ export const calculateBusinessDaysExcludingHolidays = (startDate: Date, endDate:
 };
 
 // Initialize standard leave balance for a new employee
-export const initializeLeaveBalance = (employee: {
-  id: string;
-  firstName: string;
-  surname: string;
-  department: string;
-}, employmentDate: string): LeaveBalance => {
-  // Calculate employment length in months
+export const initializeLeaveBalance = (
+  employee: {
+    id: string;
+    firstName: string;
+    surname: string;
+    department: string;
+  },
+  employmentDate: string
+): LeaveBalance => {
   const startDate = new Date(employmentDate);
   const today = new Date();
-  const monthsEmployed = (today.getFullYear() - startDate.getFullYear()) * 12 + 
-    (today.getMonth() - startDate.getMonth());
-  
-  // Calculate annual leave accrual (1.25 days per month)
-  const accruedAnnualLeave = Math.min(15, monthsEmployed * 1.25);
+  const monthsEmployed = (today.getFullYear() - startDate.getFullYear()) * 12 +
+                         (today.getMonth() - startDate.getMonth());
   
   return {
     employeeId: employee.id,
     employeeName: `${employee.firstName} ${employee.surname}`,
     department: employee.department,
-    annual: { total: 15, used: 0, remaining: 15, accrued: accruedAnnualLeave },
-    sick: { total: 30, used: 0, remaining: 30 },
-    familyResponsibility: { total: 3, used: 0, remaining: 3 },
-    maternity: { total: 120, used: 0, remaining: 120 }, // 4 months = ~120 days
-    parental: { total: 10, used: 0, remaining: 10 },
-    adoption: { total: 10, used: 0, remaining: 10 },
-    commissioning: { total: 10, used: 0, remaining: 10 },
-    bereavement: { total: 3, used: 0, remaining: 3 },
-    unpaid: { days: 0 },
+    annual: {
+      total: 15, // SA standard: 15 working days per year for 5-day work week
+      used: 0,
+      remaining: 15,
+      accrued: 0 // This will track monthly accrual of 1.25 days
+    },
+    sick: {
+      total: 30, // SA standard: 30 days in a 3-year cycle
+      used: 0,
+      remaining: 30
+    },
+    familyResponsibility: {
+      total: 3, // SA standard: 3 days per year
+      used: 0,
+      remaining: 3
+    },
+    maternity: {
+      total: 0, // 4 months unpaid per BCEA
+      used: 0,
+      remaining: 0
+    },
+    parental: {
+      total: 10, // 10 days per BCEA
+      used: 0,
+      remaining: 10
+    },
+    bereavement: {
+      total: 0, // Typically covered under family responsibility
+      used: 0,
+      remaining: 0
+    },
+    religious: {
+      total: 0, // Typically unpaid or from annual leave
+      used: 0,
+      remaining: 0
+    },
+    study: {
+      total: 0, // Typically unpaid or company policy
+      used: 0,
+      remaining: 0
+    },
+    adoption: {
+      total: 0,
+      used: 0,
+      remaining: 0
+    },
+    commissioning: {
+      total: 0,
+      used: 0,
+      remaining: 0
+    },
     employmentStartDate: employmentDate,
-    employmentLengthMonths: monthsEmployed
+    employmentLengthMonths: monthsEmployed,
+    onMaternityLeave: false,
+    jobReserved: false,
+    unpaid: { days: 0 },
   };
 };
