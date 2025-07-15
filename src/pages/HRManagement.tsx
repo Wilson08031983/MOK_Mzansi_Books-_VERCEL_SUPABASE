@@ -21,6 +21,7 @@ import LeaveManagement from '@/components/hr/LeaveManagement';
 import PayrollManagement from '@/components/hr/PayrollManagement';
 import TrainingManagement from '@/components/hr/TrainingManagement';
 import ModulePlaceholder from '@/components/hr/ModulePlaceholder';
+import TimeAttendance from '@/components/hr/TimeAttendance';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
 
@@ -481,10 +482,8 @@ const HRManagement: React.FC = () => {
             />
           )}
           {activeTab === 'attendance' && (
-            <ModulePlaceholder
-              title="Time & Attendance"
-              description="Track employee hours, manage timesheets, and monitor attendance patterns."
-              icon={<Clock className="h-8 w-8 text-white" />}
+            <TimeAttendance
+              employees={employees}
             />
           )}
           {activeTab === 'training' && (
