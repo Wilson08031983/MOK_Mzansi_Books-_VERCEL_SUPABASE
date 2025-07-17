@@ -2,6 +2,12 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      window.addEventListener('error', function(event) {
+        console.error('Global error caught:', event.error);
+        document.body.innerHTML = '<div style="padding: 20px; font-family: sans-serif;"><h2>An error occurred</h2><pre style="background: #f8f8f8; padding: 10px; border-radius: 5px; overflow: auto;">' + event.error.stack + '</pre></div>';
+      });
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MOKMzansiBooks - South African Accounting Software</title>

@@ -15,21 +15,36 @@ const AuthProviderContext = createContext<AuthProviderContextType | undefined>(u
 // Provider component that determines which auth implementation to use
 export const AuthProviderSelector = ({ children }: { children: React.ReactNode }) => {
   const [providerType, setProviderType] = useState<AuthProviderType>(() => {
-    // Try to get stored preference, default to 'mock' for now
-    const stored = localStorage.getItem('mokAuthProvider');
-    return (stored as AuthProviderType) || 'mock';
+    try {
+      // Try to get stored preference, default to 'mock' for now
+      const stored = localStorage.getItem('mokAuthProvider');
+      // Validate that it's a valid provider type
+      if (stored === 'mock' || stored === 'supabase') {
+        return stored as AuthProviderType;
+      }
+      return 'mock'; // Default if invalid
+    } catch (error) {
+      console.error('Error retrieving auth provider preference:', error);
+      return 'mock'; // Default to mock on error
+    }
   });
 
   const toggleProvider = () => {
-    const newType: AuthProviderType = providerType === 'mock' ? 'supabase' : 'mock';
-    localStorage.setItem('mokAuthProvider', newType);
-    setProviderType(newType);
-    // Force reload to apply the new auth provider
-    window.location.reload();
+    try {
+      const newType: AuthProviderType = providerType === 'mock' ? 'supabase' : 'mock';
+      localStorage.setItem('mokAuthProvider', newType);
+      setProviderType(newType);
+      // Force reload to apply the new auth provider
+      window.location.reload();
+    } catch (error) {
+      console.error('Error toggling auth provider:', error);
+      // Continue with current provider
+    }
   };
 
   // Wrap with the appropriate auth provider based on the current setting
-  const AuthProviderComponent = providerType === 'mock' ? MockAuthProvider : SupabaseAuthProvider;
+  // Default to MockAuthProvider if anything goes wrong
+  const AuthProviderComponent = providerType === 'supabase' ? SupabaseAuthProvider : MockAuthProvider;
   
   return (
     <AuthProviderContext.Provider value={{ providerType, toggleProvider }}>

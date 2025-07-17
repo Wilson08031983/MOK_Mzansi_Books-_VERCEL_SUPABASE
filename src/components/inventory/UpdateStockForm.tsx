@@ -27,6 +27,7 @@ interface InventoryItem {
 interface UpdateStockFormProps {
   item: InventoryItem | null;
   onClose: () => void;
+  isEditMode?: boolean;
 }
 
 const UpdateStockForm: React.FC<UpdateStockFormProps> = ({ item, onClose }) => {

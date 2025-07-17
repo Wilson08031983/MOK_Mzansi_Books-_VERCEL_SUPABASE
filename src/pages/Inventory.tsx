@@ -122,7 +122,8 @@ const Inventory = () => {
   const [stockHistory, setStockHistory] = useState<StockHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState<string[]>([]);
-  const [statuses] = useState<string[]>(Object.values(STOCK_STATUS));
+  // Filter out any empty values from STOCK_STATUS
+  const [statuses] = useState<string[]>(Object.values(STOCK_STATUS).filter(status => !!status));
   
   // Define loadInventoryData with useCallback to avoid dependency issues
   const loadInventoryData = useCallback((forceRefresh = false) => {
@@ -140,8 +141,9 @@ const Inventory = () => {
       const items = getAllInventoryItems();
       setInventoryItems(items);
       
-      // Extract unique categories
-      const uniqueCategories = Array.from(new Set(items.map(item => item.category)));
+      // Extract unique categories and filter out empty/undefined values
+      const uniqueCategories = Array.from(new Set(items.map(item => item.category)))
+        .filter(category => !!category && category.trim() !== '');
       setCategories(uniqueCategories);
       
       // Get stock history
@@ -485,8 +487,10 @@ const Inventory = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>{category}</SelectItem>
+              {categories
+                .filter(category => !!category && category.trim() !== '')
+                .map((category) => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -497,8 +501,10 @@ const Inventory = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              {statuses.map((status) => (
-                <SelectItem key={status} value={status}>{status}</SelectItem>
+              {statuses
+                .filter(status => !!status && status.trim() !== '')
+                .map((status) => (
+                  <SelectItem key={status} value={status}>{status}</SelectItem>
               ))}
             </SelectContent>
           </Select>

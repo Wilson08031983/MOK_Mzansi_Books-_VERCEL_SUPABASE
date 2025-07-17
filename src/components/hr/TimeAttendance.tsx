@@ -57,6 +57,13 @@ import {
   calculateNightShiftHours
 } from './TimeAttendanceTypes';
 import { LeaveTypes } from './LeaveManagementTypes';
+import { 
+  calculateTimeEntry, 
+  formatHours, 
+  formatCurrency,
+  type TimeCalculationResult 
+} from './AutomatedCalculations';
+import { isPublicHoliday, getPublicHolidayName } from './SouthAfricanHolidays';
 
 interface TimeAttendanceProps {
   employees: Employee[];
@@ -79,13 +86,17 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [dateFilter, setDateFilter] = useState<string | { startDate: Date, endDate: Date }>(format(new Date(), 'yyyy-MM-dd'));
+  const [filteredTimeEntries, setFilteredTimeEntries] = useState<TimeEntry[]>([]);
   
   // State for modals
   const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
   const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
   const [isViewDetailsModalOpen, setIsViewDetailsModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
+  const [selectedTimesheet, setSelectedTimesheet] = useState<WeeklyTimesheet | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
   
   // State for new entry form
   const [newEntry, setNewEntry] = useState<Partial<TimeEntry>>({
@@ -100,11 +111,77 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     isLeave: false
   });
   
+  // State for real-time calculations
+  const [calculationResult, setCalculationResult] = useState<TimeCalculationResult | null>(null);
+  const [selectedEmployeeHourlyRate, setSelectedEmployeeHourlyRate] = useState<number>(0);
+  
   // Get unique departments from employees
   const departments = [...new Set(employees.map(emp => emp.department))];
   
-  // Initialize with sample data
+  // Real-time calculation effect
   useEffect(() => {
+    if (newEntry.date && newEntry.clockIn && newEntry.clockOut && !newEntry.isLeave) {
+      try {
+        const result = calculateTimeEntry({
+          date: newEntry.date,
+          clockIn: newEntry.clockIn,
+          clockOut: newEntry.clockOut,
+          hourlyRate: selectedEmployeeHourlyRate,
+          nightShiftAllowancePercentage: newEntry.nightShiftAllowancePercentage || 10
+        });
+        
+        setCalculationResult(result);
+        
+        // Auto-update the newEntry with calculated values
+        setNewEntry(prev => ({
+          ...prev,
+          totalHours: result.totalHours,
+          regularHours: result.regularHours,
+          overtimeHours: result.overtimeHours,
+          nightShiftHours: result.nightShiftHours,
+          overtimeRate: result.overtimeRate,
+          type: result.entryType,
+          isNightShift: result.isNightShift
+        }));
+      } catch (error) {
+        console.error('Calculation error:', error);
+        setCalculationResult(null);
+      }
+    } else {
+      setCalculationResult(null);
+    }
+  }, [newEntry.date, newEntry.clockIn, newEntry.clockOut, newEntry.nightShiftAllowancePercentage, selectedEmployeeHourlyRate, newEntry.isLeave]);
+  
+  // Update hourly rate when employee is selected
+  useEffect(() => {
+    if (newEntry.employeeId) {
+      const employee = employees.find(e => e.id === newEntry.employeeId);
+      if (employee) {
+        // Calculate hourly rate from monthly salary (assuming 160 hours per month)
+        const hourlyRate = employee.salary / 160;
+        setSelectedEmployeeHourlyRate(hourlyRate);
+      }
+    } else {
+      setSelectedEmployeeHourlyRate(0);
+    }
+  }, [newEntry.employeeId, employees]);
+  
+  // Load data from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedTimeEntries = localStorage.getItem('timeEntries');
+      if (savedTimeEntries) {
+        const parsedEntries = JSON.parse(savedTimeEntries);
+        setTimeEntries(parsedEntries);
+        generateWeeklyTimesheets(parsedEntries);
+        generateAttendanceSummaries(parsedEntries);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to load time entries from localStorage:', error);
+    }
+    
+    // Initialize with sample data if no saved data and employees are available
     if (employees.length > 0 && timeEntries.length === 0) {
       generateSampleTimeEntries();
     }
@@ -216,30 +293,61 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       }
       
       const timesheet = timesheetMap.get(timesheetKey)!;
-      timesheet.timeEntries.push(entry);
-      timesheet.totalRegularHours += entry.regularHours;
-      timesheet.totalOvertimeHours += entry.overtimeHours;
-      timesheet.totalNightShiftHours += entry.nightShiftHours;
+      
+      // Only add the entry if it's not already in the timesheet
+      if (!timesheet.timeEntries.some(te => te.id === entry.id)) {
+        timesheet.timeEntries.push(entry);
+      }
+      
+      // Recalculate totals from all entries instead of incrementing
+      // This ensures accuracy when entries are updated or removed
+      timesheet.totalRegularHours = timesheet.timeEntries.reduce(
+        (sum, te) => sum + te.regularHours, 0
+      );
+      timesheet.totalOvertimeHours = timesheet.timeEntries.reduce(
+        (sum, te) => sum + te.overtimeHours, 0
+      );
+      timesheet.totalNightShiftHours = timesheet.timeEntries.reduce(
+        (sum, te) => sum + te.nightShiftHours, 0
+      );
       
       // Update timesheet status based on entries
-      if (entry.status === TimeEntryStatus.Rejected) {
+      // If any entry is rejected, the timesheet is rejected
+      // If any entry is pending (and none are rejected), the timesheet is pending
+      // Otherwise, the timesheet is approved
+      let hasRejected = false;
+      let hasPending = false;
+      
+      timesheet.timeEntries.forEach(te => {
+        if (te.status === TimeEntryStatus.Rejected) hasRejected = true;
+        if (te.status === TimeEntryStatus.Pending) hasPending = true;
+      });
+      
+      if (hasRejected) {
         timesheet.status = TimeEntryStatus.Rejected;
-      } else if (timesheet.status !== TimeEntryStatus.Rejected && 
-                entry.status === TimeEntryStatus.Pending) {
+      } else if (hasPending) {
         timesheet.status = TimeEntryStatus.Pending;
-      } else if (timesheet.status !== TimeEntryStatus.Rejected && 
-                timesheet.status !== TimeEntryStatus.Pending) {
+      } else {
         timesheet.status = TimeEntryStatus.Approved;
       }
     });
     
-    setWeeklyTimesheets(Array.from(timesheetMap.values()));
+    // Round all hour values to 2 decimal places for consistency
+    const timesheets = Array.from(timesheetMap.values()).map(timesheet => ({
+      ...timesheet,
+      totalRegularHours: parseFloat(timesheet.totalRegularHours.toFixed(2)),
+      totalOvertimeHours: parseFloat(timesheet.totalOvertimeHours.toFixed(2)),
+      totalNightShiftHours: parseFloat(timesheet.totalNightShiftHours.toFixed(2))
+    }));
+    
+    setWeeklyTimesheets(timesheets);
   };
   
   // Generate attendance summaries from time entries
   const generateAttendanceSummaries = (entries: TimeEntry[]) => {
     const summaryMap = new Map<string, AttendanceSummary>();
     
+    // Initialize summaries for all employees
     employees.forEach(employee => {
       summaryMap.set(employee.id, {
         employeeId: employee.id,
@@ -258,59 +366,122 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       });
     });
     
-    // Current month entries
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
+    // Get current date information
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+    
+    // Group entries by employee
+    const entriesByEmployee = new Map<string, TimeEntry[]>();
     
     entries.forEach(entry => {
-      const entryDate = parseISO(entry.date);
-      if (entryDate.getMonth() !== currentMonth || entryDate.getFullYear() !== currentYear) {
-        return; // Skip entries not in current month
+      if (!entriesByEmployee.has(entry.employeeId)) {
+        entriesByEmployee.set(entry.employeeId, []);
       }
-      
-      const summary = summaryMap.get(entry.employeeId);
+      entriesByEmployee.get(entry.employeeId)!.push(entry);
+    });
+    
+    // Process each employee's entries
+    entriesByEmployee.forEach((employeeEntries, employeeId) => {
+      const summary = summaryMap.get(employeeId);
       if (!summary) return;
       
-      if (entry.isLeave) {
-        summary.leaveHoursTaken += entry.totalHours;
-      } else {
-        summary.currentMonthRegularHours += entry.regularHours;
-        summary.currentMonthOvertimeHours += entry.overtimeHours;
-        summary.currentMonthNightShiftHours += entry.nightShiftHours;
+      // Reset counters to ensure accurate recalculation
+      summary.currentMonthRegularHours = 0;
+      summary.currentMonthOvertimeHours = 0;
+      summary.currentMonthNightShiftHours = 0;
+      summary.currentWeekOvertimeHours = 0;
+      summary.currentDayOvertimeHours = 0;
+      summary.leaveHoursTaken = 0;
+      
+      // Count scheduled workdays and attended days for attendance rate
+      let scheduledWorkdays = 0;
+      let attendedDays = 0;
+      let onTimeDays = 0;
+      
+      employeeEntries.forEach(entry => {
+        const entryDate = parseISO(entry.date);
         
-        // Update current week overtime if entry is from current week
-        const today = new Date();
-        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-        
-        if (entryDate >= weekStart && entryDate <= weekEnd) {
-          summary.currentWeekOvertimeHours += entry.overtimeHours;
+        // Process current month entries
+        if (entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear) {
+          if (entry.isLeave) {
+            summary.leaveHoursTaken += entry.totalHours;
+          } else {
+            summary.currentMonthRegularHours += entry.regularHours;
+            summary.currentMonthOvertimeHours += entry.overtimeHours;
+            summary.currentMonthNightShiftHours += entry.nightShiftHours;
+            
+            // Count for attendance metrics
+            scheduledWorkdays++;
+            if (entry.status !== TimeEntryStatus.Rejected) {
+              attendedDays++;
+              
+              // Check if employee was on time (within 5 minutes of scheduled time)
+              const clockInHour = parseInt(entry.clockIn.split(':')[0], 10);
+              const clockInMinute = parseInt(entry.clockIn.split(':')[1], 10);
+              if (clockInHour < 9 || (clockInHour === 9 && clockInMinute <= 5)) {
+                onTimeDays++;
+              }
+            }
+          }
+          
+          // Update current week overtime if entry is from current week
+          if (entryDate >= weekStart && entryDate <= weekEnd) {
+            summary.currentWeekOvertimeHours += entry.overtimeHours;
+          }
+          
+          // Update current day overtime if entry is from today
+          if (isSameDay(entryDate, today)) {
+            summary.currentDayOvertimeHours += entry.overtimeHours;
+          }
         }
-        
-        // Update current day overtime if entry is from today
-        if (isSameDay(entryDate, today)) {
-          summary.currentDayOvertimeHours += entry.overtimeHours;
-        }
+      });
+      
+      // Calculate attendance and punctuality rates
+      if (scheduledWorkdays > 0) {
+        summary.attendanceRate = parseFloat(((attendedDays / scheduledWorkdays) * 100).toFixed(1));
+        summary.punctualityRate = parseFloat(((onTimeDays / attendedDays) * 100).toFixed(1));
       }
+      
+      // Round all hour values to 2 decimal places for consistency
+      summary.currentMonthRegularHours = parseFloat(summary.currentMonthRegularHours.toFixed(2));
+      summary.currentMonthOvertimeHours = parseFloat(summary.currentMonthOvertimeHours.toFixed(2));
+      summary.currentMonthNightShiftHours = parseFloat(summary.currentMonthNightShiftHours.toFixed(2));
+      summary.leaveHoursTaken = parseFloat(summary.leaveHoursTaken.toFixed(2));
     });
     
     setAttendanceSummaries(Array.from(summaryMap.values()));
   };
   
   // Filter time entries based on search and filters
-  const filteredTimeEntries = timeEntries.filter(entry => {
-    const matchesSearch = entry.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         entry.employeeNumber.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    const filtered = timeEntries.filter(entry => {
+      const matchesSearch = entry.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           entry.employeeNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesDepartment = departmentFilter === 'all' || 
+                               employees.find(e => e.id === entry.employeeId)?.department === departmentFilter;
+      
+      const matchesStatus = statusFilter === 'all' || entry.status === statusFilter;
+      
+      // Handle date filtering for both single date and date range
+      let matchesDate = false;
+      if (typeof dateFilter === 'string') {
+        // Single date filter
+        matchesDate = entry.date === dateFilter;
+      } else {
+        // Date range filter
+        const entryDate = new Date(entry.date);
+        matchesDate = entryDate >= dateFilter.startDate && entryDate <= dateFilter.endDate;
+      }
+      
+      return matchesSearch && matchesDepartment && matchesStatus && matchesDate;
+    });
     
-    const matchesDepartment = departmentFilter === 'all' || 
-                             employees.find(e => e.id === entry.employeeId)?.department === departmentFilter;
-    
-    const matchesStatus = statusFilter === 'all' || entry.status === statusFilter;
-    
-    const matchesDate = entry.date === dateFilter;
-    
-    return matchesSearch && matchesDepartment && matchesStatus && matchesDate;
-  });
+    setFilteredTimeEntries(filtered);
+  }, [timeEntries, searchTerm, departmentFilter, statusFilter, dateFilter, employees]);
   
   // Filter weekly timesheets
   const filteredTimesheets = weeklyTimesheets.filter(timesheet => {
@@ -346,40 +517,46 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       return;
     }
     
-    // Calculate hours
-    const clockInHour = parseInt(newEntry.clockIn?.split(':')[0] || '0', 10);
-    const clockInMinute = parseInt(newEntry.clockIn?.split(':')[1] || '0', 10);
-    const clockOutHour = parseInt(newEntry.clockOut?.split(':')[0] || '0', 10);
-    const clockOutMinute = parseInt(newEntry.clockOut?.split(':')[1] || '0', 10);
-    
-    let totalHours = clockOutHour - clockInHour + (clockOutMinute - clockInMinute) / 60;
-    if (totalHours < 0) totalHours += 24; // Handle overnight shifts
-    
-    const regularHours = Math.min(totalHours, 8); // Regular hours capped at 8
-    const overtimeHours = Math.max(0, totalHours - 8); // Overtime after 8 hours
-    
-    // Check overtime limits
-    const isExempt = isExemptFromOvertimeRules(employee.salary * 12);
-    const summary = attendanceSummaries.find(s => s.employeeId === newEntry.employeeId);
-    
-    if (!isExempt && summary) {
-      // Check daily overtime limit (3 hours)
-      if (summary.currentDayOvertimeHours + overtimeHours > 3) {
-        toast.error('Daily overtime limit of 3 hours would be exceeded');
-        return;
-      }
+    // Use automated calculations if not a leave day
+    let calculatedValues;
+    if (!newEntry.isLeave && newEntry.date && newEntry.clockIn && newEntry.clockOut) {
+      calculatedValues = calculateTimeEntry({
+        date: newEntry.date,
+        clockIn: newEntry.clockIn,
+        clockOut: newEntry.clockOut,
+        hourlyRate: selectedEmployeeHourlyRate,
+        nightShiftAllowancePercentage: newEntry.nightShiftAllowancePercentage || 10
+      });
       
-      // Check weekly overtime limit (10 hours)
-      if (summary.currentWeekOvertimeHours + overtimeHours > 10) {
-        toast.error('Weekly overtime limit of 10 hours would be exceeded');
-        return;
+      // Check overtime limits for non-exempt employees
+      const isExempt = isExemptFromOvertimeRules(employee.salary * 12);
+      const summary = attendanceSummaries.find(s => s.employeeId === newEntry.employeeId);
+      
+      if (!isExempt && summary && calculatedValues.overtimeHours > 0) {
+        // Check daily overtime limit (3 hours)
+        if (summary.currentDayOvertimeHours + calculatedValues.overtimeHours > 3) {
+          toast.error('Daily overtime limit of 3 hours would be exceeded');
+          return;
+        }
+        
+        // Check weekly overtime limit (10 hours)
+        if (summary.currentWeekOvertimeHours + calculatedValues.overtimeHours > 10) {
+          toast.error('Weekly overtime limit of 10 hours would be exceeded');
+          return;
+        }
       }
+    } else {
+      // Default values for leave days or incomplete data
+      calculatedValues = {
+        totalHours: 0,
+        regularHours: 0,
+        overtimeHours: 0,
+        nightShiftHours: 0,
+        overtimeRate: OvertimeRateType.Normal,
+        entryType: TimeEntryType.Regular,
+        isNightShift: false
+      };
     }
-    
-    // Calculate night shift hours if applicable
-    const isNightShift = newEntry.isNightShift || false;
-    const nightShiftHours = isNightShift ? 
-      calculateNightShiftHours(newEntry.clockIn || '00:00', newEntry.clockOut || '00:00') : 0;
     
     const newTimeEntry: TimeEntry = {
       id: uuidv4(),
@@ -390,16 +567,16 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       date: newEntry.date || format(new Date(), 'yyyy-MM-dd'),
       clockIn: newEntry.clockIn || '08:00',
       clockOut: newEntry.clockOut || '17:00',
-      totalHours,
-      regularHours,
-      overtimeHours,
-      overtimeRate: newEntry.overtimeRate || OvertimeRateType.Normal,
-      isNightShift,
-      nightShiftHours,
+      totalHours: calculatedValues.totalHours,
+      regularHours: calculatedValues.regularHours,
+      overtimeHours: calculatedValues.overtimeHours,
+      overtimeRate: calculatedValues.overtimeRate,
+      isNightShift: calculatedValues.isNightShift,
+      nightShiftHours: calculatedValues.nightShiftHours,
       nightShiftAllowancePercentage: newEntry.nightShiftAllowancePercentage || 10,
       status: TimeEntryStatus.Pending,
       notes: newEntry.notes,
-      type: newEntry.type || TimeEntryType.Regular,
+      type: calculatedValues.entryType,
       isLeave: newEntry.isLeave || false,
       leaveType: newEntry.isLeave ? newEntry.leaveType : undefined
     };
@@ -408,6 +585,13 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save time entries to localStorage:', error);
+    }
     
     setIsAddEntryModalOpen(false);
     setNewEntry({
@@ -422,25 +606,74 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       isLeave: false
     });
     
-    toast.success('Time entry added successfully');
+    // Reset calculation result
+    setCalculationResult(null);
+    setSelectedEmployeeHourlyRate(0);
+    
+    toast.success('Time entry added successfully with automated calculations');
   };
   
   // Handle updating a time entry
   const handleUpdateTimeEntry = () => {
     if (!selectedEntry) return;
     
+    // Use automated calculations if not a leave day
+    let calculatedValues;
+    if (!selectedEntry.isLeave && selectedEntry.date && selectedEntry.clockIn && selectedEntry.clockOut) {
+      const employee = employees.find(e => e.id === selectedEntry.employeeId);
+      const hourlyRate = employee ? employee.salary / 160 : 0;
+      
+      calculatedValues = calculateTimeEntry({
+        date: selectedEntry.date,
+        clockIn: selectedEntry.clockIn,
+        clockOut: selectedEntry.clockOut,
+        hourlyRate: hourlyRate,
+        nightShiftAllowancePercentage: selectedEntry.nightShiftAllowancePercentage || 10
+      });
+    } else {
+      // Keep existing values for leave days
+      calculatedValues = {
+        totalHours: selectedEntry.totalHours,
+        regularHours: selectedEntry.regularHours,
+        overtimeHours: selectedEntry.overtimeHours,
+        nightShiftHours: selectedEntry.nightShiftHours,
+        overtimeRate: selectedEntry.overtimeRate,
+        entryType: selectedEntry.type,
+        isNightShift: selectedEntry.isNightShift
+      };
+    }
+    
+    // Create updated entry with recalculated hours
+    const updatedSelectedEntry = {
+      ...selectedEntry,
+      totalHours: calculatedValues.totalHours,
+      regularHours: calculatedValues.regularHours,
+      overtimeHours: calculatedValues.overtimeHours,
+      nightShiftHours: calculatedValues.nightShiftHours,
+      overtimeRate: calculatedValues.overtimeRate,
+      type: calculatedValues.entryType,
+      isNightShift: calculatedValues.isNightShift
+    };
+    
     const updatedEntries = timeEntries.map(entry => 
-      entry.id === selectedEntry.id ? selectedEntry : entry
+      entry.id === selectedEntry.id ? updatedSelectedEntry : entry
     );
     
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
     
+    // Save to localStorage
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save time entries to localStorage:', error);
+    }
+    
     setIsEditEntryModalOpen(false);
     setSelectedEntry(null);
     
-    toast.success('Time entry updated successfully');
+    toast.success('Time entry updated successfully with automated calculations');
   };
   
   // Handle deleting a time entry
@@ -449,6 +682,13 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save time entries to localStorage:', error);
+    }
     
     toast.success('Time entry deleted successfully');
   };
@@ -466,6 +706,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
+    generateAttendanceSummaries(updatedEntries);
     
     toast.success('Time entry approved successfully');
   };
@@ -482,8 +723,252 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
+    generateAttendanceSummaries(updatedEntries);
     
     toast.success('Time entry rejected successfully');
+  };
+  
+  // Handle approving a weekly timesheet
+  const handleApproveTimesheet = (timesheetId: string) => {
+    // Find the timesheet
+    const timesheet = weeklyTimesheets.find(ts => ts.id === timesheetId);
+    if (!timesheet) return;
+    
+    // Update all pending time entries in this timesheet to approved
+    const updatedEntries = timeEntries.map(entry => {
+      // Check if this entry belongs to the timesheet (same employee and week)
+      const entryDate = parseISO(entry.date);
+      const weekStart = format(startOfWeek(entryDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      
+      if (entry.employeeId === timesheet.employeeId && 
+          weekStart === timesheet.weekStartDate && 
+          entry.status === TimeEntryStatus.Pending) {
+        return {
+          ...entry,
+          status: TimeEntryStatus.Approved,
+          approvedBy: 'Current User', // Replace with actual user
+          approvedDate: format(new Date(), 'yyyy-MM-dd')
+        };
+      }
+      return entry;
+    });
+    
+    // Update state
+    setTimeEntries(updatedEntries);
+    generateWeeklyTimesheets(updatedEntries);
+    generateAttendanceSummaries(updatedEntries);
+    
+    toast.success('Timesheet approved successfully');
+  };
+  
+  // Handle rejecting a weekly timesheet
+  const handleRejectTimesheet = (timesheetId: string, reason: string) => {
+    // Find the timesheet
+    const timesheet = weeklyTimesheets.find(ts => ts.id === timesheetId);
+    if (!timesheet) return;
+    
+    // Update all pending time entries in this timesheet to rejected
+    const updatedEntries = timeEntries.map(entry => {
+      // Check if this entry belongs to the timesheet (same employee and week)
+      const entryDate = parseISO(entry.date);
+      const weekStart = format(startOfWeek(entryDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      
+      if (entry.employeeId === timesheet.employeeId && 
+          weekStart === timesheet.weekStartDate && 
+          entry.status === TimeEntryStatus.Pending) {
+        return {
+          ...entry,
+          status: TimeEntryStatus.Rejected,
+          rejectedReason: reason
+        };
+      }
+      return entry;
+    });
+    
+    // Update state
+    setTimeEntries(updatedEntries);
+    generateWeeklyTimesheets(updatedEntries);
+    generateAttendanceSummaries(updatedEntries);
+    
+    // Reset state
+    setIsRejectModalOpen(false);
+    setSelectedTimesheet(null);
+    setRejectionReason('');
+    
+    toast.success('Timesheet rejected successfully');
+  };
+  
+  // Handle editing a weekly timesheet
+  const handleEditTimesheet = (timesheetId: string) => {
+    // Find the timesheet
+    const timesheet = weeklyTimesheets.find(ts => ts.id === timesheetId);
+    if (!timesheet) return;
+    
+    // Set the active tab to daily entries
+    setActiveTab('daily');
+    
+    // Get the start and end dates of the timesheet week
+    const startDate = new Date(timesheet.weekStartDate);
+    const endDate = new Date(timesheet.weekEndDate);
+    
+    // Set the date filter to the week of the timesheet
+    setDateFilter({ startDate, endDate });
+    
+    // Get the time entry IDs from the timesheet's timeEntries array
+    const timeEntryIds = timesheet.timeEntries.map(entry => entry.id);
+    
+    // Filter time entries to show only those in this timesheet
+    const filteredEntries = timeEntries.filter(entry => 
+      timeEntryIds.includes(entry.id)
+    );
+    
+    // Set the filtered entries to be displayed
+    setFilteredTimeEntries(filteredEntries);
+    
+    // Filter for this employee
+    setSearchTerm(timesheet.employeeName);
+    
+    toast.success(`Editing timesheet for ${timesheet.employeeName} (${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')})`);
+  };
+  
+  // Handle exporting a weekly timesheet
+  const handleExportTimesheet = (timesheetId: string) => {
+    // Find the timesheet
+    const timesheet = weeklyTimesheets.find(ts => ts.id === timesheetId);
+    if (!timesheet) return;
+
+    // Find the employee
+    const employee = employees.find(emp => emp.id === timesheet.employeeId);
+    if (!employee) return;
+    
+    // Get the time entry IDs from the timesheet's timeEntries array
+    const timeEntryIds = timesheet.timeEntries.map(entry => entry.id);
+    
+    // Get all time entries for this timesheet
+    const timesheetEntries = timeEntries.filter(entry => 
+      timeEntryIds.includes(entry.id)
+    );
+    
+    // Format dates for display
+    const startDate = new Date(timesheet.weekStartDate);
+    const endDate = new Date(timesheet.weekEndDate);
+    const formattedDateRange = `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`;
+    
+    // Create CSV content
+    let csvContent = 'data:text/csv;charset=utf-8,';
+    
+    // Add header with timesheet information
+    csvContent += `Weekly Timesheet - ${timesheet.employeeName}\n`;
+    csvContent += `Week: ${formattedDateRange}\n`;
+    csvContent += `Status: ${timesheet.status}\n\n`;
+    
+    // Add column headers
+    csvContent += 'Date,Day,Clock In,Clock Out,Regular Hours,Overtime Hours,Night Shift Hours,Status,Notes\n';
+    
+    // Sort entries by date
+    const sortedEntries = [...timesheetEntries].sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    
+    // Add entries
+    sortedEntries.forEach(entry => {
+      const entryDate = new Date(entry.date);
+      const row = [
+        format(entryDate, 'yyyy-MM-dd'),
+        format(entryDate, 'EEEE'),
+        entry.clockIn,
+        entry.clockOut,
+        entry.regularHours.toFixed(2),
+        entry.overtimeHours.toFixed(2),
+        entry.nightShiftHours.toFixed(2),
+        entry.status,
+        entry.notes || ''
+      ];
+      
+      // Escape any commas in the data
+      const escapedRow = row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+      csvContent += escapedRow + '\n';
+    });
+    
+    // Add summary row
+    csvContent += `\n"TOTAL","","","","${timesheet.totalRegularHours.toFixed(2)}","${timesheet.totalOvertimeHours.toFixed(2)}","${timesheet.totalNightShiftHours.toFixed(2)}","",""\n`;
+    csvContent += `"Total Hours: ${(timesheet.totalRegularHours + timesheet.totalOvertimeHours + timesheet.totalNightShiftHours).toFixed(2)}"\n`;
+    
+    // Create download link
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Timesheet_${employee.firstName}_${employee.lastName}_${format(startDate, 'yyyyMMdd')}.csv`);
+    document.body.appendChild(link);
+    
+    // Trigger download
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    
+    toast.success('Timesheet exported successfully');
+  };
+  
+  // Handle deleting a weekly timesheet
+  const handleDeleteTimesheet = (timesheetId: string) => {
+    console.log('Delete timesheet called with ID:', timesheetId);
+    
+    // Find the timesheet
+    const timesheet = weeklyTimesheets.find(ts => ts.id === timesheetId);
+    if (!timesheet) {
+      console.error('Timesheet not found:', timesheetId);
+      return;
+    }
+    
+    // Format dates for confirmation message
+    const startDate = new Date(timesheet.weekStartDate);
+    const endDate = new Date(timesheet.weekEndDate);
+    const formattedDateRange = `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`;
+    
+    console.log('Showing confirmation dialog for:', timesheet.employeeName, formattedDateRange);
+    
+    // Use setTimeout to ensure the confirmation dialog appears properly
+    setTimeout(() => {
+      const confirmed = window.confirm(`Are you sure you want to delete this timesheet for ${timesheet.employeeName} (${formattedDateRange})?\n\nThis will remove all time entries for this week and cannot be undone.`);
+      
+      console.log('User confirmation result:', confirmed);
+      
+      if (confirmed) {
+        // Get the time entry IDs from the timesheet's timeEntries array
+        const timeEntryIds = timesheet.timeEntries.map(entry => entry.id);
+        
+        console.log('Deleting time entries:', timeEntryIds);
+        
+        // Filter out all time entries for this timesheet
+        const updatedEntries = timeEntries.filter(entry => 
+          !timeEntryIds.includes(entry.id)
+        );
+        
+        // Update state
+        setTimeEntries(updatedEntries);
+        
+        // Regenerate weekly timesheets and attendance summaries
+        const updatedTimesheets = generateWeeklyTimesheets(updatedEntries);
+        setWeeklyTimesheets(updatedTimesheets);
+        
+        const updatedSummaries = generateAttendanceSummaries(updatedEntries);
+        setAttendanceSummaries(updatedSummaries);
+        
+        // Save to localStorage
+        try {
+          localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+          localStorage.setItem('weeklyTimesheets', JSON.stringify(updatedTimesheets));
+          localStorage.setItem('attendanceSummaries', JSON.stringify(updatedSummaries));
+          
+          toast.success(`Timesheet for ${timesheet.employeeName} (${formattedDateRange}) deleted successfully`);
+          console.log('Timesheet deleted successfully');
+        } catch (error) {
+          console.error('Error saving to localStorage:', error);
+          toast.error('Failed to save changes. Please try again.');
+        }
+      }
+    }, 100);
   };
   
   // Get status badge color
@@ -575,13 +1060,46 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
             
             <div className="flex items-center gap-2">
               <Label htmlFor="date-filter" className="whitespace-nowrap">Date:</Label>
-              <Input
-                id="date-filter"
-                type="date"
-                className="bg-white/80"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-              />
+              {typeof dateFilter === 'string' ? (
+                <Input
+                  id="date-filter"
+                  type="date"
+                  className="bg-white/80"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="date-filter-start"
+                    type="date"
+                    className="bg-white/80"
+                    value={format(dateFilter.startDate, 'yyyy-MM-dd')}
+                    onChange={(e) => setDateFilter({
+                      startDate: new Date(e.target.value),
+                      endDate: dateFilter.endDate
+                    })}
+                  />
+                  <span>to</span>
+                  <Input
+                    id="date-filter-end"
+                    type="date"
+                    className="bg-white/80"
+                    value={format(dateFilter.endDate, 'yyyy-MM-dd')}
+                    onChange={(e) => setDateFilter({
+                      startDate: dateFilter.startDate,
+                      endDate: new Date(e.target.value)
+                    })}
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setDateFilter(format(new Date(), 'yyyy-MM-dd'))}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -601,7 +1119,10 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
             <CardHeader className="pb-2">
               <CardTitle>Daily Time Entries</CardTitle>
               <CardDescription>
-                Time entries for {format(parseISO(dateFilter), 'MMMM d, yyyy')}
+                {typeof dateFilter === 'string' 
+                  ? `Time entries for ${format(parseISO(dateFilter), 'MMMM d, yyyy')}`
+                  : `Time entries for ${format(dateFilter.startDate, 'MMM d')} - ${format(dateFilter.endDate, 'MMM d, yyyy')}`
+                }
               </CardDescription>
             </CardHeader>
             
@@ -628,43 +1149,65 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                             <div className="text-sm text-slate-500">{entry.employeePosition}</div>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center">
-                              <Clock className="h-4 w-4 mr-1 text-slate-500" />
-                              {entry.clockIn}
-                              {entry.isNightShift && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger>
-                                      <Moon className="h-4 w-4 ml-1 text-indigo-500" />
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Night Shift</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
+                            {entry.isLeave ? (
+                              <div className="flex items-center text-yellow-600">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                <span className="text-sm font-medium">On Leave</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center">
+                                <Clock className="h-4 w-4 mr-1 text-slate-500" />
+                                {entry.clockIn}
+                                {entry.isNightShift && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Moon className="h-4 w-4 ml-1 text-indigo-500" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Night Shift</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center">
-                              <Clock className="h-4 w-4 mr-1 text-slate-500" />
-                              {entry.clockOut}
-                            </div>
+                            {entry.isLeave ? (
+                              <div className="flex items-center text-yellow-600">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                <span className="text-sm font-medium">On Leave</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center">
+                                <Clock className="h-4 w-4 mr-1 text-slate-500" />
+                                {entry.clockOut}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-col">
-                              <span>{entry.totalHours.toFixed(2)} total</span>
-                              {entry.overtimeHours > 0 && (
-                                <span className="text-sm text-purple-600">
-                                  {entry.overtimeHours.toFixed(2)} overtime
-                                </span>
-                              )}
-                              {entry.nightShiftHours > 0 && (
-                                <span className="text-sm text-indigo-600">
-                                  {entry.nightShiftHours.toFixed(2)} night hrs
-                                </span>
-                              )}
-                            </div>
+                            {entry.isLeave ? (
+                              <div className="flex items-center">
+                                <Badge className="bg-yellow-100 text-yellow-800 rounded-full px-2 py-1">
+                                  0h (Leave)
+                                </Badge>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col">
+                                <span>{entry.totalHours.toFixed(2)} total</span>
+                                {entry.overtimeHours > 0 && (
+                                  <span className="text-sm text-purple-600">
+                                    {entry.overtimeHours.toFixed(2)} overtime
+                                  </span>
+                                )}
+                                {entry.nightShiftHours > 0 && (
+                                  <span className="text-sm text-indigo-600">
+                                    {entry.nightShiftHours.toFixed(2)} night hrs
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge className={getEntryTypeBadgeColor(entry.type)}>
@@ -848,41 +1391,65 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              {/* Edit Button */}
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={() => {
-                                        // View timesheet details
+                                      onClick={() => handleEditTimesheet(timesheet.id)}
+                                    >
+                                      <Edit className="h-4 w-4 text-blue-500" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Edit Timesheet</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              {/* Export Button */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleExportTimesheet(timesheet.id)}
+                                    >
+                                      <Download className="h-4 w-4 text-slate-500" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Export Timesheet</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              {/* Delete Button */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTimesheet(timesheet.id);
                                       }}
                                     >
-                                      <FileText className="h-4 w-4" />
+                                      <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>View Timesheet</p>
+                                    <p>Delete Timesheet</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                               
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                    >
-                                      <Download className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Download Timesheet</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
+                              {/* Approve/Reject Buttons (only for pending timesheets) */}
                               {timesheet.status === TimeEntryStatus.Pending && (
                                 <>
                                   <TooltipProvider>
@@ -891,6 +1458,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                                         <Button
                                           variant="ghost"
                                           size="icon"
+                                          onClick={() => handleApproveTimesheet(timesheet.id)}
                                         >
                                           <Check className="h-4 w-4 text-green-500" />
                                         </Button>
@@ -907,6 +1475,11 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                                         <Button
                                           variant="ghost"
                                           size="icon"
+                                          onClick={() => {
+                                            setSelectedTimesheet(timesheet);
+                                            setSelectedEntry(null); // Clear any selected entry
+                                            setIsRejectModalOpen(true);
+                                          }}
                                         >
                                           <X className="h-4 w-4 text-red-500" />
                                         </Button>
@@ -994,7 +1567,20 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                               <Moon className="h-4 w-4 ml-1 text-indigo-500" />
                             </div>
                           </TableCell>
-                          <TableCell>{summary.leaveHoursTaken.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              {summary.leaveHoursTaken > 0 ? (
+                                <>
+                                  <Badge className="bg-yellow-100 text-yellow-800 rounded-full px-2 py-1 mr-1">
+                                    {summary.leaveHoursTaken.toFixed(2)}h
+                                  </Badge>
+                                  <Calendar className="h-4 w-4 text-yellow-600" />
+                                </>
+                              ) : (
+                                <span className="text-slate-500">0.00</span>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             {summary.isExemptFromOvertimeRules ? (
                               <Badge className="bg-blue-100 text-blue-800">Exempt</Badge>
@@ -1079,129 +1665,132 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       
       {/* Add Time Entry Modal */}
       <Dialog open={isAddEntryModalOpen} onOpenChange={setIsAddEntryModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Add Time Entry</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[620px] max-w-[95vw] rounded-2xl shadow-md bg-white transition-opacity ease-in-out duration-300">
+          <DialogHeader className="space-y-2 pb-4">
+            <DialogTitle className="text-sm md:text-base font-medium text-gray-800 flex items-center gap-2">
+              <Clock className="h-5 w-5 text-mokm-blue-500" />
+              Add Time Entry
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-500">
               Record a new time entry for an employee.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="employee" className="text-right">
-                Employee
-              </Label>
-              <div className="col-span-3">
-                <Select 
-                  value={newEntry.employeeId} 
-                  onValueChange={(value) => setNewEntry({...newEntry, employeeId: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.firstName} {employee.surname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right">
-                Date
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id="date"
-                  type="date"
-                  value={newEntry.date}
-                  onChange={(e) => setNewEntry({...newEntry, date: e.target.value})}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">
-                Entry Type
-              </Label>
-              <div className="col-span-3">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="is-leave"
-                    checked={newEntry.isLeave}
-                    onCheckedChange={(checked) => 
-                      setNewEntry({...newEntry, isLeave: checked as boolean})
-                    }
-                  />
-                  <Label htmlFor="is-leave">Leave Day</Label>
-                </div>
-              </div>
-            </div>
-            
-            {newEntry.isLeave ? (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="leave-type" className="text-right">
-                  Leave Type
-                </Label>
-                <div className="col-span-3">
+          <div className="space-y-4 py-2">
+            {/* Form Fields Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left Column */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="employee" className="text-sm font-medium text-gray-800">
+                    Employee
+                  </Label>
                   <Select 
-                    value={newEntry.leaveType} 
-                    onValueChange={(value) => setNewEntry({...newEntry, leaveType: value})}
+                    value={newEntry.employeeId} 
+                    onValueChange={(value) => setNewEntry({...newEntry, employeeId: value})}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select leave type" />
+                    <SelectTrigger className="rounded-lg">
+                      <SelectValue placeholder="Select employee" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.values(LeaveTypes).map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
+                      {employees.map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.firstName} {employee.surname}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="clock-in" className="text-right">
-                    Clock In
+                
+                <div className="space-y-2">
+                  <Label htmlFor="date" className="text-sm font-medium text-gray-800">
+                    Date
                   </Label>
-                  <div className="col-span-3">
+                  <Input
+                    id="date"
+                    type="date"
+                    className="rounded-lg"
+                    value={newEntry.date}
+                    onChange={(e) => setNewEntry({...newEntry, date: e.target.value})}
+                  />
+                </div>
+                
+                {!newEntry.isLeave && (
+                  <div className="space-y-2">
+                    <Label htmlFor="clock-in" className="text-sm font-medium text-gray-800">
+                      Clock In
+                    </Label>
                     <Input
                       id="clock-in"
                       type="time"
+                      className="rounded-lg"
                       value={newEntry.clockIn}
                       onChange={(e) => setNewEntry({...newEntry, clockIn: e.target.value})}
                     />
                   </div>
+                )}
+              </div>
+              
+              {/* Right Column */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-800">
+                    Entry Type
+                  </Label>
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border">
+                    <Checkbox
+                      id="is-leave"
+                      checked={newEntry.isLeave}
+                      onCheckedChange={(checked) => 
+                        setNewEntry({...newEntry, isLeave: checked as boolean})
+                      }
+                    />
+                    <Label htmlFor="is-leave" className="text-sm text-gray-700">Leave Day</Label>
+                  </div>
                 </div>
                 
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="clock-out" className="text-right">
-                    Clock Out
-                  </Label>
-                  <div className="col-span-3">
+                {newEntry.isLeave ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="leave-type" className="text-sm font-medium text-gray-800">
+                      Leave Type
+                    </Label>
+                    <Select 
+                      value={newEntry.leaveType} 
+                      onValueChange={(value) => setNewEntry({...newEntry, leaveType: value})}
+                    >
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder="Select leave type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(LeaveTypes).map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="clock-out" className="text-sm font-medium text-gray-800">
+                      Clock Out
+                    </Label>
                     <Input
                       id="clock-out"
                       type="time"
+                      className="rounded-lg"
                       value={newEntry.clockOut}
                       onChange={(e) => setNewEntry({...newEntry, clockOut: e.target.value})}
                     />
                   </div>
-                </div>
+                )}
                 
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">
-                    Night Shift
-                  </Label>
-                  <div className="col-span-3">
-                    <div className="flex items-center space-x-2">
+                {!newEntry.isLeave && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-800">
+                      Night Shift
+                    </Label>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border">
                       <Switch
                         id="night-shift"
                         checked={newEntry.isNightShift}
@@ -1209,77 +1798,174 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                           setNewEntry({...newEntry, isNightShift: checked})
                         }
                       />
-                      <Label htmlFor="night-shift">Night Shift (18:00-06:00)</Label>
-                    </div>
-                  </div>
-                </div>
-                
-                {newEntry.isNightShift && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="night-allowance" className="text-right">
-                      Night Allowance %
-                    </Label>
-                    <div className="col-span-3">
-                      <Input
-                        id="night-allowance"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={newEntry.nightShiftAllowancePercentage}
-                        onChange={(e) => setNewEntry({
-                          ...newEntry, 
-                          nightShiftAllowancePercentage: parseInt(e.target.value) || 10
-                        })}
-                      />
+                      <Label htmlFor="night-shift" className="text-sm text-gray-700">Night Shift (18:00-06:00)</Label>
                     </div>
                   </div>
                 )}
-                
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="overtime-rate" className="text-right">
-                    Overtime Rate
-                  </Label>
-                  <div className="col-span-3">
-                    <Select 
-                      value={newEntry.overtimeRate} 
-                      onValueChange={(value) => 
-                        setNewEntry({...newEntry, overtimeRate: value as OvertimeRateType})
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select overtime rate" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={OvertimeRateType.Normal}>Normal (1.5x)</SelectItem>
-                        <SelectItem value={OvertimeRateType.Sunday}>Sunday (2x)</SelectItem>
-                        <SelectItem value={OvertimeRateType.PublicHoliday}>Public Holiday (2x)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
-            )}
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="notes" className="text-right">
-                Notes
-              </Label>
-              <div className="col-span-3">
-                <Textarea
-                  id="notes"
-                  placeholder="Add any additional notes here..."
-                  value={newEntry.notes || ''}
-                  onChange={(e) => setNewEntry({...newEntry, notes: e.target.value})}
-                />
               </div>
             </div>
+            
+            {/* Night Allowance Percentage (Full Width) */}
+            {!newEntry.isLeave && calculationResult?.isNightShift && (
+              <div className="space-y-2">
+                <Label htmlFor="night-allowance" className="text-sm font-medium text-gray-800">
+                  Night Allowance Percentage
+                </Label>
+                <Input
+                  id="night-allowance"
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="rounded-lg w-full md:w-48"
+                  value={newEntry.nightShiftAllowancePercentage}
+                  onChange={(e) => setNewEntry({
+                    ...newEntry, 
+                    nightShiftAllowancePercentage: parseInt(e.target.value) || 10
+                  })}
+                />
+              </div>
+            )}
+            
+            {/* Notes Section (Full Width) */}
+            <div className="space-y-2">
+              <Label htmlFor="notes" className="text-sm font-medium text-gray-800">
+                Notes
+              </Label>
+              <Textarea
+                id="notes"
+                placeholder="Add any additional notes here..."
+                className="rounded-lg h-24 resize-none"
+                value={newEntry.notes || ''}
+                onChange={(e) => setNewEntry({...newEntry, notes: e.target.value})}
+              />
+            </div>
+            
+            {/* Separator */}
+            {!newEntry.isLeave && calculationResult && (
+              <hr className="border-gray-200 my-4" />
+            )}
+            
+            {/* Automated Calculation Breakdown */}
+            {!newEntry.isLeave && calculationResult && (
+              <div className="mt-4">
+                <Card className="bg-slate-50/80 rounded-2xl border border-slate-200/60 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm md:text-base font-medium text-gray-800 flex items-center gap-2">
+                      <CalendarClock className="h-4 w-4 text-mokm-blue-500" />
+                      Automated Calculation Breakdown
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Date Information */}
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-medium text-gray-700">Date Type:</span>
+                      <div className="flex items-center gap-2">
+                        {isPublicHoliday(newEntry.date || '') && (
+                          <Badge variant="destructive" className="text-xs rounded-full">
+                            {getPublicHolidayName(newEntry.date || '')}
+                          </Badge>
+                        )}
+                        {calculationResult.entryType === 'weekend' && (
+                          <Badge variant="secondary" className="text-xs rounded-full">
+                            Weekend
+                          </Badge>
+                        )}
+                        {calculationResult.entryType === 'regular' && (
+                          <Badge variant="default" className="text-xs rounded-full">
+                            Weekday
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Hours Breakdown */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-gray-800 mb-2">Hours Breakdown</h4>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Total Hours:</span>
+                          <span className="font-medium">{formatHours(calculationResult.totalHours)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Regular Hours:</span>
+                          <span className="font-medium">{formatHours(calculationResult.regularHours)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Overtime Hours:</span>
+                          <span className="font-medium text-orange-600">{formatHours(calculationResult.overtimeHours)}</span>
+                        </div>
+                        {calculationResult.nightShiftHours > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Night Shift Hours:</span>
+                            <span className="font-medium text-blue-600">{formatHours(calculationResult.nightShiftHours)}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Pay Breakdown */}
+                      {selectedEmployeeHourlyRate > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="font-medium text-gray-800 mb-2">Pay Breakdown</h4>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Regular Pay:</span>
+                            <span className="font-medium">{formatCurrency(calculationResult.breakdown.regularPay)}</span>
+                          </div>
+                          {calculationResult.breakdown.overtimePay > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Overtime Pay:</span>
+                              <span className="font-medium text-orange-600">{formatCurrency(calculationResult.breakdown.overtimePay)}</span>
+                            </div>
+                          )}
+                          {calculationResult.breakdown.nightShiftAllowance > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Night Allowance:</span>
+                              <span className="font-medium text-blue-600">{formatCurrency(calculationResult.breakdown.nightShiftAllowance)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t pt-2 mt-2">
+                            <span className="font-semibold text-gray-800">Total Pay:</span>
+                            <span className="font-semibold text-green-600">{formatCurrency(calculationResult.breakdown.totalPay)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Overtime Rate Information */}
+                    <div className="flex justify-between items-center text-sm pt-2 border-t">
+                      <span className="font-medium text-gray-700">Overtime Rate:</span>
+                      <Badge variant={calculationResult.overtimeRate === 'Normal' ? 'default' : 'destructive'} className="text-xs rounded-full">
+                        {calculationResult.overtimeRate === 'Normal' ? '1.5x' : '2.0x'} 
+                        ({calculationResult.overtimeRate})
+                      </Badge>
+                    </div>
+                    
+                    {/* Warnings */}
+                    {calculationResult.warnings.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <div className="flex items-center gap-2 text-amber-600">
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="font-medium text-sm">Compliance Notices:</span>
+                        </div>
+                        <div className="space-y-2">
+                          {calculationResult.warnings.map((warning, index) => (
+                            <div key={index} className="text-xs text-amber-700 bg-amber-50 p-3 rounded-lg border-l-4 border-amber-400">
+                              {warning}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddEntryModalOpen(false)}>
+          <DialogFooter className="flex justify-end space-x-2 mt-4 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsAddEntryModalOpen(false)} className="rounded-lg">
               Cancel
             </Button>
-            <Button onClick={handleAddTimeEntry}>
+            <Button onClick={handleAddTimeEntry} className="rounded-lg bg-mokm-blue-500 hover:bg-mokm-blue-600">
               Add Entry
             </Button>
           </DialogFooter>
@@ -1628,9 +2314,9 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                     variant="outline" 
                     className="border-red-500 text-red-500 hover:bg-red-50"
                     onClick={() => {
-                      // Open rejection dialog
+                      setSelectedEntry(selectedEntry);
                       setIsViewDetailsModalOpen(false);
-                      // Implement rejection dialog
+                      setIsRejectModalOpen(true);
                     }}
                   >
                     <X className="h-4 w-4 mr-2" />
@@ -1638,6 +2324,57 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                   </Button>
                 </div>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Rejection Dialog */}
+      {isRejectModalOpen && (
+        <Dialog open={isRejectModalOpen} onOpenChange={setIsRejectModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject {selectedTimesheet ? 'Timesheet' : 'Time Entry'}</DialogTitle>
+              <DialogDescription>
+                Please provide a reason for rejection.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="rejection-reason">Rejection Reason</Label>
+                <Textarea
+                  id="rejection-reason"
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter reason for rejection"
+                  className="min-h-[100px]"
+                />
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsRejectModalOpen(false);
+                setRejectionReason('');
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => {
+                  if (selectedTimesheet) {
+                    handleRejectTimesheet(selectedTimesheet.id, rejectionReason);
+                  } else if (selectedEntry) {
+                    handleRejectTimeEntry(selectedEntry.id, rejectionReason);
+                  }
+                  setIsRejectModalOpen(false);
+                  setRejectionReason('');
+                }}
+                disabled={!rejectionReason.trim()}
+              >
+                Reject
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

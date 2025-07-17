@@ -32,13 +32,37 @@ class ErrorBoundary extends Component<Props, State> {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     
     this.setState({
+      hasError: true,
       error,
       errorInfo,
     });
 
+    // Log error to console with detailed stack trace
+    console.group('React Error Boundary Details');
+    console.error('Error:', error?.message);
+    console.error('Component Stack:', errorInfo?.componentStack);
+    console.error('Full Error Object:', error);
+    console.groupEnd();
+
     // Call the onError callback if provided
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
+    }
+
+    // Log to localStorage for debugging (will survive page reload)
+    try {
+      const errorLog = JSON.parse(localStorage.getItem('mokErrorLog') || '[]');
+      errorLog.push({
+        timestamp: new Date().toISOString(),
+        message: error?.message,
+        stack: error?.stack,
+        componentStack: errorInfo?.componentStack,
+      });
+      // Keep only the last 5 errors
+      if (errorLog.length > 5) errorLog.shift();
+      localStorage.setItem('mokErrorLog', JSON.stringify(errorLog));
+    } catch (e) {
+      console.error('Failed to log error to localStorage:', e);
     }
   }
 
@@ -51,10 +75,20 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   render() {
-    if (this.state.hasError) {
+    const { hasError, error, errorInfo } = this.state;
+    const { children, fallback } = this.props;
+
+    // Reset the error state if localStorage flag is set
+    if (hasError && localStorage.getItem('mokResetErrorBoundary') === 'true') {
+      localStorage.removeItem('mokResetErrorBoundary');
+      this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+      return children;
+    }
+
+    if (hasError) {
       // Custom fallback UI
-      if (this.props.fallback) {
-        return this.props.fallback;
+      if (fallback) {
+        return fallback;
       }
 
       // Default error UI

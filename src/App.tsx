@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess } from "@/services/localAuthService";
@@ -48,19 +49,37 @@ import WelcomeBack from "./pages/WelcomeBack";
 import AuthReset from "./pages/AuthReset";
 import AuthDebug from "./pages/AuthDebug";
 
-const queryClient = new QueryClient();
+// Setup global error handlers
+safeExecute(() => {
+  setupGlobalErrorHandlers();
+}, undefined, 'Global error handlers setup');
 
-// Initialize global error handlers for crash prevention
-setupGlobalErrorHandlers();
+// Ensure Wilson's CEO account is created
+safeExecute(() => {
+  ensureWilsonHasCEOAccess();
+}, undefined, 'CEO access initialization');
 
-// Safely ensure Wilson's CEO account exists with full admin permissions
-safeExecute(
-  () => ensureWilsonHasCEOAccess(),
-  undefined,
-  'CEO access initialization'
-);
+const App = () => {
+  // Create a new QueryClient instance for each app render with basic configuration
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: 1,
+        retryDelay: 1000,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false
+      }
+    }
+  }));
+  
+  // Clear any previous error conditions on app init
+  useEffect(() => {
+    // Remove any error flags that might prevent the app from rendering
+    localStorage.removeItem('mokResetErrorBoundary');
+    console.log('App initialized successfully');
+  }, []);
 
-const App = () => (
+  return (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -160,6 +179,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </ErrorBoundary>
-);
+  );
+}
 
 export default App;

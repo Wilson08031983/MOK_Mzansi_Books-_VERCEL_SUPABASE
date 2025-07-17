@@ -1,21 +1,38 @@
 
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
-import './index.css';
-import { initializeLocalAuth } from '@/services/localAuthService';
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+import { initializeLocalAuth } from '@/services/localAuthService'
 
-// Initialize local authentication with default users
-initializeLocalAuth();
+// Basic error handlers
+window.addEventListener('error', (event) => {
+  console.error('Global error:', event.error)
+})
 
-const container = document.getElementById("root");
-if (!container) {
-  throw new Error("Root element not found");
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled rejection:', event.reason)
+})
+
+// Initialize authentication
+try {
+  console.log('Initializing local authentication...')
+  initializeLocalAuth()
+} catch (error) {
+  console.error('Auth initialization error:', error)
 }
 
-const root = createRoot(container);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// Mount application
+const rootElement = document.getElementById('root')
+
+if (!rootElement) {
+  console.error('Root element not found')
+  document.body.innerHTML = '<div style="padding:20px">Root element not found</div>'
+} else {
+  const root = ReactDOM.createRoot(rootElement)
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
+}

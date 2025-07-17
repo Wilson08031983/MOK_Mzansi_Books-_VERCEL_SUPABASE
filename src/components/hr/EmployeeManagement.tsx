@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import AddEmployeeModal from '@/components/hr/AddEmployeeModal';
 import { 
   Search,
   Filter,
@@ -20,15 +21,18 @@ import { Button } from '@/components/ui/button';
 
 interface Employee {
   id: string;
-  name: string;
-  email: string;
-  phone: string;
-  position: string;
-  department: string;
-  startDate: string;
-  status: 'active' | 'on-leave' | 'terminated';
-  location: string;
-  employmentType: 'full-time' | 'part-time' | 'contract' | 'intern';
+  firstName?: string;
+  surname?: string;
+  name?: string; // For backward compatibility
+  email?: string;
+  phone?: string;
+  contactNumber?: string; // Alternative field for phone
+  position?: string;
+  department?: string;
+  startDate?: string;
+  status?: 'active' | 'on-leave' | 'terminated';
+  location?: string;
+  employmentType?: string;
   avatar?: string;
 }
 
@@ -42,17 +46,25 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
 
   // Get unique departments
   const departments = Array.from(new Set(employees.map(emp => emp.department)));
 
   // Filter employees
   const filteredEmployees = employees.filter(employee => {
-    const matchesSearch = 
-      employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.id.toLowerCase().includes(searchQuery.toLowerCase());
+    // Get display name (either name or firstName + surname)
+    const displayName = employee.name || 
+      (employee.firstName && employee.surname ? 
+        `${employee.firstName} ${employee.surname}` : 
+        employee.firstName || employee.surname || '');
+    
+    const matchesSearch = searchQuery === '' || (
+      displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (employee.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (employee.position?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (employee.id?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+    );
     
     const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
     const matchesStatus = statusFilter === 'all' || employee.status === statusFilter;
@@ -84,13 +96,25 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
   };
 
   // Format date for display
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
   // Get initials from name
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('');
+  const getInitials = (name?: string) => {
+    if (!name) return '';
+    return name.split(' ').map(n => n && n[0] || '').join('');
+  };
+  
+  // Get full name from employee
+  const getFullName = (employee: Employee) => {
+    if (employee.name) return employee.name;
+    return [employee.firstName, employee.surname].filter(Boolean).join(' ') || 'Unknown';
   };
 
   return (
@@ -101,7 +125,10 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
           <p className="text-slate-600 font-sf-pro">Manage your company workforce</p>
         </div>
         
-        <Button className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro">
+        <Button 
+          className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro"
+          onClick={() => setIsAddEmployeeModalOpen(true)}
+        >
           <UserPlus className="h-4 w-4 mr-2" />
           Add Employee
         </Button>
@@ -172,18 +199,20 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                   <div className="flex items-center">
                     <div className="h-10 w-10 rounded-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-medium font-sf-pro">
                       {employee.avatar ? (
-                        <img src={employee.avatar} alt={employee.name} className="h-10 w-10 rounded-full" />
+                        <img src={employee.avatar} alt={getFullName(employee)} className="h-10 w-10 rounded-full" />
                       ) : (
-                        getInitials(employee.name)
+                        getInitials(getFullName(employee))
                       )}
                     </div>
                     <div className="ml-3">
-                      <div className="font-medium text-slate-900 font-sf-pro">{employee.name}</div>
-                      <div className="text-sm text-slate-600 font-sf-pro">{employee.position}</div>
+                      <div className="font-medium text-slate-900 font-sf-pro">{getFullName(employee)}</div>
+                      <div className="text-sm text-slate-600 font-sf-pro">{employee.position || 'No position'}</div>
                     </div>
                   </div>
-                  <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getStatusBadgeColor(employee.status)}`}>
-                    {employee.status === 'on-leave' ? 'On Leave' : employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
+                  <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getStatusBadgeColor(employee.status || '')}`}>
+                    {!employee.status ? 'Unknown' : 
+                     employee.status === 'on-leave' ? 'On Leave' : 
+                     employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
                   </span>
                 </div>
                 
@@ -194,7 +223,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                         <Mail className="h-5 w-5 text-slate-400 mr-2" />
                         <div>
                           <div className="text-xs text-slate-500 font-sf-pro">Email</div>
-                          <div className="text-sm text-slate-900 font-sf-pro">{employee.email}</div>
+                          <div className="text-sm text-slate-900 font-sf-pro">{employee.email || 'Not provided'}</div>
                         </div>
                       </div>
                       
@@ -202,7 +231,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                         <Phone className="h-5 w-5 text-slate-400 mr-2" />
                         <div>
                           <div className="text-xs text-slate-500 font-sf-pro">Phone</div>
-                          <div className="text-sm text-slate-900 font-sf-pro">{employee.phone}</div>
+                          <div className="text-sm text-slate-900 font-sf-pro">{employee.phone || employee.contactNumber || 'Not provided'}</div>
                         </div>
                       </div>
                       
@@ -210,7 +239,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                         <Building className="h-5 w-5 text-slate-400 mr-2" />
                         <div>
                           <div className="text-xs text-slate-500 font-sf-pro">Department</div>
-                          <div className="text-sm text-slate-900 font-sf-pro">{employee.department}</div>
+                          <div className="text-sm text-slate-900 font-sf-pro">{employee.department || 'Not assigned'}</div>
                         </div>
                       </div>
                       
@@ -254,7 +283,10 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                   Add employees or adjust your filters to see employees
                 </p>
                 <div className="mt-6">
-                  <Button className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro">
+                  <Button 
+                    className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro"
+                    onClick={() => setIsAddEmployeeModalOpen(true)}
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Employee
                   </Button>
@@ -289,6 +321,16 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
           </div>
         </CardContent>
       </Card>
+      
+      {/* Add Employee Modal */}
+      <AddEmployeeModal 
+        isOpen={isAddEmployeeModalOpen} 
+        onClose={() => setIsAddEmployeeModalOpen(false)}
+        onEmployeeAdded={(newEmployee) => {
+          setEmployees(prev => [...prev, newEmployee]);
+          setIsAddEmployeeModalOpen(false);
+        }}
+      />
     </div>
   );
 };

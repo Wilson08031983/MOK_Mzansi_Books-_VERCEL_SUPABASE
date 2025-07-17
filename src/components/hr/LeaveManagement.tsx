@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { format, addMonths } from 'date-fns';
+import { format, addMonths, parseISO, addDays, eachDayOfInterval } from 'date-fns';
+import { formatDate } from './LeaveManagementTypes';
+import { v4 as uuidv4 } from 'uuid';
 import { 
   Search,
   Plus,
@@ -31,6 +33,7 @@ import {
 import NextPublicHolidayDisplay from './NextPublicHolidayDisplay';
 import NewLeaveRequestModal from './NewLeaveRequestModal';
 import { toast } from 'sonner';
+import { TimeEntry, TimeEntryStatus, TimeEntryType, OvertimeRateType } from './TimeAttendanceTypes';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +43,17 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Employee } from '@/services/employeeService';
+
+// Helper function to format string dates as DD/MM/YYYY
+const formatDateString = (dateString: string | undefined): string => {
+  if (!dateString) return '';
+  try {
+    return formatDate(new Date(dateString));
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '';
+  }
+};
 import { 
   LeaveRequest, 
   LeaveTypes, 
@@ -187,12 +201,12 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, le
             
             <div>
               <Label className="text-sm font-medium text-slate-700 font-sf-pro">Start Date</Label>
-              <p className="mt-1 text-slate-800 font-sf-pro">{new Date(leaveRequest.startDate).toLocaleDateString()}</p>
+              <p className="mt-1 text-slate-800 font-sf-pro">{formatDateString(leaveRequest.startDate)}</p>
             </div>
             
             <div>
               <Label className="text-sm font-medium text-slate-700 font-sf-pro">End Date</Label>
-              <p className="mt-1 text-slate-800 font-sf-pro">{new Date(leaveRequest.endDate).toLocaleDateString()}</p>
+              <p className="mt-1 text-slate-800 font-sf-pro">{formatDateString(leaveRequest.endDate)}</p>
             </div>
             
             <div>
@@ -250,10 +264,6 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
   employees = [] 
 }): JSX.Element => {
   // Helper functions inside component scope
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
   const getInitials = (name: string): string => {
     return name.split(' ').map(n => n[0]).join('');
   };
@@ -321,6 +331,82 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
     return searchMatch && statusMatch && leaveTypeMatch && timeMatch;
   });
   
+  // Sync approved leave to Time & Attendance
+  const syncApprovedLeaveToTimeAttendance = (leaveRequest: LeaveRequest) => {
+    try {
+      // Get existing time entries from localStorage
+      const existingTimeEntries = JSON.parse(localStorage.getItem('timeEntries') || '[]') as TimeEntry[];
+      
+      // Find the employee for this leave request
+      const employee = employees?.find(emp => emp.id === leaveRequest.employeeId);
+      if (!employee) {
+        console.error('Employee not found for leave request:', leaveRequest.employeeId);
+        return;
+      }
+      
+      // Generate date range for the leave period
+      const startDate = parseISO(leaveRequest.startDate);
+      const endDate = parseISO(leaveRequest.endDate);
+      const leaveDates = eachDayOfInterval({ start: startDate, end: endDate });
+      
+      // Create leave entries for each day in the range
+      const leaveEntries: TimeEntry[] = leaveDates.map(date => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        
+        // Check if entry already exists for this employee and date
+        const existingEntry = existingTimeEntries.find(
+          entry => entry.employeeId === employee.id && entry.date === dateStr
+        );
+        
+        if (existingEntry) {
+          console.log(`Time entry already exists for ${employee.firstName} ${employee.surname} on ${dateStr}`);
+          return null; // Skip if entry already exists
+        }
+        
+        return {
+          id: uuidv4(),
+          employeeId: employee.id,
+          employeeName: `${employee.firstName} ${employee.surname}`,
+          employeeNumber: employee.employeeNumber,
+          employeePosition: employee.position,
+          date: dateStr,
+          clockIn: '00:00', // Disabled for leave days
+          clockOut: '00:00', // Disabled for leave days
+          totalHours: 0, // 0 hours for leave days
+          regularHours: 0,
+          overtimeHours: 0,
+          overtimeRate: OvertimeRateType.Normal,
+          isNightShift: false,
+          nightShiftHours: 0,
+          nightShiftAllowancePercentage: 0,
+          status: TimeEntryStatus.Approved, // Auto-approved for leave entries
+          notes: `On Leave - ${leaveRequest.leaveType} (Auto-generated from approved leave request)`,
+          approvedBy: 'System',
+          approvedDate: format(new Date(), 'yyyy-MM-dd'),
+          type: TimeEntryType.Regular,
+          isLeave: true,
+          leaveType: leaveRequest.leaveType
+        };
+      }).filter(entry => entry !== null) as TimeEntry[];
+      
+      if (leaveEntries.length > 0) {
+        // Add new leave entries to existing time entries
+        const updatedTimeEntries = [...existingTimeEntries, ...leaveEntries];
+        
+        // Save updated time entries to localStorage
+        localStorage.setItem('timeEntries', JSON.stringify(updatedTimeEntries));
+        
+        console.log(`Successfully created ${leaveEntries.length} leave entries for ${employee.firstName} ${employee.surname}`);
+      } else {
+        console.log('No new leave entries created - all dates already have existing entries');
+      }
+      
+    } catch (error) {
+      console.error('Error syncing leave to time attendance:', error);
+      toast.error('Failed to sync leave to Time & Attendance');
+    }
+  };
+  
   // Handle leave action (approve/reject)
   const handleLeaveAction = (requestId: string, action: 'approve' | 'reject', rejectReason?: string) => {
     const updatedRequests = leaveRequests.map(request => {
@@ -340,9 +426,17 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
     // Save to localStorage for demo purposes
     localStorage.setItem('leaveRequests', JSON.stringify(updatedRequests));
     
+    // Auto-sync approved leaves to Time & Attendance
+    if (action === 'approve') {
+      const approvedRequest = updatedRequests.find(req => req.id === requestId);
+      if (approvedRequest) {
+        syncApprovedLeaveToTimeAttendance(approvedRequest);
+      }
+    }
+    
     // Show toast notification
     if (action === 'approve') {
-      toast.success('Leave request approved successfully');
+      toast.success('Leave request approved and synced to Time & Attendance');
     } else {
       toast.success('Leave request rejected successfully');
     }
@@ -650,7 +744,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                   
                   <div className="flex items-center space-x-1 text-sm text-slate-600 font-sf-pro">
                     <CalendarDays className="h-4 w-4 text-slate-400" />
-                    <span>{formatDate(request.startDate)} to {formatDate(request.endDate)}</span>
+                    <span>{formatDateString(request.startDate)} to {formatDateString(request.endDate)}</span>
                   </div>
                   
                   <div className="flex items-center justify-end md:justify-start">
