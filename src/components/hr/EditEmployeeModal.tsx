@@ -281,35 +281,11 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
               </TabsTrigger>
             </TabsList>
 
-            {/* Admin User Warning */}
-            {isAdminUser && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <Building2 className="h-5 w-5 text-blue-600 mt-0.5" />
-                  <div>
-                    <h4 className="font-medium text-blue-900 font-sf-pro">Company Owner/Admin Account</h4>
-                    <p className="text-sm text-blue-700 font-sf-pro mt-1">
-                      This employee record is synchronized with Company Details. 
-                      To edit Name, Email, Phone, Position, or Address information, 
-                      please update them in <strong>Company Page → Company Details</strong>.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Basic Information Tab */}
             <TabsContent value="basic" className="space-y-4 mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName" className="font-sf-pro flex items-center gap-2">
-                    First Name *
-                    {isAdminUser && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                        Synced from Company Details
-                      </span>
-                    )}
-                  </Label>
+                  <Label htmlFor="firstName" className="font-sf-pro">First Name *</Label>
                   <Input
                     id="firstName"
                     name="firstName"
@@ -323,14 +299,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="surname" className="font-sf-pro flex items-center gap-2">
-                    Surname *
-                    {isAdminUser && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                        Synced from Company Details
-                      </span>
-                    )}
-                  </Label>
+                  <Label htmlFor="surname" className="font-sf-pro">Surname *</Label>
                   <Input
                     id="surname"
                     name="surname"
@@ -344,14 +313,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="font-sf-pro flex items-center gap-2">
-                    Email Address
-                    {isAdminUser && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                        Synced from Company Details
-                      </span>
-                    )}
-                  </Label>
+                  <Label htmlFor="email" className="font-sf-pro">Email Address</Label>
                   <Input
                     id="email"
                     name="email"
@@ -365,14 +327,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="contactNumber" className="font-sf-pro flex items-center gap-2">
-                    Contact Number
-                    {isAdminUser && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                        Synced from Company Details
-                      </span>
-                    )}
-                  </Label>
+                  <Label htmlFor="contactNumber" className="font-sf-pro">Contact Number</Label>
                   <Input
                     id="contactNumber"
                     name="contactNumber"
@@ -420,14 +375,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
             <TabsContent value="employment" className="space-y-4 mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="position" className="font-sf-pro flex items-center gap-2">
-                    Position
-                    {isAdminUser && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                        Synced from Company Details
-                      </span>
-                    )}
-                  </Label>
+                  <Label htmlFor="position" className="font-sf-pro">Position</Label>
                   <Input
                     id="position"
                     name="position"
@@ -569,14 +517,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                 <h3 className="text-lg font-medium text-slate-900 font-sf-pro">Address Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine1" className="font-sf-pro flex items-center gap-2">
-                      Address Line 1
-                      {isAdminUser && (
-                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                          Synced from Company Details
-                        </span>
-                      )}
-                    </Label>
+                    <Label htmlFor="addressLine1" className="font-sf-pro">Address Line 1</Label>
                     <Input
                       id="addressLine1"
                       name="addressLine1"
@@ -589,14 +530,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine2" className="font-sf-pro flex items-center gap-2">
-                      Address Line 2
-                      {isAdminUser && (
-                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                          Synced from Company Details
-                        </span>
-                      )}
-                    </Label>
+                    <Label htmlFor="addressLine2" className="font-sf-pro">Address Line 2</Label>
                     <Input
                       id="addressLine2"
                       name="addressLine2"
@@ -609,14 +543,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine3" className="font-sf-pro flex items-center gap-2">
-                      Address Line 3
-                      {isAdminUser && (
-                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                          Synced from Company Details
-                        </span>
-                      )}
-                    </Label>
+                    <Label htmlFor="addressLine3" className="font-sf-pro">Address Line 3</Label>
                     <Input
                       id="addressLine3"
                       name="addressLine3"
@@ -629,14 +556,7 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine4" className="font-sf-pro flex items-center gap-2">
-                      Address Line 4
-                      {isAdminUser && (
-                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                          Synced from Company Details
-                        </span>
-                      )}
-                    </Label>
+                    <Label htmlFor="addressLine4" className="font-sf-pro">Address Line 4</Label>
                     <Input
                       id="addressLine4"
                       name="addressLine4"

@@ -244,14 +244,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                       )}
                     </div>
                     <div className="ml-3">
-                      <div className="font-medium text-slate-900 font-sf-pro flex items-center gap-2">
-                        {getFullName(employee)}
-                        {isSyncedAdminUser(employee) && (
-                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                            Synced
-                          </span>
-                        )}
-                      </div>
+                      <div className="font-medium text-slate-900 font-sf-pro">{getFullName(employee)}</div>
                       <div className="text-sm text-slate-600 font-sf-pro">{employee.position || 'No position'}</div>
                     </div>
                   </div>
