@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateEmployee, Employee, EmployeeFormData } from '@/services/employeeService';
+import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
 
 interface EditEmployeeModalProps {
   isOpen: boolean;
@@ -179,6 +180,19 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
       
       if (updatedEmployee) {
         toast.success('Employee updated successfully!');
+        
+        // Check if this is the admin/owner employee and sync back to company details
+        if (updatedEmployee.email === 'admin@mokmzansibooks.com' || 
+            (updatedEmployee.position && ['CEO', 'Founder', 'Director', 'Manager'].includes(updatedEmployee.position))) {
+          try {
+            const syncResult = companyEmployeeSyncService.syncEmployeeToCompanyDetails(updatedEmployee);
+            if (syncResult.success) {
+              toast.info('Company details updated to match employee information.');
+            }
+          } catch (syncError) {
+            console.warn('Could not sync employee changes to company details:', syncError);
+          }
+        }
         
         if (onEmployeeUpdated) {
           onEmployeeUpdated(updatedEmployee);

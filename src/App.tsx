@@ -8,6 +8,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess, initializeDefaultUsers } from "@/services/localAuthService";
 import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";
+import { companyEmployeeSyncService } from "@/services/companyEmployeeSyncService";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -97,6 +98,9 @@ const App = () => {
         if (syncResult.syncedCount > 0) {
           console.log(`Synced ${syncResult.syncedCount} default users to HR Management`);
         }
+        
+        // Auto-sync company details to employee records
+        companyEmployeeSyncService.autoSyncCompanyEmployee();
       } catch (error) {
         console.error('Error during user initialization:', error);
       }

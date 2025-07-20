@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Edit, Save, X, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/services/localAuthService';
+import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
 import AuthModal from './AuthModal';
 import CompanyInformationForm from './CompanyInformationForm';
 import ContactPersonForm from './ContactPersonForm';
@@ -25,6 +26,9 @@ const CompanyDetails = () => {
     // Reset the auth state first, then initialize with new credentials
     resetAuthState();
     initializeLocalAuth();
+    
+    // Initialize company details for sync
+    companyEmployeeSyncService.initializeCompanyDetails();
     
     // Notify about the test users available
     toast.info("Admin: admin@mokmzansibooks.com / admin123\nRegular: user@mokmzansibooks.com / user123", {
@@ -195,12 +199,38 @@ const CompanyDetails = () => {
       localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
       
       // Save complete company data (including bank details) for persistence
-      localStorage.setItem('companyDetails', JSON.stringify({
-        ...companyData,
+      const companyDetailsToSave = {
+        companyName: companyData.name,
+        email: companyData.email,
+        phone: companyData.phone,
+        website: companyData.website,
+        ownerName: companyData.contactName,
+        ownerSurname: companyData.contactSurname,
+        ownerPosition: companyData.position,
+        addressLine1: companyData.addressLine1,
+        addressLine2: companyData.addressLine2,
+        addressLine3: companyData.addressLine3,
+        addressLine4: companyData.addressLine4,
         lastUpdated: new Date().toISOString()
-      }));
+      };
       
-      toast.success('Company details saved successfully.');
+      localStorage.setItem('companyDetails', JSON.stringify(companyDetailsToSave));
+      
+      // Sync company details to HR Management employee record
+      try {
+        const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
+        if (syncResult.success) {
+          toast.success('Company details saved and synced to HR Management successfully.');
+        } else {
+          toast.success('Company details saved successfully.');
+          toast.info(`Sync note: ${syncResult.message}`);
+        }
+      } catch (syncError) {
+        console.error('Sync error:', syncError);
+        toast.success('Company details saved successfully.');
+        toast.warning('Note: Could not sync to HR Management. Please check employee records.');
+      }
+      
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving company data:', error);
