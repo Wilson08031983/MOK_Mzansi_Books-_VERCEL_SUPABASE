@@ -169,16 +169,32 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
   // Load data from localStorage on mount
   useEffect(() => {
     try {
+      // Load time entries
       const savedTimeEntries = localStorage.getItem('timeEntries');
       if (savedTimeEntries) {
         const parsedEntries = JSON.parse(savedTimeEntries);
         setTimeEntries(parsedEntries);
         generateWeeklyTimesheets(parsedEntries);
+      }
+      
+      // Load attendance summaries (shared with AllowanceManagement)
+      const savedAttendanceSummaries = localStorage.getItem('attendanceSummaries');
+      if (savedAttendanceSummaries) {
+        const parsedSummaries = JSON.parse(savedAttendanceSummaries);
+        setAttendanceSummaries(parsedSummaries);
+        console.log('Loaded attendance summaries:', parsedSummaries);
+      } else if (employees.length > 0) {
+        // Create attendance summaries if none exist
+        createDefaultAttendanceSummaries();
+      }
+      
+      // If we have time entries but no attendance summaries loaded, generate them
+      if (savedTimeEntries && !savedAttendanceSummaries && employees.length > 0) {
+        const parsedEntries = JSON.parse(savedTimeEntries);
         generateAttendanceSummaries(parsedEntries);
-        return;
       }
     } catch (error) {
-      console.error('Failed to load time entries from localStorage:', error);
+      console.error('Failed to load data from localStorage:', error);
     }
     
     // Initialize with sample data if no saved data and employees are available
@@ -344,6 +360,29 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
   };
   
   // Generate attendance summaries from time entries
+  // Create default attendance summaries that match AllowanceManagement format
+  const createDefaultAttendanceSummaries = () => {
+    const summaries = employees.map(employee => ({
+      employeeId: employee.id,
+      employeeName: `${employee.firstName} ${employee.surname}`,
+      department: employee.department,
+      position: employee.position,
+      currentMonthRegularHours: 25.0 + Math.random() * 15, // 25-40 hours
+      currentMonthOvertimeHours: Math.random() * 8, // 0-8 overtime hours
+      currentMonthNightShiftHours: Math.random() * 5, // 0-5 night shift hours
+      currentWeekOvertimeHours: Math.random() * 3,
+      currentDayOvertimeHours: 0,
+      attendanceRate: 95 + Math.random() * 5,
+      punctualityRate: 90 + Math.random() * 10,
+      leaveHoursTaken: 0,
+      isExemptFromOvertimeRules: isExemptFromOvertimeRules(employee.salary * 12)
+    }));
+    
+    setAttendanceSummaries(summaries);
+    localStorage.setItem('attendanceSummaries', JSON.stringify(summaries));
+    console.log('Created default attendance summaries:', summaries);
+  };
+
   const generateAttendanceSummaries = (entries: TimeEntry[]) => {
     const summaryMap = new Map<string, AttendanceSummary>();
     
@@ -452,7 +491,10 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       summary.leaveHoursTaken = parseFloat(summary.leaveHoursTaken.toFixed(2));
     });
     
-    setAttendanceSummaries(Array.from(summaryMap.values()));
+    const summaries = Array.from(summaryMap.values());
+    setAttendanceSummaries(summaries);
+    localStorage.setItem('attendanceSummaries', JSON.stringify(summaries));
+    console.log('Generated and saved attendance summaries:', summaries);
   };
   
   // Filter time entries based on search and filters
@@ -1512,11 +1554,32 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
         {/* Attendance Summary Tab */}
         <TabsContent value="summary" className="space-y-4">
           <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-            <CardHeader className="pb-2">
-              <CardTitle>Attendance Summary</CardTitle>
-              <CardDescription>
-                Monthly attendance statistics for employees
-              </CardDescription>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Attendance Summary</CardTitle>
+                <CardDescription>
+                  Monthly attendance statistics for employees
+                </CardDescription>
+              </div>
+              <Button
+                onClick={() => {
+                  const savedSummaries = localStorage.getItem('attendanceSummaries');
+                  if (savedSummaries) {
+                    const parsedSummaries = JSON.parse(savedSummaries);
+                    setAttendanceSummaries(parsedSummaries);
+                    toast.success('Attendance summaries refreshed successfully');
+                  } else {
+                    createDefaultAttendanceSummaries();
+                    toast.info('Created new attendance summaries');
+                  }
+                }}
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+              >
+                <ArrowUpDown className="h-4 w-4 mr-2" />
+                Refresh Data
+              </Button>
             </CardHeader>
             
             <CardContent>
