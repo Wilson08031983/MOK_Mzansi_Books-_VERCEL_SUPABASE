@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
-import { ensureWilsonHasCEOAccess } from "@/services/localAuthService";
+import { ensureWilsonHasCEOAccess, initializeDefaultUsers } from "@/services/localAuthService";
+import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -48,6 +49,7 @@ import ResetPassword from "./pages/ResetPassword";
 import WelcomeBack from "./pages/WelcomeBack";
 import AuthReset from "./pages/AuthReset";
 import AuthDebug from "./pages/AuthDebug";
+import ServiceTestPanel from "./components/ServiceTestPanel";
 
 // Setup global error handlers
 safeExecute(() => {
@@ -78,6 +80,30 @@ const App = () => {
     localStorage.removeItem('mokResetErrorBoundary');
     console.log('App initialized successfully');
   }, []);
+  
+  // Initialize default users in a separate effect to avoid React rendering conflicts
+  useEffect(() => {
+    // Use setTimeout to delay initialization until after initial render
+    const initTimer = setTimeout(() => {
+      try {
+        // Initialize default users (admin@mokmzansibooks.com and user@mokmzansibooks.com)
+        initializeDefaultUsers();
+        
+        // Ensure Wilson has CEO access
+        ensureWilsonHasCEOAccess();
+        
+        // Sync default users to HR Management
+        const syncResult = teamEmployeeSyncService.syncDefaultUsers();
+        if (syncResult.syncedCount > 0) {
+          console.log(`Synced ${syncResult.syncedCount} default users to HR Management`);
+        }
+      } catch (error) {
+        console.error('Error during user initialization:', error);
+      }
+    }, 1000); // Delay by 1 second
+    
+    return () => clearTimeout(initTimer); // Clean up timer on unmount
+  }, []); // Empty dependency array ensures this only runs once
 
   return (
   <ErrorBoundary>
@@ -107,6 +133,7 @@ const App = () => {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth-reset" element={<AuthReset />} />
             <Route path="/auth-debug" element={<AuthDebug />} />
+            <Route path="/service-test" element={<ServiceTestPanel />} />
             <Route 
               path="/welcome-back" 
               element={

@@ -3,7 +3,7 @@
 import { getDefaultPermissions, getAdminPermissions, UserPermissions } from './permissionService';
 
 // Define user roles and types
-type UserRole = 'CEO' | 'Manager' | 'Bookkeeper' | 'Director' | 'Founder' | 'Staff';
+export type UserRole = 'CEO' | 'Manager' | 'Bookkeeper' | 'Director' | 'Founder' | 'Staff';
 const ADMIN_ROLES: UserRole[] = ['CEO', 'Manager', 'Bookkeeper', 'Director', 'Founder'];
 
 // Type for stored user credentials
@@ -52,17 +52,65 @@ const safeSet = <T>(key: string, value: T): void => {
   }
 };
 
-// Type guard for user role
-const isValidUserRole = (role: string): role is UserRole => 
-  [...ADMIN_ROLES, 'Staff'].includes(role as UserRole);
+// Helper function for safe string handling
+const safeString = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
 
-// Initialize with default admin user if no users exist
-export const initializeAuth = (): void => {
+// Helper function for safe localStorage access
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      console.error(`Error getting localStorage key "${key}":`, error);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Error removing localStorage key "${key}":`, error);
+    }
+  }
+};
+
+// Check if a role is an admin role
+export const isAdminRole = (role: string): boolean => {
+  return ADMIN_ROLES.includes(role as UserRole);
+};
+
+// Save user permissions to localStorage
+const saveUserPermissions = (userId: string, permissions: UserPermissions): void => {
+  try {
+    const permissionsKey = `user_permissions_${userId}`;
+    localStorage.setItem(permissionsKey, JSON.stringify(permissions));
+  } catch (error) {
+    console.error('Error saving user permissions:', error);
+  }
+};
+
+// Type guard for user role
+const isUserRole = (role: string): role is UserRole => {
+  return [...ADMIN_ROLES, 'Staff'].includes(role as UserRole);
+};
+
+// Initialize with default admin and regular users if no users exist
+export const initializeDefaultUsers = (): void => {
   const credentials = safeGet<StoredCredentials>('userCredentials', {});
   
   if (Object.keys(credentials).length === 0) {
-    // Create default admin user if no users exist
-    const defaultAdmin: StoredUserCredential = {
+    // Create default admin user
+    const adminUser: StoredUserCredential = {
       email: 'admin@mokmzansibooks.com',
       password: 'admin123',
       fullName: 'Admin User',
@@ -70,9 +118,64 @@ export const initializeAuth = (): void => {
       permissions: getAdminPermissions()
     };
     
-    credentials['default-admin'] = defaultAdmin;
-    safeSet('userCredentials', credentials);
+    // Create default regular user
+    const regularUser: StoredUserCredential = {
+      email: 'user@mokmzansibooks.com',
+      password: 'user123',
+      fullName: 'Regular User',
+      role: 'Staff',
+      permissions: getDefaultPermissions()
+    };
+    
+    credentials['default-admin'] = adminUser;
+    credentials['default-user'] = regularUser;
+    safeSet<StoredCredentials>('userCredentials', credentials);
+  } else {
+    // Check for and add specific users if they don't exist
+    let adminExists = false;
+    let regularUserExists = false;
+    
+    // Check if admin and regular user exist
+    Object.values(credentials).forEach(user => {
+      if (user.email === 'admin@mokmzansibooks.com') adminExists = true;
+      if (user.email === 'user@mokmzansibooks.com') regularUserExists = true;
+    });
+    
+    // Add admin if not exists
+    if (!adminExists) {
+      const adminUser: StoredUserCredential = {
+        email: 'admin@mokmzansibooks.com',
+        password: 'admin123',
+        fullName: 'Admin User',
+        role: 'Manager',
+        permissions: getAdminPermissions()
+      };
+      credentials['default-admin'] = adminUser;
+    }
+    
+    // Add regular user if not exists
+    if (!regularUserExists) {
+      const regularUser: StoredUserCredential = {
+        email: 'user@mokmzansibooks.com',
+        password: 'user123',
+        fullName: 'Regular User',
+        role: 'Staff',
+        permissions: getDefaultPermissions()
+      };
+      credentials['default-user'] = regularUser;
+    }
+    
+    // Save any changes
+    if (!adminExists || !regularUserExists) {
+      safeSet<StoredCredentials>('userCredentials', credentials);
+    }
   }
+};
+
+// Initialize auth system
+export const initializeAuth = (): void => {
+  // Initialize default users
+  initializeDefaultUsers();
 };
 
 // Authenticate user with email and password
@@ -84,53 +187,76 @@ export const authenticateUser = async (
     if (!email || !password) {
       return { user: null, error: 'Email and password are required' };
     }
-
+    
     const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    
+    // Find user with matching email (case insensitive)
     const userEntry = Object.entries(credentials).find(
       ([_, cred]) => cred.email.toLowerCase() === email.toLowerCase()
     );
-
+    
     if (!userEntry) {
       return { user: null, error: 'Invalid email or password' };
     }
-
-    const [userId, userCreds] = userEntry;
-
-    if (userCreds.password !== password) {
+    
+    const [userId, userCred] = userEntry;
+    
+    // Verify password
+    if (userCred.password !== password) {
       return { user: null, error: 'Invalid email or password' };
     }
-
+    
+    // Create user object
     const user: AuthUser = {
       id: userId,
-      email: userCreds.email,
-      fullName: userCreds.fullName,
-      role: userCreds.role,
-      permissions: userCreds.permissions
+      email: userCred.email,
+      fullName: userCred.fullName,
+      role: userCred.role,
+      permissions: userCred.permissions,
+      user_metadata: {
+        role: userCred.role,
+        first_name: userCred.fullName?.split(' ')[0] || '',
+        last_name: userCred.fullName?.split(' ').slice(1).join(' ') || '',
+        company_name: 'MOK Mzansi Books',
+        phone: ''
+      }
     };
-
+    
     // Store current user in localStorage
     safeSet('currentUser', user);
     
     return { user, error: null };
   } catch (error) {
-    console.error('Authentication error:', error);
-    return { user: null, error: 'An error occurred during authentication' };
+    console.error('Error authenticating user:', error);
+    return { user: null, error: 'Authentication failed' };
   }
 };
 
 // Get current authenticated user
 export const getCurrentUser = (): AuthUser | null => {
-  return safeGet<AuthUser | null>('currentUser', null);
+  const userJson = localStorage.getItem('currentUser');
+  if (!userJson) return null;
+  try {
+    return JSON.parse(userJson) as AuthUser;
+  } catch (error) {
+    console.error('Error parsing current user:', error);
+    return null;
+  }
 };
 
 // Sign out current user
 export const signOut = (): void => {
-  localStorage.removeItem('currentUser');
+  try {
+    localStorage.removeItem('currentUser');
+  } catch (error) {
+    console.error('Error signing out:', error);
+  }
 };
 
 // Check if user has admin role
 export const isAdmin = (user: AuthUser | null): boolean => {
-  return user ? ADMIN_ROLES.includes(user.role) : false;
+  if (!user) return false;
+  return ADMIN_ROLES.includes(user.role);
 };
 
 // Add a new user with specified credentials
@@ -141,166 +267,109 @@ export const addUser = (
   fullName?: string,
   permissions?: UserPermissions
 ): { success: boolean; error?: string } => {
-  try {
-    if (!email || !password || !role) {
-      return { success: false, error: 'Email, password, and role are required' };
-    }
-
-    if (!isValidUserRole(role)) {
-      return { success: false, error: 'Invalid user role' };
-    }
-
-    const credentials = safeGet<StoredCredentials>('userCredentials', {});
-    
-    // Check if email already exists
-    const emailExists = Object.values(credentials).some(
-      cred => cred.email.toLowerCase() === email.toLowerCase()
-    );
-    
-    if (emailExists) {
-      return { success: false, error: 'A user with this email already exists' };
-    }
-
-    // Generate a unique ID for the new user
-    const userId = `user-${Date.now()}`;
-    
-    // Create new user credential
-    const userCred: StoredUserCredential = {
-      email: email.toLowerCase(),
-      password,
-      role,
-      fullName,
-      permissions: permissions || (isAdmin({ id: userId, email, role, fullName, permissions }) ? getAdminPermissions() : getDefaultPermissions())
-    };
-    
-    // Add to credentials store
-    credentials[userId] = userCred;
-    safeSet('userCredentials', credentials);
-    
-    // Create user object for return
-    const user: AuthUser = {
-      id: userId,
-      email: userCred.email,
-      fullName: userCred.fullName,
-      role: userCred.role,
-      permissions: userCred.permissions,
-      user_metadata: {
-        role: userCred.role || '',
-        first_name: 'User',
-        last_name: 'Account',
-        company_name: 'MOK Mzansi Books',
-        phone: ''
-      }
-    };
-    
-    // Return success
-    return { success: true };
-  } catch (error) {
-    console.error('Authentication error:', error);
-    return { success: false, error: 'Authentication failed' };
+  if (!email || !password) {
+    return { success: false, error: 'Email and password are required' };
   }
+
+  if (!isUserRole(role)) {
+    return { success: false, error: 'Invalid user role' };
+  }
+
+  const credentials = safeGet<StoredCredentials>('userCredentials', {});
+  
+  // Check if email already exists
+  const emailExists = Object.values(credentials).some(
+    cred => cred.email.toLowerCase() === email.toLowerCase()
+  );
+
+  if (emailExists) {
+    return { success: false, error: 'Email already exists' };
+  }
+
+  // Generate a unique ID
+  const userId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  
+  // Create user with provided role and permissions
+  const userPermissions = permissions || 
+    (isAdminRole(role) ? getAdminPermissions() : getDefaultPermissions());
+  
+  const newUser: StoredUserCredential = {
+    email,
+    password,
+    fullName,
+    role,
+    permissions: userPermissions
+  };
+  
+  credentials[userId] = newUser;
+  safeSet<StoredCredentials>('userCredentials', credentials);
+  
+  return { success: true };
 };
 
 // Verify if user has admin permission
 export const verifyAdminPermission = async (email: string, password: string): Promise<boolean> => {
-  // Special case for Wilson Moabelo - case insensitive email check to be safe
-  if (email.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com' && password === 'Ka!gi#so123J') {
-    console.log('CEO admin verification bypass activated for Wilson');
-    
-    // Ensure Wilson's account exists and has proper admin rights
-    ensureWilsonHasCEOAccess();
-    
-    return true; // Always grant admin permission to Wilson Moabelo
-  }
+  const result = await authenticateUser(email, password);
+  if (!result.user) return false;
   
-  // First authenticate the user
-  const { user, error } = await authenticateUser(email, password);
-  
-  if (error || !user) {
-    return false;
-  }
-  
-  // Check if the user has an admin role
-  return isAdmin(user);
+  return ADMIN_ROLES.includes(result.user.role);
 };
 
 // Initialize with some default users for testing if none exist
 export const initializeLocalAuth = (): void => {
-  try {
-    // Check if credentials already exist
-    const storedCredentials = safeGet<StoredCredentials>('userCredentials', {});
-    if (Object.keys(storedCredentials).length > 0) {
-      console.log('User credentials already exist, skipping initialization');
-      return;
-    }
-    
-    console.log('Initializing default users...');
-    
-    // Create users with different roles for testing
-    const defaultCredentials: StoredCredentials = {
-      'user1': {
-        email: 'admin@mokmzansibooks.com',
-        password: 'admin123',
-        role: 'Manager' as UserRole,  // This is an admin role
-        fullName: 'Admin User'
-      },
-      'user2': {
-        email: 'user@mokmzansibooks.com',
-        password: 'user123',
-        role: 'Staff' as UserRole,    // This is NOT an admin role
-        fullName: 'Regular User'
-      },
-      'user3': {
-        email: 'ceo@mokmzansibooks.com',
-        password: 'ceo123',
-        role: 'CEO' as UserRole,      // Another admin role for testing
-        fullName: 'CEO User'
-      },
-      'user4': {
-        email: 'bookkeeper@mokmzansibooks.com',
-        password: 'book123',
-        role: 'Bookkeeper' as UserRole, // Another admin role for testing
-        fullName: 'Bookkeeper User'
-      }
+  const credentials = safeGet<StoredCredentials>('userCredentials', {});
+  
+  if (Object.keys(credentials).length === 0) {
+    // Create default admin user
+    const adminUser: StoredUserCredential = {
+      email: 'admin@mokmzansibooks.com',
+      password: 'admin123',
+      fullName: 'Admin User',
+      role: 'Manager',
+      permissions: getAdminPermissions()
     };
     
-    // Save the updated user credentials
-    safeSet('userCredentials', defaultCredentials);
+    // Create default regular user
+    const regularUser: StoredUserCredential = {
+      email: 'user@mokmzansibooks.com',
+      password: 'user123',
+      fullName: 'Regular User',
+      role: 'Staff',
+      permissions: getDefaultPermissions()
+    };
     
-    // Log initialization
-    console.log('Authentication system initialized with test users');
-    console.log('- Admin users: admin@mokmzansibooks.com, ceo@mokmzansibooks.com, bookkeeper@mokmzansibooks.com');
-    console.log('- Regular user: user@mokmzansibooks.com');
-  } catch (error) {
-    console.error('Error initializing local auth:', error);
+    credentials['admin-user'] = adminUser;
+    credentials['regular-user'] = regularUser;
+    
+    safeSet<StoredCredentials>('userCredentials', credentials);
+    
+    console.log('Initialized local auth with default users');
   }
 };
 
 // Helper function to reset auth state (for testing)
 export const resetAuthState = (): void => {
   try {
-    // Clear existing credentials by setting to empty object
-    safeSet('userCredentials', {});
-    
-    // Reinitialize with default users
-    initializeLocalAuth();
-    
-    console.log('Auth state reset and default users reinitialized.');
+    localStorage.removeItem('userCredentials');
+    localStorage.removeItem('currentUser');
+    console.log('Auth state reset successfully');
   } catch (error) {
     console.error('Error resetting auth state:', error);
-    throw new Error('Failed to reset auth state: ' + (error instanceof Error ? error.message : String(error)));
   }
 };
 
 // Add a new user with specified credentials
-export const addNewUser = (email: string, password: string, role: string, permissions?: UserPermissions): { success: boolean; error?: string } => {
+export const addNewUser = (email: string, password: string, role: string): { success: boolean; error?: string } => {
   try {
     const safeEmail = safeString(email);
     const safePassword = safeString(password);
     const safeRole = safeString(role);
     
-    const storedCredentials = safeLocalStorage.getItem('userCredentials', {});
-    let credentials: Record<string, UserCredentials> = safeGet(storedCredentials, {});
+    if (!isUserRole(safeRole)) {
+      return { success: false, error: 'Invalid user role' };
+    }
+    
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
     
     // Check if email already exists
     const existingUser = Object.values(credentials).find(cred => cred.email === safeEmail);
@@ -312,18 +381,18 @@ export const addNewUser = (email: string, password: string, role: string, permis
     const userId = `user${Date.now()}`;
     
     // Add new user
-    const userPermissions = permissions || (isAdminRole(safeRole) ? getAdminPermissions() : getDefaultPermissions());
+    const userPermissions = isAdminRole(safeRole) ? getAdminPermissions() : getDefaultPermissions();
     
-    const newCredentials: UserCredentials = {
+    const newCredentials: StoredUserCredential = {
       email: safeEmail,
       password: safePassword,
-      role: safeRole,
+      role: safeRole as UserRole,
       permissions: userPermissions
     };
     
     // Save updated credentials
     credentials[userId] = newCredentials;
-    safeLocalStorage.setItem('userCredentials', credentials);
+    safeSet<StoredCredentials>('userCredentials', credentials);
     
     return { success: true };
   } catch (error) {
@@ -357,15 +426,12 @@ export const getAllTeamMembers = () => {
 // Ensure that Wilson's account is properly set up as CEO with all admin privileges
 export const ensureWilsonHasCEOAccess = () => {
   try {
-    const userCredentials = safeLocalStorage.getItem('userCredentials', null);
-    if (!userCredentials) return;
-    
-    const credentials = safeGet(userCredentials, {});
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
     let wilsonFound = false;
     let wilsonId = '';
     
     // Check if Wilson's account exists
-    Object.entries(credentials).forEach(([id, cred]: [string, UserCredentials]) => {
+    Object.entries(credentials).forEach(([id, cred]) => {
       if (safeString(cred?.email) === 'mokgethwamoabelo@gmail.com') {
         wilsonFound = true;
         wilsonId = id;
@@ -374,7 +440,6 @@ export const ensureWilsonHasCEOAccess = () => {
         credentials[id] = {
           ...cred,
           role: 'CEO',
-          isDefaultAdmin: true,
           password: 'Ka!gi#so123J', // Ensure password is correct
           permissions: getAdminPermissions()
         };
@@ -383,7 +448,7 @@ export const ensureWilsonHasCEOAccess = () => {
     
     // If Wilson's account was found and updated, save the changes
     if (wilsonFound) {
-      safeLocalStorage.setItem('userCredentials', credentials);
+      safeSet<StoredCredentials>('userCredentials', credentials);
       
       // Also update permissions storage
       const permissions = getAdminPermissions();
@@ -393,35 +458,6 @@ export const ensureWilsonHasCEOAccess = () => {
     console.error('Error ensuring Wilson has CEO access:', error);
   }
 };
-
-// User type for authentication response
-export interface AuthUser {
-  id: string;
-  email: string;
-  fullName?: string;
-  role?: string;
-  permissions?: UserPermissions;
-}
-
-import { UserPermissions } from './permissionService';
-
-// Define interface for user credentials
-interface UserCredentials {
-  email: string;
-  password: string;
-  fullName?: string;
-  role: string;
-  permissions?: UserPermissions;
-}
-
-// StoredUserCredential represents how user credentials are stored in localStorage
-interface StoredUserCredential {
-  email: string;
-  password: string;
-  fullName?: string;
-  role: string;
-  permissions?: UserPermissions;
-}
 
 // Get user credentials by email and password
 export const getUserCredentialsByEmail = (email: string, password: string): { success: boolean; user?: AuthUser; error?: string } => {
@@ -489,23 +525,31 @@ export const deleteUser = (userId: string): { success: boolean; error?: string }
     const safeUserId = safeString(userId);
     
     // Get stored credentials with proper type checking
-    const storedCredentials: StoredCredentials = safeGet<StoredCredentials>('userCredentials', {});
-    if (!storedCredentials) {
-      return { success: false, error: 'No user found with this email' };
-    }
-    
-    const credentials = safeGet(storedCredentials, {}) as Record<string, UserCredentials>;
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
     
     // Check if user exists
     if (!credentials[safeUserId]) {
       return { success: false, error: 'User not found' };
     }
     
+    // Check if this is the last admin user
+    const isUserAdmin = isAdminRole(credentials[safeUserId].role);
+    if (isUserAdmin) {
+      // Count other admin users
+      const otherAdmins = Object.entries(credentials).filter(
+        ([id, cred]) => id !== safeUserId && isAdminRole(cred.role)
+      );
+      
+      if (otherAdmins.length === 0) {
+        return { success: false, error: 'Cannot delete the last admin user' };
+      }
+    }
+    
     // Delete the user
     delete credentials[safeUserId];
     
     // Save updated credentials
-    safeLocalStorage.setItem('userCredentials', credentials);
+    safeSet<StoredCredentials>('userCredentials', credentials);
     
     return { success: true };
   } catch (error) {
@@ -513,3 +557,24 @@ export const deleteUser = (userId: string): { success: boolean; error?: string }
     return { success: false, error: 'Failed to delete user' };
   }
 };
+
+// Export the localAuthService object with all functions
+export const localAuthService = {
+  initializeAuth,
+  authenticateUser,
+  getCurrentUser,
+  signOut,
+  isAdmin,
+  addUser,
+  verifyAdminPermission,
+  initializeLocalAuth,
+  resetAuthState,
+  addNewUser,
+  getAllTeamMembers,
+  ensureWilsonHasCEOAccess,
+  getUserCredentialsByEmail,
+  deleteUser
+};
+
+// Re-export as default for backward compatibility
+export default localAuthService;

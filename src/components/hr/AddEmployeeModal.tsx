@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+
 import { 
   X, Save, User, CalendarDays, Briefcase, CreditCard, Clock, UserPlus, Building2
 } from 'lucide-react';
@@ -99,9 +99,12 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleCheckboxChange = (name: string, checked: boolean) => {
-    setFormData({ ...formData, [name]: checked });
-  };
+  const handleCheckboxChange = useCallback((name: string, checked: boolean) => {
+    setFormData(prevData => ({
+      ...prevData,
+      [name]: checked
+    }));
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,27 +414,36 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
               <div className="space-y-2">
                 <Label className="font-sf-pro">Shift Type</Label>
                 <div className="flex flex-wrap gap-4 pt-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
+                  <div key="dayShift" className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
                       id="dayShift"
+                      name="dayShift"
                       checked={formData.dayShift}
-                      onCheckedChange={(checked) => handleCheckboxChange('dayShift', !!checked)}
+                      onChange={(e) => handleCheckboxChange('dayShift', e.target.checked)}
+                      className="h-4 w-4 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <Label htmlFor="dayShift" className="font-sf-pro">Day Shift</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
+                  <div key="nightShift" className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
                       id="nightShift"
+                      name="nightShift"
                       checked={formData.nightShift}
-                      onCheckedChange={(checked) => handleCheckboxChange('nightShift', !!checked)}
+                      onChange={(e) => handleCheckboxChange('nightShift', e.target.checked)}
+                      className="h-4 w-4 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <Label htmlFor="nightShift" className="font-sf-pro">Night Shift</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
+                  <div key="flexibleShift" className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
                       id="flexibleShift"
+                      name="flexibleShift"
                       checked={formData.flexibleShift}
-                      onCheckedChange={(checked) => handleCheckboxChange('flexibleShift', !!checked)}
+                      onChange={(e) => handleCheckboxChange('flexibleShift', e.target.checked)}
+                      className="h-4 w-4 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <Label htmlFor="flexibleShift" className="font-sf-pro">Flexible Shifts</Label>
                   </div>

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getClients, Client } from '@/services/clientService';
+import { getAllEmployees } from '@/services/employeeService';
+import { getAllTeamMembers } from '@/services/localAuthService';
 import { Project } from '@/types/project';
 
 // Using a specialized version of Project for creating new projects
@@ -86,8 +88,17 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
     'Education / Training',
     'Healthcare / Medical'
   ];
-  const availableTeam = ['John Smith', 'Sarah Connor', 'Mike Johnson', 'Lisa Anderson', 'Emma Brown', 'James Wilson'];
-  const managers = ['John Smith', 'Sarah Connor', 'David Lee', 'Emma Brown'];
+  // Management positions that can be project managers
+  const managementPositions = [
+    'CEO', 'Manager', 'General Manager', 'Site Manager', 'Bookkeeper', 'Director', 'Founder',
+    'Project Manager', 'Senior Manager', 'Team Lead', 'Team Leader', 'Department Head',
+    'Finance Manager', 'HR Manager', 'Operations Manager'
+  ];
+  
+  // State for employees
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [managers, setManagers] = useState<string[]>([]);
+  const [availableTeam, setAvailableTeam] = useState<string[]>([]);
   
   // State for storing clients from localStorage
   const [clients, setClients] = useState<Client[]>([]);
@@ -169,19 +180,58 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
     }));
   };
 
-  // Load clients from localStorage when component mounts
+  // Load clients and employees from localStorage when component mounts
   useEffect(() => {
-    const loadClients = () => {
-      const loadedClients = getClients();
-      setClients(loadedClients);
-      setFilteredClients(loadedClients);
+    const loadEmployees = () => {
+      // Load HR employees
+      const loadedEmployees = getAllEmployees();
+      setEmployees(loadedEmployees);
+
+      const managerList: string[] = [];
+      const teamList: string[] = [];
+
+      // Process HR employees
+      loadedEmployees.forEach(employee => {
+        // Only include active employees
+        if (employee.status === 'active') {
+          const fullName = `${employee.firstName} ${employee.surname}`;
+          
+          if (managementPositions.includes(employee.position)) {
+            managerList.push(fullName);
+          } else {
+            teamList.push(fullName);
+          }
+        }
+      });
+      
+      // Also include team members from Team Management
+      const teamMembers = getAllTeamMembers();
+      teamMembers.forEach(member => {
+        // Create full name from email if fullName is not available
+        const memberName = member.fullName || member.email.split('@')[0];
+        
+        // Determine if the team member should be a manager based on role
+        if (managementPositions.includes(member.role)) {
+          if (!managerList.includes(memberName)) {
+            managerList.push(memberName);
+          }
+        } else {
+          if (!teamList.includes(memberName)) {
+            teamList.push(memberName);
+          }
+        }
+      });
+      
+      setManagers(managerList);
+      setAvailableTeam(teamList);
     };
-    loadClients();
+
+    loadEmployees();
     
-    // Initialize filtered tags
-    setFilteredTags(availableTags);
-    // We only want to run this effect once on mount, availableTags is constant and doesn't change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Also load clients
+    const loadedClients = getClients();
+    setClients(loadedClients);
+    setFilteredClients(loadedClients);
   }, []);
 
   const handleSubmit = () => {

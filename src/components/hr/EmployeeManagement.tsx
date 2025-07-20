@@ -1,6 +1,10 @@
 
 import React, { useState } from 'react';
 import AddEmployeeModal from '@/components/hr/AddEmployeeModal';
+import EditEmployeeModal from '@/components/hr/EditEmployeeModal';
+import EmployeeDetailsModal from '@/components/hr/EmployeeDetailsModal';
+import { deleteEmployee, Employee } from '@/services/employeeService';
+import { toast } from 'sonner';
 import { 
   Search,
   Filter,
@@ -19,22 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-interface Employee {
-  id: string;
-  firstName?: string;
-  surname?: string;
-  name?: string; // For backward compatibility
-  email?: string;
-  phone?: string;
-  contactNumber?: string; // Alternative field for phone
-  position?: string;
-  department?: string;
-  startDate?: string;
-  status?: 'active' | 'on-leave' | 'terminated';
-  location?: string;
-  employmentType?: string;
-  avatar?: string;
-}
+
 
 interface EmployeeManagementProps {
   employees: Employee[];
@@ -47,15 +36,17 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
 
   // Get unique departments
   const departments = Array.from(new Set(employees.map(emp => emp.department)));
 
   // Filter employees
   const filteredEmployees = employees.filter(employee => {
-    // Get display name (either name or firstName + surname)
-    const displayName = employee.name || 
-      (employee.firstName && employee.surname ? 
+    // Get display name from firstName + surname
+    const displayName = (employee.firstName && employee.surname ? 
         `${employee.firstName} ${employee.surname}` : 
         employee.firstName || employee.surname || '');
     
@@ -110,11 +101,53 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
     if (!name) return '';
     return name.split(' ').map(n => n && n[0] || '').join('');
   };
+
+  // Handle edit employee
+  const handleEditEmployee = (employee: Employee) => {
+    setEditingEmployee(employee);
+    setIsEditEmployeeModalOpen(true);
+  };
+
+  // Handle delete employee
+  const handleDeleteEmployee = (employee: Employee) => {
+    const displayName = (employee.firstName && employee.surname ? 
+        `${employee.firstName} ${employee.surname}` : 
+        employee.firstName || employee.surname || 'Unknown Employee');
+    
+    if (window.confirm(`Are you sure you want to delete ${displayName}? This action cannot be undone.`)) {
+      const success = deleteEmployee(employee.id);
+      if (success) {
+        // Update the employees list by removing the deleted employee
+        setEmployees(prevEmployees => prevEmployees.filter(emp => emp.id !== employee.id));
+        toast.success(`${displayName} has been deleted successfully.`);
+      } else {
+        toast.error('Failed to delete employee. Please try again.');
+      }
+    }
+  };
+
+  // Handle employee updated
+  const handleEmployeeUpdated = (updatedEmployee: Employee) => {
+    setEmployees(prevEmployees => 
+      prevEmployees.map(emp => 
+        emp.id === updatedEmployee.id ? updatedEmployee : emp
+      )
+    );
+    setIsEditEmployeeModalOpen(false);
+    setEditingEmployee(null);
+  };
+
+  // Handle employee added
+  const handleEmployeeAdded = (newEmployee: Employee) => {
+    setEmployees(prevEmployees => [...prevEmployees, newEmployee]);
+    setIsAddEmployeeModalOpen(false);
+  };
   
   // Get full name from employee
   const getFullName = (employee: Employee) => {
-    if (employee.name) return employee.name;
-    return [employee.firstName, employee.surname].filter(Boolean).join(' ') || 'Unknown';
+    return (employee.firstName && employee.surname ? 
+        `${employee.firstName} ${employee.surname}` : 
+        employee.firstName || employee.surname || 'Unknown');
   };
 
   return (
@@ -231,7 +264,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                         <Phone className="h-5 w-5 text-slate-400 mr-2" />
                         <div>
                           <div className="text-xs text-slate-500 font-sf-pro">Phone</div>
-                          <div className="text-sm text-slate-900 font-sf-pro">{employee.phone || employee.contactNumber || 'Not provided'}</div>
+                          <div className="text-sm text-slate-900 font-sf-pro">{employee.contactNumber || 'N/A'}</div>
                         </div>
                       </div>
                       
@@ -252,16 +285,31 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                       </div>
                       
                       <div className="flex space-x-2 mt-2 pt-2 border-t border-white/20">
-                        <Button variant="outline" size="sm" className="flex-1 font-sf-pro">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 font-sf-pro"
+                          onClick={() => setViewingEmployee(employee)}
+                        >
                           <FileText className="h-4 w-4 mr-1" />
                           View Details
                         </Button>
                         
-                        <Button variant="outline" size="sm" className="px-3 font-sf-pro">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="px-3 font-sf-pro"
+                          onClick={() => handleEditEmployee(employee)}
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
                         
-                        <Button variant="outline" size="sm" className="px-3 text-red-600 hover:text-red-700 font-sf-pro">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="px-3 text-red-600 hover:text-red-700 font-sf-pro"
+                          onClick={() => handleDeleteEmployee(employee)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -326,10 +374,25 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
       <AddEmployeeModal 
         isOpen={isAddEmployeeModalOpen} 
         onClose={() => setIsAddEmployeeModalOpen(false)}
-        onEmployeeAdded={(newEmployee) => {
-          setEmployees(prev => [...prev, newEmployee]);
-          setIsAddEmployeeModalOpen(false);
+        onEmployeeAdded={handleEmployeeAdded}
+      />
+
+      {/* Edit Employee Modal */}
+      <EditEmployeeModal 
+        isOpen={isEditEmployeeModalOpen} 
+        onClose={() => {
+          setIsEditEmployeeModalOpen(false);
+          setEditingEmployee(null);
         }}
+        employee={editingEmployee}
+        onEmployeeUpdated={handleEmployeeUpdated}
+      />
+
+      {/* Employee Details Modal */}
+      <EmployeeDetailsModal
+        isOpen={viewingEmployee !== null}
+        onClose={() => setViewingEmployee(null)}
+        employee={viewingEmployee}
       />
     </div>
   );

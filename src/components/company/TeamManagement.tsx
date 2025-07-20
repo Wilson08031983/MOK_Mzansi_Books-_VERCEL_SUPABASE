@@ -16,7 +16,9 @@ import {
   Eye,
   Trash2,
   Edit2,
-  MoreVertical
+  MoreVertical,
+  RefreshCw,
+  Users
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -32,6 +34,7 @@ import { sendAccountDeletionEmail } from '@/services/emailService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuthHook';
 import { getUserPermissions, isAdminRole } from '@/services/permissionService';
+import { syncTeamMembersToEmployees, getSyncStatus } from '@/services/teamEmployeeSyncService';
 
 const TeamManagement = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -56,10 +59,16 @@ const TeamManagement = () => {
     active: 0,
     pending: 0
   });
+  const [syncStatus, setSyncStatus] = useState({
+    totalTeamMembers: 0,
+    syncedMembers: 0,
+    unsyncedMembers: [] as string[]
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Function to load team members
+  // Function to load team members and sync status
   const loadTeamMembers = () => {
     const members = getAllTeamMembers();
     setTeamMembers(members);
@@ -70,6 +79,10 @@ const TeamManagement = () => {
       active: members.length, // In a real app, this would filter by status
       pending: 0 // In a real app with actual pending invites
     });
+    
+    // Update sync status
+    const status = getSyncStatus();
+    setSyncStatus(status);
   };
   
   // Load team members on component mount
@@ -93,6 +106,43 @@ const TeamManagement = () => {
       title: "Permissions Updated",
       description: "User permissions have been updated successfully."
     });
+  };
+  
+  // Handle sync team members to employees
+  const handleSyncToEmployees = async () => {
+    setIsSyncing(true);
+    
+    try {
+      const result = syncTeamMembersToEmployees();
+      
+      if (result.success) {
+        toast({
+          title: "Sync Successful",
+          description: `Synced ${result.syncedCount} team members to HR Management. ${result.skippedCount} already existed.`,
+          duration: 5000
+        });
+      } else {
+        toast({
+          title: "Sync Completed with Errors",
+          description: `Synced ${result.syncedCount} members, but encountered ${result.errors.length} errors.`,
+          variant: "destructive",
+          duration: 5000
+        });
+        console.error('Sync errors:', result.errors);
+      }
+      
+      // Refresh sync status
+      loadTeamMembers();
+    } catch (error) {
+      console.error('Error during sync:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync team members to HR Management.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
   
   // Open confirm delete modal for a member
@@ -260,7 +310,19 @@ const TeamManagement = () => {
           <h2 className="text-2xl font-bold text-slate-900 font-sf-pro tracking-tight">Team Management</h2>
           <p className="text-slate-600 font-sf-pro">Manage your company's team members and permissions.</p>
         </div>
-        <div>
+        <div className="flex items-center space-x-3">
+          <Button
+            onClick={handleSyncToEmployees}
+            disabled={isSyncing || syncStatus.unsyncedMembers.length === 0}
+            className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 text-white rounded-xl px-4 disabled:opacity-50"
+          >
+            {isSyncing ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Users className="mr-2 h-4 w-4" />
+            )}
+            {isSyncing ? 'Syncing...' : 'Sync to HR'}
+          </Button>
           <Button
             onClick={handleAddNewUser}
             className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white rounded-xl px-4"
@@ -271,7 +333,7 @@ const TeamManagement = () => {
       </div>
 
       {/* Team Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
@@ -309,6 +371,25 @@ const TeamManagement = () => {
               <div>
                 <p className="text-2xl font-bold text-slate-900 font-sf-pro">{stats.pending}</p>
                 <p className="text-slate-600 font-sf-pro text-sm">Pending Invites</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 rounded-2xl shadow-colored">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900 font-sf-pro">{syncStatus.syncedMembers}</p>
+                <p className="text-slate-600 font-sf-pro text-sm">Synced to HR</p>
+                {syncStatus.unsyncedMembers.length > 0 && (
+                  <p className="text-xs text-mokm-orange-600 font-sf-pro">
+                    {syncStatus.unsyncedMembers.length} pending sync
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
