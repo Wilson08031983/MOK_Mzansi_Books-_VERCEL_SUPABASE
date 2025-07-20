@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, Users, Calendar, CheckSquare, Tag, DollarSign, FileText } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Users, Calendar, CheckSquare, Tag, DollarSign, FileText, UserPlus } from 'lucide-react';
 import { Project, Task, Expense } from '@/types/project';
+import EmployeeAssignmentModal from './EmployeeAssignmentModal';
 import {
   Dialog,
   DialogContent,
@@ -16,15 +17,21 @@ import { Progress } from '@/components/ui/progress';
 
 interface ViewProjectModalProps {
   project: Project;
+  allProjects: Project[];
   onClose: () => void;
   onEdit: (project: Project) => void;
+  onUpdate: (project: Project) => void;
 }
 
 const ViewProjectModal: React.FC<ViewProjectModalProps> = ({ 
   project, 
+  allProjects,
   onClose,
-  onEdit
+  onEdit,
+  onUpdate
 }) => {
+  const [showEmployeeAssignment, setShowEmployeeAssignment] = useState(false);
+  const [currentProject, setCurrentProject] = useState(project);
   const getStatusColor = (status) => {
     switch (status) {
       case 'Completed': return 'bg-green-100 text-green-800';
@@ -172,19 +179,25 @@ const ViewProjectModal: React.FC<ViewProjectModalProps> = ({
                 Budget & Expenses
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Total Budget</div>
-                <div className="text-xl font-semibold text-slate-800">{formatCurrency(project.budget)}</div>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Expenses to Date</div>
-                <div className="text-xl font-semibold text-red-600">{formatCurrency(project.expenses)}</div>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-500 mb-1">Remaining</div>
-                <div className={`text-xl font-semibold ${calculateRemainingBudget() < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {formatCurrency(calculateRemainingBudget())}
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="text-sm text-slate-500 mb-1">Total Budget</div>
+                  <div className="text-xl font-semibold text-slate-800">{formatCurrency(currentProject.budget)}</div>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="text-sm text-slate-500 mb-1">Other Expenses</div>
+                  <div className="text-xl font-semibold text-orange-600">{formatCurrency(currentProject.expenses)}</div>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="text-sm text-slate-500 mb-1">Salary Expenses</div>
+                  <div className="text-xl font-semibold text-blue-600">{formatCurrency(currentProject.salaryExpenses || 0)}</div>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="text-sm text-slate-500 mb-1">Remaining Budget</div>
+                  <div className={`text-xl font-semibold ${(currentProject.budget - (currentProject.totalProjectExpenses || currentProject.expenses)) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(currentProject.budget - (currentProject.totalProjectExpenses || currentProject.expenses))}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -193,22 +206,57 @@ const ViewProjectModal: React.FC<ViewProjectModalProps> = ({
           {/* Team */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center">
-                <Users className="h-5 w-5 mr-2 text-slate-500" />
-                Team
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-slate-500" />
+                  Team Assignment
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setShowEmployeeAssignment(true)}
+                  className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Manage Team
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {project.team.map((member, index) => (
-                  <div key={index} className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-lg">
-                    <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-medium">
-                      {member.split(' ').map(part => part[0]).join('')}
+              {currentProject.assignedEmployees && currentProject.assignedEmployees.length > 0 ? (
+                <div className="space-y-3">
+                  {currentProject.assignedEmployees.map((employee, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center text-sm font-medium">
+                          {employee.employeeName.split(' ').map(part => part[0]).join('')}
+                        </div>
+                        <div>
+                          <div className="font-medium">{employee.employeeName}</div>
+                          <div className="text-sm text-slate-500">
+                            {employee.position} • {employee.department}
+                            {employee.role && ` • ${employee.role}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">{formatCurrency(employee.monthlySalary)}/month</div>
+                        <div className="text-sm text-slate-500">{employee.allocation}% allocation</div>
+                      </div>
                     </div>
-                    <span className="text-sm font-medium">{member}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {currentProject.team.map((member, index) => (
+                    <div key={index} className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-lg">
+                      <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-medium">
+                        {member.split(' ').map(part => part[0]).join('')}
+                      </div>
+                      <span className="text-sm font-medium">{member}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
           
@@ -304,6 +352,18 @@ const ViewProjectModal: React.FC<ViewProjectModalProps> = ({
             </CardContent>
           </Card>
         </div>
+        
+        {showEmployeeAssignment && (
+          <EmployeeAssignmentModal
+            project={currentProject}
+            allProjects={allProjects}
+            onClose={() => setShowEmployeeAssignment(false)}
+            onUpdate={(updatedProject) => {
+              setCurrentProject(updatedProject);
+              onUpdate(updatedProject);
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Project } from '@/types/project';
+import { calculateProjectSalaryExpenses } from '@/services/projectEmployeeService';
 import { 
   Search, 
   Plus, 
@@ -54,7 +55,11 @@ const Projects = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Sample projects data
-  const [projects, setProjects] = useState<Project[]>([
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  // Initialize projects with sample data
+  useEffect(() => {
+    const sampleProjects: Project[] = [
     {
       id: 1,
       name: 'Website Redesign',
@@ -64,13 +69,15 @@ const Projects = () => {
       priority: 'High',
       progress: 75,
       budget: 25000,
-      expenses: 15000,
-      startDate: '2025-05-01',
-      endDate: '2025-07-15',
-      team: ['Sarah Parker', 'Michael Johnson', 'Lisa Williams', 'David Brown'],
+      expenses: 12000,
+      startDate: '2025-01-01',
+      endDate: '2025-12-31',
+      team: ['John Smith', 'Sarah Connor'],
       tags: ['Web Development', 'UI/UX'],
       description: 'Complete redesign of corporate website with modern UI/UX',
-      code: 'WEB-2025-001'
+      code: 'WEB-2025-001',
+      salaryExpenses: 0,
+      totalProjectExpenses: 12000
     },
     {
       id: 2,
@@ -87,7 +94,9 @@ const Projects = () => {
       team: ['Mike Johnson', 'Lisa Anderson'],
       tags: ['Mobile', 'React Native'],
       description: 'Native mobile application for iOS and Android platforms',
-      code: 'MOB-2025-002'
+      code: 'MOB-2025-002',
+      salaryExpenses: 0,
+      totalProjectExpenses: 18000
     },
     {
       id: 3,
@@ -104,7 +113,9 @@ const Projects = () => {
       team: ['Emma Brown', 'James Wilson', 'Anna Taylor'],
       tags: ['Marketing', 'Digital'],
       description: 'Comprehensive digital marketing campaign',
-      code: 'MKT-2025-003'
+      code: 'MKT-2025-003',
+      salaryExpenses: 0,
+      totalProjectExpenses: 14800
     },
     {
       id: 4,
@@ -118,10 +129,12 @@ const Projects = () => {
       expenses: 25000,
       startDate: '2025-02-15',
       endDate: '2025-06-15',
-      team: ['Tom Wilson', 'Jane Smith', 'Mark Davis', 'Carol White'],
+      team: ['Robert Chen'],
       tags: ['Construction', 'Internal'],
-      description: 'Complete office space renovation and modernization',
-      code: 'REN-2025-004'
+      description: 'Renovation of office space and facilities',
+      code: 'REN-2025-004',
+      salaryExpenses: 0,
+      totalProjectExpenses: 25000
     },
     {
       id: 5,
@@ -132,15 +145,38 @@ const Projects = () => {
       priority: 'Medium',
       progress: 60,
       budget: 30000,
-      expenses: 18000,
-      startDate: '2025-01-10',
-      endDate: '2025-04-10',
-      team: ['Alex Johnson', 'Maria Garcia', 'Steve Brown'],
+      expenses: 8000,
+      startDate: '2025-01-20',
+      endDate: '2025-04-30',
+      team: ['Lisa Park'],
       tags: ['Product', 'Launch'],
-      description: 'New product launch strategy and execution',
-      code: 'PRD-2025-005'
+      description: 'Launch of new product line with marketing support',
+      code: 'PRD-2025-005',
+      salaryExpenses: 0,
+      totalProjectExpenses: 8000
     }
-  ]);
+    ];
+
+    // Load projects from localStorage or use sample data
+    const storedProjects = localStorage.getItem('projects');
+    if (storedProjects) {
+      try {
+        const parsed = JSON.parse(storedProjects);
+        // Ensure all projects have the new salary expense fields
+        const updatedProjects = parsed.map((project: Project) => ({
+          ...project,
+          salaryExpenses: project.salaryExpenses || calculateProjectSalaryExpenses(project),
+          totalProjectExpenses: project.totalProjectExpenses || (project.expenses + (project.salaryExpenses || 0))
+        }));
+        setProjects(updatedProjects);
+      } catch (error) {
+        console.error('Error parsing stored projects:', error);
+        setProjects(sampleProjects);
+      }
+    } else {
+      setProjects(sampleProjects);
+    }
+  }, []);
 
   // Calculate summary statistics
   const totalProjects = projects.length;
@@ -172,6 +208,24 @@ const Projects = () => {
     } catch (error) {
       console.error('Error saving updated project to localStorage:', error);
     }
+  };
+
+  // Handler for updating a project (used for employee assignments and other updates)
+  const handleUpdateProject = (updatedProject: Project) => {
+    setProjects(prevProjects => {
+      const updated = prevProjects.map(project => 
+        project.id === updatedProject.id ? updatedProject : project
+      );
+      
+      // Store updated projects in localStorage
+      try {
+        localStorage.setItem('projects', JSON.stringify(updated));
+      } catch (error) {
+        console.error('Error saving updated project to localStorage:', error);
+      }
+      
+      return updated;
+    });
   };
 
   const getStatusColor = (status) => {
@@ -293,6 +347,7 @@ const Projects = () => {
               getStatusColor={getStatusColor}
               getPriorityColor={getPriorityColor}
               onEditProject={handleEditProject}
+              onUpdateProject={handleUpdateProject}
             />
           </div>
 

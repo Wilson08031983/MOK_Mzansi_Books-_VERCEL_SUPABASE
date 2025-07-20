@@ -33,13 +33,15 @@ interface ProjectsGridProps {
   getStatusColor: (status: string) => string;
   getPriorityColor: (priority: string) => string;
   onEditProject?: (updatedProject: Project) => void;
+  onUpdateProject?: (updatedProject: Project) => void;
 }
 
 const ProjectsGrid: React.FC<ProjectsGridProps> = ({
   projects,
   getStatusColor,
   getPriorityColor,
-  onEditProject
+  onEditProject,
+  onUpdateProject
 }) => {
   const [viewingProject, setViewingProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -297,8 +299,15 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
       {viewingProject && (
         <ViewProjectModal 
           project={viewingProject}
+          allProjects={projects}
           onClose={() => setViewingProject(null)}
           onEdit={handleEditProject}
+          onUpdate={(updatedProject) => {
+            if (onUpdateProject) {
+              onUpdateProject(updatedProject);
+            }
+            setViewingProject(updatedProject); // Update the viewing project state
+          }}
         />
       )}
       

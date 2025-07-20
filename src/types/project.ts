@@ -19,6 +19,18 @@ export interface Expense {
   notes?: string;
 }
 
+export interface ProjectEmployee {
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string;
+  position: string;
+  department: string;
+  monthlySalary: number;
+  assignedDate: string;
+  role?: string; // Role in the project (e.g., 'Lead Developer', 'Designer')
+  allocation: number; // Percentage allocation to project (0-100)
+}
+
 export interface TaskTemplate {
   id: string;
   name: string;
@@ -38,11 +50,14 @@ export interface Project {
   expenses: number;
   startDate: string;
   endDate: string;
-  team: string[];
+  team: string[]; // Keep for backward compatibility
+  assignedEmployees?: ProjectEmployee[]; // New employee assignments
   tags: string[];
   description: string;
   code: string;
   tasks?: Task[];
   expenseItems?: Expense[];
+  salaryExpenses?: number; // Calculated salary expenses for assigned employees
+  totalProjectExpenses?: number; // Total expenses including salaries and other expenses
   [key: string]: unknown; // For dynamic property access
 }
