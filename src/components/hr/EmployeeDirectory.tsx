@@ -17,9 +17,10 @@ import { format } from 'date-fns';
 
 interface EmployeeDirectoryProps {
   employees: Employee[];
+  onViewProfile?: (employee: Employee) => void;
 }
 
-const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ employees }) => {
+const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ employees, onViewProfile }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -160,7 +161,12 @@ const EmployeeDirectory: React.FC<EmployeeDirectoryProps> = ({ employees }) => {
                     {employee.employmentType}
                   </span>
                 </div>
-                <Button variant="outline" size="sm" className="font-sf-pro">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="font-sf-pro" 
+                  onClick={() => onViewProfile && onViewProfile(employee)}
+                >
                   View Profile
                 </Button>
               </div>

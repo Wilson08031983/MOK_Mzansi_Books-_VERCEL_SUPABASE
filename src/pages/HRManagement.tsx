@@ -24,6 +24,7 @@ import TrainingManagement from '@/components/hr/TrainingManagement';
 import ModulePlaceholder from '@/components/hr/ModulePlaceholder';
 import TimeAttendance from '@/components/hr/TimeAttendance';
 import AllowanceManagement from '@/components/hr/AllowanceManagement';
+import EmployeeProfile from '@/components/hr/EmployeeProfile';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
 
@@ -31,6 +32,8 @@ import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveMan
 
 const HRManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'allowance' | 'payroll'>('dashboard');
+  const [viewingProfile, setViewingProfile] = useState<boolean>(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   // Sample data
   const hrMetrics = {
@@ -467,14 +470,26 @@ const HRManagement: React.FC = () => {
         <div className="animate-fade-in">
           {activeTab === 'dashboard' && <HRDashboard 
             metrics={hrMetrics} 
-            employees={employees} 
-            setEmployees={setEmployees} 
-            leaveRequests={leaveRequests}
-            setLeaveRequests={setLeaveRequests}
-            leaveBalances={leaveBalances}
           />}
           {activeTab === 'employees' && <EmployeeManagement employees={employees} setEmployees={setEmployees} />}
-          {activeTab === 'directory' && <EmployeeDirectory employees={employees} />}
+          {activeTab === 'directory' && !viewingProfile && (
+            <EmployeeDirectory 
+              employees={employees} 
+              onViewProfile={(employee) => {
+                setSelectedEmployee(employee);
+                setViewingProfile(true);
+              }} 
+            />
+          )}
+          {activeTab === 'directory' && viewingProfile && (
+            <EmployeeProfile 
+              employee={selectedEmployee} 
+              onBack={() => {
+                setViewingProfile(false);
+                setSelectedEmployee(null);
+              }} 
+            />
+          )}
           {activeTab === 'leave' && (
             <LeaveManagement 
               leaveRequests={leaveRequests} 
