@@ -76,7 +76,10 @@ export const syncCompanyDetailsToEmployee = (): {
 } => {
   try {
     const companyDetails = getCompanyDetails();
+    console.log('Sync Debug - Company Details:', companyDetails);
+    
     if (!companyDetails) {
+      console.log('Sync Debug - No company details found');
       return {
         success: false,
         message: 'No company details found to sync'
@@ -84,8 +87,10 @@ export const syncCompanyDetailsToEmployee = (): {
     }
 
     let ownerEmployee = findOwnerEmployeeRecord();
+    console.log('Sync Debug - Found owner employee:', ownerEmployee);
     
     if (!ownerEmployee) {
+      console.log('Sync Debug - Creating new employee record');
       // Create new employee record for the company owner
       const newEmployeeData = {
         firstName: companyDetails.ownerName,

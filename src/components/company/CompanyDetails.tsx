@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuthHook';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Edit, Save, X, ShieldAlert } from 'lucide-react';
+import { Edit, Save, X, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/services/localAuthService';
 import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
@@ -29,6 +29,24 @@ const CompanyDetails = () => {
     
     // Initialize company details for sync
     companyEmployeeSyncService.initializeCompanyDetails();
+    
+    // Load the initialized company details immediately
+    const initializedDetails = companyEmployeeSyncService.getCompanyDetails();
+    if (initializedDetails) {
+      setCompanyData(prev => ({
+        ...prev,
+        name: initializedDetails.companyName || prev.name,
+        contactName: initializedDetails.ownerName || prev.contactName,
+        contactSurname: initializedDetails.ownerSurname || prev.contactSurname,
+        position: initializedDetails.ownerPosition || prev.position,
+        email: initializedDetails.email || prev.email,
+        phone: initializedDetails.phone || prev.phone,
+        addressLine1: initializedDetails.addressLine1 || prev.addressLine1,
+        addressLine2: initializedDetails.addressLine2 || prev.addressLine2,
+        addressLine3: initializedDetails.addressLine3 || prev.addressLine3,
+        addressLine4: initializedDetails.addressLine4 || prev.addressLine4
+      }));
+    }
     
     // Notify about the test users available
     toast.info("Admin: admin@mokmzansibooks.com / admin123\nRegular: user@mokmzansibooks.com / user123", {
@@ -120,6 +138,11 @@ const CompanyDetails = () => {
             console.error('Error parsing user data:', userError);
           }
         }
+        
+        // Trigger sync after data is loaded
+        setTimeout(() => {
+          companyEmployeeSyncService.autoSyncCompanyEmployee();
+        }, 500);
       } catch (error) {
         console.error('Error fetching user profile:', error);
       } finally {
@@ -261,13 +284,30 @@ const CompanyDetails = () => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-slate-900 font-sf-pro text-xl">Company Information</CardTitle>
           {!isEditing ? (
-            <Button
-              onClick={handleStartEdit}
-              className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
-            >
-              <ShieldAlert className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                onClick={() => {
+                  const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
+                  if (syncResult.success) {
+                    toast.success('Manual sync completed successfully!');
+                  } else {
+                    toast.error(`Sync failed: ${syncResult.message}`);
+                  }
+                }}
+                variant="outline"
+                className="border-blue-300 hover:bg-blue-50 text-blue-600 font-sf-pro rounded-xl transition-all duration-300"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync to HR
+              </Button>
+              <Button
+                onClick={handleStartEdit}
+                className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
+              >
+                <ShieldAlert className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            </div>
           ) : (
             <div className="flex space-x-2">
               <Button
