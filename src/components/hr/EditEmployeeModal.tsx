@@ -27,6 +27,15 @@ interface EditEmployeeModalProps {
 const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: EditEmployeeModalProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // Helper function to check if this is the synced admin user
+  const isSyncedAdminUser = (emp: Employee | null): boolean => {
+    if (!emp) return false;
+    return emp.email === 'admin@mokmzansibooks.com' || 
+           (emp.position && ['CEO', 'Founder', 'Director', 'Manager'].includes(emp.position));
+  };
+  
+  const isAdminUser = isSyncedAdminUser(employee);
   const [formData, setFormData] = useState<EmployeeFormData>({
     // Basic Information
     firstName: '',
@@ -171,10 +180,26 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
     
     try {
       // Update employee with avatar if selected
-      const dataToUpdate = {
+      let dataToUpdate = {
         ...formData,
         avatar: selectedImage || undefined
       };
+      
+      // For synced admin users, preserve the original synced fields
+      if (isAdminUser && employee) {
+        dataToUpdate = {
+          ...dataToUpdate,
+          firstName: employee.firstName,
+          surname: employee.surname,
+          email: employee.email,
+          contactNumber: employee.contactNumber,
+          position: employee.position,
+          addressLine1: employee.addressLine1,
+          addressLine2: employee.addressLine2,
+          addressLine3: employee.addressLine3,
+          addressLine4: employee.addressLine4
+        };
+      }
       
       const updatedEmployee = updateEmployee(employee.id, dataToUpdate);
       
@@ -256,53 +281,106 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
               </TabsTrigger>
             </TabsList>
 
+            {/* Admin User Warning */}
+            {isAdminUser && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <Building2 className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 font-sf-pro">Company Owner/Admin Account</h4>
+                    <p className="text-sm text-blue-700 font-sf-pro mt-1">
+                      This employee record is synchronized with Company Details. 
+                      To edit Name, Email, Phone, Position, or Address information, 
+                      please update them in <strong>Company Page → Company Details</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Basic Information Tab */}
             <TabsContent value="basic" className="space-y-4 mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName" className="font-sf-pro">First Name *</Label>
+                  <Label htmlFor="firstName" className="font-sf-pro flex items-center gap-2">
+                    First Name *
+                    {isAdminUser && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                        Synced from Company Details
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="firstName"
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleChange}
                     required
-                    className="font-sf-pro"
+                    readOnly={isAdminUser}
+                    className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="surname" className="font-sf-pro">Surname *</Label>
+                  <Label htmlFor="surname" className="font-sf-pro flex items-center gap-2">
+                    Surname *
+                    {isAdminUser && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                        Synced from Company Details
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="surname"
                     name="surname"
                     value={formData.surname}
                     onChange={handleChange}
                     required
-                    className="font-sf-pro"
+                    readOnly={isAdminUser}
+                    className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="font-sf-pro">Email Address</Label>
+                  <Label htmlFor="email" className="font-sf-pro flex items-center gap-2">
+                    Email Address
+                    {isAdminUser && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                        Synced from Company Details
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="email"
                     name="email"
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="font-sf-pro"
+                    readOnly={isAdminUser}
+                    className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="contactNumber" className="font-sf-pro">Contact Number</Label>
+                  <Label htmlFor="contactNumber" className="font-sf-pro flex items-center gap-2">
+                    Contact Number
+                    {isAdminUser && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                        Synced from Company Details
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="contactNumber"
                     name="contactNumber"
                     value={formData.contactNumber}
                     onChange={handleChange}
-                    className="font-sf-pro"
+                    readOnly={isAdminUser}
+                    className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                   />
                 </div>
               </div>
@@ -342,13 +420,22 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
             <TabsContent value="employment" className="space-y-4 mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="position" className="font-sf-pro">Position</Label>
+                  <Label htmlFor="position" className="font-sf-pro flex items-center gap-2">
+                    Position
+                    {isAdminUser && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                        Synced from Company Details
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="position"
                     name="position"
                     value={formData.position}
                     onChange={handleChange}
-                    className="font-sf-pro"
+                    readOnly={isAdminUser}
+                    className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                   />
                 </div>
                 
@@ -482,46 +569,82 @@ const EditEmployeeModal = ({ isOpen, onClose, employee, onEmployeeUpdated }: Edi
                 <h3 className="text-lg font-medium text-slate-900 font-sf-pro">Address Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine1" className="font-sf-pro">Address Line 1</Label>
+                    <Label htmlFor="addressLine1" className="font-sf-pro flex items-center gap-2">
+                      Address Line 1
+                      {isAdminUser && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                          Synced from Company Details
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="addressLine1"
                       name="addressLine1"
                       value={formData.addressLine1}
                       onChange={handleChange}
-                      className="font-sf-pro"
+                      readOnly={isAdminUser}
+                      className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                      title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine2" className="font-sf-pro">Address Line 2</Label>
+                    <Label htmlFor="addressLine2" className="font-sf-pro flex items-center gap-2">
+                      Address Line 2
+                      {isAdminUser && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                          Synced from Company Details
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="addressLine2"
                       name="addressLine2"
                       value={formData.addressLine2}
                       onChange={handleChange}
-                      className="font-sf-pro"
+                      readOnly={isAdminUser}
+                      className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                      title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine3" className="font-sf-pro">Address Line 3</Label>
+                    <Label htmlFor="addressLine3" className="font-sf-pro flex items-center gap-2">
+                      Address Line 3
+                      {isAdminUser && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                          Synced from Company Details
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="addressLine3"
                       name="addressLine3"
                       value={formData.addressLine3}
                       onChange={handleChange}
-                      className="font-sf-pro"
+                      readOnly={isAdminUser}
+                      className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                      title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine4" className="font-sf-pro">Address Line 4</Label>
+                    <Label htmlFor="addressLine4" className="font-sf-pro flex items-center gap-2">
+                      Address Line 4
+                      {isAdminUser && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                          Synced from Company Details
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="addressLine4"
                       name="addressLine4"
                       value={formData.addressLine4}
                       onChange={handleChange}
-                      className="font-sf-pro"
+                      readOnly={isAdminUser}
+                      className={`font-sf-pro ${isAdminUser ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                      title={isAdminUser ? 'This field is synced from Company Details and cannot be edited here' : ''}
                     />
                   </div>
                 </div>

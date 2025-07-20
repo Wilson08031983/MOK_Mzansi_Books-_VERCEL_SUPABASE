@@ -39,6 +39,12 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  
+  // Helper function to check if this is the synced admin user
+  const isSyncedAdminUser = (emp: Employee): boolean => {
+    return emp.email === 'admin@mokmzansibooks.com' || 
+           (emp.position && ['CEO', 'Founder', 'Director', 'Manager'].includes(emp.position));
+  };
 
   // Get unique departments
   const departments = Array.from(new Set(employees.map(emp => emp.department)));
@@ -238,7 +244,14 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                       )}
                     </div>
                     <div className="ml-3">
-                      <div className="font-medium text-slate-900 font-sf-pro">{getFullName(employee)}</div>
+                      <div className="font-medium text-slate-900 font-sf-pro flex items-center gap-2">
+                        {getFullName(employee)}
+                        {isSyncedAdminUser(employee) && (
+                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                            Synced
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-slate-600 font-sf-pro">{employee.position || 'No position'}</div>
                     </div>
                   </div>
@@ -304,14 +317,16 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                           <Edit className="h-4 w-4" />
                         </Button>
                         
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="px-3 text-red-600 hover:text-red-700 font-sf-pro"
-                          onClick={() => handleDeleteEmployee(employee)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {!isSyncedAdminUser(employee) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="px-3 text-red-600 hover:text-red-700 font-sf-pro"
+                            onClick={() => handleDeleteEmployee(employee)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
