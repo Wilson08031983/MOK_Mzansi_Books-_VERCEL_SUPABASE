@@ -28,6 +28,7 @@ import ThankYou from "./pages/ThankYou";
 import Features from "./pages/Features";
 import Integrations from "./pages/Integrations";
 import AcceptInvitation from "./pages/AcceptInvitation";
+import DisciplinaryTest from "./components/debug/DisciplinaryTest";
 import InvitedSignup from "./pages/InvitedSignup";
 import Dashboard from "./pages/Dashboard";
 import Quotations from "./pages/Quotations";
@@ -142,6 +143,7 @@ const App = () => {
             <Route path="/auth-reset" element={<AuthReset />} />
             <Route path="/auth-debug" element={<AuthDebug />} />
             <Route path="/service-test" element={<ServiceTestPanel />} />
+            <Route path="/disciplinary-test" element={<DisciplinaryTest />} />
             <Route 
               path="/welcome-back" 
               element={

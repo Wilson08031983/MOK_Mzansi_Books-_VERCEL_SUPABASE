@@ -13,7 +13,8 @@ import {
   Check,
   Plus,
   Search,
-  PiggyBank
+  PiggyBank,
+  AlertTriangle
 } from 'lucide-react';
 import HRDashboard from '@/components/hr/HRDashboard';
 import EmployeeManagement from '@/components/hr/EmployeeManagement';
@@ -25,6 +26,7 @@ import ModulePlaceholder from '@/components/hr/ModulePlaceholder';
 import TimeAttendance from '@/components/hr/TimeAttendance';
 import AllowanceManagement from '@/components/hr/AllowanceManagement';
 import PerformanceManagement from '@/components/hr/PerformanceManagement';
+import DisciplinaryManagement from '@/components/hr/DisciplinaryManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
@@ -32,7 +34,7 @@ import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveMan
 // Using shared types from LeaveManagementTypes
 
 const HRManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'allowance' | 'payroll'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'disciplinary' | 'allowance' | 'payroll'>('dashboard');
   const [viewingProfile, setViewingProfile] = useState<boolean>(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
@@ -447,12 +449,13 @@ const HRManagement: React.FC = () => {
             { id: 'attendance', label: 'Time & Attendance', icon: <Clock className="h-4 w-4" /> },
             { id: 'training', label: 'Training', icon: <GraduationCap className="h-4 w-4" /> },
             { id: 'performance', label: 'Performance', icon: <Target className="h-4 w-4" /> },
+            { id: 'disciplinary', label: 'Disciplinary', icon: <AlertTriangle className="h-4 w-4" /> },
             { id: 'allowance', label: 'Allowance', icon: <PiggyBank className="h-4 w-4" /> },
             { id: 'payroll', label: 'Payroll', icon: <DollarSign className="h-4 w-4" /> }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as "dashboard" | "employees" | "directory" | "leave" | "attendance" | "training" | "performance" | "allowance" | "payroll")}
+              onClick={() => setActiveTab(tab.id as "dashboard" | "employees" | "directory" | "leave" | "attendance" | "training" | "performance" | "disciplinary" | "allowance" | "payroll")}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-sf-pro ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored'
@@ -513,6 +516,11 @@ const HRManagement: React.FC = () => {
           )}
           {activeTab === 'performance' && (
             <PerformanceManagement
+              employees={employees}
+            />
+          )}
+          {activeTab === 'disciplinary' && (
+            <DisciplinaryManagement
               employees={employees}
             />
           )}

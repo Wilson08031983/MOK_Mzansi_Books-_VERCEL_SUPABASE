@@ -223,12 +223,11 @@ export const calculateTrainingScore = (employeeId: string): number => {
 
 /**
  * Calculate behavior performance score
- * Based on professional behavior and teamwork
+ * Based on professional behavior, teamwork, and disciplinary record
  */
 export const calculateBehaviorScore = (employeeId: string): number => {
   try {
-    // For demo purposes, generate realistic behavior scores
-    // In a real system, this would be based on peer reviews, manager feedback, etc.
+    // Check for existing behavior data
     const behaviorData = localStorage.getItem(`behavior_${employeeId}`);
     
     if (behaviorData) {
@@ -236,23 +235,87 @@ export const calculateBehaviorScore = (employeeId: string): number => {
       return behavior.score || 80;
     }
 
-    // Generate realistic behavior score
+    // Get employee information
     const employee = getEmployeeById(employeeId);
     if (!employee) return 80;
 
+    // Base score based on position
     let baseScore = 75;
-    
-    // Management positions typically have higher behavior expectations
     if (['CEO', 'Manager', 'Director', 'Founder'].includes(employee.position)) {
       baseScore = 85;
+    } else if (['Team Leader', 'Senior', 'Lead'].some(title => employee.position.includes(title))) {
+      baseScore = 80;
     }
 
-    // Add some randomization for realism
-    const variation = (Math.random() - 0.5) * 15;
-    return Math.min(100, Math.max(60, Math.round(baseScore + variation)));
+    // Check disciplinary record and adjust score
+    const disciplinaryActions = getDisciplinaryActions(employeeId);
+    let disciplinaryDeduction = 0;
+
+    disciplinaryActions.forEach(action => {
+      if (action.status === 'active') {
+        // Deduct points based on action type and severity
+        switch (action.actionType) {
+          case 'verbal_warning':
+            disciplinaryDeduction += action.severity === 'gross' ? 15 : action.severity === 'serious' ? 10 : 5;
+            break;
+          case 'written_warning':
+            disciplinaryDeduction += action.severity === 'gross' ? 25 : action.severity === 'serious' ? 20 : 10;
+            break;
+          case 'final_warning':
+            disciplinaryDeduction += action.severity === 'gross' ? 40 : action.severity === 'serious' ? 30 : 20;
+            break;
+          case 'suspension':
+            disciplinaryDeduction += 35;
+            break;
+        }
+      } else if (action.status === 'expired') {
+        // Expired warnings have reduced impact but still affect score
+        const expiredImpact = 0.3; // 30% of original impact
+        switch (action.actionType) {
+          case 'verbal_warning':
+            disciplinaryDeduction += (action.severity === 'gross' ? 15 : action.severity === 'serious' ? 10 : 5) * expiredImpact;
+            break;
+          case 'written_warning':
+            disciplinaryDeduction += (action.severity === 'gross' ? 25 : action.severity === 'serious' ? 20 : 10) * expiredImpact;
+            break;
+          case 'final_warning':
+            disciplinaryDeduction += (action.severity === 'gross' ? 40 : action.severity === 'serious' ? 30 : 20) * expiredImpact;
+            break;
+        }
+      }
+    });
+
+    // Calculate final score
+    const finalScore = baseScore - disciplinaryDeduction;
+    
+    // Add some positive variation for employees with clean records
+    let variation = 0;
+    if (disciplinaryActions.length === 0) {
+      variation = Math.random() * 10; // Up to 10 bonus points for clean record
+    } else {
+      variation = (Math.random() - 0.5) * 5; // Smaller variation for those with records
+    }
+
+    return Math.min(100, Math.max(20, Math.round(finalScore + variation)));
   } catch (error) {
     console.error('Error calculating behavior score:', error);
     return 80;
+  }
+};
+
+/**
+ * Get disciplinary actions for an employee
+ */
+const getDisciplinaryActions = (employeeId: string): any[] => {
+  try {
+    const actionsRaw = localStorage.getItem('disciplinaryActions');
+    if (!actionsRaw) return [];
+    
+    const actions = JSON.parse(actionsRaw);
+    return actions.filter((action: any) => action.employeeId === employeeId);
+  } catch (error) {
+    console.error('Error getting disciplinary actions:', error);
+    return [];
   }
 };
 
@@ -406,9 +469,15 @@ export const getAllEmployeePerformances = (): EmployeePerformance[] => {
     if (!employeesRaw) return [];
 
     const employees: Employee[] = JSON.parse(employeesRaw);
+    
+    // Remove duplicates based on employee ID
+    const uniqueEmployees = employees.filter((employee, index, self) => 
+      index === self.findIndex(e => e.id === employee.id)
+    );
+    
     const performances: EmployeePerformance[] = [];
 
-    employees.forEach(employee => {
+    uniqueEmployees.forEach(employee => {
       const performance = generateEmployeePerformance(employee.id);
       if (performance) {
         performances.push(performance);

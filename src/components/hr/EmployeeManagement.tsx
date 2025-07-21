@@ -15,10 +15,7 @@ import {
   Calendar,
   Edit,
   Trash2,
-  FileText,
-  Plus,
-  Upload,
-  Download
+  Plus
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -352,31 +349,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
           </div>
         )}
       </div>
-      
-      {/* Employee actions */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-        <CardHeader>
-          <CardTitle className="text-slate-900 font-sf-pro">Employee Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="outline" className="flex items-center justify-center space-x-2 py-3 font-sf-pro">
-              <Upload className="h-5 w-5" />
-              <span>Import Employees</span>
-            </Button>
-            
-            <Button variant="outline" className="flex items-center justify-center space-x-2 py-3 font-sf-pro">
-              <Download className="h-5 w-5" />
-              <span>Export Employee Data</span>
-            </Button>
-            
-            <Button variant="outline" className="flex items-center justify-center space-x-2 py-3 font-sf-pro">
-              <FileText className="h-5 w-5" />
-              <span>Employee Reports</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+
       
       {/* Add Employee Modal */}
       <AddEmployeeModal 
