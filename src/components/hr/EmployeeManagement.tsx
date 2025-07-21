@@ -15,7 +15,8 @@ import {
   Calendar,
   Edit,
   Trash2,
-  Plus
+  Plus,
+  FileText
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,10 +83,19 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
 
   // Toggle employee details
   const toggleEmployeeDetails = (id: string) => {
-    if (selectedEmployee === id) {
-      setSelectedEmployee(null);
-    } else {
-      setSelectedEmployee(id);
+    try {
+      if (!id) {
+        console.warn('Employee ID is missing');
+        return;
+      }
+      if (selectedEmployee === id) {
+        setSelectedEmployee(null);
+      } else {
+        setSelectedEmployee(id);
+      }
+    } catch (error) {
+      console.error('Error toggling employee details:', error);
+      toast.error('Error displaying employee details');
     }
   };
 
@@ -101,8 +111,12 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
 
   // Get initials from name
   const getInitials = (name?: string) => {
-    if (!name) return '';
-    return name.split(' ').map(n => n && n[0] || '').join('');
+    if (!name) return 'UN';
+    return name.split(' ')
+      .filter(n => n && n.trim().length > 0)
+      .map(n => n.trim()[0]?.toUpperCase() || '')
+      .join('')
+      .slice(0, 2) || 'UN';
   };
 
   // Handle edit employee
@@ -230,7 +244,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
               <CardContent className="p-0">
                 <div 
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-white/70 transition-colors"
-                  onClick={() => toggleEmployeeDetails(employee.id)}
+                  onClick={() => employee?.id && toggleEmployeeDetails(employee.id)}
                 >
                   <div className="flex items-center">
                     <div className="h-10 w-10 rounded-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-medium font-sf-pro">
@@ -252,7 +266,7 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                   </span>
                 </div>
                 
-                {selectedEmployee === employee.id && (
+                {selectedEmployee === employee?.id && employee && (
                   <div className="p-4 bg-white/30 border-t border-white/20">
                     <div className="grid grid-cols-1 gap-3">
                       <div className="flex items-start">

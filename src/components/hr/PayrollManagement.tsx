@@ -10,7 +10,8 @@ import {
   Clock,
   X,
   AlertCircle,
-  User
+  User,
+  Download
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { payrollCalculationService, PayrollCalculation, SalaryAdvance } from '@/services/payrollCalculationService';
+import { PayslipService } from '@/services/payslipService';
+import { Employee } from '@/services/employeeService';
 
 const PayrollManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,6 +123,48 @@ const PayrollManagement: React.FC = () => {
   const handleViewPayrollDetails = (calculation: PayrollCalculation) => {
     setSelectedPayrollData(calculation);
     setShowPayrollDetails(true);
+  };
+  
+  // Download payslip
+  const handleDownloadPayslip = async (calculation: PayrollCalculation) => {
+    try {
+      // Get employee data from localStorage
+      const employeesData = localStorage.getItem('employees');
+      if (!employeesData) {
+        toast.error('Employee data not found');
+        return;
+      }
+      
+      const employees: Employee[] = JSON.parse(employeesData);
+      const employee = employees.find(emp => emp.id === calculation.employeeId);
+      
+      if (!employee) {
+        toast.error('Employee not found');
+        return;
+      }
+      
+      // Show loading toast
+      const loadingToast = toast.loading('Generating payslip PDF...');
+      
+      try {
+        // Generate the payslip
+        await PayslipService.generatePayslip(employee, calculation);
+        
+        // Dismiss the loading toast
+        toast.dismiss(loadingToast);
+        
+        // Show success message
+        toast.success('Payslip downloaded successfully!');
+      } catch (pdfError) {
+        // Dismiss the loading toast
+        toast.dismiss(loadingToast);
+        throw pdfError;
+      }
+      
+    } catch (error) {
+      console.error('Error downloading payslip:', error);
+      toast.error('Failed to download payslip');
+    }
   };
   
   // Filter payroll calculations
@@ -368,11 +413,11 @@ const PayrollManagement: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 font-sf-pro">R {calculation.baseSalary.toLocaleString()}</td>
                       <td className="py-3 px-4">
-                        <div className="text-sm font-sf-pro">
-                          <div>Regular: {calculation.regularHours.toFixed(1)}h</div>
-                          <div className="text-orange-600">OT: {calculation.overtimeHours.toFixed(1)}h</div>
-                          <div className="text-purple-600">Night: {calculation.nightShiftHours.toFixed(1)}h</div>
-                          <div className="text-blue-600">Leave: {calculation.leaveHours.toFixed(1)}h</div>
+                        <div className="text-xs font-sf-pro space-y-0.5">
+                          <div className="leading-tight">Regular: {calculation.regularHours.toFixed(1)}h</div>
+                          <div className="text-orange-600 leading-tight">OT: {calculation.overtimeHours.toFixed(1)}h</div>
+                          <div className="text-purple-600 leading-tight">Night: {calculation.nightShiftHours.toFixed(1)}h</div>
+                          <div className="text-blue-600 leading-tight">Leave: {calculation.leaveHours.toFixed(1)}h</div>
                         </div>
                       </td>
                       <td className="py-3 px-4 font-sf-pro">R {calculation.attendancePay.toLocaleString()}</td>
@@ -386,8 +431,18 @@ const PayrollManagement: React.FC = () => {
                             variant="outline"
                             onClick={() => handleViewPayrollDetails(calculation)}
                             className="font-sf-pro"
+                            title="View Details"
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadPayslip(calculation)}
+                            className="font-sf-pro text-mokm-purple-600 hover:text-mokm-purple-700 hover:bg-mokm-purple-50"
+                            title="Download Payslip"
+                          >
+                            <Download className="h-4 w-4" />
                           </Button>
                           <Badge 
                             variant={calculation.status === 'paid' ? 'default' : 'secondary'}
