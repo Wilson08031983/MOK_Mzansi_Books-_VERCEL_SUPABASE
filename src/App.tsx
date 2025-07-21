@@ -9,6 +9,7 @@ import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess, initializeDefaultUsers } from "@/services/localAuthService";
 import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";
 import { companyEmployeeSyncService } from "@/services/companyEmployeeSyncService";
+import { useProjectAttendanceSync } from "@/hooks/useProjectAttendanceSync";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -74,6 +75,9 @@ const App = () => {
       }
     }
   }));
+  
+  // Initialize project attendance sync
+  useProjectAttendanceSync();
   
   // Clear any previous error conditions on app init
   useEffect(() => {

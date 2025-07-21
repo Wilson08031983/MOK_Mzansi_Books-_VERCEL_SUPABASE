@@ -57,6 +57,7 @@ export interface Project {
   code: string;
   tasks?: Task[];
   expenseItems?: Expense[];
+  expenses_list?: Expense[]; // Detailed list of all expenses including attendance pay
   salaryExpenses?: number; // Calculated salary expenses for assigned employees
   totalProjectExpenses?: number; // Total expenses including salaries and other expenses
   [key: string]: unknown; // For dynamic property access

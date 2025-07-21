@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getClients, Client } from '@/services/clientService';
-import { getAllEmployees } from '@/services/employeeService';
+import { getAllEmployees, Employee } from '@/services/employeeService';
 import { getAllTeamMembers } from '@/services/localAuthService';
 import { Project } from '@/types/project';
+import { updateProjectWithAttendanceExpenses } from '@/services/projectAttendanceExpenseService';
 
 // Using a specialized version of Project for creating new projects
 interface ProjectData extends Omit<Project, 'budget' | 'expenses' | 'status' | 'priority'> {
@@ -471,7 +472,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Project Manager *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Team Leader *</label>
                   <select
                     value={formState.manager}
                     onChange={(e) => handleInputChange('manager', e.target.value)}

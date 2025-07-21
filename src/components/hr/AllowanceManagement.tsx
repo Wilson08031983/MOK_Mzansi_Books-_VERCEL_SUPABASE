@@ -7,10 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/utils';
-import { DollarSign, Calculator, Users, PiggyBank, Car, Home, Heart, Shield, Edit, Save, Clock } from 'lucide-react';
+import { DollarSign, Calculator, Users, PiggyBank, Car, Home, Heart, Shield, Edit, Save, Clock, Briefcase, TrendingUp } from 'lucide-react';
 import { Employee } from '@/services/employeeService';
 import { TimeEntry } from '@/components/hr/TimeAttendanceTypes';
 import { toast } from 'sonner';
+import { getAttendancePayExpensesSummary, updateAllActiveProjectsWithAttendanceExpenses, calculateProjectAttendanceExpenses } from '@/services/projectAttendanceExpenseService';
+import { Project } from '@/types/project';
 
 // Types
 interface MonthlyAttendance {
@@ -158,11 +160,203 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   };
 };
 
+// Project Expenses Tab Component
+interface ProjectExpensesTabProps {
+  employees: Employee[];
+}
+
+const ProjectExpensesTab: React.FC<ProjectExpensesTabProps> = ({ employees }) => {
+  const [projectExpensesSummary, setProjectExpensesSummary] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    loadProjectData();
+  }, []);
+
+  const loadProjectData = () => {
+    setIsLoading(true);
+    try {
+      // Load projects from localStorage
+      const projectsRaw = localStorage.getItem('projects');
+      const loadedProjects: Project[] = projectsRaw ? JSON.parse(projectsRaw) : [];
+      setProjects(loadedProjects);
+
+      // Get attendance pay expenses summary
+      const summary = getAttendancePayExpensesSummary();
+      setProjectExpensesSummary(summary);
+    } catch (error) {
+      console.error('Error loading project data:', error);
+      toast.error('Failed to load project data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateProjectExpenses = () => {
+    setIsLoading(true);
+    try {
+      updateAllActiveProjectsWithAttendanceExpenses();
+      loadProjectData(); // Reload data
+      toast.success('Project expenses updated with attendance pay');
+    } catch (error) {
+      console.error('Error updating project expenses:', error);
+      toast.error('Failed to update project expenses');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-mokm-purple-600 mx-auto mb-2"></div>
+          <p className="text-sm text-slate-500">Loading project data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro">Active Projects</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-sf-pro">{projectExpensesSummary?.projectCount || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro">Assigned Employees</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-sf-pro">{projectExpensesSummary?.employeeCount || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro">Total Attendance Expenses</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-sf-pro text-green-600">
+              {formatCurrency(projectExpensesSummary?.totalAttendanceExpenses || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro">Update Expenses</CardTitle>
+            <Calculator className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={handleUpdateProjectExpenses}
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 text-white"
+            >
+              {isLoading ? 'Updating...' : 'Update Now'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Project Breakdown Table */}
+      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <CardHeader>
+          <CardTitle className="font-sf-pro">Project Attendance Expenses Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {projectExpensesSummary?.breakdown && projectExpensesSummary.breakdown.length > 0 ? (
+            <div className="relative w-full overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-sf-pro">Project Name</TableHead>
+                    <TableHead className="font-sf-pro">Assigned Employees</TableHead>
+                    <TableHead className="font-sf-pro">Monthly Attendance Pay</TableHead>
+                    <TableHead className="font-sf-pro">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projectExpensesSummary.breakdown.map((project: any, index: number) => {
+                    const projectData = projects.find(p => p.name === project.projectName);
+                    return (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium font-sf-pro">{project.projectName}</TableCell>
+                        <TableCell className="font-sf-pro">{project.employeeCount}</TableCell>
+                        <TableCell className="font-sf-pro text-green-600">
+                          {formatCurrency(project.totalAttendancePay)}
+                        </TableCell>
+                        <TableCell className="font-sf-pro">
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            projectData?.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                            projectData?.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                            projectData?.status === 'Planning' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {projectData?.status || 'Unknown'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Briefcase className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+              <p className="text-slate-500 font-sf-pro">No active projects with assigned employees found.</p>
+              <p className="text-sm text-slate-400 font-sf-pro mt-2">
+                Assign employees to projects in the Projects page to see attendance expenses here.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Information Card */}
+      <Card className="glass backdrop-blur-sm bg-blue-50/50 border border-blue-200/20 shadow-business">
+        <CardHeader>
+          <CardTitle className="font-sf-pro text-blue-800">How Project Attendance Expenses Work</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 text-sm text-blue-700">
+            <p className="font-sf-pro">
+              <strong>Automatic Integration:</strong> When employees are assigned to projects, their attendance pay automatically becomes part of the project expenses.
+            </p>
+            <p className="font-sf-pro">
+              <strong>Real-time Calculation:</strong> Attendance pay is calculated based on regular hours, overtime (1.5x), and night shift allowances (10%).
+            </p>
+            <p className="font-sf-pro">
+              <strong>Project Allocation:</strong> Only the percentage of attendance pay allocated to each project is included in expenses.
+            </p>
+            <p className="font-sf-pro">
+              <strong>Duration-based:</strong> Expenses continue until the project is marked as 100% complete.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) => {
   const [salaryData, setSalaryData] = useState<SalaryBreakdown[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'individual' | 'uif'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'individual' | 'uif' | 'projects'>('overview');
   const [editingAllowances, setEditingAllowances] = useState<string | null>(null);
   const [tempAllowances, setTempAllowances] = useState<EmployeeAllowances>({
     thirteenthMonthBonus: 0,
@@ -360,9 +554,10 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="individual">Individual Breakdown</TabsTrigger>
+          <TabsTrigger value="projects">Project Expenses</TabsTrigger>
           <TabsTrigger value="uif">UIF Information</TabsTrigger>
         </TabsList>
 
@@ -637,6 +832,10 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
               </Card>
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="projects" className="space-y-6">
+          <ProjectExpensesTab employees={employees} />
         </TabsContent>
 
         <TabsContent value="uif" className="space-y-6">

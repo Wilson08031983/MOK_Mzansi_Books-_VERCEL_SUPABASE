@@ -24,6 +24,7 @@ import TrainingManagement from '@/components/hr/TrainingManagement';
 import ModulePlaceholder from '@/components/hr/ModulePlaceholder';
 import TimeAttendance from '@/components/hr/TimeAttendance';
 import AllowanceManagement from '@/components/hr/AllowanceManagement';
+import PerformanceManagement from '@/components/hr/PerformanceManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
@@ -511,10 +512,8 @@ const HRManagement: React.FC = () => {
             />
           )}
           {activeTab === 'performance' && (
-            <ModulePlaceholder
-              title="Performance Management"
-              description="Set goals, conduct reviews, and track employee performance metrics."
-              icon={<Target className="h-8 w-8 text-white" />}
+            <PerformanceManagement
+              employees={employees}
             />
           )}
           {activeTab === 'allowance' && (
