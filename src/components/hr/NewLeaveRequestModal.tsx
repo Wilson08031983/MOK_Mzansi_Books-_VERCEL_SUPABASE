@@ -345,6 +345,7 @@ const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
   };
   
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>  
       <DialogContent className="sm:max-w-[500px] glass backdrop-blur-sm bg-white/90 border border-white/20 shadow-business rounded-xl">
         <DialogHeader>
@@ -717,51 +718,55 @@ const NewLeaveRequestModal: React.FC<NewLeaveRequestModalProps> = ({
           </Button>
         </DialogFooter>
         
-        {/* Confirmation Dialog */}
-        {showConfirmation && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full">
-              <h3 className="text-lg font-semibold mb-4">Confirm Leave Request</h3>
-              
-              <div className="space-y-3 mb-6">
-                <p>Please review your leave request details:</p>
-                
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span className="font-medium">Employee:</span>
-                  <span>{selectedEmployee?.firstName} {selectedEmployee?.surname}</span>
-                  
-                  <span className="font-medium">Leave Type:</span>
-                  <span className="flex items-center">
-                    {getLeaveTypeIcon(leaveType as LeaveTypes, "h-4 w-4 mr-1")}
-                    {leaveType}
-                  </span>
-                  
-                  <span className="font-medium">Period:</span>
-                  <span>{formatDate(startDate)} to {formatDate(endDate)}</span>
-                  
-                  <span className="font-medium">Working Days:</span>
-                  <span>{totalDays} day{totalDays !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
-              
-              <div className="flex justify-end space-x-3">
-                <Button variant="outline" onClick={cancelConfirmation}>
-                  <X className="mr-2 h-4 w-4" />
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleSubmit} 
-                  className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 text-white"
-                >
-                  <Check className="mr-2 h-4 w-4" />
-                  Confirm Submission
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+
       </DialogContent>
     </Dialog>
+    
+    {/* Separate Confirmation Dialog */}
+    <Dialog open={showConfirmation} onOpenChange={cancelConfirmation}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirm Leave Request</DialogTitle>
+          <DialogDescription>
+            Please review your leave request details:
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <span className="font-medium">Employee:</span>
+            <span>{selectedEmployee?.firstName} {selectedEmployee?.surname}</span>
+            
+            <span className="font-medium">Leave Type:</span>
+            <span className="flex items-center">
+              {getLeaveTypeIcon(leaveType as LeaveTypes, "h-4 w-4 mr-1")}
+              {leaveType}
+            </span>
+            
+            <span className="font-medium">Period:</span>
+            <span>{formatDate(new Date(startDate))} to {formatDate(new Date(endDate))}</span>
+            
+            <span className="font-medium">Working Days:</span>
+            <span>{totalDays} day{totalDays !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={cancelConfirmation}>
+            <X className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 text-white"
+          >
+            <Check className="mr-2 h-4 w-4" />
+            Confirm Submission
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 

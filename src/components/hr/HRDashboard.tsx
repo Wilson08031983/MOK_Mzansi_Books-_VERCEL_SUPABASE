@@ -25,9 +25,15 @@ interface HRMetrics {
 
 interface HRDashboardProps {
   metrics: HRMetrics;
+  onAddEmployee?: () => void;
+  onApproveLeave?: () => void;
 }
 
-const HRDashboard: React.FC<HRDashboardProps> = ({ metrics }) => {
+const HRDashboard: React.FC<HRDashboardProps> = ({ 
+  metrics, 
+  onAddEmployee, 
+  onApproveLeave
+}) => {
   return (
     <div className="space-y-8">
       {/* Overview Metrics */}
@@ -126,18 +132,20 @@ const HRDashboard: React.FC<HRDashboardProps> = ({ metrics }) => {
           <CardTitle className="text-slate-900 font-sf-pro">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button className="h-20 w-full flex flex-col items-center justify-center gap-2 bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button 
+              onClick={onAddEmployee}
+              className="h-20 w-full flex flex-col items-center justify-center gap-2 bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 transition-all duration-200 hover:scale-105"
+            >
               <UserPlus className="h-6 w-6" />
               <span className="font-sf-pro">Add Employee</span>
             </Button>
-            <Button className="h-20 w-full flex flex-col items-center justify-center gap-2 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600">
+            <Button 
+              onClick={onApproveLeave}
+              className="h-20 w-full flex flex-col items-center justify-center gap-2 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 transition-all duration-200 hover:scale-105"
+            >
               <UserCheck className="h-6 w-6" />
               <span className="font-sf-pro">Approve Leave</span>
-            </Button>
-            <Button className="h-20 w-full flex flex-col items-center justify-center gap-2 bg-gradient-to-r from-mokm-purple-500 to-mokm-pink-500 hover:from-mokm-purple-600 hover:to-mokm-pink-600">
-              <Calendar className="h-6 w-6" />
-              <span className="font-sf-pro">Schedule Interview</span>
             </Button>
           </div>
         </CardContent>

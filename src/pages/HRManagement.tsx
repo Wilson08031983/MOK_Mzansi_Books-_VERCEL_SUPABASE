@@ -37,20 +37,74 @@ const HRManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'disciplinary' | 'allowance' | 'payroll'>('dashboard');
   const [viewingProfile, setViewingProfile] = useState<boolean>(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  
+  // Initialize employees state
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  
+  // State for HR metrics that updates when employees change
+  const [hrMetrics, setHrMetrics] = useState({
+    totalEmployees: 0,
+    newHires: 0,
+    onLeaveToday: 0,
+    upcomingBirthdays: 0,
+    openPositions: 5,
+    turnoverRate: 0
+  });
 
-  // Sample data
-  const hrMetrics = {
-    totalEmployees: 127,
-    newHires: 8,
-    onLeaveToday: 5,
-    upcomingBirthdays: 3,
-    openPositions: 12,
-    turnoverRate: 2.3
+  // Update metrics when employees data changes
+  useEffect(() => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    // Total active employees
+    const totalEmployees = employees.filter(emp => emp.status === 'active').length;
+    
+    // New hires this month
+    const newHires = employees.filter(emp => {
+      const startDate = new Date(emp.startDate);
+      return startDate.getMonth() === currentMonth && startDate.getFullYear() === currentYear;
+    }).length;
+    
+    // Employees on leave today
+    const onLeaveToday = employees.filter(emp => emp.status === 'on-leave').length;
+    
+    // Upcoming birthdays this week
+    const upcomingBirthdays = employees.filter(emp => {
+      if (!emp.dateOfBirth) return false;
+      const birthDate = new Date(emp.dateOfBirth);
+      const thisYearBirthday = new Date(currentYear, birthDate.getMonth(), birthDate.getDate());
+      return thisYearBirthday >= today && thisYearBirthday <= oneWeekFromNow;
+    }).length;
+    
+    // Mock data for positions and turnover (would come from job postings system)
+    const openPositions = 5; // This would be calculated from actual job postings
+    const turnoverRate = totalEmployees > 0 ? ((employees.filter(emp => emp.status === 'terminated').length / totalEmployees) * 100).toFixed(1) : 0;
+    
+    setHrMetrics({
+      totalEmployees,
+      newHires,
+      onLeaveToday,
+      upcomingBirthdays,
+      openPositions,
+      turnoverRate: parseFloat(turnoverRate.toString())
+    });
+  }, [employees]);
+
+  // Quick action handlers
+  const handleAddEmployee = () => {
+    setActiveTab('employees');
+    // The EmployeeManagement component will handle opening the add modal
   };
 
-  // Initialize with sample employees data structure
-  const [employees, setEmployees] = useState<Employee[]>([]); 
-  
+  const handleApproveLeave = () => {
+    setActiveTab('leave');
+    // The LeaveManagement component will show pending leave requests
+  };
+
+
+
   // Load employees from localStorage on component mount
   useEffect(() => {
     const storedEmployees = getAllEmployees();
@@ -473,7 +527,9 @@ const HRManagement: React.FC = () => {
         {/* Content */}
         <div className="animate-fade-in">
           {activeTab === 'dashboard' && <HRDashboard 
-            metrics={hrMetrics} 
+            metrics={hrMetrics}
+            onAddEmployee={handleAddEmployee}
+            onApproveLeave={handleApproveLeave}
           />}
           {activeTab === 'employees' && <EmployeeManagement employees={employees} setEmployees={setEmployees} />}
           {activeTab === 'directory' && !viewingProfile && (
