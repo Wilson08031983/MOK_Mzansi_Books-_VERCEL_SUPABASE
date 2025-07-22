@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calculator, Receipt, FileText, TrendingUp, DollarSign, CreditCard, ChevronLeft } from 'lucide-react';
 import ExpensesTab from '@/components/accounting/ExpensesTab';
-import DocumentsTab from '@/components/accounting/DocumentsTab';
+import TaxTab from '@/components/accounting/TaxTab';
 
 const Accounting = () => {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
@@ -127,10 +127,10 @@ const Accounting = () => {
                 Expenses
               </TabsTrigger>
               <TabsTrigger 
-                value="documents" 
+                value="tax" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
-                Documents
+                Tax
               </TabsTrigger>
               <TabsTrigger 
                 value="reports" 
@@ -198,8 +198,8 @@ const Accounting = () => {
               <ExpensesTab onAddExpense={handleAddExpense} />
             </TabsContent>
 
-            <TabsContent value="documents">
-              <DocumentsTab />
+            <TabsContent value="tax">
+              <TaxTab />
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-6">
