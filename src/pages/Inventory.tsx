@@ -62,6 +62,7 @@ import DamageStockForm from '@/components/inventory/DamageStockForm';
 import AddSupplierModal from '@/components/inventory/AddSupplierModal';
 import AddStorageModal from '@/components/inventory/AddStorageModal';
 import UpdateStockWithBarcodeModal from '@/components/inventory/UpdateStockWithBarcodeModal';
+import SalesModal from '@/components/inventory/SalesModal';
 
 // Service imports
 import { 
@@ -115,6 +116,7 @@ const Inventory = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showUpdateWithBarcodeModal, setShowUpdateWithBarcodeModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSalesModal, setShowSalesModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -190,12 +192,12 @@ const Inventory = () => {
   // Refresh data when forms close or when any modal is closed
   useEffect(() => {
     if (!showNewStockForm && !showUpdateStockForm && !showReceiveStockForm && !showDamageStockForm && 
-        !showEditModal && !showHistoryModal && !showDeleteConfirm) {
+        !showEditModal && !showHistoryModal && !showDeleteConfirm && !showSalesModal) {
       // Force refresh when modals close to ensure we get the latest data
       loadInventoryData(true);
     }
   }, [showNewStockForm, showUpdateStockForm, showReceiveStockForm, showDamageStockForm, 
-      showEditModal, showHistoryModal, showDeleteConfirm, loadInventoryData]);
+      showEditModal, showHistoryModal, showDeleteConfirm, showSalesModal, loadInventoryData]);
       
   // Ensure we refresh data on component mount
   useEffect(() => {
@@ -299,6 +301,9 @@ const Inventory = () => {
         break;
       case 'storage':
         setShowStorageModal(true);
+        break;
+      case 'sales':
+        setShowSalesModal(true);
         break;
       case 'history':
         setShowHistoryModal(true);
@@ -466,6 +471,13 @@ const Inventory = () => {
             >
               <Store className="h-4 w-4" /> Add Storage
             </Button>
+            
+            <Button 
+              className="flex items-center gap-2 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
+              onClick={() => handleActionClick('sales')}
+            >
+              <Package className="h-4 w-4" /> Sales
+            </Button>
           </div>
         </div>
 
@@ -548,8 +560,8 @@ const Inventory = () => {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="h-4 w-4" />
-                  )}
-                  <span className="hidden md:inline">Refresh</span>
+                   )}
+                   <span className="hidden md:inline">Refresh</span>
                 </Button>
               </div>
               
@@ -831,6 +843,12 @@ const Inventory = () => {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Sales Modal */}
+        <SalesModal
+          isOpen={showSalesModal}
+          onClose={() => setShowSalesModal(false)}
+        />
       </div>
     </div>
   );

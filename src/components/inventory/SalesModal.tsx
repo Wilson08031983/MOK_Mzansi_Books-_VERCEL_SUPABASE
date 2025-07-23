@@ -99,6 +99,37 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   });
   const { toast } = useToast();
 
+  // Helper function to save income record
+  const saveIncomeRecord = (description: string, amount: number, category: string, paymentMethod: string = 'Cash') => {
+    try {
+      const existingIncomes = JSON.parse(localStorage.getItem('incomes') || '[]');
+      
+      const newIncomeRecord = {
+        id: `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        date: new Date().toISOString(),
+        description: description,
+        amount: amount,
+        category: category,
+        status: 'received' as const,
+        paymentMethod: paymentMethod,
+        client: selectedClientId ? (clients.find(c => c.id === selectedClientId)?.companyName || clients.find(c => c.id === selectedClientId)?.contactPerson) : undefined,
+        hasInvoice: false,
+        notes: 'Auto-generated from sales transaction'
+      };
+      
+      const updatedIncomes = [...existingIncomes, newIncomeRecord];
+      localStorage.setItem('incomes', JSON.stringify(updatedIncomes));
+      
+      // Dispatch event for real-time updates
+      window.dispatchEvent(new CustomEvent('income-updated'));
+      
+      return newIncomeRecord;
+    } catch (error) {
+      console.error('Error saving income record:', error);
+      return null;
+    }
+  };
+
   // Load clients and company information on component mount
   useEffect(() => {
     if (isOpen) {
@@ -322,10 +353,18 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               document.body.removeChild(iframe);
             }, 1000);
             
+            // Save income record for the sale
+            const incomeRecord = saveIncomeRecord(
+              `Sales Transaction - Print Slip`,
+              totalAmount,
+              'Sales',
+              'Cash'
+            );
+            
             // Show success message
             toast({
               title: "Print Initiated",
-              description: "The print slip has been sent to your printer.",
+              description: "The print slip has been sent to your printer and income record saved.",
               variant: "default"
             });
           }, 500);
@@ -594,6 +633,16 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
       // Update inventory quantities
       updateInventoryQuantities();
       
+      // Save income record for delivery cost if there is one
+      if (deliveryNote.deliveryCost > 0) {
+        const incomeRecord = saveIncomeRecord(
+          `Delivery Service - ${deliveryNote.customerName} ${deliveryNote.customerSurname}`,
+          deliveryNote.deliveryCost,
+          'Delivery Services',
+          'Cash'
+        );
+      }
+      
       // Generate and download PDF
       generateDeliveryNotePdf({
         customerName: deliveryNote.customerName,
@@ -613,15 +662,19 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         total: totalAmount
       }, selectedClientId);
 
-      toast.success("Delivery note created", {
-        description: "Delivery note created and PDF downloaded",
+      toast({
+        title: "Delivery note created",
+        description: "Delivery note created, PDF downloaded, and income record saved.",
+        variant: "default"
       });
 
       onClose();
     } catch (error) {
       console.error('Error creating delivery note:', error);
-      toast.error("Error creating delivery note", {
+      toast({
+        title: "Error creating delivery note",
         description: "An error occurred while creating the delivery note",
+        variant: "destructive"
       });
     }
   };
