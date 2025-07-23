@@ -35,7 +35,7 @@ import {
   AlertCircle,
   XCircle,
 } from 'lucide-react';
-import type { Invoice, InvoiceStatus } from '@/services/invoiceService';
+import type { Invoice, InvoiceStatus } from '@/types/invoice';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { toast } from 'sonner';
 
@@ -77,6 +77,12 @@ const getStatusConfig = (status: InvoiceStatus) => {
         bg: 'bg-green-50',
         text: 'text-green-800',
         icon: <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+      };
+    case 'partial':
+      return {
+        bg: 'bg-orange-50',
+        text: 'text-orange-800',
+        icon: <Clock className="h-3.5 w-3.5 mr-1.5" />
       };
     case 'overdue':
       return {

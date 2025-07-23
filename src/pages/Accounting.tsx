@@ -5,13 +5,28 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calculator, Receipt, FileText, TrendingUp, DollarSign, CreditCard, ChevronLeft } from 'lucide-react';
 import ExpensesTab from '@/components/accounting/ExpensesTab';
+import IncomeTab from '@/components/accounting/IncomeTab';
 import TaxTab from '@/components/accounting/TaxTab';
+import AddIncomeModal from '@/components/accounting/AddIncomeModal';
+import EditIncomeModal from '@/components/accounting/EditIncomeModal';
 
 const Accounting = () => {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [showAddIncomeModal, setShowAddIncomeModal] = useState(false);
+  const [showEditIncomeModal, setShowEditIncomeModal] = useState(false);
+  const [editingIncome, setEditingIncome] = useState(null);
 
   const handleAddExpense = () => {
     setShowAddExpenseModal(true);
+  };
+
+  const handleAddIncome = () => {
+    setShowAddIncomeModal(true);
+  };
+
+  const handleEditIncome = (income) => {
+    setEditingIncome(income);
+    setShowEditIncomeModal(true);
   };
 
   return (
@@ -127,6 +142,12 @@ const Accounting = () => {
                 Expenses
               </TabsTrigger>
               <TabsTrigger 
+                value="income" 
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
+              >
+                Income
+              </TabsTrigger>
+              <TabsTrigger 
                 value="tax" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
@@ -198,6 +219,10 @@ const Accounting = () => {
               <ExpensesTab onAddExpense={handleAddExpense} />
             </TabsContent>
 
+            <TabsContent value="income">
+              <IncomeTab onAddIncome={handleAddIncome} onEditIncome={handleEditIncome} />
+            </TabsContent>
+
             <TabsContent value="tax">
               <TaxTab />
             </TabsContent>
@@ -243,6 +268,35 @@ const Accounting = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Add Income Modal */}
+        {showAddIncomeModal && (
+          <AddIncomeModal 
+            onClose={() => setShowAddIncomeModal(false)}
+            onSave={() => {
+              setShowAddIncomeModal(false);
+              // Trigger income list refresh
+              window.dispatchEvent(new CustomEvent('income-updated'));
+            }}
+          />
+        )}
+
+        {/* Edit Income Modal */}
+        {showEditIncomeModal && editingIncome && (
+          <EditIncomeModal 
+            income={editingIncome}
+            onClose={() => {
+              setShowEditIncomeModal(false);
+              setEditingIncome(null);
+            }}
+            onSave={() => {
+              setShowEditIncomeModal(false);
+              setEditingIncome(null);
+              // Trigger income list refresh
+              window.dispatchEvent(new CustomEvent('income-updated'));
+            }}
+          />
         )}
       </div>
     </div>

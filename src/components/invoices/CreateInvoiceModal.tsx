@@ -10,33 +10,7 @@ import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Link } from 'react-router-dom';
 import InvoicePreviewModal from './InvoicePreviewModal';
-
-// Define Invoice type locally instead of importing to avoid conflicts
-type Invoice = {
-  id: string;
-  number: string;
-  clientId: string;
-  date: string;
-  dueDate: string;
-  reference: string;
-  notes: string;
-  terms: string;
-  vatRate: number;
-  items: Array<{
-    id: string;
-    itemNo: number;
-    description: string;
-    quantity: number;
-    rate: number;
-    markupPercent: number;
-    discount: number;
-    amount: number;
-  }>;
-  status?: string;
-  subtotal?: number;
-  total?: number;
-  vatAmount?: number;
-};
+import { Invoice } from '@/types/invoice';
 
 interface LineItem {
   id: string;

@@ -35,6 +35,7 @@ interface InvoicesContentProps {
   onDeleteInvoice: (invoiceId: string) => void;
   onEditInvoice?: (invoiceId: string) => void;
   onUpdateStatus: (invoiceId: string, newStatus: string) => void;
+  onView: (invoice: Invoice) => void;
 }
 
 const InvoicesContent: React.FC<InvoicesContentProps> = ({
@@ -55,7 +56,8 @@ const InvoicesContent: React.FC<InvoicesContentProps> = ({
   onRecordPayment = () => {},
   onDeleteInvoice = () => {},
   onEditInvoice,
-  onUpdateStatus = () => {}
+  onUpdateStatus = () => {},
+  onView
 }) => {
   // Get status icon with proper typing
   const getStatusIcon = (status: string) => {
@@ -116,16 +118,33 @@ const InvoicesContent: React.FC<InvoicesContentProps> = ({
           invoices={invoices}
           selectedInvoices={selectedInvoices}
           onSelectInvoice={onSelectInvoice}
-          onSelectAll={onSelectAll}
-          getStatusIcon={getStatusIcon}
-          getStatusColor={getStatusColor}
-          getDisplayStatus={getDisplayStatus}
-          sortColumn={sortColumn}
+          onSelectAll={(selected: boolean) => {
+            if (selected) {
+              onSelectAll();
+            } else {
+              // Clear all selections - this would need to be handled by parent
+              invoices.forEach(invoice => {
+                if (selectedInvoices.includes(invoice.id)) {
+                  onSelectInvoice(invoice.id);
+                }
+              });
+            }
+          }}
+          onSort={onSort as (field: any) => void}
+          sortField={sortColumn as any}
           sortDirection={sortDirection}
-          onSort={onSort}
-          onDeleteInvoice={onDeleteInvoice}
-          onEditInvoice={onEditInvoice}
-          onUpdateStatus={onUpdateStatus}
+          onRecordPayment={onRecordPayment}
+          onEdit={(invoice) => onEditInvoice?.(invoice.id)}
+          onView={onView}
+          onDelete={(id) => onDeleteInvoice(id)}
+          onSend={(invoice) => {
+            // Handle send action - could be passed as prop if needed
+            console.log('Send invoice:', invoice);
+          }}
+          onDuplicate={(invoice) => {
+            // Handle duplicate action - could be passed as prop if needed
+            console.log('Duplicate invoice:', invoice);
+          }}
         />
       ) : (
         <InvoicesGrid

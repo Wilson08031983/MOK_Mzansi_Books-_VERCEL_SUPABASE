@@ -122,6 +122,9 @@ const Invoices: React.FC = () => {
         vatRate: 15,
         reference: 'PO-12345',
         terms: 'Net 30 days',
+        notes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         items: [
           {
             id: '1',
@@ -254,14 +257,14 @@ const Invoices: React.FC = () => {
 
 
   // Function to save invoice to localStorage
-  const handleSaveInvoice = async (invoice: Invoice) => {
+  const handleSaveInvoice = async (invoice: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
       // Find the client
       const client = clients.find(c => c.id === invoice.clientId);
       
       // Ensure invoice number is properly set
       // The modal uses invoiceNumber but we need to use number for storage
-      const invoiceNumber = invoice.invoiceNumber || invoice.number;
+      const invoiceNumber = invoice.number || 'INV-' + Date.now();
       
       // Generate new invoice with required fields
       const newInvoice: Invoice = {
@@ -276,6 +279,17 @@ const Invoices: React.FC = () => {
         clientEmail: client?.email || '',
         // Ensure number is set correctly
         number: invoiceNumber,
+        // Ensure required fields are present
+        date: invoice.invoiceDate || invoice.date || new Date().toISOString().split('T')[0],
+        invoiceDate: invoice.invoiceDate || invoice.date || new Date().toISOString().split('T')[0],
+        amount: invoice.total || invoice.amount || 0,
+        total: invoice.total || invoice.amount || 0,
+        client: invoice.clientId,
+        currency: invoice.currency || 'ZAR',
+        terms: invoice.terms || 'Net 30 days',
+        reference: invoice.reference || '',
+        vatRate: invoice.vatRate || 0,
+        items: invoice.items || [],
       };
       
       console.log('Saving invoice with number:', newInvoice.number);
@@ -489,9 +503,21 @@ const Invoices: React.FC = () => {
           setSelectedInvoiceForEdit(null); // Clear any previous edit data
           setShowCreateModal(true);
         }}
-        onRecordPayment={() => setShowPaymentModal(true)}
+        onRecordPayment={() => {
+          if (selectedInvoices.length === 1) {
+            const invoice = invoices.find(inv => inv.id === selectedInvoices[0]);
+            if (invoice) {
+              handleRecordPayment(invoice);
+            }
+          } else if (selectedInvoices.length === 0) {
+            toast.error('Please select an invoice to record payment');
+          } else {
+            toast.error('Please select only one invoice to record payment');
+          }
+        }}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        hasSelectedInvoice={selectedInvoices.length === 1}
       />
 
       <InvoicesSummaryCards invoices={invoices} />
@@ -543,9 +569,8 @@ const Invoices: React.FC = () => {
         onRecordPayment={handleRecordPayment}
         onDeleteInvoice={handleDeleteInvoice}
         onEditInvoice={handleEditInvoice}
-        onViewInvoice={handleViewInvoice}
-        onDuplicateInvoice={handleDuplicateInvoice}
         onUpdateStatus={handleUpdateInvoiceStatus}
+        onView={handleViewInvoice}
       />
 
       <CreateInvoiceModal
@@ -560,11 +585,24 @@ const Invoices: React.FC = () => {
 
       <RecordPaymentModal
         isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        invoice={selectedInvoiceForPayment}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setSelectedInvoiceForPayment(null);
+        }}
+        invoice={selectedInvoiceForPayment || null}
         onSuccess={(paymentData) => {
           console.log('Payment recorded', paymentData);
+          
+          // Refresh invoices from localStorage to reflect the payment
+          const updatedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+          setInvoices(updatedInvoices);
+          
+          // Close modal and clear selected invoice
           setShowPaymentModal(false);
+          setSelectedInvoiceForPayment(null);
+          
+          // Show success message
+          toast.success(`Payment of ${paymentData.amount.toLocaleString()} recorded successfully`);
         }}
       />
       

@@ -18,6 +18,7 @@ interface InvoicesHeaderProps {
   viewMode: 'table' | 'grid';
   onViewModeChange: (mode: 'table' | 'grid') => void;
   className?: string;
+  hasSelectedInvoice?: boolean;
 }
 
 const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
@@ -27,7 +28,8 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
   onRecordPayment,
   viewMode,
   onViewModeChange,
-  className = ''
+  className = '',
+  hasSelectedInvoice = false
 }) => {
   return (
     <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${className}`}>
@@ -69,7 +71,12 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
           <Button 
             variant="outline" 
             onClick={onRecordPayment}
-            className="font-sf-pro border-slate-200 hover:bg-slate-50 transition-colors"
+            className={`font-sf-pro border-slate-200 transition-colors ${
+              hasSelectedInvoice 
+                ? 'hover:bg-slate-50 text-slate-900' 
+                : 'text-slate-400 cursor-not-allowed opacity-60'
+            }`}
+            title={hasSelectedInvoice ? 'Record payment for selected invoice' : 'Select an invoice to record payment'}
           >
             <CreditCard className="h-4 w-4 mr-2" />
             Receive Payment
