@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { PayrollCalculation } from './payrollCalculationService';
 import { Employee } from './employeeService';
+import { employeeDeductionsService } from './employeeDeductionsService';
 
 interface CompanyDetails {
   name: string;
@@ -127,15 +128,15 @@ export class PayslipService {
     console.log('Company logo available:', !!company.logo);
     
     // Company name and details on the left
-    pdf.setFontSize(18);
+    pdf.setFontSize(14); // Reduced from 18
     pdf.setTextColor(0, 0, 0);
-    pdf.text(company.name, margin, yPosition + 8);
+    pdf.text(company.name, margin, yPosition + 6);
     
     // Add logo on the right side if available
     if (company.logo) {
       try {
         console.log('Adding logo to PDF...');
-        const logoSize = 30; // Slightly larger logo size in mm
+        const logoSize = 20; // Reduced from 30
         const logoX = pageWidth - margin - logoSize; // Position on right side
         pdf.addImage(company.logo, 'PNG', logoX, yPosition, logoSize, logoSize);
         console.log('Logo added successfully');
@@ -146,188 +147,218 @@ export class PayslipService {
       console.log('No logo found');
     }
     
-    yPosition += 30; // Space for logo height
+    yPosition += 22; // Reduced from 30
     
-    pdf.setFontSize(10);
+    pdf.setFontSize(8); // Reduced from 10
     pdf.setTextColor(100, 100, 100);
     pdf.text(company.address.line1, margin, yPosition);
-    yPosition += 4;
+    yPosition += 3; // Reduced from 4
     pdf.text(`${company.address.line2}, ${company.address.line3}`, margin, yPosition);
-    yPosition += 4;
+    yPosition += 3;
     pdf.text(company.address.line4, margin, yPosition);
-    yPosition += 4;
+    yPosition += 3;
     pdf.text(`Email: ${company.email} | Phone: ${company.phone}`, margin, yPosition);
-    yPosition += 4;
+    yPosition += 3;
     pdf.text(`Website: ${company.website}`, margin, yPosition);
-    yPosition += 20; // Increased spacing
+    yPosition += 12; // Reduced from 20
     
     // Title
-    pdf.setFontSize(16);
+    pdf.setFontSize(12); // Reduced from 16
     pdf.setTextColor(0, 0, 0);
     const title = 'PAYSLIP / PAY ADVICE';
     const titleWidth = pdf.getTextWidth(title);
     pdf.text(title, (pageWidth - titleWidth) / 2, yPosition);
-    yPosition += 25; // Increased spacing after title
+    yPosition += 15; // Reduced from 25
     
     // Employee Information Section
-    pdf.setFontSize(12);
+    pdf.setFontSize(10); // Reduced from 12
     pdf.setTextColor(0, 0, 0);
     pdf.text('EMPLOYEE INFORMATION', margin, yPosition);
-    yPosition += 8;
+    yPosition += 6; // Reduced from 8
     
     // Draw border for employee info
     pdf.setDrawColor(200, 200, 200);
-    pdf.rect(margin, yPosition - 2, contentWidth, 25);
+    pdf.rect(margin, yPosition - 2, contentWidth, 20); // Reduced from 25
     
-    pdf.setFontSize(10);
-    const leftCol = margin + 5;
+    pdf.setFontSize(8); // Reduced from 10
+    const leftCol = margin + 3; // Reduced from 5
     const rightCol = margin + (contentWidth / 2);
     
     pdf.text(`Employee Number: ${employeeNumber}`, leftCol, yPosition + 3);
     pdf.text(`Pay Period: ${payPeriod}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4; // Reduced from 6
     
     pdf.text(`Name: ${employee.firstName} ${employee.surname}`, leftCol, yPosition + 3);
     pdf.text(`Position: ${employee.position || 'Not specified'}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     pdf.text(`Department: ${employee.department || 'Not specified'}`, leftCol, yPosition + 3);
     pdf.text(`Employee ID: ${employee.id.slice(0, 8)}...`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     pdf.text(`Base Salary: ${this.formatCurrency(employee.salary)}`, leftCol, yPosition + 3);
-    yPosition += 10;
+    yPosition += 8; // Reduced from 10
     
     // Hours Breakdown Section
-    pdf.setFontSize(12);
+    pdf.setFontSize(10); // Reduced from 12
     pdf.text('HOURS BREAKDOWN', margin, yPosition);
-    yPosition += 8;
+    yPosition += 6; // Reduced from 8
     
-    pdf.rect(margin, yPosition - 2, contentWidth, 20);
-    pdf.setFontSize(10);
+    pdf.rect(margin, yPosition - 2, contentWidth, 16); // Reduced from 20
+    pdf.setFontSize(8); // Reduced from 10
     
     pdf.text(`Regular Hours: ${payrollData.regularHours.toFixed(1)}h`, leftCol, yPosition + 3);
     pdf.text(`Overtime Hours: ${payrollData.overtimeHours.toFixed(1)}h`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4; // Reduced from 6
     
     pdf.text(`Night Shift Hours: ${payrollData.nightShiftHours.toFixed(1)}h`, leftCol, yPosition + 3);
     pdf.text(`Leave Hours: ${payrollData.leaveHours.toFixed(1)}h`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     pdf.setTextColor(0, 100, 0);
     pdf.text(`Total Hours: ${(payrollData.regularHours + payrollData.overtimeHours + payrollData.nightShiftHours + payrollData.leaveHours).toFixed(1)}h`, leftCol, yPosition + 3);
     pdf.setTextColor(0, 0, 0);
-    yPosition += 15;
+    yPosition += 10; // Reduced from 15
     
     // Earnings Section
-    pdf.setFontSize(12);
+    pdf.setFontSize(10); // Reduced from 12
     pdf.text('EARNINGS', margin, yPosition);
-    yPosition += 8;
+    yPosition += 6; // Reduced from 8
     
-    // Increased box height to accommodate all content including gross salary
-    pdf.rect(margin, yPosition - 2, contentWidth, 35);
-    pdf.setFontSize(10);
+    // Reduced box height
+    pdf.rect(margin, yPosition - 2, contentWidth, 28); // Reduced from 35
+    pdf.setFontSize(8); // Reduced from 10
     
     pdf.text(`Base Salary: ${this.formatCurrency(payrollData.baseSalary)}`, leftCol, yPosition + 3);
     pdf.text(`Attendance Pay: ${this.formatCurrency(payrollData.attendancePay)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4; // Reduced from 6
     
     pdf.text(`Housing Allowance: ${this.formatCurrency(payrollData.allowances.housingAllowance || 0)}`, leftCol, yPosition + 3);
     pdf.text(`Medical Aid Allowance: ${this.formatCurrency(payrollData.allowances.medicalAidAllowance || 0)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     pdf.text(`13th Month Bonus: ${this.formatCurrency(payrollData.allowances.thirteenthMonthBonus || 0)}`, leftCol, yPosition + 3);
     pdf.text(`Motor Vehicle Allowance: ${this.formatCurrency(payrollData.allowances.motorVehicleAllowance || 0)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     pdf.text(`Other Allowances: ${this.formatCurrency(payrollData.allowances.otherAllowances || 0)}`, leftCol, yPosition + 3);
     pdf.text(`Total Allowances: ${this.formatCurrency(payrollData.allowances.totalAllowances)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     // Gross salary inside the box with highlighting
     pdf.setTextColor(0, 150, 0);
-    pdf.setFontSize(11);
+    pdf.setFontSize(9); // Reduced from 11
     pdf.text(`GROSS SALARY: ${this.formatCurrency(payrollData.grossSalary)}`, leftCol, yPosition + 3);
     pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(10);
-    yPosition += 15;
+    pdf.setFontSize(8);
+    yPosition += 12; // Reduced from 15
     
     // Deductions Section
-    pdf.setFontSize(12);
+    pdf.setFontSize(10); // Reduced from 12
     pdf.text('DEDUCTIONS', margin, yPosition);
-    yPosition += 8;
+    yPosition += 6; // Reduced from 8
     
-    pdf.rect(margin, yPosition - 2, contentWidth, 25);
-    pdf.setFontSize(10);
+    // Get employee deductions for display
+    const employeeDeductions = employeeDeductionsService.getEmployeeDeductions(employee.id);
+    const activeDeductions = employeeDeductions.filter(d => d.isActive);
+    
+    // Calculate box height based on number of deductions
+    const baseDeductionLines = 3; // PAYE, UIF, Medical Aid, Retirement, Salary Advance, Other
+    const employeeDeductionLines = Math.min(activeDeductions.length, 2); // Show max 2 employee deductions
+    const totalLines = baseDeductionLines + employeeDeductionLines + 1; // +1 for total
+    const boxHeight = Math.max(20, totalLines * 4 + 4);
+    
+    pdf.rect(margin, yPosition - 2, contentWidth, boxHeight);
+    pdf.setFontSize(8); // Reduced from 10
     
     pdf.text(`PAYE Tax: ${this.formatCurrency(payrollData.deductions.tax)}`, leftCol, yPosition + 3);
     pdf.text(`UIF: ${this.formatCurrency(payrollData.deductions.uif)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4; // Reduced from 6
     
     pdf.text(`Medical Aid: ${this.formatCurrency(payrollData.deductions.medicalAid)}`, leftCol, yPosition + 3);
     pdf.text(`Retirement Fund: ${this.formatCurrency(payrollData.deductions.retirementFund)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    yPosition += 4;
     
     pdf.text(`Salary Advance: ${this.formatCurrency(payrollData.deductions.salaryAdvance || 0)}`, leftCol, yPosition + 3);
-    pdf.text(`Other Deductions: ${this.formatCurrency(payrollData.deductions.otherDeductions || 0)}`, rightCol, yPosition + 3);
-    yPosition += 6;
+    
+    // Show first employee deduction if available
+    if (activeDeductions.length > 0) {
+      const firstDeduction = activeDeductions[0];
+      const amount = firstDeduction.isPercentage 
+        ? (payrollData.grossSalary * firstDeduction.amount / 100)
+        : firstDeduction.amount;
+      pdf.text(`${firstDeduction.deductionType}: ${this.formatCurrency(amount)}`, rightCol, yPosition + 3);
+    } else {
+      pdf.text(`Other Deductions: ${this.formatCurrency(payrollData.deductions.otherDeductions || 0)}`, rightCol, yPosition + 3);
+    }
+    yPosition += 4;
+    
+    // Show second employee deduction if available
+    if (activeDeductions.length > 1) {
+      const secondDeduction = activeDeductions[1];
+      const amount = secondDeduction.isPercentage 
+        ? (payrollData.grossSalary * secondDeduction.amount / 100)
+        : secondDeduction.amount;
+      pdf.text(`${secondDeduction.deductionType}: ${this.formatCurrency(amount)}`, leftCol, yPosition + 3);
+      yPosition += 4;
+    }
     
     pdf.setTextColor(200, 0, 0);
-    pdf.setFontSize(11);
+    pdf.setFontSize(9); // Reduced from 11
     pdf.text(`TOTAL DEDUCTIONS: ${this.formatCurrency(payrollData.deductions.totalDeductions)}`, leftCol, yPosition + 3);
     pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(10);
-    yPosition += 15;
+    pdf.setFontSize(8);
+    yPosition += 12; // Reduced from 15
     
     // Net Salary Section
     pdf.setFillColor(240, 240, 240);
-    pdf.rect(margin, yPosition - 2, contentWidth, 15, 'F');
-    pdf.setFontSize(14);
+    pdf.rect(margin, yPosition - 2, contentWidth, 12, 'F'); // Reduced from 15
+    pdf.setFontSize(12); // Reduced from 14
     pdf.setTextColor(0, 100, 0);
     const netSalaryText = `NET SALARY: ${this.formatCurrency(payrollData.netSalary)}`;
     const netSalaryWidth = pdf.getTextWidth(netSalaryText);
-    pdf.text(netSalaryText, (pageWidth - netSalaryWidth) / 2, yPosition + 8);
-    yPosition += 20;
+    pdf.text(netSalaryText, (pageWidth - netSalaryWidth) / 2, yPosition + 7); // Adjusted for smaller box
+    yPosition += 16; // Reduced from 20
     
     // Calculation Formula
-    pdf.setFontSize(9);
+    pdf.setFontSize(7); // Reduced from 9
     pdf.setTextColor(100, 100, 100);
     const formula = `Calculation: Base Salary (${this.formatCurrency(payrollData.baseSalary)}) + Gross Salary (${this.formatCurrency(payrollData.grossSalary)}) - Total Deductions (${this.formatCurrency(payrollData.deductions.totalDeductions)})`;
     pdf.text(formula, margin, yPosition + 3);
-    yPosition += 15;
+    yPosition += 10; // Reduced from 15
     
     // Signature Section
     console.log('Company signature available:', !!company.signature);
     if (company.signature) {
       try {
         console.log('Adding signature to PDF...');
-        yPosition += 10;
-        pdf.setFontSize(10);
+        yPosition += 5; // Reduced from 10
+        pdf.setFontSize(8); // Reduced from 10
         pdf.setTextColor(0, 0, 0);
         pdf.text('Authorized Signature:', margin, yPosition);
-        yPosition += 5;
+        yPosition += 3; // Reduced from 5
         
         // Add signature image
-        const signatureWidth = 40; // Signature width in mm
-        const signatureHeight = 15; // Signature height in mm
+        const signatureWidth = 30; // Reduced from 40
+        const signatureHeight = 10; // Reduced from 15
         pdf.addImage(company.signature, 'PNG', margin, yPosition, signatureWidth, signatureHeight);
-        yPosition += signatureHeight + 5;
+        yPosition += signatureHeight + 3; // Reduced spacing
         console.log('Signature added successfully');
       } catch (error) {
         console.warn('Error adding signature to PDF:', error);
-        yPosition += 10;
+        yPosition += 8; // Reduced from 10
       }
     } else {
       console.log('No signature found, skipping signature section');
-      yPosition += 10;
+      yPosition += 8; // Reduced from 10
     }
     
     // Footer
-    pdf.setFontSize(8);
+    pdf.setFontSize(7); // Reduced from 8
     pdf.setTextColor(150, 150, 150);
     const footerText = `Generated on ${new Date().toLocaleDateString('en-ZA')} at ${new Date().toLocaleTimeString('en-ZA')}`;
     const footerWidth = pdf.getTextWidth(footerText);
-    pdf.text(footerText, (pageWidth - footerWidth) / 2, yPosition + 10);
+    pdf.text(footerText, (pageWidth - footerWidth) / 2, yPosition + 8); // Reduced from 10
     
     // Generate filename
     const fileName = `Payslip_${employee.firstName}_${employee.surname}_${new Date().toISOString().slice(0, 7)}.pdf`;

@@ -11,7 +11,8 @@ import {
   X,
   AlertCircle,
   User,
-  Download
+  Download,
+  Minus
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import { toast } from 'sonner';
 import { payrollCalculationService, PayrollCalculation, SalaryAdvance } from '@/services/payrollCalculationService';
 import { PayslipService } from '@/services/payslipService';
 import { Employee } from '@/services/employeeService';
+import EmployeeDeductionsManagement from '@/components/hr/EmployeeDeductionsManagement';
 
 const PayrollManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +37,7 @@ const PayrollManagement: React.FC = () => {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showPayrollDetails, setShowPayrollDetails] = useState(false);
   const [selectedPayrollData, setSelectedPayrollData] = useState<PayrollCalculation | null>(null);
+  const [showDeductionsModal, setShowDeductionsModal] = useState(false);
   
   // Salary Advance Form State
   const [advanceForm, setAdvanceForm] = useState({
@@ -187,6 +190,15 @@ const PayrollManagement: React.FC = () => {
         </div>
         
         <div className="flex gap-3">
+          <Button
+            onClick={() => setShowDeductionsModal(true)}
+            variant="outline"
+            className="font-sf-pro"
+          >
+            <Minus className="h-4 w-4 mr-2" />
+            Employee Deductions
+          </Button>
+          
           <Button
             onClick={handleCalculatePayroll}
             disabled={isCalculating}
@@ -740,6 +752,16 @@ const PayrollManagement: React.FC = () => {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Employee Deductions Modal */}
+      <Dialog open={showDeductionsModal} onOpenChange={setShowDeductionsModal}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Employee Deductions Management</DialogTitle>
+          </DialogHeader>
+          <EmployeeDeductionsManagement onClose={() => setShowDeductionsModal(false)} />
         </DialogContent>
       </Dialog>
     </div>

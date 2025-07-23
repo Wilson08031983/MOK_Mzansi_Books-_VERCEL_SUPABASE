@@ -1,4 +1,5 @@
 import { Employee } from './employeeService';
+import { employeeDeductionsService } from './employeeDeductionsService';
 
 export interface AttendanceData {
   employeeId: string;
@@ -323,10 +324,13 @@ class PayrollCalculationService {
       this.markSalaryAdvanceAsDeducted(advance.id);
     });
     
+    // Get employee deductions
+    const employeeDeductions = employeeDeductionsService.calculateTotalDeductions(employee.id, totalTaxableIncome);
+    
     // Other deductions (can be customized)
     const medicalAid = totalTaxableIncome * 0.02; // 2% for medical aid
     const retirementFund = totalTaxableIncome * 0.075; // 7.5% for retirement fund
-    const otherDeductions = 0;
+    const otherDeductions = employeeDeductions; // Include employee deductions
     
     const totalDeductions = tax + uif + medicalAid + retirementFund + salaryAdvanceDeduction + otherDeductions;
     

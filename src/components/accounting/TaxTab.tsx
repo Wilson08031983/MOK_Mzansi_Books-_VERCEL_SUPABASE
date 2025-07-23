@@ -15,11 +15,14 @@ import {
   CheckCircle,
   Clock,
   DollarSign,
-  Receipt
+  Receipt,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import EmployeeTaxManagement from './EmployeeTaxManagement';
 
 interface TaxRecord {
   id: string;
@@ -40,6 +43,7 @@ const TaxTab: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTax, setSelectedTax] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'business' | 'employees'>('business');
 
   // Sample tax records data based on South African tax requirements
   const [taxRecords] = useState<TaxRecord[]>([
@@ -160,15 +164,36 @@ const TaxTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* South African Tax Information Banner */}
-      <Card className="glass backdrop-blur-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 shadow-business">
+      {/* Tax Management Tabs */}
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-6">
+        <TabsList className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business p-1 h-auto">
+          <TabsTrigger 
+            value="business" 
+            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 flex items-center gap-2"
+          >
+            <Receipt className="h-4 w-4" />
+            Business Tax
+          </TabsTrigger>
+          <TabsTrigger 
+            value="employees" 
+            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 flex items-center gap-2"
+          >
+            <Users className="h-4 w-4" />
+            Employee Tax
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Business Tax Tab */}
+        <TabsContent value="business" className="space-y-6">
+          {/* South African Tax Information Banner */}
+          <Card className="glass backdrop-blur-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 shadow-business">
         <CardContent className="p-6">
           <div className="flex items-start space-x-4">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
               <FileText className="h-6 w-6 text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">South African Tax Compliance 2025</h3>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">South African Business Tax Compliance 2025</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-slate-700">
                 <div>
                   <p className="font-medium text-blue-700">PAYE Tax</p>
@@ -196,201 +221,208 @@ const TaxTab: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Tax Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600">Total Tax Liability</p>
-                <p className="text-2xl font-bold text-slate-900">R{totalTaxLiability.toLocaleString()}</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Tax Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600">Total Tax Liability</p>
+                    <p className="text-2xl font-bold text-slate-900">R{totalTaxLiability.toLocaleString()}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600">Overdue Returns</p>
-                <p className="text-2xl font-bold text-red-600">{overdueTaxes}</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600">Overdue Returns</p>
+                    <p className="text-2xl font-bold text-red-600">{overdueTaxes}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
+                    <AlertCircle className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600">Pending Returns</p>
-                <p className="text-2xl font-bold text-yellow-600">{pendingTaxes}</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center">
-                <Clock className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tax Management Section */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="text-xl font-semibold text-slate-900 font-sf-pro">Tax Returns & Compliance</CardTitle>
-            <div className="flex flex-wrap gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className="border-slate-200 hover:bg-slate-50"
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filters
-              </Button>
-              <Button 
-                size="sm"
-                className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 text-white hover:shadow-colored-lg transition-all duration-300"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Return
-              </Button>
-            </div>
+            <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600">Pending Returns</p>
+                    <p className="text-2xl font-bold text-yellow-600">{pendingTaxes}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center">
+                    <Clock className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardHeader>
-        
-        <CardContent className="p-6">
-          {/* Search and Filters */}
-          <div className="space-y-4 mb-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                <Input
-                  placeholder="Search tax returns..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 border-slate-200 focus:border-mokm-purple-500"
-                />
-              </div>
-            </div>
-            
-            {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tax Type</label>
-                  <select 
-                    value={typeFilter} 
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:outline-none"
+
+          {/* Tax Management Section */}
+          <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="text-xl font-semibold text-slate-900 font-sf-pro">Business Tax Returns & Compliance</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="border-slate-200 hover:bg-slate-50"
                   >
-                    <option value="all">All Types</option>
-                    <option value="VAT">VAT</option>
-                    <option value="PAYE">PAYE</option>
-                    <option value="Income Tax">Income Tax</option>
-                    <option value="UIF">UIF</option>
-                    <option value="SDL">SDL</option>
-                  </select>
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filters
+                  </Button>
+                  <Button 
+                    size="sm"
+                    className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 text-white hover:shadow-colored-lg transition-all duration-300"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Return
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            
+            <CardContent className="p-6">
+              {/* Search and Filters */}
+              <div className="space-y-4 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search tax returns..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 border-slate-200 focus:border-mokm-purple-500"
+                    />
+                  </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                  <select 
-                    value={statusFilter} 
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:outline-none"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="submitted">Submitted</option>
-                    <option value="paid">Paid</option>
-                    <option value="overdue">Overdue</option>
-                  </select>
-                </div>
+                {showFilters && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Tax Type</label>
+                      <select 
+                        value={typeFilter} 
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:outline-none"
+                      >
+                        <option value="all">All Types</option>
+                        <option value="VAT">VAT</option>
+                        <option value="PAYE">PAYE</option>
+                        <option value="Income Tax">Income Tax</option>
+                        <option value="UIF">UIF</option>
+                        <option value="SDL">SDL</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                      <select 
+                        value={statusFilter} 
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:outline-none"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="paid">Paid</option>
+                        <option value="overdue">Overdue</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Tax Records Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Period</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Type</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Due Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTaxRecords.map((record) => (
-                  <tr key={record.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4">
-                      <div>
-                        <p className="font-medium text-slate-900">{record.period}</p>
-                        {record.reference && (
-                          <p className="text-sm text-slate-600">{record.reference}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                        {record.type}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="font-semibold text-slate-900">R{record.amount.toLocaleString()}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 text-slate-400 mr-2" />
-                        <span className="text-slate-700">{record.dueDate}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center">
-                        {getStatusIcon(record.status)}
-                        <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(record.status)}`}>
-                          {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              {/* Tax Records Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Period</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Type</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Amount</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Due Date</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Status</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTaxRecords.map((record) => (
+                      <tr key={record.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-3 px-4">
+                          <div>
+                            <p className="font-medium text-slate-900">{record.period}</p>
+                            {record.reference && (
+                              <p className="text-sm text-slate-600">{record.reference}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                            {record.type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-slate-900">R{record.amount.toLocaleString()}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center">
+                            <Calendar className="h-4 w-4 text-slate-400 mr-2" />
+                            <span className="text-slate-700">{record.dueDate}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center">
+                            {getStatusIcon(record.status)}
+                            <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(record.status)}`}>
+                              {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2">
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-          {filteredTaxRecords.length === 0 && (
-            <div className="text-center py-8">
-              <Calculator className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <p className="text-slate-600">No tax records found matching your criteria.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              {filteredTaxRecords.length === 0 && (
+                <div className="text-center py-8">
+                  <Calculator className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                  <p className="text-slate-600">No tax records found matching your criteria.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Employee Tax Tab */}
+        <TabsContent value="employees">
+          <EmployeeTaxManagement />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
