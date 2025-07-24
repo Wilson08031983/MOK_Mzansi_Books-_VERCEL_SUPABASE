@@ -28,7 +28,7 @@ import AllowanceManagement from '@/components/hr/AllowanceManagement';
 import PerformanceManagement from '@/components/hr/PerformanceManagement';
 import DisciplinaryManagement from '@/components/hr/DisciplinaryManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
-import { Employee, getAllEmployees } from '@/services/employeeService';
+import { Employee, getAllEmployees, initializeEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
 
 // Using shared types from LeaveManagementTypes
@@ -107,190 +107,30 @@ const HRManagement: React.FC = () => {
 
   // Load employees from localStorage on component mount
   useEffect(() => {
+    // Always force cleanup duplicates to ensure clean state
+    forceCleanupDuplicates();
+    
+    // Initialize employees if needed
+    initializeEmployees();
+    
+    // Load employees from localStorage
     const storedEmployees = getAllEmployees();
-    if (storedEmployees && storedEmployees.length > 0) {
-      setEmployees(storedEmployees);
-    } else {
-      // Fallback to sample data if no data in localStorage
-      setEmployees([
-    {
-      id: 'EMP001',
-      employeeNumber: 'SP0323001',
-      firstName: 'Sarah',
-      surname: 'Parker',
-      idType: 'ID Number',
-      idValue: '8801156789123',
-      email: 'sarah.parker@mokbooks.co.za',
-      contactNumber: '071 234 5678',
-      position: 'Senior Developer',
-      department: 'Development',
-      startDate: '2023-03-15',
-      taxPercentage: 25,
-      status: 'active',
-      location: 'Johannesburg',
-      employmentType: 'Full Time',
-      dateOfBirth: '1988-01-15',
-      addressLine1: '123 Main Street',
-      addressLine2: 'Sandton',
-      addressLine3: 'Johannesburg, Gauteng',
-      addressLine4: '2196, South Africa',
-      kinName: 'James',
-      kinSurname: 'Parker',
-      kinRelationship: 'Spouse',
-      kinContactNumber: '072 123 4567',
-      dayShift: true,
-      nightShift: false,
-      flexibleShift: false,
-      accountHolderName: 'Sarah Parker',
-      salary: 45000,
-      paymentCycle: 'Monthly',
-      bankName: 'First National Bank',
-      accountNumber: '62123456789',
-      branchCode: '250655'
-    },
-    {
-      id: 'EMP002',
-      employeeNumber: 'MJ0523001',
-      firstName: 'Michael',
-      surname: 'Johnson',
-      idType: 'ID Number',
-      idValue: '9103215678912',
-      email: 'michael.johnson@mokbooks.co.za',
-      contactNumber: '082 345 6789',
-      position: 'UX Designer',
-      department: 'Design',
-      startDate: '2023-05-20',
-      taxPercentage: 22,
-      status: 'active',
-      location: 'Cape Town',
-      employmentType: 'Full Time',
-      dateOfBirth: '1991-03-21',
-      addressLine1: '45 Beach Road',
-      addressLine2: 'Sea Point',
-      addressLine3: 'Cape Town, Western Cape',
-      addressLine4: '8001, South Africa',
-      kinName: 'Sarah',
-      kinSurname: 'Johnson',
-      kinRelationship: 'Wife',
-      kinContactNumber: '083 987 6543',
-      dayShift: true,
-      nightShift: false,
-      flexibleShift: true,
-      accountHolderName: 'Michael Johnson',
-      salary: 38000,
-      paymentCycle: 'Monthly',
-      bankName: 'Standard Bank',
-      accountNumber: '102345678',
-      branchCode: '051001'
-    },
-    {
-      id: 'EMP003',
-      employeeNumber: 'LW1122001',
-      firstName: 'Lisa',
-      surname: 'Williams',
-      idType: 'ID Number',
-      idValue: '8506128901234',
-      email: 'lisa.williams@mokbooks.co.za',
-      contactNumber: '073 456 7890',
-      position: 'Project Manager',
-      department: 'Management',
-      startDate: '2022-11-10',
-      taxPercentage: 28,
-      status: 'on-leave',
-      location: 'Durban',
-      employmentType: 'Full Time',
-      dateOfBirth: '1985-06-12',
-      addressLine1: '78 Umhlanga Rocks Drive',
-      addressLine2: 'Umhlanga',
-      addressLine3: 'Durban, KwaZulu-Natal',
-      addressLine4: '4320, South Africa',
-      kinName: 'Robert',
-      kinSurname: 'Williams',
-      kinRelationship: 'Husband',
-      kinContactNumber: '074 111 2222',
-      dayShift: false,
-      nightShift: false,
-      flexibleShift: true,
-      accountHolderName: 'Lisa Williams',
-      salary: 52000,
-      paymentCycle: 'Monthly',
-      bankName: 'ABSA',
-      accountNumber: '4056781234',
-      branchCode: '632005'
-    },
-    {
-      id: 'EMP004',
-      employeeNumber: 'DB0124001',
-      firstName: 'David',
-      surname: 'Brown',
-      idType: 'ID Number',
-      idValue: '9012115678123',
-      email: 'david.brown@mokbooks.co.za',
-      contactNumber: '061 567 8901',
-      position: 'Finance Officer',
-      department: 'Finance',
-      startDate: '2024-01-05',
-      taxPercentage: 18,
-      status: 'active',
-      location: 'Johannesburg',
-      employmentType: 'Full Time',
-      dateOfBirth: '1990-12-11',
-      addressLine1: '56 Oxford Road',
-      addressLine2: 'Rosebank',
-      addressLine3: 'Johannesburg, Gauteng',
-      addressLine4: '2196, South Africa',
-      kinName: 'Maria',
-      kinSurname: 'Brown',
-      kinRelationship: 'Mother',
-      kinContactNumber: '082 333 4444',
-      dayShift: true,
-      nightShift: false,
-      flexibleShift: false,
-      accountHolderName: 'David Brown',
-      salary: 35000,
-      paymentCycle: 'Monthly',
-      bankName: 'Nedbank',
-      accountNumber: '1122334455',
-      branchCode: '198765'
-    },
-    {
-      id: 'EMP005',
-      employeeNumber: 'EW0823001',
-      firstName: 'Emma',
-      surname: 'Wilson',
-      idType: 'ID Number',
-      idValue: '9204235678912',
-      email: 'emma.wilson@mokbooks.co.za',
-      contactNumber: '084 678 9012',
-      position: 'Marketing Specialist',
-      department: 'Marketing',
-      startDate: '2023-08-12',
-      endDate: '2024-06-30',
-      taxPercentage: 15,
-      status: 'terminated',
-      location: 'Cape Town',
-      employmentType: 'Part Time',
-      dateOfBirth: '1992-04-23',
-      addressLine1: '12 Long Street',
-      addressLine2: 'City Centre',
-      addressLine3: 'Cape Town, Western Cape',
-      addressLine4: '8001, South Africa',
-      kinName: 'John',
-      kinSurname: 'Wilson',
-      kinRelationship: 'Father',
-      kinContactNumber: '083 555 6666',
-      dayShift: false,
-      nightShift: true,
-      flexibleShift: false,
-      accountHolderName: 'Emma Wilson',
-      salary: 18000,
-      paymentCycle: 'Monthly',
-      bankName: 'Capitec',
-      accountNumber: '1598753245',
-      branchCode: '470010'
-    }
-      ]);
-    }
+    console.log('Loaded employees:', storedEmployees.length, storedEmployees.map(e => `${e.firstName} ${e.surname} (ID: ${e.id})`));
+    setEmployees(storedEmployees);
+  }, []);
+
+  // Listen for custom event to switch to payroll tab
+  useEffect(() => {
+    const handleSwitchToPayroll = (event: CustomEvent) => {
+      setActiveTab('payroll');
+      console.log('Switched to payroll tab for employee:', event.detail?.employeeId);
+    };
+
+    window.addEventListener('switchToPayrollTab', handleSwitchToPayroll as EventListener);
+    
+    return () => {
+      window.removeEventListener('switchToPayrollTab', handleSwitchToPayroll as EventListener);
+    };
   }, []);
 
   // Sample leave requests

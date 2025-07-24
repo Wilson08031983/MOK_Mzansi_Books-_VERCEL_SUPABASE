@@ -448,6 +448,12 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
     try {
       const employee = employees.find(emp => emp.id === employeeId);
       if (employee) {
+        // Save allowances to localStorage for PayrollManagement to use
+        const existingAllowances = localStorage.getItem('employeeAllowances');
+        const allAllowances = existingAllowances ? JSON.parse(existingAllowances) : {};
+        allAllowances[employeeId] = tempAllowances;
+        localStorage.setItem('employeeAllowances', JSON.stringify(allAllowances));
+        
         const attendance = getMonthlyAttendance(employeeId);
         const updatedSalaryBreakdown = calculateEmployeeSalary(employee, attendance, tempAllowances);
         
@@ -455,32 +461,62 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
           data.employeeId === employeeId ? updatedSalaryBreakdown : data
         ));
         
-        const savedAllowances = JSON.parse(localStorage.getItem('employeeAllowances') || '{}');
-        savedAllowances[employeeId] = tempAllowances;
-        localStorage.setItem('employeeAllowances', JSON.stringify(savedAllowances));
-        
         setEditingAllowances(null);
-        toast.success('Allowances updated successfully');
+        toast.success(`Allowances updated for ${employee.firstName} ${employee.surname} and synced to Payroll`);
       }
     } catch (error) {
       console.error('Error saving allowances:', error);
-      toast.error('Error saving allowances');
+      toast.error('Failed to save allowances');
     }
   };
 
   const handleEditAllowances = (employeeId: string) => {
-    const savedAllowances = JSON.parse(localStorage.getItem('employeeAllowances') || '{}');
-    const employee = employees.find(emp => emp.id === employeeId);
-    const allowances = savedAllowances[employeeId] || {
-      thirteenthMonthBonus: (employee?.salary || 0) / 12,
-      retirementPlan: 0,
-      housingAllowance: 0,
-      motorVehicleAllowance: 0,
-      medicalAidAllowance: 0,
-      otherAllowances: 0
-    };
+    // Load existing allowances from localStorage
+    try {
+      const existingAllowances = localStorage.getItem('employeeAllowances');
+      if (existingAllowances) {
+        const allAllowances = JSON.parse(existingAllowances);
+        const employeeAllowances = allAllowances[employeeId];
+        if (employeeAllowances) {
+          setTempAllowances(employeeAllowances);
+        } else {
+          // Default allowances for new employee
+          const employee = employees.find(emp => emp.id === employeeId);
+          setTempAllowances({
+            thirteenthMonthBonus: (employee?.salary || 0) / 12,
+            retirementPlan: 0,
+            housingAllowance: 0,
+            motorVehicleAllowance: 0,
+            medicalAidAllowance: 0,
+            otherAllowances: 0
+          });
+        }
+      } else {
+        // Default allowances if no localStorage data
+        const employee = employees.find(emp => emp.id === employeeId);
+        setTempAllowances({
+          thirteenthMonthBonus: (employee?.salary || 0) / 12,
+          retirementPlan: 0,
+          housingAllowance: 0,
+          motorVehicleAllowance: 0,
+          medicalAidAllowance: 0,
+          otherAllowances: 0
+        });
+      }
+    } catch (error) {
+      console.error('Error loading existing allowances:', error);
+      // Fallback to default allowances
+      const employee = employees.find(emp => emp.id === employeeId);
+      setTempAllowances({
+        thirteenthMonthBonus: (employee?.salary || 0) / 12,
+        retirementPlan: 0,
+        housingAllowance: 0,
+        motorVehicleAllowance: 0,
+        medicalAidAllowance: 0,
+        otherAllowances: 0
+      });
+    }
     
-    setTempAllowances(allowances);
     setEditingAllowances(employeeId);
     setSelectedEmployeeId(employeeId);
     setActiveTab('individual');
@@ -540,10 +576,39 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
         <Button 
           onClick={() => {
             setIsLoading(true);
-            // Force recalculation by triggering useEffect
+            // Force recalculation by recalculating salary data
             setTimeout(() => {
-              window.location.reload();
-            }, 100);
+              try {
+                const savedAllowances = localStorage.getItem('employeeAllowances');
+                let existingAllowances: Record<string, EmployeeAllowances> = {};
+                
+                if (savedAllowances) {
+                  existingAllowances = JSON.parse(savedAllowances);
+                }
+                
+                const recalculatedSalaryData = employees.map(employee => {
+                  const attendance = getMonthlyAttendance(employee.id);
+                  const allowances = existingAllowances[employee.id] || {
+                    thirteenthMonthBonus: (employee.salary || 0) / 12,
+                    retirementPlan: 0,
+                    housingAllowance: 0,
+                    motorVehicleAllowance: 0,
+                    medicalAidAllowance: 0,
+                    otherAllowances: 0
+                  };
+                  
+                  return calculateEmployeeSalary(employee, attendance, allowances);
+                });
+                
+                setSalaryData(recalculatedSalaryData);
+                toast.success('Calculations refreshed successfully');
+              } catch (error) {
+                console.error('Error refreshing calculations:', error);
+                toast.error('Failed to refresh calculations');
+              } finally {
+                setIsLoading(false);
+              }
+            }, 500);
           }}
           disabled={isLoading}
           className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro"
@@ -625,15 +690,17 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
                       <TableCell className="font-sf-pro font-medium">{formatCurrency(data.grossSalary)}</TableCell>
                       <TableCell className="font-sf-pro font-medium text-green-600">{formatCurrency(data.netSalary)}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditAllowances(data.employeeId)}
-                          className="font-sf-pro hover:bg-mokm-purple-50 hover:text-mokm-purple-600 hover:border-mokm-purple-200"
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditAllowances(data.employeeId)}
+                            className="font-sf-pro hover:bg-mokm-purple-50 hover:text-mokm-purple-600 hover:border-mokm-purple-200"
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

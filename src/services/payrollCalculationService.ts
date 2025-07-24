@@ -1,4 +1,4 @@
-import { Employee } from './employeeService';
+import { Employee, getAllEmployees } from './employeeService';
 import { employeeDeductionsService } from './employeeDeductionsService';
 
 export interface AttendanceData {
@@ -205,18 +205,30 @@ class PayrollCalculationService {
   }
   
   private getDefaultAllowances(employeeId?: string) {
-    // Return specific allowances for Admin User to match expected calculations  
-    if (employeeId && (employeeId.includes('bb8a05cd-8978-41a6') || employeeId === 'admin-user')) {
-      return {
-        thirteenthMonthBonus: 0,
-        housingAllowance: 2000,
-        medicalAidAllowance: 500,
-        motorVehicleAllowance: 3666.67,
-        retirementPlan: 500,
-        otherAllowances: 0
-      }; // Total: 6,666.67
+    // Try to get allowances from AllowanceManagement first
+    if (employeeId) {
+      try {
+        const storedAllowances = localStorage.getItem('employeeAllowances');
+        if (storedAllowances) {
+          const allAllowances = JSON.parse(storedAllowances);
+          const employeeAllowances = allAllowances[employeeId];
+          if (employeeAllowances) {
+            return {
+              thirteenthMonthBonus: employeeAllowances.thirteenthMonthBonus || 0,
+              housingAllowance: employeeAllowances.housingAllowance || 0,
+              medicalAidAllowance: employeeAllowances.medicalAidAllowance || 0,
+              motorVehicleAllowance: employeeAllowances.motorVehicleAllowance || 0,
+              retirementPlan: employeeAllowances.retirementPlan || 0,
+              otherAllowances: employeeAllowances.otherAllowances || 0
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Error loading allowances from AllowanceManagement:', error);
+      }
     }
     
+    // Return zero allowances as default (no hardcoded R 3,000)
     return {
       thirteenthMonthBonus: 0,
       housingAllowance: 0,
@@ -305,14 +317,15 @@ class PayrollCalculationService {
                       (allowanceData.otherAllowances || 0)
     };
     
-    // Calculate gross salary (Attendance Pay + Allowances only, Base Salary is separate)
+    // Calculate gross salary (Attendance Pay + Allowances)
+    // This matches the calculation in AllowanceManagement.tsx
     const grossSalary = attendancePay + allowances.totalAllowances;
     
     // Calculate deductions
-    // Tax is calculated on total taxable income (Base Salary + Gross Salary components)
-    const totalTaxableIncome = employee.salary + grossSalary;
-    const tax = this.calculateTax(totalTaxableIncome * 12); // Annual salary for tax calculation
-    const uif = this.calculateUIF(totalTaxableIncome);
+    // Tax is calculated on total income (base salary + gross salary)
+    const totalIncome = employee.salary + grossSalary;
+    const tax = this.calculateTax(totalIncome * 12); // Annual salary for tax calculation
+    const uif = this.calculateUIF(totalIncome);
     
     // Get salary advance deductions
     const salaryAdvances = this.getSalaryAdvances(employee.id);
@@ -325,12 +338,13 @@ class PayrollCalculationService {
     });
     
     // Get employee deductions
-    const employeeDeductions = employeeDeductionsService.calculateTotalDeductions(employee.id, totalTaxableIncome);
+    const employeeDeductionsResult = employeeDeductionsService.calculateEmployeeDeductions(employee.id, totalIncome);
+    const employeeDeductionsTotal = employeeDeductionsResult.totalDeductions;
     
     // Other deductions (can be customized)
-    const medicalAid = totalTaxableIncome * 0.02; // 2% for medical aid
-    const retirementFund = totalTaxableIncome * 0.075; // 7.5% for retirement fund
-    const otherDeductions = employeeDeductions; // Include employee deductions
+    const medicalAid = totalIncome * 0.02; // 2% for medical aid
+    const retirementFund = totalIncome * 0.075; // 7.5% for retirement fund
+    const otherDeductions = employeeDeductionsTotal; // Include employee deductions
     
     const totalDeductions = tax + uif + medicalAid + retirementFund + salaryAdvanceDeduction + otherDeductions;
     
@@ -344,8 +358,9 @@ class PayrollCalculationService {
       totalDeductions
     };
     
-    // Calculate net salary (Base Salary + Gross Salary - Total Deductions)
-    const netSalary = employee.salary + grossSalary - totalDeductions;
+    // Calculate net salary (Attendance Pay + Allowances - Total Deductions)
+    // DO NOT include base salary in net salary calculation as per user requirements
+    const netSalary = attendancePay + allowances.totalAllowances - totalDeductions;
     
     return {
       employeeId: employee.id,
@@ -374,13 +389,14 @@ class PayrollCalculationService {
   // Calculate payroll for all employees
   calculateAllEmployeesPayroll(period: string): PayrollCalculation[] {
     try {
-      // Get all employees
-      const employeesData = localStorage.getItem('employees');
-      if (!employeesData) {
-        throw new Error('No employees found');
+      // Get all employees using the employee service
+      const employees: Employee[] = getAllEmployees();
+      if (!employees || employees.length === 0) {
+        console.log('No employees found in getAllEmployees()');
+        return [];
       }
       
-      const employees: Employee[] = JSON.parse(employeesData);
+      console.log(`Found ${employees.length} employees for payroll calculation`);
       const payrollCalculations: PayrollCalculation[] = [];
       
       employees.forEach(employee => {
