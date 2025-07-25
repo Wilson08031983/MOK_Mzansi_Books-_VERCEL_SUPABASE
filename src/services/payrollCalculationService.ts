@@ -171,10 +171,10 @@ class PayrollCalculationService {
     const baseHours = SA_LABOR_CONSTANTS.STANDARD_MONTHLY_HOURS;
     return {
       employeeId,
-      regularHours: baseHours + (Math.random() - 0.5) * 10,
-      overtimeHours: Math.random() * 20,
-      nightShiftHours: Math.random() * 15,
-      leaveHours: Math.random() * 8,
+      regularHours: baseHours, // Standard monthly hours
+      overtimeHours: 0, // No overtime by default
+      nightShiftHours: 0, // No night shift by default
+      leaveHours: 0, // No leave by default
       period: new Date().toISOString().slice(0, 7) // Current month
     };
   }

@@ -86,13 +86,13 @@ const getMonthlyAttendance = (employeeId: string): MonthlyAttendance => {
     // Find existing attendance summary for this employee
     let attendanceSummary = attendanceSummaries.find((summary: any) => summary.employeeId === employeeId);
     
-    // If no attendance summary exists, create one with realistic data
+    // If no attendance summary exists, create one with default data
     if (!attendanceSummary) {
       attendanceSummary = {
         employeeId,
-        currentMonthRegularHours: 25.0 + Math.random() * 15, // 25-40 hours
-        currentMonthOvertimeHours: Math.random() * 8, // 0-8 overtime hours
-        currentMonthNightShiftHours: Math.random() * 5, // 0-5 night shift hours
+        currentMonthRegularHours: 160, // Standard 8 hours/day * 20 working days
+        currentMonthOvertimeHours: 0, // No overtime by default
+        currentMonthNightShiftHours: 0, // No night shift by default
       };
       
       // Save the new attendance summary
@@ -390,13 +390,13 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
               employeeName: `${employee.firstName} ${employee.surname}`,
               department: employee.department,
               position: employee.position,
-              currentMonthRegularHours: 20.0 + Math.random() * 20, // 20-40 hours
-              currentMonthOvertimeHours: Math.random() * 8, // 0-8 overtime hours
-              currentMonthNightShiftHours: Math.random() * 5, // 0-5 night shift hours
-              currentWeekOvertimeHours: Math.random() * 3,
+              currentMonthRegularHours: 160, // Standard 8 hours/day * 20 working days
+              currentMonthOvertimeHours: 0, // No overtime by default
+              currentMonthNightShiftHours: 0, // No night shift by default
+              currentWeekOvertimeHours: 0,
               currentDayOvertimeHours: 0,
-              attendanceRate: 95 + Math.random() * 5,
-              punctualityRate: 90 + Math.random() * 10,
+              attendanceRate: 100, // Perfect attendance by default
+              punctualityRate: 100, // Perfect punctuality by default
               leaveHoursTaken: 0,
               isExemptFromOvertimeRules: false
             };

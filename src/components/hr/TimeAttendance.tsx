@@ -215,18 +215,18 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       const date = addDays(today, -i);
       const dateStr = format(date, 'yyyy-MM-dd');
       
-      // Generate 2-3 entries per day
-      const entriesPerDay = Math.floor(Math.random() * 2) + 2;
+      // Generate 2 entries per day (fixed)
+      const entriesPerDay = 2;
       
       for (let j = 0; j < entriesPerDay; j++) {
-        const employee = employees[Math.floor(Math.random() * employees.length)];
+        const employee = employees[j % employees.length]; // Cycle through employees
         
-        // Randomize clock in/out times
-        const clockInHour = 7 + Math.floor(Math.random() * 2);
-        const clockInMinute = Math.floor(Math.random() * 60);
-        const workHours = 8 + Math.floor(Math.random() * 3); // 8-10 hours
+        // Fixed clock in/out times
+        const clockInHour = 8; // Standard 8 AM start
+        const clockInMinute = 0;
+        const workHours = 8; // Standard 8 hour workday
         const clockOutHour = clockInHour + workHours;
-        const clockOutMinute = Math.floor(Math.random() * 60);
+        const clockOutMinute = 0;
         
         const clockIn = `${clockInHour.toString().padStart(2, '0')}:${clockInMinute.toString().padStart(2, '0')}`;
         const clockOut = `${clockOutHour.toString().padStart(2, '0')}:${clockOutMinute.toString().padStart(2, '0')}`;
@@ -357,6 +357,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     }));
     
     setWeeklyTimesheets(timesheets);
+    return timesheets;
   };
   
   // Generate attendance summaries from time entries
@@ -367,13 +368,13 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       employeeName: `${employee.firstName} ${employee.surname}`,
       department: employee.department,
       position: employee.position,
-      currentMonthRegularHours: 25.0 + Math.random() * 15, // 25-40 hours
-      currentMonthOvertimeHours: Math.random() * 8, // 0-8 overtime hours
-      currentMonthNightShiftHours: Math.random() * 5, // 0-5 night shift hours
-      currentWeekOvertimeHours: Math.random() * 3,
+      currentMonthRegularHours: 160, // Standard 8 hours/day * 20 working days
+      currentMonthOvertimeHours: 0, // No overtime by default
+      currentMonthNightShiftHours: 0, // No night shift by default
+      currentWeekOvertimeHours: 0,
       currentDayOvertimeHours: 0,
-      attendanceRate: 95 + Math.random() * 5,
-      punctualityRate: 90 + Math.random() * 10,
+      attendanceRate: 100, // Perfect attendance by default
+      punctualityRate: 100, // Perfect punctuality by default
       leaveHoursTaken: 0,
       isExemptFromOvertimeRules: isExemptFromOvertimeRules(employee.salary * 12)
     }));
@@ -495,6 +496,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setAttendanceSummaries(summaries);
     localStorage.setItem('attendanceSummaries', JSON.stringify(summaries));
     console.log('Generated and saved attendance summaries:', summaries);
+    return summaries;
   };
   
   // Filter time entries based on search and filters
@@ -940,7 +942,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Timesheet_${employee.firstName}_${employee.lastName}_${format(startDate, 'yyyyMMdd')}.csv`);
+    link.setAttribute('download', `Timesheet_${employee.firstName}_${employee.surname}_${format(startDate, 'yyyyMMdd')}.csv`);
     document.body.appendChild(link);
     
     // Trigger download

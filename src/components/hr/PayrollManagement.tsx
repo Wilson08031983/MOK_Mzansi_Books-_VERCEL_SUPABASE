@@ -26,6 +26,7 @@ import { payrollCalculationService, PayrollCalculation, SalaryAdvance } from '@/
 import { PayslipService } from '@/services/payslipService';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import EmployeeDeductionsManagement from '@/components/hr/EmployeeDeductionsManagement';
+import { employeeDeductionsService } from '@/services/employeeDeductionsService';
 
 // Import salary calculation functions from AllowanceManagement
 interface MonthlyAttendance {
@@ -61,7 +62,34 @@ interface SalaryBreakdown {
   tax: number;
   uif: UIFCalculation;
   salaryAdvanceDeduction: number;
+  employeeDeductions: number;
   netSalary: number;
+  // Additional properties for payroll details
+  period?: string;
+  status?: string;
+  regularHours?: number;
+  overtimeHours?: number;
+  nightShiftHours?: number;
+  leaveHours?: number;
+  allowances?: {
+    thirteenthMonthBonus: number;
+    retirementPlan: number;
+    housingAllowance: number;
+    motorVehicleAllowance: number;
+    medicalAidAllowance: number;
+    otherAllowances: number;
+    totalAllowances: number;
+  };
+  deductions?: {
+    tax: number;
+    uif: number;
+    medicalAid: number;
+    retirementFund: number;
+    salaryAdvance: number;
+    employeeDeductions: number;
+    otherDeductions: number;
+    totalDeductions: number;
+  };
 }
 
 const UIF_CONSTANTS = {
@@ -83,51 +111,62 @@ const calculateUIF = (grossSalary: number): UIFCalculation => {
 
 const getMonthlyAttendance = (employeeId: string): MonthlyAttendance => {
   try {
-    // Always ensure we have some attendance data for demonstration
-    const attendanceSummariesRaw = localStorage.getItem('attendanceSummaries');
-    let attendanceSummaries = [];
+    // Use the real attendance data from PayrollCalculationService
+    const currentPeriod = new Date().toISOString().slice(0, 7);
+    const attendanceData = payrollCalculationService.getAttendanceData(employeeId, currentPeriod);
     
-    if (attendanceSummariesRaw) {
-      attendanceSummaries = JSON.parse(attendanceSummariesRaw);
-    }
-    
-    // Find existing attendance summary for this employee
-    let attendanceSummary = attendanceSummaries.find((summary: any) => summary.employeeId === employeeId);
-    
-    // If no attendance summary exists, create one with realistic data
-    if (!attendanceSummary) {
-      attendanceSummary = {
+    if (attendanceData) {
+      const result = {
         employeeId,
-        currentMonthRegularHours: 25.0 + Math.random() * 15, // 25-40 hours
-        currentMonthOvertimeHours: Math.random() * 8, // 0-8 overtime hours
-        currentMonthNightShiftHours: Math.random() * 5, // 0-5 night shift hours
+        regularHours: attendanceData.regularHours || 0,
+        overtimeHours: attendanceData.overtimeHours || 0,
+        nightShiftHours: attendanceData.nightShiftHours || 0,
+        daysWorked: Math.ceil((attendanceData.regularHours || 0) / 8)
       };
       
-      // Save the new attendance summary
-      attendanceSummaries.push(attendanceSummary);
-      localStorage.setItem('attendanceSummaries', JSON.stringify(attendanceSummaries));
+      console.log(`Real attendance data for ${employeeId}:`, result);
+      return result;
     }
     
-    const result = {
-      employeeId,
-      regularHours: attendanceSummary.currentMonthRegularHours || 0,
-      overtimeHours: attendanceSummary.currentMonthOvertimeHours || 0,
-      nightShiftHours: attendanceSummary.currentMonthNightShiftHours || 0,
-      daysWorked: Math.ceil((attendanceSummary.currentMonthRegularHours || 0) / 8)
-    };
+    // Fallback: try to get from attendanceSummaries in localStorage
+    const attendanceSummariesRaw = localStorage.getItem('attendanceSummaries');
+    if (attendanceSummariesRaw) {
+      const attendanceSummaries = JSON.parse(attendanceSummariesRaw);
+      const attendanceSummary = attendanceSummaries.find((summary: any) => summary.employeeId === employeeId);
+      
+      if (attendanceSummary) {
+        const result = {
+          employeeId,
+          regularHours: attendanceSummary.currentMonthRegularHours || 0,
+          overtimeHours: attendanceSummary.currentMonthOvertimeHours || 0,
+          nightShiftHours: attendanceSummary.currentMonthNightShiftHours || 0,
+          daysWorked: Math.ceil((attendanceSummary.currentMonthRegularHours || 0) / 8)
+        };
+        
+        console.log(`Fallback attendance data for ${employeeId}:`, result);
+        return result;
+      }
+    }
     
-    console.log(`Attendance data for ${employeeId}:`, result);
-    return result;
+    // Final fallback: return zero hours (no attendance recorded)
+    console.log(`No attendance data found for ${employeeId}, using zero hours`);
+    return { 
+      employeeId, 
+      regularHours: 0, 
+      overtimeHours: 0, 
+      nightShiftHours: 0, 
+      daysWorked: 0 
+    };
     
   } catch (error) {
     console.error('Error getting attendance data:', error);
-    // Return default realistic attendance data as fallback
+    // Return zero hours as fallback when there's an error
     return { 
       employeeId, 
-      regularHours: 30, 
-      overtimeHours: 2, 
-      nightShiftHours: 1, 
-      daysWorked: 4 
+      regularHours: 0, 
+      overtimeHours: 0, 
+      nightShiftHours: 0, 
+      daysWorked: 0 
     };
   }
 };
@@ -161,10 +200,14 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
     );
   const salaryAdvanceDeduction = approvedAdvances.reduce((sum, advance) => sum + advance.amount, 0);
   
-  // Calculate net salary (gross - tax - uif - salary advances)
-  const netSalary = grossSalary - tax - uif.employeeContribution - salaryAdvanceDeduction;
+  // Calculate employee deductions from Employee Deductions Management
+  const deductionCalculation = employeeDeductionsService.calculateEmployeeDeductions(employee.id, grossSalary);
+  const employeeDeductions = deductionCalculation.totalDeductions;
   
-  console.log(`Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = R${attendancePay.toFixed(2)}, Advance Deduction = R${salaryAdvanceDeduction.toFixed(2)}`);
+  // Calculate net salary (gross - tax - uif - salary advances - employee deductions)
+  const netSalary = grossSalary - tax - uif.employeeContribution - salaryAdvanceDeduction - employeeDeductions;
+  
+  console.log(`Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = R${attendancePay.toFixed(2)}, Advance Deduction = R${salaryAdvanceDeduction.toFixed(2)}, Employee Deductions = R${employeeDeductions.toFixed(2)}`);
   
   return {
     employeeId: employee.id,
@@ -176,6 +219,7 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
     tax,
     uif,
     salaryAdvanceDeduction,
+    employeeDeductions,
     netSalary
   };
 };
@@ -291,8 +335,57 @@ const PayrollManagement: React.FC = () => {
   };
   
   // View payroll details
-  const handleViewPayrollDetails = (calculation: any) => {
-    setSelectedPayrollData(calculation);
+  const handleViewPayrollDetails = (calculation: SalaryBreakdown) => {
+    // Get attendance data for this employee
+    const attendance = getMonthlyAttendance(calculation.employeeId);
+    
+    // Get allowances from localStorage
+    const storedAllowances = JSON.parse(localStorage.getItem('employeeAllowances') || '{}');
+    const employeeAllowances = storedAllowances[calculation.employeeId] || {
+      thirteenthMonthBonus: 0,
+      retirementPlan: 0,
+      housingAllowance: 0,
+      motorVehicleAllowance: 0,
+      medicalAidAllowance: 0,
+      otherAllowances: 0
+    };
+    
+    // Get deduction calculation for detailed breakdown
+    const deductionCalculation = employeeDeductionsService.calculateEmployeeDeductions(calculation.employeeId, calculation.grossSalary);
+    
+    // Structure the data properly for the modal
+    const detailedPayrollData = {
+      ...calculation,
+      period: periodFilter,
+      status: 'calculated',
+      regularHours: attendance.regularHours,
+      overtimeHours: attendance.overtimeHours,
+      nightShiftHours: attendance.nightShiftHours,
+      leaveHours: 0, // Not tracked in current attendance data
+      allowances: {
+        thirteenthMonthBonus: employeeAllowances.thirteenthMonthBonus || 0,
+        retirementPlan: employeeAllowances.retirementPlan || 0,
+        housingAllowance: employeeAllowances.housingAllowance || 0,
+        motorVehicleAllowance: employeeAllowances.motorVehicleAllowance || 0,
+        medicalAidAllowance: employeeAllowances.medicalAidAllowance || 0,
+        otherAllowances: employeeAllowances.otherAllowances || 0,
+        totalAllowances: calculation.totalAllowances
+      },
+      deductions: {
+        tax: calculation.tax,
+        uif: calculation.uif.employeeContribution,
+        medicalAid: deductionCalculation.deductions.medical || 0,
+        retirementFund: deductionCalculation.deductions.retirement_plans || 0,
+        salaryAdvance: calculation.salaryAdvanceDeduction,
+        employeeDeductions: calculation.employeeDeductions,
+        otherDeductions: Object.entries(deductionCalculation.deductions)
+          .filter(([key]) => !['medical', 'retirement_plans'].includes(key))
+          .reduce((sum, [, value]) => sum + (value || 0), 0),
+        totalDeductions: calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction + calculation.employeeDeductions
+      }
+    };
+    
+    setSelectedPayrollData(detailedPayrollData);
     setShowPayrollDetails(true);
   };
   
@@ -387,19 +480,6 @@ const PayrollManagement: React.FC = () => {
             Employee Deductions
           </Button>
           
-          <Button
-            onClick={handleCalculatePayroll}
-            disabled={isCalculating}
-            className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 font-sf-pro"
-          >
-            {isCalculating ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Calculator className="h-4 w-4 mr-2" />
-            )}
-            {isCalculating ? 'Calculating...' : 'Calculate Payroll'}
-          </Button>
-          
           <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
             <DialogTrigger asChild>
               <Button variant="outline" className="font-sf-pro">
@@ -454,6 +534,19 @@ const PayrollManagement: React.FC = () => {
               </div>
             </DialogContent>
           </Dialog>
+          
+          <Button
+            onClick={handleCalculatePayroll}
+            disabled={isCalculating}
+            className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 font-sf-pro"
+          >
+            {isCalculating ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Calculator className="h-4 w-4 mr-2" />
+            )}
+            {isCalculating ? 'Calculating...' : 'Calculate Payroll'}
+          </Button>
         </div>
       </div>
       
@@ -589,6 +682,7 @@ const PayrollManagement: React.FC = () => {
                   <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Allowances</th>
                   <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Gross Salary</th>
                   <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Salary Advance</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Employee Deductions</th>
                   <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Net Salary</th>
                   <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Actions</th>
                 </tr>
@@ -596,7 +690,7 @@ const PayrollManagement: React.FC = () => {
               <tbody>
                 {filteredCalculations.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-slate-500 font-sf-pro">
+                    <td colSpan={10} className="text-center py-8 text-slate-500 font-sf-pro">
                       {salaryData.length === 0 
                         ? "No payroll calculated yet. Click 'Calculate Payroll' to begin."
                         : "No employees match your search criteria."
@@ -632,6 +726,7 @@ const PayrollManagement: React.FC = () => {
                       <td className="py-3 px-4 font-sf-pro">R {calculation.totalAllowances.toLocaleString()}</td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-green-600">R {calculation.grossSalary.toLocaleString()}</td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">-R {calculation.salaryAdvanceDeduction.toLocaleString()}</td>
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">-R {calculation.employeeDeductions.toLocaleString()}</td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-mokm-purple-600">R {calculation.netSalary.toLocaleString()}</td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2">
@@ -639,6 +734,8 @@ const PayrollManagement: React.FC = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => {
+                              // Get allowances from localStorage for detailed view
+                              const employeeAllowances = JSON.parse(localStorage.getItem(`employee_allowances_${calculation.employeeId}`) || '{}');
                               const payrollCalc = {
                                 ...calculation,
                                 period: periodFilter,
@@ -647,15 +744,24 @@ const PayrollManagement: React.FC = () => {
                                 overtimeHours: getMonthlyAttendance(calculation.employeeId).overtimeHours,
                                 nightShiftHours: getMonthlyAttendance(calculation.employeeId).nightShiftHours,
                                 leaveHours: 0,
-                                allowances: { totalAllowances: calculation.totalAllowances },
+                                allowances: {
+                                  thirteenthMonthBonus: employeeAllowances.thirteenthMonthBonus || 0,
+                                  retirementPlan: employeeAllowances.retirementPlan || 0,
+                                  housingAllowance: employeeAllowances.housingAllowance || 0,
+                                  motorVehicleAllowance: employeeAllowances.motorVehicleAllowance || 0,
+                                  medicalAidAllowance: employeeAllowances.medicalAidAllowance || 0,
+                                  otherAllowances: employeeAllowances.otherAllowances || 0,
+                                  totalAllowances: calculation.totalAllowances
+                                },
                                 deductions: {
                                   tax: calculation.tax,
                                   uif: calculation.uif.employeeContribution,
                                   medicalAid: 0,
                                   retirementFund: 0,
                                   salaryAdvance: calculation.salaryAdvanceDeduction,
+                                  employeeDeductions: calculation.employeeDeductions,
                                   otherDeductions: 0,
-                                  totalDeductions: calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction
+                                  totalDeductions: calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction + calculation.employeeDeductions
                                 }
                               };
                               handleViewPayrollDetails(payrollCalc);
@@ -698,70 +804,7 @@ const PayrollManagement: React.FC = () => {
         </CardContent>
       </Card>
       
-      {/* Salary Advances Management */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-        <CardHeader>
-          <CardTitle className="font-sf-pro flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Salary Advances
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Employee</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Amount</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Request Date</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Deduction Period</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Reason</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Status</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salaryAdvances.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-slate-500 font-sf-pro">
-                      No salary advance requests found.
-                    </td>
-                  </tr>
-                ) : (
-                  salaryAdvances.map((advance) => (
-                    <tr key={advance.id} className="border-b border-slate-100 hover:bg-slate-50/50">
-                      <td className="py-3 px-4 font-sf-pro font-medium">{advance.employeeName}</td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-green-600">R {advance.amount.toLocaleString()}</td>
-                      <td className="py-3 px-4 font-sf-pro">{new Date(advance.requestDate).toLocaleDateString()}</td>
-                      <td className="py-3 px-4 font-sf-pro">{advance.deductionPeriod}</td>
-                      <td className="py-3 px-4 font-sf-pro">{advance.reason}</td>
-                      <td className="py-3 px-4">
-                        <Badge 
-                          variant={advance.status === 'approved' ? 'default' : advance.status === 'pending' ? 'secondary' : 'destructive'}
-                          className="font-sf-pro"
-                        >
-                          {advance.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        {advance.status === 'pending' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleApproveSalaryAdvance(advance.id)}
-                            className="font-sf-pro"
-                          >
-                            Approve
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+
 
       {/* Payroll Details Modal */}
       <Dialog open={showPayrollDetails} onOpenChange={setShowPayrollDetails}>

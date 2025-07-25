@@ -69,17 +69,22 @@ export const calculateProjectSpeedScore = (employeeId: string): number => {
         const endDate = new Date(project.endDate);
         const plannedDuration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
         
-        // Estimate actual completion time based on progress and current date
-        const actualDuration = plannedDuration; // Simplified for demo
+        // Use actual completion date vs planned end date for real calculation
+        // For completed projects, use endDate as completion date (projects don't have separate completionDate)
+        const completionDate = endDate;
+        const actualDuration = Math.ceil((completionDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
         
         // Calculate speed score: faster completion = higher score
-        let speedScore = 100;
-        if (actualDuration > plannedDuration) {
-          const delayRatio = actualDuration / plannedDuration;
-          speedScore = Math.max(20, 100 - ((delayRatio - 1) * 50));
-        } else if (actualDuration < plannedDuration) {
+        let speedScore = 75; // Base score for completion
+        
+        if (actualDuration <= plannedDuration) {
+          // Completed on time or early
           const efficiencyRatio = plannedDuration / actualDuration;
-          speedScore = Math.min(100, 80 + ((efficiencyRatio - 1) * 20));
+          speedScore = Math.min(100, 75 + ((efficiencyRatio - 1) * 25));
+        } else {
+          // Completed late
+          const delayRatio = actualDuration / plannedDuration;
+          speedScore = Math.max(30, 75 - ((delayRatio - 1) * 30));
         }
         
         totalSpeedScore += speedScore;
@@ -115,26 +120,30 @@ export const calculateCostSavingsScore = (employeeId: string): number => {
     let projectsWithBudget = 0;
 
     employeeProjects.forEach(project => {
-      if (project.budget > 0) {
+      if (project.budget > 0 && project.status === 'Completed') {
         const budgetUtilization = project.expenses / project.budget;
         
         // Calculate savings score: under budget = higher score
-        let savingsScore = 50;
-        if (budgetUtilization < 0.8) {
-          // Significant savings
-          savingsScore = 90 + (0.8 - budgetUtilization) * 50;
-        } else if (budgetUtilization < 1.0) {
-          // Some savings
-          savingsScore = 70 + (1.0 - budgetUtilization) * 100;
-        } else if (budgetUtilization <= 1.1) {
-          // Slightly over budget
-          savingsScore = 50 - (budgetUtilization - 1.0) * 200;
+        let savingsScore = 60; // Base score for staying within reasonable budget
+        
+        if (budgetUtilization <= 0.8) {
+          // Significant savings (20% or more under budget)
+          savingsScore = 85 + Math.min(15, (0.8 - budgetUtilization) * 75);
+        } else if (budgetUtilization <= 0.95) {
+          // Good budget management (5-20% under budget)
+          savingsScore = 75 + ((0.95 - budgetUtilization) / 0.15) * 10;
+        } else if (budgetUtilization <= 1.05) {
+          // Acceptable budget management (within 5% of budget)
+          savingsScore = 65 + ((1.05 - budgetUtilization) / 0.1) * 10;
+        } else if (budgetUtilization <= 1.15) {
+          // Over budget but manageable (5-15% over)
+          savingsScore = 45 - ((budgetUtilization - 1.05) / 0.1) * 15;
         } else {
-          // Significantly over budget
-          savingsScore = Math.max(10, 30 - (budgetUtilization - 1.1) * 100);
+          // Significantly over budget (15%+ over)
+          savingsScore = Math.max(20, 30 - ((budgetUtilization - 1.15) * 50));
         }
         
-        totalSavingsScore += Math.min(100, Math.max(10, savingsScore));
+        totalSavingsScore += Math.min(100, Math.max(20, savingsScore));
         projectsWithBudget++;
       }
     });
@@ -186,38 +195,46 @@ export const calculateAttendanceScore = (employeeId: string): number => {
 
 /**
  * Calculate training performance score
- * Based on training completion and effectiveness
+ * Based on actual training qualifications and completion
  */
 export const calculateTrainingScore = (employeeId: string): number => {
   try {
-    // For demo purposes, generate realistic training scores
-    // In a real system, this would be based on actual training data
-    const trainingData = localStorage.getItem(`training_${employeeId}`);
+    // Get actual training qualifications from localStorage
+    const qualificationsRaw = localStorage.getItem('employeeQualifications');
+    if (!qualificationsRaw) return 50; // No training data = low score
+
+    const qualifications = JSON.parse(qualificationsRaw);
+    const employeeQualifications = qualifications.filter((qual: any) => qual.employeeId === employeeId);
     
-    if (trainingData) {
-      const training = JSON.parse(trainingData);
-      return training.score || 75;
+    // If no qualifications, return low score
+    if (employeeQualifications.length === 0) {
+      return 50;
     }
 
-    // Generate realistic training score based on employee role and tenure
-    const employee = getEmployeeById(employeeId);
-    if (!employee) return 75;
-
-    let baseScore = 70;
+    // Calculate score based on number and recency of qualifications
+    let baseScore = 60; // Base score for having any training
     
-    // Management positions typically have higher training scores
-    if (['CEO', 'Manager', 'Director', 'Founder'].includes(employee.position)) {
-      baseScore = 85;
-    } else if (['Team Leader', 'Senior', 'Lead'].some(title => employee.position.includes(title))) {
-      baseScore = 80;
+    // Add points for each qualification (max 5 qualifications counted)
+    const qualificationBonus = Math.min(employeeQualifications.length * 8, 40);
+    baseScore += qualificationBonus;
+    
+    // Add bonus for recent training (within last 2 years)
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    
+    const recentTraining = employeeQualifications.filter((qual: any) => {
+      const endDate = new Date(qual.endDate);
+      return endDate >= twoYearsAgo;
+    });
+    
+    if (recentTraining.length > 0) {
+      baseScore += Math.min(recentTraining.length * 5, 15); // Up to 15 bonus points
     }
 
-    // Add some randomization for realism
-    const variation = (Math.random() - 0.5) * 20;
-    return Math.min(100, Math.max(50, Math.round(baseScore + variation)));
+    return Math.min(100, Math.max(50, Math.round(baseScore)));
   } catch (error) {
     console.error('Error calculating training score:', error);
-    return 75;
+    return 50;
   }
 };
 
@@ -267,6 +284,9 @@ export const calculateBehaviorScore = (employeeId: string): number => {
           case 'suspension':
             disciplinaryDeduction += 35;
             break;
+          case 'dismissal':
+            disciplinaryDeduction += 50;
+            break;
         }
       } else if (action.status === 'expired') {
         // Expired warnings have reduced impact but still affect score
@@ -288,15 +308,13 @@ export const calculateBehaviorScore = (employeeId: string): number => {
     // Calculate final score
     const finalScore = baseScore - disciplinaryDeduction;
     
-    // Add some positive variation for employees with clean records
-    let variation = 0;
+    // Clean record bonus (no random variation)
+    let cleanRecordBonus = 0;
     if (disciplinaryActions.length === 0) {
-      variation = Math.random() * 10; // Up to 10 bonus points for clean record
-    } else {
-      variation = (Math.random() - 0.5) * 5; // Smaller variation for those with records
+      cleanRecordBonus = 10; // Fixed 10 point bonus for clean record
     }
 
-    return Math.min(100, Math.max(20, Math.round(finalScore + variation)));
+    return Math.min(100, Math.max(20, Math.round(finalScore + cleanRecordBonus)));
   } catch (error) {
     console.error('Error calculating behavior score:', error);
     return 80;
@@ -321,39 +339,64 @@ const getDisciplinaryActions = (employeeId: string): any[] => {
 
 /**
  * Calculate promotions performance score
- * Based on career progression and achievements
+ * Based on actual career progression and position changes
  */
 export const calculatePromotionsScore = (employeeId: string): number => {
   try {
-    // For demo purposes, generate realistic promotion scores
-    // In a real system, this would be based on actual promotion history
-    const promotionData = localStorage.getItem(`promotions_${employeeId}`);
+    // Get actual promotion history from localStorage
+    const promotionHistoryRaw = localStorage.getItem('promotionHistory');
     
-    if (promotionData) {
-      const promotions = JSON.parse(promotionData);
-      return promotions.score || 70;
+    if (promotionHistoryRaw) {
+      const promotionHistory = JSON.parse(promotionHistoryRaw);
+      const employeePromotions = promotionHistory.filter((promo: any) => promo.employeeId === employeeId);
+      
+      if (employeePromotions.length > 0) {
+        // Calculate score based on actual promotions
+        let score = 60; // Base score
+        score += employeePromotions.length * 15; // 15 points per promotion
+        
+        // Bonus for recent promotions (within last 2 years)
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        
+        const recentPromotions = employeePromotions.filter((promo: any) => {
+          const promoDate = new Date(promo.effectiveDate);
+          return promoDate >= twoYearsAgo;
+        });
+        
+        if (recentPromotions.length > 0) {
+          score += recentPromotions.length * 10; // 10 bonus points per recent promotion
+        }
+        
+        return Math.min(100, Math.max(60, Math.round(score)));
+      }
     }
 
+    // If no promotion history exists, base score on tenure and current position
     const employee = getEmployeeById(employeeId);
-    if (!employee) return 70;
+    if (!employee) return 60;
 
-    let baseScore = 60;
+    // Calculate tenure in years
+    const startDate = new Date(employee.startDate);
+    const currentDate = new Date();
+    const tenureYears = (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
     
-    // Higher positions indicate career progression
-    if (['CEO', 'Founder'].includes(employee.position)) {
-      baseScore = 95;
-    } else if (['Director', 'Manager'].includes(employee.position)) {
-      baseScore = 85;
-    } else if (['Team Leader', 'Senior', 'Lead'].some(title => employee.position.includes(title))) {
-      baseScore = 75;
+    let baseScore = 60; // Base score for no promotions
+    
+    // Slight bonus for longer tenure without promotions (up to 5 points)
+    if (tenureYears > 1) {
+      baseScore += Math.min(tenureYears * 2, 5);
+    }
+    
+    // Slight penalty for very long tenure without promotions
+    if (tenureYears > 5) {
+      baseScore -= Math.min((tenureYears - 5) * 2, 10);
     }
 
-    // Add some randomization for realism
-    const variation = (Math.random() - 0.5) * 10;
-    return Math.min(100, Math.max(40, Math.round(baseScore + variation)));
+    return Math.min(100, Math.max(50, Math.round(baseScore)));
   } catch (error) {
     console.error('Error calculating promotions score:', error);
-    return 70;
+    return 60;
   }
 };
 

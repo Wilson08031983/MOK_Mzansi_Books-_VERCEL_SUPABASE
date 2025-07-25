@@ -41,13 +41,13 @@ const getMonthlyAttendance = (employeeId: string): MonthlyAttendance => {
     // Find existing attendance summary for this employee
     let attendanceSummary = attendanceSummaries.find((summary: any) => summary.employeeId === employeeId);
     
-    // If no attendance summary exists, create one with realistic data
+    // If no attendance summary exists, create one with default data
     if (!attendanceSummary) {
       attendanceSummary = {
         employeeId,
-        currentMonthRegularHours: 25.0 + Math.random() * 15, // 25-40 hours
-        currentMonthOvertimeHours: Math.random() * 8, // 0-8 overtime hours
-        currentMonthNightShiftHours: Math.random() * 5, // 0-5 night shift hours
+        currentMonthRegularHours: 160, // Standard 8 hours/day * 20 working days
+        currentMonthOvertimeHours: 0, // No overtime by default
+        currentMonthNightShiftHours: 0, // No night shift by default
       };
       
       // Save the new attendance summary
