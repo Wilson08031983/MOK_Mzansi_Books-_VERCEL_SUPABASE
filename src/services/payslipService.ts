@@ -363,17 +363,13 @@ export class PayslipService {
     // Generate filename
     const fileName = `Payslip_${employee.firstName}_${employee.surname}_${new Date().toISOString().slice(0, 7)}.pdf`;
     
-    // Download the PDF and return a promise
-    return new Promise<void>((resolve) => {
-      try {
-        pdf.save(fileName);
-        // Add a small delay to ensure the download starts
-        setTimeout(() => {
-          resolve();
-        }, 200);
-      } catch (error) {
-        throw error;
-      }
-    });
+    // Download the PDF
+    try {
+      pdf.save(fileName);
+      console.log('Payslip PDF generated and download initiated:', fileName);
+    } catch (error) {
+      console.error('Error saving PDF:', error);
+      throw new Error('Failed to generate payslip PDF');
+    }
   }
 }

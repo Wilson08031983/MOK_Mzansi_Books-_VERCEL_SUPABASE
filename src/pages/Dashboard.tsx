@@ -113,7 +113,7 @@ const Dashboard = () => {
 
       // Generate recent activities
       const recentInvoices = invoices.slice(0, 2).map(invoice => ({
-        id: invoice.id,
+        id: `invoice-${invoice.id}`,
         type: 'invoice' as const,
         action: 'created invoice',
         subject: `${invoice.invoiceNumber} for ${invoice.clientName}`,
@@ -122,7 +122,7 @@ const Dashboard = () => {
       }));
       
       const recentClients = clients.slice(0, 2).map(client => ({
-        id: client.id,
+        id: `client-${client.id}`,
         type: 'client' as const,
         action: 'added client',
         subject: client.name,
@@ -136,7 +136,7 @@ const Dashboard = () => {
       const overdueTasks = invoices
         .filter(invoice => invoice.status === 'sent')
         .map(invoice => ({
-          id: invoice.id,
+          id: `task-${invoice.id}`,
           title: `Follow up on ${invoice.invoiceNumber} - ${invoice.clientName}`,
           dueDate: formatDate(invoice.dueDate),
           priority: 'high' as const

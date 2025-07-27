@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AddEmployeeModal from '@/components/hr/AddEmployeeModal';
 import EditEmployeeModal from '@/components/hr/EditEmployeeModal';
 import EmployeeDetailsModal from '@/components/hr/EmployeeDetailsModal';
@@ -16,7 +17,8 @@ import {
   Edit,
   Trash2,
   Plus,
-  FileText
+  FileText,
+  Calculator
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +31,7 @@ interface EmployeeManagementProps {
 }
 
 const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setEmployees }) => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -165,6 +168,19 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
     return (employee.firstName && employee.surname ? 
         `${employee.firstName} ${employee.surname}` : 
         employee.firstName || employee.surname || 'Unknown');
+  };
+
+  // Handle calculate tax navigation
+  const handleCalculateTax = (employee: Employee) => {
+    // Navigate to accounting page with tax tab active and employee pre-selected
+    navigate('/accounting', {
+      state: {
+        activeTab: 'tax',
+        selectedEmployee: employee,
+        taxSubTab: 'employees'
+      }
+    });
+    toast.success(`Navigating to tax calculation for ${getFullName(employee)}`);
   };
 
   return (
@@ -319,6 +335,15 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
                           onClick={() => handleEditEmployee(employee)}
                         >
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="px-3 text-blue-600 hover:text-blue-700 font-sf-pro"
+                          onClick={() => handleCalculateTax(employee)}
+                        >
+                          <Calculator className="h-4 w-4" />
                         </Button>
                         
                         {!isSyncedAdminUser(employee) && (

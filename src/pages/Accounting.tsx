@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calculator, Receipt, FileText, TrendingUp, DollarSign, CreditCard, ChevronLeft } from 'lucide-react';
@@ -11,10 +11,30 @@ import AddIncomeModal from '@/components/accounting/AddIncomeModal';
 import EditIncomeModal from '@/components/accounting/EditIncomeModal';
 
 const Accounting = () => {
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [taxSubTab, setTaxSubTab] = useState('business');
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showAddIncomeModal, setShowAddIncomeModal] = useState(false);
   const [showEditIncomeModal, setShowEditIncomeModal] = useState(false);
   const [editingIncome, setEditingIncome] = useState(null);
+
+  // Handle navigation from HR Management
+  useEffect(() => {
+    if (location.state) {
+      const { activeTab: navActiveTab, selectedEmployee: navEmployee, taxSubTab: navTaxSubTab } = location.state;
+      if (navActiveTab) {
+        setActiveTab(navActiveTab);
+      }
+      if (navEmployee) {
+        setSelectedEmployee(navEmployee);
+      }
+      if (navTaxSubTab) {
+        setTaxSubTab(navTaxSubTab);
+      }
+    }
+  }, [location.state]);
 
   const handleAddExpense = () => {
     setShowAddExpenseModal(true);
@@ -127,7 +147,7 @@ const Accounting = () => {
 
         {/* Main Content Tabs */}
         <div className="animate-fade-in delay-400">
-          <Tabs defaultValue="overview" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business p-1 h-auto">
               <TabsTrigger 
                 value="overview" 
@@ -224,7 +244,11 @@ const Accounting = () => {
             </TabsContent>
 
             <TabsContent value="tax">
-              <TaxTab />
+              <TaxTab 
+                selectedEmployee={selectedEmployee}
+                taxSubTab={taxSubTab}
+                onEmployeeChange={setSelectedEmployee}
+              />
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-6">

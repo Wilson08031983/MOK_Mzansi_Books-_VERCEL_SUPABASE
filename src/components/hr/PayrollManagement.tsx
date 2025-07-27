@@ -390,7 +390,14 @@ const PayrollManagement: React.FC = () => {
   };
   
   // Download payslip
-  const handleDownloadPayslip = async (calculation: any) => {
+  const [downloadingPayslips, setDownloadingPayslips] = useState<Set<string>>(new Set());
+  
+  const handleDownloadPayslip = (calculation: any) => {
+    // Prevent multiple simultaneous downloads for the same employee
+    if (downloadingPayslips.has(calculation.employeeId)) {
+      return;
+    }
+    
     try {
       // Get employee data from localStorage
       const employeesData = localStorage.getItem('employees');
@@ -407,12 +414,15 @@ const PayrollManagement: React.FC = () => {
         return;
       }
       
+      // Mark as downloading
+      setDownloadingPayslips(prev => new Set(prev).add(calculation.employeeId));
+      
       // Show loading toast
       const loadingToast = toast.loading('Generating payslip PDF...');
       
       try {
         // Generate the payslip
-        await PayslipService.generatePayslip(employee, calculation);
+        PayslipService.generatePayslip(employee, calculation);
         
         // Dismiss the loading toast
         toast.dismiss(loadingToast);
@@ -423,11 +433,24 @@ const PayrollManagement: React.FC = () => {
         // Dismiss the loading toast
         toast.dismiss(loadingToast);
         throw pdfError;
+      } finally {
+        // Remove from downloading set
+        setDownloadingPayslips(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(calculation.employeeId);
+          return newSet;
+        });
       }
       
     } catch (error) {
       console.error('Error downloading payslip:', error);
       toast.error('Failed to download payslip');
+      // Ensure we remove from downloading set on error
+      setDownloadingPayslips(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(calculation.employeeId);
+        return newSet;
+      });
     }
   };
   
@@ -782,10 +805,15 @@ const PayrollManagement: React.FC = () => {
                               };
                               handleDownloadPayslip(payrollCalc);
                             }}
-                            className="font-sf-pro text-mokm-purple-600 hover:text-mokm-purple-700 hover:bg-mokm-purple-50"
-                            title="Download Payslip"
+                            disabled={downloadingPayslips.has(calculation.employeeId)}
+                            className="font-sf-pro text-mokm-purple-600 hover:text-mokm-purple-700 hover:bg-mokm-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={downloadingPayslips.has(calculation.employeeId) ? "Generating payslip..." : "Download Payslip"}
                           >
-                            <Download className="h-4 w-4" />
+                            {downloadingPayslips.has(calculation.employeeId) ? (
+                              <div className="animate-spin h-4 w-4 border-2 border-mokm-purple-600 border-t-transparent rounded-full" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
                           </Button>
                           <Badge 
                             variant="secondary"

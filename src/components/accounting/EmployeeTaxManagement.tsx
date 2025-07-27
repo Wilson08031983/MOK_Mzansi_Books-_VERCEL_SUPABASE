@@ -73,7 +73,15 @@ interface EmployeeTaxSummary {
   status: 'active' | 'inactive';
 }
 
-const EmployeeTaxManagement: React.FC = () => {
+interface EmployeeTaxManagementProps {
+  selectedEmployee?: any;
+  onEmployeeChange?: (employee: any) => void;
+}
+
+const EmployeeTaxManagement: React.FC<EmployeeTaxManagementProps> = ({
+  selectedEmployee: propSelectedEmployee,
+  onEmployeeChange
+}) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [taxRecords, setTaxRecords] = useState<EmployeeTaxRecord[]>([]);
   const [taxSummaries, setTaxSummaries] = useState<EmployeeTaxSummary[]>([]);
@@ -96,6 +104,24 @@ const EmployeeTaxManagement: React.FC = () => {
   useEffect(() => {
     generateTaxSummaries();
   }, [employees, taxRecords]);
+
+  // Handle prop changes for selected employee
+  useEffect(() => {
+    if (propSelectedEmployee && propSelectedEmployee.id) {
+      setSelectedEmployee(propSelectedEmployee.id);
+      setActiveTab('calculate');
+    }
+  }, [propSelectedEmployee]);
+
+  // Notify parent when selected employee changes
+  useEffect(() => {
+    if (selectedEmployee && onEmployeeChange) {
+      const employee = employees.find(emp => emp.id === selectedEmployee);
+      if (employee) {
+        onEmployeeChange(employee);
+      }
+    }
+  }, [selectedEmployee, employees, onEmployeeChange]);
 
   const loadEmployees = () => {
     const employeeData = getAllEmployees();

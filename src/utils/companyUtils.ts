@@ -60,7 +60,14 @@ export const getCompanyDetails = (): CompanyDetails => {
     accountType: 'Business Account'
   };
   
-  return localStorageService.getItem<CompanyDetails>('companyDetails', defaultCompany);
+  const storedData = localStorageService.getItem<any>('companyDetails', defaultCompany);
+  
+  // Handle both 'name' and 'companyName' field names for backward compatibility
+  if (storedData && storedData.companyName && !storedData.name) {
+    storedData.name = storedData.companyName;
+  }
+  
+  return storedData;
 };
 
 /**
