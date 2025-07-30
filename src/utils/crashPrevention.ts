@@ -19,8 +19,10 @@ export const setupGlobalErrorHandlers = () => {
   window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
     
-    // Report the error
-    reportError('Global JavaScript Error', event.error);
+    // Only report if there's an actual error
+    if (event.error) {
+      reportError('Global JavaScript Error', event.error);
+    }
   });
 
   // Handle React errors (if using React 18+)
@@ -38,6 +40,12 @@ export const setupGlobalErrorHandlers = () => {
  * Error reporting function - can be extended to send to external services
  */
 const reportError = (type: string, error: any) => {
+  // Skip reporting if error is null or undefined
+  if (!error) {
+    console.warn('Attempted to report null/undefined error, skipping');
+    return;
+  }
+  
   const errorInfo = {
     type,
     message: safeString(error?.message || error),
@@ -58,7 +66,7 @@ const reportError = (type: string, error: any) => {
     errors.unshift(errorInfo);
     if (errors.length > 10) errors.pop();
     localStorage.setItem('app_errors', JSON.stringify(errors));
-  });
+  }, undefined);
 
   // TODO: Send to external error reporting service
   // Example: Sentry, LogRocket, etc.
@@ -116,7 +124,7 @@ export const safeEventHandler = <T extends Event>(
   handler: (event: T) => void
 ) => {
   return (event: T) => {
-    safeExecute(() => handler(event));
+    safeExecute(() => handler(event), undefined);
   };
 };
 
@@ -127,7 +135,7 @@ export const safeStateUpdate = <T>(
   setter: (value: T | ((prev: T) => T)) => void,
   value: T | ((prev: T) => T)
 ) => {
-  safeExecute(() => setter(value));
+  safeExecute(() => setter(value), undefined);
 };
 
 /**
@@ -209,7 +217,7 @@ export const getErrorLogs = () => {
  * Clear error logs
  */
 export const clearErrorLogs = () => {
-  safeExecute(() => localStorage.removeItem('app_errors'));
+  safeExecute(() => localStorage.removeItem('app_errors'), undefined);
 };
 
 export default {

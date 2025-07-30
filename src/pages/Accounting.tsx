@@ -19,6 +19,22 @@ const Accounting = () => {
   const [showAddIncomeModal, setShowAddIncomeModal] = useState(false);
   const [showEditIncomeModal, setShowEditIncomeModal] = useState(false);
   const [editingIncome, setEditingIncome] = useState(null);
+  
+  // Get or generate company ID
+  const getCompanyId = () => {
+    try {
+      const companyDetails = localStorage.getItem('companyDetails');
+      if (companyDetails) {
+        const parsed = JSON.parse(companyDetails);
+        return `company_${parsed.companyName?.replace(/\s+/g, '_').toLowerCase() || 'default'}`;
+      }
+    } catch (error) {
+      console.error('Error getting company details:', error);
+    }
+    return 'current-company-id';
+  };
+  
+  const [companyId] = useState(getCompanyId());
 
   // Handle navigation from HR Management
   useEffect(() => {
@@ -236,7 +252,7 @@ const Accounting = () => {
             </TabsContent>
 
             <TabsContent value="expenses">
-              <ExpensesTab onAddExpense={handleAddExpense} />
+              <ExpensesTab onAddExpense={handleAddExpense} companyId={companyId} />
             </TabsContent>
 
             <TabsContent value="income">

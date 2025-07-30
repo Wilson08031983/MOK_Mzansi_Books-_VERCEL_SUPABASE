@@ -5,13 +5,17 @@ import App from './App'
 import './index.css'
 import { initializeLocalAuth } from '@/services/localAuthService'
 
-// Basic error handlers
+// Basic error handlers with null checks
 window.addEventListener('error', (event) => {
-  console.error('Global error:', event.error)
+  if (event.error) {
+    console.error('Global error:', event.error)
+  }
 })
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled rejection:', event.reason)
+  if (event.reason) {
+    console.error('Unhandled rejection:', event.reason)
+  }
 })
 
 // Initialize authentication

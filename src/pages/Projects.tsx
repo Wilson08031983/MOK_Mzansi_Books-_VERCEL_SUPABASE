@@ -172,9 +172,14 @@ const Projects = () => {
       } catch (error) {
         console.error('Error parsing stored projects:', error);
         setProjects(sampleProjects);
+        // Save sample projects to localStorage as fallback
+        localStorage.setItem('projects', JSON.stringify(sampleProjects));
       }
     } else {
       setProjects(sampleProjects);
+      // Save sample projects to localStorage for first time users
+      localStorage.setItem('projects', JSON.stringify(sampleProjects));
+      console.log('Projects: Saved sample projects to localStorage');
     }
   }, []);
 

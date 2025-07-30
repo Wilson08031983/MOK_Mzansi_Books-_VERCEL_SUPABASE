@@ -1,0 +1,17 @@
+STANDARD BANK
+Bank Statement
+Account Number: 123456789
+Statement Period: 01/01/2024 to 31/01/2024
+
+Date        Description                    Amount      Balance
+02/01/2024  SALARY DEPOSIT                +5000.00    5000.00
+03/01/2024  GROCERY STORE POS             -150.75     4849.25
+05/01/2024  FUEL STATION                  -800.00     4049.25
+07/01/2024  RESTAURANT                    -250.50     3798.75
+10/01/2024  ELECTRICITY PAYMENT           -450.00     3348.75
+15/01/2024  ATM WITHDRAWAL                -500.00     2848.75
+20/01/2024  ONLINE TRANSFER               -1200.00    1648.75
+25/01/2024  BANK CHARGES                  -25.00      1623.75
+30/01/2024  INTEREST EARNED               +15.25      1639.00
+
+Closing Balance: R1639.00
