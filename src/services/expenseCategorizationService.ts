@@ -24,6 +24,10 @@ export interface CategorizedExpense {
   status: 'pending' | 'approved' | 'rejected';
   submittedBy?: string;
   submittedDate: string;
+  // Project linking fields
+  projectId?: number;
+  projectCode?: string;
+  projectName?: string;
 }
 
 class ExpenseCategorizationService {

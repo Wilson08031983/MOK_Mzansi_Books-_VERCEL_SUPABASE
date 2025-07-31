@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Project } from '@/types/project';
 import { calculateProjectSalaryExpenses } from '@/services/projectEmployeeService';
+import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
 import { 
   Search, 
   Plus, 
@@ -56,6 +57,28 @@ const Projects = () => {
 
   // Sample projects data
   const [projects, setProjects] = useState<Project[]>([]);
+
+  // Initialize sync service
+  const syncService = ExpenseProjectSyncService.getInstance();
+
+  // Subscribe to sync service updates
+  useEffect(() => {
+    const handleSyncUpdate = () => {
+      console.log('Projects: Received sync update, refreshing project data');
+      // Reload projects from localStorage to get updated expense totals
+      const storedProjects = localStorage.getItem('projects');
+      if (storedProjects) {
+        try {
+          const parsed = JSON.parse(storedProjects);
+          setProjects(parsed);
+        } catch (error) {
+          console.error('Error parsing updated projects:', error);
+        }
+      }
+    };
+
+    syncService.subscribe(handleSyncUpdate);
+  }, [syncService]);
 
   // Initialize projects with sample data
   useEffect(() => {
@@ -162,13 +185,23 @@ const Projects = () => {
     if (storedProjects) {
       try {
         const parsed = JSON.parse(storedProjects);
-        // Ensure all projects have the new salary expense fields
-        const updatedProjects = parsed.map((project: Project) => ({
-          ...project,
-          salaryExpenses: project.salaryExpenses || calculateProjectSalaryExpenses(project),
-          totalProjectExpenses: project.totalProjectExpenses || (project.expenses + (project.salaryExpenses || 0))
-        }));
+        // Ensure all projects have the new salary expense fields and sync expense totals
+        const updatedProjects = parsed.map((project: Project) => {
+          const salaryExpenses = project.salaryExpenses || calculateProjectSalaryExpenses(project);
+          // Get actual expense totals from sync service
+          const expenseTotals = syncService.getProjectExpenseSummary(project.id);
+          return {
+            ...project,
+            salaryExpenses,
+            totalProjectExpenses: expenseTotals.totalExpenses + salaryExpenses,
+            expenses: expenseTotals.totalExpenses // Update the expenses field with actual assigned expenses
+          };
+        });
         setProjects(updatedProjects);
+        
+        // Save updated projects back to localStorage
+        localStorage.setItem('projects', JSON.stringify(updatedProjects));
+        console.log('Projects: Updated project expense totals from sync service');
       } catch (error) {
         console.error('Error parsing stored projects:', error);
         setProjects(sampleProjects);
@@ -181,6 +214,9 @@ const Projects = () => {
       localStorage.setItem('projects', JSON.stringify(sampleProjects));
       console.log('Projects: Saved sample projects to localStorage');
     }
+    
+    // Update all project expenses to ensure sync
+    syncService.updateAllProjectExpenses();
   }, []);
 
   // Calculate summary statistics

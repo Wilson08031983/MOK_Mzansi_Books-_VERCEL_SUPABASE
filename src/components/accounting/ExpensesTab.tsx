@@ -8,7 +8,6 @@ import {
   FileText, 
   Calendar, 
   Upload, 
-  MoreVertical, 
   Edit, 
   Trash2, 
   FileCheck, 
@@ -21,7 +20,12 @@ import {
   Eye,
   Download,
   FolderOpen,
-  Link
+  Link,
+  FileX,
+  CheckCircle,
+  XCircle,
+  Save,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,10 +34,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BankStatementUpload from './BankStatementUpload';
-import SlipUpload from './SlipUpload';
+
+import RecordExpenseModal, { NewExpenseData } from './RecordExpenseModal';
 import bankStatementService from '../../services/bankStatementService';
 import expenseCategorizationService, { CategorizedExpense } from '../../services/expenseCategorizationService';
+import expenseStorageService, { StoredExpense } from '../../services/expenseStorageService';
 import { Project } from '@/types/project';
+import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
+import { toast } from 'sonner';
+import slipOCRService, { ReceiptData } from '../../services/slipOCRService';
+import SlipUploadWithOCR from './SlipUploadWithOCR';
 
 interface Expense {
   id: string;
@@ -41,7 +51,6 @@ interface Expense {
   description: string;
   amount: number;
   category: string;
-  status: 'pending' | 'approved' | 'rejected';
   paymentMethod: string;
   assignedTo?: string;
   project?: string;
@@ -60,6 +69,8 @@ interface Expense {
   transactionType?: 'debit' | 'credit';
   source?: 'manual' | 'bank_statement';
   bankStatementId?: string;
+  // Receipt data for OCR and validation
+  receipt?: ReceiptData;
 }
 
 interface ExpensesTabProps {
@@ -79,7 +90,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   const [bankStatements, setBankStatements] = useState<any[]>([]);
   const [categorizedExpenses, setCategorizedExpenses] = useState<CategorizedExpense[]>([]);
   const [showBankUpload, setShowBankUpload] = useState(false);
-  const [selectedExpenseForSlip, setSelectedExpenseForSlip] = useState<string | null>(null);
+
   const [viewMode, setViewMode] = useState<'expense' | 'bank_statement'>('expense');
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<any[]>([]);
@@ -89,16 +100,47 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   const [selectedExpensesForBulkProject, setSelectedExpensesForBulkProject] = useState<string[]>([]);
   // companyId is now passed as a prop
   
+  // Manual expense recording state
+  const [showRecordExpenseModal, setShowRecordExpenseModal] = useState(false);
+  const [manualExpenses, setManualExpenses] = useState<StoredExpense[]>([]);
+  
   // Force refresh data when component mounts
   const [refreshKey, setRefreshKey] = useState(0);
+  
+  // Initialize sync service
+  const syncService = ExpenseProjectSyncService.getInstance();
+  
+  // Edit functionality state
+  const [editingExpense, setEditingExpense] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Expense>>({});
+  
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | CategorizedExpense | null>(null);
+  
+
 
   // Load bank statements, expenses, and projects on component mount
   useEffect(() => {
     console.log('ExpensesTab: Loading data for company:', companyId, 'refreshKey:', refreshKey);
     loadBankStatements();
     loadCategorizedExpenses();
+    loadManualExpenses();
     loadProjects();
+    
+    // Initialize sync service
+    syncService.initializeSync();
   }, [companyId, refreshKey]);
+  
+  // Subscribe to sync service updates
+  useEffect(() => {
+    const unsubscribe = syncService.subscribe(() => {
+      console.log('ExpensesTab: Received sync update, refreshing projects');
+      loadProjects();
+    });
+    
+    return unsubscribe;
+  }, [syncService]);
 
   // Load projects from localStorage
   const loadProjects = () => {
@@ -272,10 +314,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     }
   };
 
-  const handleSlipUpload = async (expenseId: string) => {
-    setSelectedExpenseForSlip(null);
-    await loadCategorizedExpenses();
-  };
+
 
   const handleCategoryChange = async (expenseId: string, newCategory: string, newSubcategory: string) => {
     try {
@@ -296,55 +335,153 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
 
 
 
-  // Sample expenses data
-  const [expenses] = useState<Expense[]>([
-    {
-      id: 'EXP001',
-      date: '2025-06-01',
-      description: 'Office Supplies - Stationery',
-      amount: 450.00,
-      category: 'Office Supplies',
-      status: 'approved',
-      paymentMethod: 'Company Card',
-      assignedTo: 'John Smith',
-      project: 'Website Redesign',
-      hasReceipt: true,
-      submittedBy: 'Jane Doe',
-      submittedDate: '2025-06-01',
-      notes: 'Monthly stationery order for the team'
-    },
-    {
-      id: 'EXP002',
-      date: '2025-06-02',
-      description: 'Client Lunch Meeting',
-      amount: 180.50,
-      category: 'Business Meals',
-      status: 'pending',
-      paymentMethod: 'Personal Card',
-      assignedTo: 'Sarah Johnson',
-      project: 'Mobile App Development',
-      hasReceipt: false,
-      submittedBy: 'Mike Wilson',
-      submittedDate: '2025-06-02',
-      notes: 'Lunch with ABC Corporation team to discuss project requirements'
-    },
-    {
-      id: 'EXP003',
-      date: '2025-06-03',
-      description: 'Uber to Client Office',
-      amount: 45.00,
-      category: 'Transportation',
-      status: 'rejected',
-      paymentMethod: 'Personal Card',
-      submittedBy: 'David Brown',
-      submittedDate: '2025-06-03',
-      hasReceipt: true,
-      notes: 'Transportation was not pre-approved'
-    }
-  ]);
+  // Manual expenses data (legacy)
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  // Combine sample expenses with categorized expenses from bank statements
+  // Load manual expenses from expenseStorageService
+  const loadManualExpenses = () => {
+    try {
+      const storedExpenses = expenseStorageService.getAllExpenses();
+      setManualExpenses(storedExpenses);
+      console.log('ExpensesTab: Loaded manual expenses:', storedExpenses.length);
+      
+      // Also load legacy expenses for backward compatibility
+      const legacyExpenses = localStorage.getItem('expenses');
+      if (legacyExpenses) {
+        const parsed = JSON.parse(legacyExpenses);
+        setExpenses(parsed);
+        console.log('ExpensesTab: Loaded legacy expenses:', parsed.length);
+      } else {
+        // Initialize with sample data if no stored expenses
+         const sampleExpenses: Expense[] = [
+           {
+             id: 'EXP001',
+             date: '2025-06-01',
+             description: 'Office Supplies - Stationery',
+             amount: 450.00,
+             category: 'Office Supplies',
+             paymentMethod: 'Company Card',
+             assignedTo: 'John Smith',
+             project: 'Website Redesign',
+             hasReceipt: true,
+             submittedBy: 'Jane Doe',
+             submittedDate: '2025-06-01',
+             notes: 'Monthly stationery order for the team'
+           },
+           {
+             id: 'EXP002',
+             date: '2025-06-02',
+             description: 'Client Lunch Meeting',
+             amount: 180.50,
+             category: 'Business Meals',
+             paymentMethod: 'Personal Card',
+             assignedTo: 'Sarah Johnson',
+             project: 'Mobile App Development',
+             hasReceipt: false,
+             submittedBy: 'Mike Wilson',
+             submittedDate: '2025-06-02',
+             notes: 'Lunch with ABC Corporation team to discuss project requirements'
+           },
+           {
+             id: 'EXP003',
+             date: '2025-06-03',
+             description: 'Uber to Client Office',
+             amount: 45.00,
+             category: 'Transportation',
+             paymentMethod: 'Personal Card',
+             submittedBy: 'David Brown',
+             submittedDate: '2025-06-03',
+             hasReceipt: true,
+             notes: 'Transportation was not pre-approved'
+           }
+         ];
+        setExpenses(sampleExpenses);
+        localStorage.setItem('expenses', JSON.stringify(sampleExpenses));
+        console.log('ExpensesTab: Initialized sample manual expenses');
+      }
+    } catch (error) {
+      console.error('Error loading manual expenses:', error);
+      setExpenses([]);
+      setManualExpenses([]);
+    }
+  };
+
+  /**
+   * Handle saving new expense from modal
+   */
+  const handleSaveExpense = async (expenseData: NewExpenseData) => {
+    try {
+      const newExpense = expenseStorageService.createExpense(expenseData);
+      console.log('ExpensesTab: Created new expense:', newExpense.id);
+      
+      // Reload manual expenses to update the display
+      loadManualExpenses();
+      
+      // Update summary statistics
+      setRefreshKey(prev => prev + 1);
+      
+      return newExpense;
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Handle opening record expense modal
+   */
+  const handleOpenRecordExpenseModal = () => {
+    setShowRecordExpenseModal(true);
+  };
+
+  /**
+   * Handle closing record expense modal
+   */
+  const handleCloseRecordExpenseModal = () => {
+    setShowRecordExpenseModal(false);
+  };
+
+  /**
+   * Delete manual expense
+   */
+  const handleDeleteManualExpense = (expenseId: string) => {
+    try {
+      const success = expenseStorageService.deleteExpense(expenseId);
+      if (success) {
+        toast.success('Expense deleted successfully');
+        loadManualExpenses();
+        setRefreshKey(prev => prev + 1);
+      } else {
+        toast.error('Failed to delete expense');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Error deleting expense');
+    }
+  };
+
+  /**
+   * Update manual expense status
+   */
+  const handleUpdateExpenseStatus = (expenseId: string, status: 'pending' | 'approved' | 'rejected') => {
+    try {
+      const updatedExpense = expenseStorageService.updateExpense(expenseId, { status });
+      if (updatedExpense) {
+        toast.success(`Expense ${status} successfully`);
+        loadManualExpenses();
+        setRefreshKey(prev => prev + 1);
+      } else {
+        toast.error('Failed to update expense status');
+      }
+    } catch (error) {
+      console.error('Error updating expense status:', error);
+      toast.error('Error updating expense status');
+    }
+  };
+
+  // Combine all expense sources: legacy manual, new manual, and categorized bank expenses
   const allExpenses: Expense[] = [
+    // Legacy manual expenses
     ...expenses.map(expense => ({
       ...expense,
       source: 'manual' as const,
@@ -353,6 +490,30 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
       balance: undefined,
       transactionType: 'debit' as const
     })),
+    // New manual expenses from expenseStorageService
+     ...manualExpenses.map(expense => ({
+        id: expense.id,
+        date: expense.date,
+        description: expense.description,
+        amount: expense.amount,
+        category: expense.category,
+        status: expense.status,
+        paymentMethod: expense.transactionType === 'bank' ? 'Bank Transfer' : 'Cash/Card',
+        assignedTo: 'Current User',
+        project: expense.projectName || undefined,
+        projectId: expense.projectId || undefined,
+        projectCode: expense.projectCode || undefined,
+        projectName: expense.projectName || undefined,
+        hasReceipt: expense.hasReceipt,
+        submittedBy: expense.submittedBy,
+        submittedDate: expense.submittedDate,
+        notes: expense.notes,
+        source: 'manual' as const,
+        debit: expense.amount,
+        credit: undefined,
+        balance: undefined,
+        transactionType: 'debit' as const
+      })),
     ...categorizedExpenses.map(expense => {
       // Get original transaction data from bank statements
       const bankStatement = bankStatements.find(bs => bs.id === expense.bankStatementId);
@@ -371,6 +532,10 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         paymentMethod: 'Bank Transfer',
         assignedTo: undefined,
         project: expense.bankStatementId || '',
+        // Include project assignment fields
+        projectId: expense.projectId,
+        projectName: expense.projectName,
+        projectCode: expense.projectCode,
         hasReceipt: expense.slipAttached || false,
         submittedBy: 'Auto-extracted',
         submittedDate: expense.date,
@@ -391,71 +556,38 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   // Project assignment functions
   const handleProjectAssignment = async (expenseId: string, projectId: number | null) => {
     try {
-      const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
+      console.log('ExpensesTab: Assigning project', projectId, 'to expense', expenseId);
       
-      // Update expense with project information
-      const updatedExpenses = allExpenses.map(expense => {
-        if (expense.id === expenseId) {
-          return {
-            ...expense,
-            projectId: selectedProject?.id || undefined,
-            projectCode: selectedProject?.code || undefined,
-            projectName: selectedProject?.name || undefined,
-            project: selectedProject ? `${selectedProject.name} (${selectedProject.code})` : undefined
-          };
-        }
-        return expense;
-      });
+      // Determine expense type (manual or categorized)
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
       
-      // Update project expenses if approved expense
-      if (selectedProject) {
-        const expense = allExpenses.find(e => e.id === expenseId);
-        if (expense && expense.status === 'approved') {
-          await updateProjectExpenses(selectedProject.id, expense.amount, 'add');
-        }
+      let expenseType: 'manual' | 'categorized' = 'manual';
+      if (isCategorizedExpense) {
+        expenseType = 'categorized';
       }
       
-      // Save to localStorage (for manual expenses)
-      const manualExpense = expenses.find(e => e.id === expenseId);
-      if (manualExpense) {
-        // Update sample expenses (in real app, this would be an API call)
-        console.log('Manual expense project assignment:', expenseId, selectedProject?.name);
-      }
+      // Use sync service to handle the assignment
+      const success = syncService.assignExpenseToProject(expenseId, projectId, expenseType);
       
-      // For bank statement expenses, update categorized expenses
-      const bankExpense = categorizedExpenses.find(e => e.id === expenseId);
-      if (bankExpense) {
-        const updatedCategorizedExpenses = categorizedExpenses.map(expense => {
-          if (expense.id === expenseId) {
-            return {
-              ...expense,
-              projectId: selectedProject?.id,
-              projectCode: selectedProject?.code,
-              projectName: selectedProject?.name
-            };
-          }
-          return expense;
-        });
+      if (success) {
+        console.log('ExpensesTab: Project assignment successful');
         
-        // Save to localStorage
-        const allStoredExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
-        const updatedStoredExpenses = allStoredExpenses.map((expense: any) => {
-          if (expense.id === expenseId) {
-            return {
-              ...expense,
-              projectId: selectedProject?.id,
-              projectCode: selectedProject?.code,
-              projectName: selectedProject?.name
-            };
-          }
-          return expense;
-        });
+        // Refresh local data to reflect changes
+        await loadCategorizedExpenses();
+        loadManualExpenses();
         
-        localStorage.setItem('categorizedExpenses', JSON.stringify(updatedStoredExpenses));
-        setCategorizedExpenses(updatedCategorizedExpenses);
+        // Show success feedback
+        const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
+        const message = selectedProject 
+          ? `Expense assigned to ${selectedProject.name}` 
+          : 'Project assignment removed';
+        
+        // You could add a toast notification here
+        console.log(message);
+      } else {
+        throw new Error('Failed to assign project to expense');
       }
-      
-      console.log('Project assigned to expense:', expenseId, selectedProject?.name);
     } catch (error) {
       console.error('Error assigning project to expense:', error);
       alert('Error assigning project. Please try again.');
@@ -519,7 +651,6 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         (expense.projectCode && expense.projectCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (expense.assignedTo && expense.assignedTo.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      const matchesStatus = statusFilter === 'all' || expense.status === statusFilter;
       const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
       const matchesProject = projectFilter === 'all' || 
         (projectFilter === 'unassigned' && !expense.projectId) ||
@@ -541,7 +672,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         matchesDateRange = expenseDate >= monthAgo;
       }
       
-      return matchesSearch && matchesStatus && matchesCategory && matchesProject && matchesDateRange;
+      return matchesSearch && matchesCategory && matchesProject && matchesDateRange;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -559,9 +690,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         case 'category':
           comparison = a.category.localeCompare(b.category);
           break;
-        case 'status':
-          comparison = a.status.localeCompare(b.status);
-          break;
+
         default:
           comparison = 0;
       }
@@ -572,19 +701,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   // Get unique categories from all expenses
   const categories = Array.from(new Set(allExpenses.map(expense => expense.category)));
 
-  // Function to get status badge color
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'bg-mokm-green-100 text-mokm-green-800';
-      case 'pending':
-        return 'bg-mokm-yellow-100 text-mokm-yellow-800';
-      case 'rejected':
-        return 'bg-mokm-red-100 text-mokm-red-800';
-      default:
-        return 'bg-slate-100 text-slate-800';
-    }
-  };
+
 
   // Toggle sort order
   const handleSort = (column: string) => {
@@ -608,55 +725,185 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   // Handle edit expense
   const handleEditExpense = (expenseId: string) => {
     console.log('Edit expense:', expenseId);
-    // TODO: Implement edit expense functionality
-    alert(`Edit expense ${expenseId} - Feature coming soon!`);
-  };
-
-  // Handle delete expense
-  const handleDeleteExpense = async (expenseId: string) => {
-    if (window.confirm('Are you sure you want to delete this expense?')) {
-      try {
-        // Check if it's a bank statement expense
-        const isBankExpense = categorizedExpenses.find(e => e.id === expenseId);
-        if (isBankExpense) {
-          await bankStatementService.deleteExpense(expenseId);
-          await loadCategorizedExpenses();
-          console.log('Bank expense deleted:', expenseId);
-        } else {
-          // Handle sample expense deletion (in real app, this would call an API)
-          console.log('Sample expense deletion not implemented:', expenseId);
-          alert('Sample expense deletion not implemented yet');
-        }
-      } catch (error) {
-        console.error('Error deleting expense:', error);
-        alert('Error deleting expense. Please try again.');
-      }
+    
+    // Find the expense to edit
+    const expenseToEdit = [...expenses, ...categorizedExpenses].find(e => e.id === expenseId);
+    if (!expenseToEdit) {
+      toast.error('Expense not found');
+      return;
+    }
+    
+    // Set edit mode and populate form data
+     setEditingExpense(expenseId);
+     setEditFormData({
+       description: expenseToEdit.description,
+       amount: expenseToEdit.amount,
+       category: expenseToEdit.category,
+       paymentMethod: 'paymentMethod' in expenseToEdit ? expenseToEdit.paymentMethod : 'Bank Transfer',
+       notes: expenseToEdit.notes || ''
+     });
+    
+    // Expand the expense details if not already expanded
+    if (selectedExpense !== expenseId) {
+      setSelectedExpense(expenseId);
     }
   };
-
-  // Handle more actions menu
-  const handleMoreActions = (expenseId: string) => {
-    console.log('More actions for expense:', expenseId);
-    // TODO: Implement dropdown menu with additional actions
-    alert(`More actions for expense ${expenseId} - Feature coming soon!`);
+  
+  // Handle save edit
+  const handleSaveEdit = async (expenseId: string) => {
+    try {
+      console.log('Saving edit for expense:', expenseId);
+      
+      // Determine expense type
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      
+      if (isManualExpense) {
+         // Update manual expense - only update allowed fields
+         const updateData = {
+           description: editFormData.description,
+           amount: editFormData.amount,
+           category: editFormData.category,
+           notes: editFormData.notes
+         };
+         const success = expenseStorageService.updateExpense(expenseId, updateData);
+         if (success) {
+           toast.success('Expense updated successfully');
+           loadManualExpenses();
+         } else {
+           throw new Error('Failed to update manual expense');
+         }
+       } else if (isCategorizedExpense) {
+        // Update categorized expense
+        const expense = categorizedExpenses.find(e => e.id === expenseId);
+        if (expense) {
+          const updatedExpense = { ...expense, ...editFormData };
+          await bankStatementService.updateExpense(expenseId, updatedExpense);
+          await loadCategorizedExpenses();
+          toast.success('Expense updated successfully');
+        }
+      }
+      
+      // Clear edit mode
+      setEditingExpense(null);
+      setEditFormData({});
+      
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      toast.error('Error updating expense. Please try again.');
+    }
   };
+  
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setEditingExpense(null);
+    setEditFormData({});
+  };
+
+  // Handle delete expense - show confirmation modal
+  const handleDeleteExpense = (expenseId: string) => {
+    const expense = [...expenses, ...categorizedExpenses].find(e => e.id === expenseId);
+    if (expense) {
+      setExpenseToDelete(expense);
+      setShowDeleteModal(true);
+    } else {
+      toast.error('Expense not found');
+    }
+  };
+  
+  // Confirm delete expense
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
+    
+    try {
+      console.log('ExpensesTab: Deleting expense', expenseToDelete.id);
+      
+      // Determine expense type
+      const isManualExpense = expenses.some(e => e.id === expenseToDelete.id);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseToDelete.id);
+      
+      let expenseType: 'manual' | 'categorized' = 'manual';
+      if (isCategorizedExpense) {
+        expenseType = 'categorized';
+      }
+      
+      // Use sync service to handle deletion (this will update project totals)
+      const success = syncService.deleteExpense(expenseToDelete.id, expenseType);
+      
+      if (success) {
+        console.log('ExpensesTab: Expense deletion successful');
+        
+        // For categorized expenses, also delete from bank statement service
+        if (isCategorizedExpense) {
+          await bankStatementService.deleteExpense(expenseToDelete.id);
+        }
+        
+        // Refresh local data
+        await loadCategorizedExpenses();
+        loadManualExpenses();
+        setRefreshKey(prev => prev + 1);
+        
+        toast.success(`Expense ${expenseToDelete.id} deleted successfully`);
+        console.log('Expense deleted successfully:', expenseToDelete.id);
+      } else {
+        throw new Error('Failed to delete expense');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Failed to delete expense. Please try again.');
+    } finally {
+      setShowDeleteModal(false);
+      setExpenseToDelete(null);
+    }
+  };
+  
+  // Cancel delete expense
+  const cancelDeleteExpense = () => {
+    setShowDeleteModal(false);
+    setExpenseToDelete(null);
+  };
+
+
 
   // Handle approve expense
   const handleApproveExpense = async (expenseId: string) => {
     try {
-      const expense = categorizedExpenses.find(e => e.id === expenseId);
-      if (expense) {
-        const updatedExpense = {
-          ...expense,
-          status: 'approved' as const
-        };
-        await bankStatementService.updateExpense(expenseId, updatedExpense);
+      console.log('ExpensesTab: Approving expense', expenseId);
+      
+      // Determine expense type
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      
+      let expenseType: 'manual' | 'categorized' = 'manual';
+      if (isCategorizedExpense) {
+        expenseType = 'categorized';
+      }
+      
+      // Use sync service to handle status change (this will update project totals)
+      const success = syncService.updateExpenseStatus(expenseId, 'approved', expenseType);
+      
+      if (success) {
+        console.log('ExpensesTab: Expense approval successful');
+        
+        // For categorized expenses, also update in bank statement service
+        if (isCategorizedExpense) {
+          const expense = categorizedExpenses.find(e => e.id === expenseId);
+          if (expense) {
+            const updatedExpense = {
+              ...expense,
+              status: 'approved' as const
+            };
+            await bankStatementService.updateExpense(expenseId, updatedExpense);
+          }
+        }
+        
+        // Refresh local data
         await loadCategorizedExpenses();
-        console.log('Expense approved:', expenseId);
+        loadManualExpenses();
+        
+        console.log('Expense approved successfully:', expenseId);
       } else {
-        // Handle sample expense approval
-        console.log('Sample expense approval not implemented:', expenseId);
-        alert('Sample expense approval not implemented yet');
+        throw new Error('Failed to approve expense');
       }
     } catch (error) {
       console.error('Error approving expense:', error);
@@ -664,21 +911,12 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     }
   };
 
-  // Handle upload receipt
-  const handleUploadReceipt = (expenseId: string) => {
-    console.log('Upload receipt for expense:', expenseId);
-    // TODO: Implement receipt upload functionality
-    alert(`Upload receipt for expense ${expenseId} - Feature coming soon!`);
-  };
+
 
   // Calculate totals
   const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const approvedExpenses = filteredExpenses
-    .filter(expense => expense.status === 'approved')
-    .reduce((sum, expense) => sum + expense.amount, 0);
-  const pendingExpenses = filteredExpenses
-    .filter(expense => expense.status === 'pending')
-    .reduce((sum, expense) => sum + expense.amount, 0);
+  const expensesWithReceipts = filteredExpenses.filter(expense => expense.hasReceipt).length;
+  const expensesWithoutReceipts = filteredExpenses.filter(expense => !expense.hasReceipt).length;
 
   return (
     <div className="space-y-6">
@@ -699,12 +937,12 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         
         <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
           <CardContent className="p-4">
-            <div className="text-sm text-slate-600 font-sf-pro">Approved Expenses</div>
-            <div className="text-xl font-bold mt-1 text-mokm-green-600 font-sf-pro">R{approvedExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-sm text-slate-600 font-sf-pro">With Receipts</div>
+            <div className="text-xl font-bold mt-1 text-mokm-green-600 font-sf-pro">{expensesWithReceipts}</div>
             <div className="mt-2 text-sm text-slate-600">
               <div className="flex items-center space-x-1">
                 <FileCheck className="h-4 w-4" />
-                <span>{filteredExpenses.filter(e => e.status === 'approved').length} approved records</span>
+                <span>receipts attached</span>
               </div>
             </div>
           </CardContent>
@@ -712,12 +950,12 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         
         <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
           <CardContent className="p-4">
-            <div className="text-sm text-slate-600 font-sf-pro">Pending Expenses</div>
-            <div className="text-xl font-bold mt-1 text-mokm-yellow-600 font-sf-pro">R{pendingExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-sm text-slate-600 font-sf-pro">Missing Receipts</div>
+            <div className="text-xl font-bold mt-1 text-mokm-yellow-600 font-sf-pro">{expensesWithoutReceipts}</div>
             <div className="mt-2 text-sm text-slate-600">
               <div className="flex items-center space-x-1">
-                <Clock className="h-4 w-4" />
-                <span>{filteredExpenses.filter(e => e.status === 'pending').length} pending approvals</span>
+                <Receipt className="h-4 w-4" />
+                <span>receipts needed</span>
               </div>
             </div>
           </CardContent>
@@ -905,7 +1143,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           <Button
-            onClick={onAddExpense}
+            onClick={handleOpenRecordExpenseModal}
             className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -933,14 +1171,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             </DialogContent>
           </Dialog>
           
-          <Button
-            onClick={handleImportFromBankStatement}
-            variant="outline"
-            className="border-blue-500 text-blue-700 hover:bg-blue-50 font-sf-pro"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Import from Bank Statement
-          </Button>
+
           
           {/* View Mode Toggle */}
           <div className="flex items-center space-x-2 bg-white/30 rounded-lg p-1">
@@ -1057,21 +1288,12 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                       </button>
                     </th>
                   )}
-                  <th className="py-3 px-4 text-left text-xs font-medium text-slate-600 uppercase tracking-wider font-sf-pro">
-                    <button 
-                      onClick={() => handleSort('status')} 
-                      className="flex items-center space-x-1 hover:text-slate-900"
-                    >
-                      <span>Status</span>
-                      {sortBy === 'status' && (
-                        sortOrder === 'asc' ? 
-                          <ChevronUp className="h-4 w-4" /> : 
-                          <ChevronDown className="h-4 w-4" />
-                      )}
-                    </button>
-                  </th>
+
                   <th className="py-3 px-4 text-center text-xs font-medium text-slate-600 uppercase tracking-wider font-sf-pro">
-                    Receipt
+                    <div className="flex items-center justify-center space-x-1">
+                      <Receipt className="h-4 w-4" />
+                      <span>RECEIPT</span>
+                    </div>
                   </th>
                   <th className="py-3 px-4 text-right text-xs font-medium text-slate-600 uppercase tracking-wider font-sf-pro">
                     Actions
@@ -1168,18 +1390,46 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                             <div className="text-sm font-medium text-slate-900 font-sf-pro">R{expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                           </td>
                         )}
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getStatusBadgeColor(expense.status)}`}>
-                            {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
-                          </span>
-                        </td>
                         <td className="py-3 px-4 text-center">
-                          {expense.hasReceipt ? (
-                            <FileCheck className="h-5 w-5 text-mokm-green-500 mx-auto" />
-                          ) : (
-                            <AlertCircle className="h-5 w-5 text-mokm-yellow-500 mx-auto" />
-                          )}
-                        </td>
+                          {(() => {
+                            const receiptData = slipOCRService.getReceiptData(expense.id);
+                            const status = receiptData?.status || (expense.hasReceipt ? 'attached' : 'missing');
+                            
+                            switch (status) {
+                              case 'attached':
+                                return (
+                                  <div className="flex flex-col items-center space-y-1">
+                                    <CheckCircle className="h-5 w-5 text-mokm-green-500" />
+                                    <span className="text-xs text-mokm-green-600 font-sf-pro">Attached</span>
+                                    {receiptData?.extractedAmount && (
+                                      <span className="text-xs text-slate-500 font-sf-pro">
+                                        R{receiptData.extractedAmount.toFixed(2)}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              case 'rejected':
+                                return (
+                                  <div className="flex flex-col items-center space-y-1">
+                                    <XCircle className="h-5 w-5 text-mokm-red-500" />
+                                    <span className="text-xs text-mokm-red-600 font-sf-pro">Rejected</span>
+                                    {receiptData?.extractedAmount && (
+                                      <span className="text-xs text-slate-500 font-sf-pro">
+                                        R{receiptData.extractedAmount.toFixed(2)}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              default: // missing
+                                return (
+                                  <div className="flex flex-col items-center space-y-1">
+                                    <Receipt className="h-5 w-5 text-mokm-yellow-500" />
+                                    <span className="text-xs text-mokm-yellow-600 font-sf-pro">Missing</span>
+                                  </div>
+                                );
+                            }
+                          })()
+                        }</td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end space-x-2">
                             <Button 
@@ -1204,17 +1454,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoreActions(expense.id);
-                              }}
-                              title="More actions"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
+
                           </div>
                         </td>
                       </tr>
@@ -1310,44 +1550,76 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                 <div>
                                   <h4 className="text-sm font-medium text-slate-700 mb-2 font-sf-pro">Actions</h4>
                                   <div className="space-y-2">
-                                    {expense.status === 'pending' && (
-                                      <Button 
-                                        size="sm" 
-                                        className="w-full bg-gradient-to-r from-mokm-green-500 to-mokm-green-600 hover:from-mokm-green-600 hover:to-mokm-green-700"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleApproveExpense(expense.id);
-                                        }}
-                                      >
-                                        <UserCheck className="h-4 w-4 mr-2" />
-                                        Approve Expense
-                                      </Button>
+                                    {editingExpense === expense.id ? (
+                                      // Edit Form
+                                      <div className="space-y-3 p-3 bg-white/50 rounded border">
+                                        <div>
+                                          <label className="text-xs text-slate-600 font-sf-pro">Description</label>
+                                          <Input
+                                            value={editFormData.description || ''}
+                                            onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                                            className="mt-1"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-slate-600 font-sf-pro">Amount</label>
+                                          <Input
+                                            type="number"
+                                            value={editFormData.amount || ''}
+                                            onChange={(e) => setEditFormData({...editFormData, amount: parseFloat(e.target.value)})}
+                                            className="mt-1"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-slate-600 font-sf-pro">Category</label>
+                                          <Input
+                                            value={editFormData.category || ''}
+                                            onChange={(e) => setEditFormData({...editFormData, category: e.target.value})}
+                                            className="mt-1"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-slate-600 font-sf-pro">Notes</label>
+                                          <Input
+                                            value={editFormData.notes || ''}
+                                            onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                                            className="mt-1"
+                                          />
+                                        </div>
+                                        <div className="flex space-x-2">
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleSaveEdit(expense.id)}
+                                            className="bg-mokm-green-600 hover:bg-mokm-green-700"
+                                          >
+                                            <Save className="h-4 w-4 mr-1" />
+                                            Save
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleCancelEdit}
+                                          >
+                                            <X className="h-4 w-4 mr-1" />
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // Normal Actions
+                                      <>
+                                        <SlipUploadWithOCR
+                                          expenseId={expense.id}
+                                          debitAmount={expense.debit || expense.amount}
+                                          onUploadComplete={() => {
+                                            // Refresh the component to show updated status
+                                            setExpenses([...expenses]);
+                                          }}
+                                          className="w-full"
+                                        />
+
+                                      </>
                                     )}
-                                    {!expense.hasReceipt && (
-                                      <Button 
-                                        size="sm" 
-                                        className="w-full bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUploadReceipt(expense.id);
-                                        }}
-                                      >
-                                        <Upload className="h-4 w-4 mr-2" />
-                                        Upload Receipt
-                                      </Button>
-                                    )}
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="w-full"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedExpenseForSlip(expense.id);
-                                      }}
-                                    >
-                                      <Upload className="h-4 w-4 mr-2" />
-                                      Upload Slip
-                                    </Button>
                                   </div>
                                 </div>
                                 
@@ -1375,8 +1647,8 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                       <p className="mt-2 text-lg font-medium font-sf-pro">No expenses found</p>
                       <p className="mt-1 font-sf-pro">Adjust your filters or add a new expense</p>
                       <div className="mt-4">
-                        <Button 
-                          onClick={onAddExpense}
+                        <Button
+                          onClick={handleOpenRecordExpenseModal}
                           className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600"
                         >
                           <Plus className="h-4 w-4 mr-2" />
@@ -1392,22 +1664,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         </CardContent>
       </Card>
       
-      {/* Slip Upload Dialog */}
-      {selectedExpenseForSlip && (
-        <Dialog open={!!selectedExpenseForSlip} onOpenChange={() => setSelectedExpenseForSlip(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Upload Expense Slip</DialogTitle>
-            </DialogHeader>
-            <SlipUpload
-               companyId={companyId}
-               expenseId={selectedExpenseForSlip}
-               onUploadComplete={() => handleSlipUpload(selectedExpenseForSlip)}
-               onClose={() => setSelectedExpenseForSlip(null)}
-             />
-          </DialogContent>
-        </Dialog>
-      )}
+
       
       {/* Import Preview Dialog */}
       <Dialog open={showImportPreview} onOpenChange={setShowImportPreview}>
@@ -1547,6 +1804,67 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
            </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <span>Confirm Delete</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete this expense? This action cannot be undone.
+            </p>
+            {expenseToDelete && (
+              <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Description:</span>
+                  <span className="text-sm">{expenseToDelete.description}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Amount:</span>
+                  <span className="text-sm font-medium">R{expenseToDelete.amount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Date:</span>
+                  <span className="text-sm">{expenseToDelete.date}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Category:</span>
+                  <span className="text-sm">{expenseToDelete.category}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              onClick={cancelDeleteExpense}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteExpense}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Expense
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Record Expense Modal */}
+      <RecordExpenseModal
+        isOpen={showRecordExpenseModal}
+        onClose={handleCloseRecordExpenseModal}
+        onSave={handleSaveExpense}
+        projects={projects}
+      />
     </div>
   );
 };

@@ -12,7 +12,9 @@ import {
   AlertCircle,
   User,
   Download,
-  Minus
+  Minus,
+  Settings,
+  TestTube
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,12 +23,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { payrollCalculationService, PayrollCalculation, SalaryAdvance } from '@/services/payrollCalculationService';
 import { PayslipService } from '@/services/payslipService';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import EmployeeDeductionsManagement from '@/components/hr/EmployeeDeductionsManagement';
 import { employeeDeductionsService } from '@/services/employeeDeductionsService';
+import PayrollExpenseIntegration from '@/components/payroll/PayrollExpenseIntegration';
+import PayrollTestRunner from '@/components/testing/PayrollTestRunner';
 
 // Import salary calculation functions from AllowanceManagement
 interface MonthlyAttendance {
@@ -493,85 +498,95 @@ const PayrollManagement: React.FC = () => {
           <p className="text-slate-600 font-sf-pro">Calculate payroll with Time & Attendance integration</p>
         </div>
         
-        <div className="flex gap-3">
-          <Button
-            onClick={() => setShowDeductionsModal(true)}
-            variant="outline"
-            className="font-sf-pro"
-          >
-            <Minus className="h-4 w-4 mr-2" />
-            Employee Deductions
-          </Button>
-          
-          <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="font-sf-pro">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Salary Advance
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Request Salary Advance</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Employee</label>
-                  <Select value={advanceForm.employeeId} onValueChange={(value) => setAdvanceForm(prev => ({ ...prev, employeeId: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {salaryData.map(calc => (
-                        <SelectItem key={calc.employeeId} value={calc.employeeId}>
-                          {calc.employeeName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Amount (R)</label>
-                  <Input
-                    type="number"
-                    value={advanceForm.amount}
-                    onChange={(e) => setAdvanceForm(prev => ({ ...prev, amount: e.target.value }))}
-                    placeholder="Enter amount"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Reason</label>
-                  <Textarea
-                    value={advanceForm.reason}
-                    onChange={(e) => setAdvanceForm(prev => ({ ...prev, reason: e.target.value }))}
-                    placeholder="Reason for salary advance"
-                  />
-                </div>
-                
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setShowAdvanceModal(false)}>Cancel</Button>
-                  <Button onClick={handleSalaryAdvanceRequest}>Submit Request</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-          
-          <Button
-            onClick={handleCalculatePayroll}
-            disabled={isCalculating}
-            className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 font-sf-pro"
-          >
-            {isCalculating ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Calculator className="h-4 w-4 mr-2" />
-            )}
-            {isCalculating ? 'Calculating...' : 'Calculate Payroll'}
-          </Button>
-        </div>
       </div>
+
+      <Tabs defaultValue="payroll" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="payroll">Payroll Calculations</TabsTrigger>
+          <TabsTrigger value="advances">Salary Advances</TabsTrigger>
+          <TabsTrigger value="expenses">Expense Integration</TabsTrigger>
+          <TabsTrigger value="testing">Testing</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="payroll" className="space-y-6">
+          <div className="flex gap-3">
+            <Button
+              onClick={() => setShowDeductionsModal(true)}
+              variant="outline"
+              className="font-sf-pro"
+            >
+              <Minus className="h-4 w-4 mr-2" />
+              Employee Deductions
+            </Button>
+            
+            <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="font-sf-pro">
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Salary Advance
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Request Salary Advance</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Employee</label>
+                    <Select value={advanceForm.employeeId} onValueChange={(value) => setAdvanceForm(prev => ({ ...prev, employeeId: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select employee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {salaryData.map(calc => (
+                          <SelectItem key={calc.employeeId} value={calc.employeeId}>
+                            {calc.employeeName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Amount (R)</label>
+                    <Input
+                      type="number"
+                      value={advanceForm.amount}
+                      onChange={(e) => setAdvanceForm(prev => ({ ...prev, amount: e.target.value }))}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Reason</label>
+                    <Textarea
+                      value={advanceForm.reason}
+                      onChange={(e) => setAdvanceForm(prev => ({ ...prev, reason: e.target.value }))}
+                      placeholder="Reason for salary advance"
+                    />
+                  </div>
+                  
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" onClick={() => setShowAdvanceModal(false)}>Cancel</Button>
+                    <Button onClick={handleSalaryAdvanceRequest}>Submit Request</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Button
+              onClick={handleCalculatePayroll}
+              disabled={isCalculating}
+              className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 font-sf-pro"
+            >
+              {isCalculating ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Calculator className="h-4 w-4 mr-2" />
+              )}
+              {isCalculating ? 'Calculating...' : 'Calculate Payroll'}
+            </Button>
+          </div>
       
       {/* Payroll Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1060,6 +1075,81 @@ const PayrollManagement: React.FC = () => {
           <EmployeeDeductionsManagement onClose={() => setShowDeductionsModal(false)} />
         </DialogContent>
       </Dialog>
+        </TabsContent>
+        
+        <TabsContent value="advances" className="space-y-6">
+          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <CardHeader>
+              <CardTitle className="font-sf-pro">Salary Advance Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-600 font-sf-pro mb-4">Manage employee salary advance requests and approvals.</p>
+              <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
+                <DialogTrigger asChild>
+                  <Button className="font-sf-pro">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    New Salary Advance Request
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Request Salary Advance</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Employee</label>
+                      <Select value={advanceForm.employeeId} onValueChange={(value) => setAdvanceForm(prev => ({ ...prev, employeeId: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {salaryData.map(calc => (
+                            <SelectItem key={calc.employeeId} value={calc.employeeId}>
+                              {calc.employeeName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Amount (R)</label>
+                      <Input
+                        type="number"
+                        value={advanceForm.amount}
+                        onChange={(e) => setAdvanceForm(prev => ({ ...prev, amount: e.target.value }))}
+                        placeholder="Enter amount"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Reason</label>
+                      <Textarea
+                        value={advanceForm.reason}
+                        onChange={(e) => setAdvanceForm(prev => ({ ...prev, reason: e.target.value }))}
+                        placeholder="Reason for salary advance"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setShowAdvanceModal(false)}>Cancel</Button>
+                      <Button onClick={handleSalaryAdvanceRequest}>Submit Request</Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="expenses" className="space-y-6">
+           <PayrollExpenseIntegration companyId="default-company" />
+         </TabsContent>
+         
+        <TabsContent value="testing" className="space-y-6">
+           <PayrollTestRunner />
+         </TabsContent>
+      </Tabs>
     </div>
   );
 };
