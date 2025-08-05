@@ -204,10 +204,27 @@ class OCRService {
       // Try to parse transactions
       let transactions: ExtractedTransaction[] = [];
       try {
+        console.log('Attempting to parse transactions from extracted text...');
+        console.log('Text sample for parsing:', extractedText.substring(0, 1000));
         transactions = this.parseTransactions(extractedText, file.name);
+        console.log('Initial parsing result:', transactions.length, 'transactions found');
       } catch (parseError) {
         console.warn('Transaction parsing failed:', parseError);
         processingErrors.push(`Transaction parsing failed: ${parseError.message}`);
+      }
+      
+      // If no transactions found, provide detailed diagnostics
+      if (transactions.length === 0) {
+        console.log('No transactions found with main parsing, analyzing text...');
+        const diagnostics = this.generateParsingDiagnostics(extractedText);
+        console.log('Parsing diagnostics:', diagnostics);
+        
+        // Show sample lines for debugging
+        const lines = extractedText.split('\n').filter(line => line.trim().length > 0);
+        console.log('Sample lines from document:');
+        lines.slice(0, 20).forEach((line, index) => {
+          console.log(`Line ${index + 1}: "${line}"`);
+        });
       }
       
       // Determine if we're in fallback mode
@@ -575,6 +592,7 @@ Date Description Debit Credit Balance
     let transactionId = 1;
     
     console.log('Parsing transactions from text:', text.substring(0, 500));
+    console.log('Total lines to process:', lines.length);
     
     for (const line of lines) {
       const trimmedLine = line.trim();
@@ -583,6 +601,43 @@ Date Description Debit Credit Balance
       if (this.isHeaderLine(line) || line.length < 10) continue;
       
       console.log('Processing line:', line);
+      
+      // ENHANCED UNIVERSAL PATTERN MATCHING
+      // Try to detect any line with date + amounts pattern first
+      const universalPattern = /(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?).+?([\d,]+\.\d{2}).+?([\d,]+\.\d{2})/;
+      const universalMatch = line.match(universalPattern);
+      
+      if (universalMatch) {
+        const [, dateStr, amount1Str, amount2Str] = universalMatch;
+        
+        const amount1 = parseFloat(amount1Str.replace(/[,\s]/g, ''));
+        const amount2 = parseFloat(amount2Str.replace(/[,\s]/g, ''));
+        
+        if (!isNaN(amount1) && amount1 > 0) {
+          // Extract description between date and first amount
+          const dateEndIndex = line.indexOf(dateStr) + dateStr.length;
+          const amount1StartIndex = line.indexOf(amount1Str);
+          const description = line.substring(dateEndIndex, amount1StartIndex).trim();
+          
+          if (description.length > 0) {
+            const type = this.determineTransactionType(description, amount1Str);
+            
+            const transaction: ExtractedTransaction = {
+              id: `${fileName}_${transactionId++}`,
+              date: this.normalizeDate(dateStr),
+              description: description,
+              amount: amount1,
+              type,
+              balance: amount2,
+              rawText: line
+            };
+            
+            console.log('Parsed universal pattern transaction:', transaction);
+            transactions.push(transaction);
+            continue;
+          }
+        }
+      }
       
       // ENHANCED NEDBANK FORMAT PATTERNS
       // Pattern N1: Nedbank format with fees, debits, credits, balance
@@ -921,7 +976,7 @@ Date Description Debit Credit Balance
   }
 
   /**
-   * Enhanced header/footer line detection
+   * Enhanced header/footer line detection - Less aggressive to avoid skipping transactions
    */
   private isHeaderLine(line: string): boolean {
     const lowerLine = line.toLowerCase().trim();
@@ -929,15 +984,14 @@ Date Description Debit Credit Balance
     // Skip empty or very short lines
     if (lowerLine.length < 3) return true;
     
-    // Definite header patterns
+    // Only definite header patterns - be more conservative
     const headerPatterns = [
-      /^(statement|bank|account)\s+(number|no\.?|name)/,
-      /^(date|description|amount|debit|credit|balance|reference)$/,
+      /^(statement|bank)\s+(number|no\.?|name)\s*:/,  // Only with colon
+      /^(account\s+number|account\s+name)\s*:/,       // Only with colon
+      /^(opening|closing)\s+(balance)\s*:/,           // Only with colon
+      /^(statement\s+period|statement\s+date)\s*:/,   // Only with colon
       /^(page|continued|brought forward|carried forward)$/,
-      /^(opening|closing)\s+(balance|amount)/,
-      /^(total|subtotal)\s/,
-      /^(account holder|statement period|statement date)/,
-      /^(fees|debits|credits)\s*\(r\)$/,  // Nedbank column headers
+      /^(total|subtotal)\s*$/,                        // Only standalone
     ];
     
     // Check for definite header patterns
@@ -945,25 +999,33 @@ Date Description Debit Credit Balance
       if (pattern.test(lowerLine)) return true;
     }
     
-    // Check for lines that are just column headers
-    const words = lowerLine.split(/\s+/);
-    const headerWords = ['date', 'description', 'amount', 'debit', 'credit', 'balance', 'reference', 'fees'];
+    // Check for lines that are ONLY column headers (exact matches)
+    const exactHeaderLines = [
+      'date description amount balance',
+      'date description debit credit balance',
+      'date description fees(r) debits(r) credits(r) balance(r)',
+      'date description fees debits credits balance',
+      'date description reference amount balance'
+    ];
     
-    // If line contains only header words and is short, it's likely a header
-    if (words.length <= 6 && words.every(word => headerWords.includes(word) || word.match(/^\(r\)$/))) {
+    const normalizedLine = lowerLine.replace(/[\(\)]/g, '').replace(/\s+/g, ' ');
+    if (exactHeaderLines.includes(normalizedLine)) {
       return true;
     }
     
-    // Check for lines with no amounts or dates (likely headers/descriptions)
+    // Only skip lines that clearly have no transaction data
     const hasAmount = /[\d,]+\.\d{2}/.test(line);
     const hasDate = this.extractDate(line) !== null;
     
-    // If no amount and no date, and contains header keywords, it's likely a header
-    if (!hasAmount && !hasDate) {
-      const headerKeywords = ['statement', 'bank', 'account', 'balance', 'total', 'page'];
-      if (headerKeywords.some(keyword => lowerLine.includes(keyword))) {
-        return true;
-      }
+    // If it has amounts or dates, it's likely a transaction
+    if (hasAmount || hasDate) {
+      return false;
+    }
+    
+    // Only skip if it's clearly a header with specific keywords AND no transaction data
+    const strongHeaderKeywords = ['statement period', 'account holder', 'bank name', 'branch code'];
+    if (strongHeaderKeywords.some(keyword => lowerLine.includes(keyword))) {
+      return true;
     }
     
     return false;
@@ -1122,45 +1184,83 @@ Date Description Debit Credit Balance
     const lines = text.split('\n').filter(line => line.trim().length > 0);
     
     console.log('Starting fallback parsing for', lines.length, 'lines');
+    console.log('Sample lines for fallback:', lines.slice(0, 10));
     
     let transactionId = 1;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
-      // Skip obvious header/footer lines
-      if (this.isHeaderLine(line) || line.length < 8) continue;
+      // Skip obvious header/footer lines but be less strict
+      if (line.length < 8) continue;
       
-      console.log('Fallback processing line:', line);
-      
-      const dateMatch = this.extractDate(line);
-      if (!dateMatch) {
-        // Try to find date in next line if current line has amounts
-        if (i < lines.length - 1) {
-          const nextLine = lines[i + 1].trim();
-          const nextDateMatch = this.extractDate(nextLine);
-          if (nextDateMatch) {
-            // Combine current line with next line for processing
-            const combinedLine = `${line} ${nextLine}`;
-            const combinedDateMatch = this.extractDate(combinedLine);
-            if (combinedDateMatch) {
-              // Process combined line
-              const result = this.processFallbackLine(combinedLine, combinedDateMatch, fileName, transactionId);
-              if (result) {
-                transactions.push(result);
-                transactionId++;
-                i++; // Skip next line as it's been processed
-              }
-            }
-          }
-        }
+      // Skip lines that are clearly headers but allow more potential transaction lines
+      const lowerLine = line.toLowerCase();
+      if (lowerLine.includes('statement') || lowerLine.includes('account number') || 
+          lowerLine.includes('opening balance') || lowerLine.includes('closing balance') ||
+          lowerLine === 'date' || lowerLine === 'description' || lowerLine === 'amount') {
         continue;
       }
       
-      const result = this.processFallbackLine(line, dateMatch, fileName, transactionId);
-      if (result) {
-        transactions.push(result);
-        transactionId++;
+      console.log('Fallback processing line:', line);
+      
+      // More aggressive date detection
+      const dateMatch = this.extractDate(line);
+      
+      // Also try to find lines with amounts even without dates
+      const hasAmount = /[\d,]+\.\d{2}/.test(line);
+      
+      if (dateMatch) {
+        const result = this.processFallbackLine(line, dateMatch, fileName, transactionId);
+        if (result) {
+          transactions.push(result);
+          transactionId++;
+        }
+      } else if (hasAmount) {
+        // Try to find date in previous or next line
+        let contextDate = null;
+        
+        // Check previous line for date
+        if (i > 0) {
+          const prevLine = lines[i - 1].trim();
+          contextDate = this.extractDate(prevLine);
+        }
+        
+        // Check next line for date
+        if (!contextDate && i < lines.length - 1) {
+          const nextLine = lines[i + 1].trim();
+          contextDate = this.extractDate(nextLine);
+        }
+        
+        if (contextDate) {
+          const result = this.processFallbackLine(line, contextDate, fileName, transactionId);
+          if (result) {
+            transactions.push(result);
+            transactionId++;
+          }
+        } else {
+          // Try to extract transaction without date (use current date)
+          const amounts = this.extractAmounts(line);
+          if (amounts.length > 0) {
+            const amount = Math.abs(amounts[0]);
+            if (amount > 0) {
+              const description = line.replace(/[\d,]+\.\d{2}/g, '').trim() || 'Transaction';
+              const type = this.determineTransactionType(line, amounts[0]);
+              
+              const transaction: ExtractedTransaction = {
+                id: `${fileName}_${transactionId++}`,
+                date: new Date().toISOString().split('T')[0], // Use current date as fallback
+                description: description,
+                amount: amount,
+                type,
+                rawText: line
+              };
+              
+              console.log('Parsed amount-only transaction:', transaction);
+              transactions.push(transaction);
+            }
+          }
+        }
       }
     }
     

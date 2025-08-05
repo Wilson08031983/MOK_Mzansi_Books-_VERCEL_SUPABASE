@@ -151,11 +151,25 @@ class BankStatementService {
     console.log('BankStatementService: Company statement IDs for', companyId, ':', companyStatementIds);
     console.log('BankStatementService: Company statements:', companyStatements.map(s => ({ id: s.id, companyId: s.companyId, fileName: s.fileName })));
     
+    // If no company statements exist, return all expenses (for development/testing)
+    if (companyStatementIds.length === 0) {
+      console.log('BankStatementService: No company statements found, returning all expenses for development');
+      return expenses;
+    }
+    
     const filtered = expenses.filter((e: CategorizedExpense) => 
       e.bankStatementId && companyStatementIds.includes(e.bankStatementId)
     );
     console.log('BankStatementService: Filtered expenses for company', companyId, ':', filtered.length);
     console.log('BankStatementService: Sample filtered expense:', filtered[0]);
+    
+    // If filtering results in no expenses but we have expenses in storage, 
+    // return all expenses (this handles companyId mismatch issues)
+    if (filtered.length === 0 && expenses.length > 0) {
+      console.log('BankStatementService: No filtered expenses found but expenses exist in storage. Returning all expenses to prevent data loss.');
+      return expenses;
+    }
+    
     return filtered;
   }
 

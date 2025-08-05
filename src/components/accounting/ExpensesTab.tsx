@@ -34,16 +34,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BankStatementUpload from './BankStatementUpload';
+import BankStatementUploadWithSnippets from './BankStatementUploadWithSnippets';
+import BankStatementTestTool from './BankStatementTestTool';
 
 import RecordExpenseModal, { NewExpenseData } from './RecordExpenseModal';
 import bankStatementService from '../../services/bankStatementService';
 import expenseCategorizationService, { CategorizedExpense } from '../../services/expenseCategorizationService';
 import expenseStorageService, { StoredExpense } from '../../services/expenseStorageService';
+import fileStorageService from '../../services/fileStorageService';
 import { Project } from '@/types/project';
 import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
+import { slipOCRService, ReceiptData } from '../../services/slipOCRService';
 import { toast } from 'sonner';
-import slipOCRService, { ReceiptData } from '../../services/slipOCRService';
-import SlipUploadWithOCR from './SlipUploadWithOCR';
+import { useAuth } from '@/hooks/useAuth';
+
 
 interface Expense {
   id: string;
@@ -69,8 +73,7 @@ interface Expense {
   transactionType?: 'debit' | 'credit';
   source?: 'manual' | 'bank_statement';
   bankStatementId?: string;
-  // Receipt data for OCR and validation
-  receipt?: ReceiptData;
+
 }
 
 interface ExpensesTabProps {
@@ -79,6 +82,7 @@ interface ExpensesTabProps {
 }
 
 const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'current-company-id' }) => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -114,23 +118,59 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   const [editingExpense, setEditingExpense] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Expense>>({});
   
+  // Inline category editing state
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryUpdateLoading, setCategoryUpdateLoading] = useState<string | null>(null);
+  
+  // Receipt processing state
+  const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
+  const [receiptData, setReceiptData] = useState<Map<string, ReceiptData>>(new Map());
+  
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [expenseToDelete, setExpenseToDelete] = useState<Expense | CategorizedExpense | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | CategorizedExpense | StoredExpense | null>(null);
+  const [showTestTool, setShowTestTool] = useState(false);
+  
+  // Receipt viewer modal state
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [currentReceiptData, setCurrentReceiptData] = useState<{expenseId: string, receiptImage: string, isPDF: boolean} | null>(null);
   
 
 
   // Load bank statements, expenses, and projects on component mount
   useEffect(() => {
     console.log('ExpensesTab: Loading data for company:', companyId, 'refreshKey:', refreshKey);
+    
+    
     loadBankStatements();
     loadCategorizedExpenses();
     loadManualExpenses();
     loadProjects();
+    loadReceiptData();
     
     // Initialize sync service
     syncService.initializeSync();
   }, [companyId, refreshKey]);
+
+  // Load existing receipt data
+  const loadReceiptData = () => {
+    try {
+      const allReceipts = slipOCRService.getAllReceiptData();
+      
+      const receiptMap = new Map<string, ReceiptData>();
+      allReceipts.forEach(receipt => {
+        if (receipt.expenseId) {
+          receiptMap.set(receipt.expenseId, receipt);
+        }
+      });
+      
+      setReceiptData(receiptMap);
+    } catch (error) {
+      console.error('Error loading receipt data:', error);
+    }
+  };
+  
+
   
   // Subscribe to sync service updates
   useEffect(() => {
@@ -175,6 +215,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
 
   const loadCategorizedExpenses = async () => {
     try {
+      console.log('ExpensesTab: Loading categorized expenses for companyId:', companyId);
       const expenses = await bankStatementService.getExpenses(companyId);
       console.log('ExpensesTab: Loaded categorized expenses:', expenses.length);
       console.log('ExpensesTab: Company ID used for filtering:', companyId);
@@ -185,7 +226,13 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
       console.log('ExpensesTab: Total expenses in localStorage:', allExpensesInStorage.length);
       console.log('ExpensesTab: Sample localStorage expense:', allExpensesInStorage.slice(0, 2));
       
+      // Debug: Check bank statements
+      const allBankStatements = JSON.parse(localStorage.getItem('bankStatements') || '[]');
+      console.log('ExpensesTab: Total bank statements in localStorage:', allBankStatements.length);
+      console.log('ExpensesTab: Bank statements for current company:', allBankStatements.filter(s => s.companyId === companyId).length);
+      
       setCategorizedExpenses(expenses);
+      console.log('ExpensesTab: Set categorized expenses state with', expenses.length, 'items');
     } catch (error) {
       console.error('Error loading expenses:', error);
     }
@@ -193,12 +240,21 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
 
   const handleBankStatementUpload = async (statementId: string) => {
     console.log('ExpensesTab: Bank statement uploaded with ID:', statementId);
+    console.log('ExpensesTab: Using companyId for data reload:', companyId);
     setShowBankUpload(false);
+    
+    // Add a small delay to ensure data is saved
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     await loadBankStatements();
     await loadCategorizedExpenses();
+    
     // Force component refresh
     setRefreshKey(prev => prev + 1);
     console.log('ExpensesTab: Data reloaded after bank statement upload');
+    
+    // Show success message
+    toast.success('Bank statement processed successfully! Transactions have been added to the table.');
   };
 
   // Standardize date format
@@ -333,6 +389,41 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     }
   };
 
+  // Handle inline category update
+  const handleInlineCategoryUpdate = async (expenseId: string, newCategoryValue: string) => {
+    try {
+      setCategoryUpdateLoading(expenseId);
+      const [category, subcategory] = newCategoryValue.split('|');
+      
+      // Determine expense type
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      
+      if (isManualExpense) {
+        // Update manual expense
+        const updateData = { category: category };
+        const success = expenseStorageService.updateExpense(expenseId, updateData);
+        if (success) {
+          toast.success('Category updated successfully');
+          loadManualExpenses();
+        } else {
+          throw new Error('Failed to update manual expense category');
+        }
+      } else if (isCategorizedExpense) {
+        // Update categorized expense
+        await handleCategoryChange(expenseId, category, subcategory);
+        toast.success('Category updated successfully');
+      }
+      
+      setEditingCategory(null);
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Error updating category. Please try again.');
+    } finally {
+      setCategoryUpdateLoading(null);
+    }
+  };
+
 
 
   // Manual expenses data (legacy)
@@ -352,52 +443,9 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         setExpenses(parsed);
         console.log('ExpensesTab: Loaded legacy expenses:', parsed.length);
       } else {
-        // Initialize with sample data if no stored expenses
-         const sampleExpenses: Expense[] = [
-           {
-             id: 'EXP001',
-             date: '2025-06-01',
-             description: 'Office Supplies - Stationery',
-             amount: 450.00,
-             category: 'Office Supplies',
-             paymentMethod: 'Company Card',
-             assignedTo: 'John Smith',
-             project: 'Website Redesign',
-             hasReceipt: true,
-             submittedBy: 'Jane Doe',
-             submittedDate: '2025-06-01',
-             notes: 'Monthly stationery order for the team'
-           },
-           {
-             id: 'EXP002',
-             date: '2025-06-02',
-             description: 'Client Lunch Meeting',
-             amount: 180.50,
-             category: 'Business Meals',
-             paymentMethod: 'Personal Card',
-             assignedTo: 'Sarah Johnson',
-             project: 'Mobile App Development',
-             hasReceipt: false,
-             submittedBy: 'Mike Wilson',
-             submittedDate: '2025-06-02',
-             notes: 'Lunch with ABC Corporation team to discuss project requirements'
-           },
-           {
-             id: 'EXP003',
-             date: '2025-06-03',
-             description: 'Uber to Client Office',
-             amount: 45.00,
-             category: 'Transportation',
-             paymentMethod: 'Personal Card',
-             submittedBy: 'David Brown',
-             submittedDate: '2025-06-03',
-             hasReceipt: true,
-             notes: 'Transportation was not pre-approved'
-           }
-         ];
-        setExpenses(sampleExpenses);
-        localStorage.setItem('expenses', JSON.stringify(sampleExpenses));
-        console.log('ExpensesTab: Initialized sample manual expenses');
+        // Set empty array if no legacy expenses exist
+        setExpenses([]);
+        console.log('ExpensesTab: No legacy expenses found, setting empty array');
       }
     } catch (error) {
       console.error('Error loading manual expenses:', error);
@@ -424,6 +472,350 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     } catch (error) {
       console.error('Error saving expense:', error);
       throw error;
+    }
+  };
+
+  /**
+   * Handle receipt upload and OCR processing
+   */
+  const handleReceiptUpload = async (expenseId: string) => {
+    try {
+      // Create file input element
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,application/pdf';
+      input.multiple = false;
+      
+      input.onchange = async (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        
+        // Validate file type
+        const isImage = file.type.startsWith('image/');
+        const isPDF = file.type === 'application/pdf';
+        
+        if (!isImage && !isPDF) {
+          toast.error('Please select an image or PDF file');
+          return;
+        }
+        
+        // Validate file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+          toast.error('File size too large. Maximum allowed: 10MB');
+          return;
+        }
+        
+        // Start processing
+        setProcessingReceipts(prev => new Set(prev).add(expenseId));
+        toast.info(`Processing ${isPDF ? 'PDF' : 'receipt'}...`, {
+          description: isPDF ? 'Uploading PDF document' : 'Extracting information from your receipt'
+        });
+        
+        try {
+          let receiptResult;
+          
+          if (isPDF) {
+            // For PDF files, store as base64 without OCR processing
+            const base64 = await fileToBase64(file);
+            receiptResult = {
+              id: `receipt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              expenseId,
+              vatIncluded: false,
+              status: 'manual_verification_required' as const,
+              matchStatus: 'manual_review' as const,
+              source: 'manual' as const,
+              receiptImage: base64,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            slipOCRService.saveReceiptData(receiptResult);
+          } else {
+            // Process images with OCR
+            receiptResult = await slipOCRService.processSlipUpload(file, expenseId);
+          }
+          
+          // Update receipt data state
+          setReceiptData(prev => new Map(prev).set(expenseId, receiptResult));
+          
+          // Show success message with extracted information
+          if (isPDF) {
+            toast.success('PDF uploaded successfully!', {
+              description: 'PDF document has been attached to the expense'
+            });
+          } else if (receiptResult.status === 'completed' && receiptResult.extractedAmount) {
+            toast.success('Receipt processed successfully!', {
+              description: `Extracted amount: R${receiptResult.extractedAmount.toFixed(2)}${receiptResult.vatAmount ? ` (VAT: R${receiptResult.vatAmount.toFixed(2)})` : ''}`
+            });
+          } else if (receiptResult.status === 'manual_verification_required') {
+            toast.warning('Receipt uploaded but needs verification', {
+              description: 'Please review the extracted information'
+            });
+          } else {
+            toast.info('Receipt uploaded', {
+              description: 'Processing completed with limited extraction'
+            });
+          }
+          
+          // Update expense to mark as having receipt
+           const expense = allExpenses.find(e => e.id === expenseId);
+           if (expense) {
+             expense.hasReceipt = true;
+             // Update in storage if it's a manual expense
+             if (expense.source === 'manual') {
+               const receipt = receiptData.get(expenseId);
+               expenseStorageService.updateExpense(expenseId, { receipt: receipt?.receiptImage || '' });
+               loadManualExpenses();
+             }
+           }
+          
+        } catch (error) {
+          console.error('Receipt processing failed:', error);
+          toast.error('Failed to process receipt', {
+            description: error instanceof Error ? error.message : 'Unknown error occurred'
+          });
+        } finally {
+          // Remove from processing set
+          setProcessingReceipts(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(expenseId);
+            return newSet;
+          });
+        }
+      };
+      
+      // Trigger file selection
+      input.click();
+      
+    } catch (error) {
+      console.error('Error setting up file upload:', error);
+      toast.error('Failed to open file selector');
+    }
+  };
+
+  // Helper function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  /**
+   * Handle viewing receipt in modal
+   */
+  const handleViewReceipt = (expenseId: string) => {
+    const receipt = receiptData.get(expenseId) || slipOCRService.getReceiptData(expenseId);
+    
+    if (receipt?.receiptImage) {
+      try {
+        const isPDF = receipt.receiptImage.startsWith('data:application/pdf');
+        
+        // Set the receipt data for the modal
+        setCurrentReceiptData({
+          expenseId,
+          receiptImage: receipt.receiptImage,
+          isPDF
+        });
+        
+        // Show the modal
+        setShowReceiptModal(true);
+        
+        toast.success('Receipt opened in viewer');
+      } catch (error) {
+        console.error('Error opening receipt:', error);
+        toast.error('Failed to open receipt viewer');
+      }
+    } else {
+      toast.error('No receipt found for this expense');
+    }
+  };
+
+  /**
+   * Handle replacing receipt
+   */
+  const handleReplaceReceipt = async (expenseId: string) => {
+    // First delete the existing receipt
+    const receipt = receiptData.get(expenseId) || slipOCRService.getReceiptData(expenseId);
+    if (receipt) {
+      slipOCRService.deleteReceiptData(receipt.id);
+      setReceiptData(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(expenseId);
+        return newMap;
+      });
+    }
+    
+    // Then trigger upload for new receipt
+    await handleReceiptUpload(expenseId);
+  };
+
+  /**
+   * Create test receipt data for debugging
+   */
+  const createTestReceiptData = (expenseId: string) => {
+    console.log('🧪 [TEST RECEIPT] Creating test receipt for expense:', expenseId);
+    
+    const testReceipt: ReceiptData = {
+      id: `test_receipt_${Date.now()}_${Math.random()}`,
+      expenseId,
+      extractedAmount: 100.00,
+      vatAmount: 15.00,
+      vatIncluded: true,
+      vatRate: 0.15,
+      status: 'completed',
+      matchStatus: 'verified',
+      source: 'manual',
+      receiptText: 'Test receipt text - DELETE RECEIPT TEST',
+      receiptImage: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      confidence: 95,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    console.log('🧪 [TEST RECEIPT] Test receipt object:', testReceipt);
+    
+    // Save to service
+    slipOCRService.saveReceiptData(testReceipt);
+    console.log('🧪 [TEST RECEIPT] Saved to OCR service');
+    
+    // Update local state
+    setReceiptData(prev => {
+      const newMap = new Map(prev);
+      newMap.set(expenseId, testReceipt);
+      console.log('🧪 [TEST RECEIPT] Updated local state, new map size:', newMap.size);
+      return newMap;
+    });
+    
+    // Update expense hasReceipt flag
+    const expense = allExpenses.find(e => e.id === expenseId);
+    if (expense) {
+      console.log('🧪 [TEST RECEIPT] Updating expense hasReceipt flag from', expense.hasReceipt, 'to true');
+      expense.hasReceipt = true;
+    } else {
+      console.log('🧪 [TEST RECEIPT] No expense found for ID:', expenseId);
+    }
+    
+    // Force refresh
+    setRefreshKey(prev => {
+      const newKey = prev + 1;
+      console.log('🧪 [TEST RECEIPT] Forcing refresh, key updated from', prev, 'to', newKey);
+      return newKey;
+    });
+    
+    console.log('🧪 [TEST RECEIPT] Test receipt creation completed');
+    toast.success('Test receipt created successfully! Now try deleting it.');
+  };
+
+  /**
+   * Handle deleting receipt
+   */
+  const handleDeleteReceipt = async (expenseId: string) => {
+    console.log('🗑️ [DELETE RECEIPT] Function called with expenseId:', expenseId);
+    console.log('🗑️ [DELETE RECEIPT] Current receiptData Map:', receiptData);
+    console.log('🗑️ [DELETE RECEIPT] All expenses:', allExpenses.map(e => ({ id: e.id, hasReceipt: e.hasReceipt })));
+    
+    try {
+      const receiptFromMap = receiptData.get(expenseId);
+      const receiptFromService = slipOCRService.getReceiptData(expenseId);
+      console.log('🗑️ [DELETE RECEIPT] Receipt from Map:', receiptFromMap);
+      console.log('🗑️ [DELETE RECEIPT] Receipt from Service:', receiptFromService);
+      
+      const receipt = receiptFromMap || receiptFromService;
+      console.log('🗑️ [DELETE RECEIPT] Combined receipt:', receipt);
+      
+      if (receipt) {
+        console.log('🗑️ [DELETE RECEIPT] Receipt found, showing confirmation dialog');
+        
+        // Show confirmation dialog
+        const confirmed = window.confirm('Are you sure you want to delete this receipt? This action cannot be undone.');
+        console.log('🗑️ [DELETE RECEIPT] User confirmed deletion:', confirmed);
+        
+        if (!confirmed) {
+          console.log('🗑️ [DELETE RECEIPT] User cancelled deletion');
+          return;
+        }
+        
+        console.log('🗑️ [DELETE RECEIPT] Starting deletion process...');
+        
+        // Debug: Check all receipts before deletion
+        const allReceiptsBefore = slipOCRService.getAllReceiptData();
+        console.log('🗑️ [DELETE RECEIPT] All receipts before deletion:', allReceiptsBefore);
+        
+        // Delete from OCR service using receipt ID
+        console.log('🗑️ [DELETE RECEIPT] Deleting from OCR service with receipt ID:', receipt.id);
+        slipOCRService.deleteReceiptData(receipt.id);
+        
+        // Debug: Check all receipts after deletion
+        const allReceiptsAfter = slipOCRService.getAllReceiptData();
+        console.log('🗑️ [DELETE RECEIPT] All receipts after deletion:', allReceiptsAfter);
+        console.log('🗑️ [DELETE RECEIPT] Receipt count before:', allReceiptsBefore.length, 'after:', allReceiptsAfter.length);
+        
+        // Also delete from file storage service using expense ID
+        console.log('🗑️ [DELETE RECEIPT] Deleting from file storage with expense ID:', expenseId);
+        const fileDeleted = fileStorageService.deleteExpenseReceipt(expenseId);
+        console.log('🗑️ [DELETE RECEIPT] File deletion result:', fileDeleted);
+        
+        // Remove from local state
+        console.log('🗑️ [DELETE RECEIPT] Updating local receiptData state');
+        setReceiptData(prev => {
+          const newMap = new Map(prev);
+          const hadEntry = newMap.has(expenseId);
+          newMap.delete(expenseId);
+          console.log('🗑️ [DELETE RECEIPT] State update - had entry:', hadEntry, 'new size:', newMap.size);
+          return newMap;
+        });
+        
+        // Update expense record to remove receipt
+        const expense = allExpenses.find(e => e.id === expenseId);
+        console.log('🗑️ [DELETE RECEIPT] Found expense to update:', expense);
+        
+        if (expense) {
+          console.log('🗑️ [DELETE RECEIPT] Updating expense hasReceipt flag from', expense.hasReceipt, 'to false');
+          expense.hasReceipt = false;
+          
+          if (expense.source === 'manual') {
+            console.log('🗑️ [DELETE RECEIPT] Updating manual expense in storage');
+            const updateResult = expenseStorageService.updateExpense(expenseId, { receipt: '' });
+            console.log('🗑️ [DELETE RECEIPT] Manual expense update result:', updateResult);
+            loadManualExpenses();
+          } else {
+            console.log('🗑️ [DELETE RECEIPT] Expense source is not manual:', expense.source);
+          }
+        } else {
+          console.log('🗑️ [DELETE RECEIPT] No expense found in allExpenses for ID:', expenseId);
+        }
+        
+        // Reload receipt data to ensure UI is updated
+        console.log('🗑️ [DELETE RECEIPT] Reloading receipt data');
+        await loadReceiptData();
+        
+        // Force refresh the entire component
+        console.log('🗑️ [DELETE RECEIPT] Forcing component refresh');
+        setRefreshKey(prev => {
+          const newKey = prev + 1;
+          console.log('🗑️ [DELETE RECEIPT] Refresh key updated from', prev, 'to', newKey);
+          return newKey;
+        });
+        
+        console.log('🗑️ [DELETE RECEIPT] Deletion process completed successfully');
+        
+        if (fileDeleted) {
+          toast.success('Receipt deleted successfully');
+        } else {
+          toast.warning('Receipt data cleared, but file deletion may have failed');
+        }
+      } else {
+        console.log('🗑️ [DELETE RECEIPT] No receipt found for expenseId:', expenseId);
+        console.log('🗑️ [DELETE RECEIPT] Available receipts:', slipOCRService.getAllReceiptData().map(r => ({ id: r.id, expenseId: r.expenseId })));
+        toast.error('No receipt found to delete');
+      }
+    } catch (error) {
+      console.error('🗑️ [DELETE RECEIPT] Error during deletion:', error);
+      console.error('🗑️ [DELETE RECEIPT] Error stack:', error.stack);
+      toast.error('Failed to delete receipt');
     }
   };
 
@@ -724,14 +1116,19 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
 
   // Handle edit expense
   const handleEditExpense = (expenseId: string) => {
-    console.log('Edit expense:', expenseId);
+    console.log('ExpensesTab: Looking for expense to edit:', expenseId);
+    console.log('ExpensesTab: Available expenses for editing:', [...expenses, ...categorizedExpenses, ...manualExpenses].map(e => e.id));
     
-    // Find the expense to edit
-    const expenseToEdit = [...expenses, ...categorizedExpenses].find(e => e.id === expenseId);
+    // Find the expense to edit in all sources
+    const allExpenses = [...expenses, ...categorizedExpenses, ...manualExpenses];
+    const expenseToEdit = allExpenses.find(e => e.id === expenseId);
     if (!expenseToEdit) {
-      toast.error('Expense not found');
+      console.error('ExpensesTab: Expense not found for editing:', expenseId);
+      toast.error(`Expense ${expenseId} not found for editing`);
       return;
     }
+    
+    console.log('ExpensesTab: Found expense to edit:', expenseToEdit);
     
     // Set edit mode and populate form data
      setEditingExpense(expenseId);
@@ -752,41 +1149,60 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   // Handle save edit
   const handleSaveEdit = async (expenseId: string) => {
     try {
-      console.log('Saving edit for expense:', expenseId);
+      console.log('ExpensesTab: Saving edit for expense:', expenseId);
       
-      // Determine expense type
-      const isManualExpense = expenses.some(e => e.id === expenseId);
+      // Determine expense type and source
+      const isLegacyExpense = expenses.some(e => e.id === expenseId);
       const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      const isStoredExpense = manualExpenses.some(e => e.id === expenseId);
       
-      if (isManualExpense) {
-         // Update manual expense - only update allowed fields
+      let success = false;
+      
+      if (isStoredExpense) {
+         // Update stored manual expense
          const updateData = {
            description: editFormData.description,
            amount: editFormData.amount,
            category: editFormData.category,
            notes: editFormData.notes
          };
-         const success = expenseStorageService.updateExpense(expenseId, updateData);
+         const updatedExpense = expenseStorageService.updateExpense(expenseId, updateData);
+         success = updatedExpense !== null;
          if (success) {
-           toast.success('Expense updated successfully');
+           console.log('ExpensesTab: Updated stored expense successfully');
            loadManualExpenses();
-         } else {
-           throw new Error('Failed to update manual expense');
          }
-       } else if (isCategorizedExpense) {
+      } else if (isLegacyExpense) {
+        // Update legacy expense in localStorage
+        const legacyExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+        const expenseIndex = legacyExpenses.findIndex((e: any) => e.id === expenseId);
+        if (expenseIndex !== -1) {
+          legacyExpenses[expenseIndex] = { ...legacyExpenses[expenseIndex], ...editFormData };
+          localStorage.setItem('expenses', JSON.stringify(legacyExpenses));
+          success = true;
+          console.log('ExpensesTab: Updated legacy expense successfully');
+          setRefreshKey(prev => prev + 1); // Trigger refresh
+        }
+      } else if (isCategorizedExpense) {
         // Update categorized expense
         const expense = categorizedExpenses.find(e => e.id === expenseId);
         if (expense) {
           const updatedExpense = { ...expense, ...editFormData };
           await bankStatementService.updateExpense(expenseId, updatedExpense);
           await loadCategorizedExpenses();
-          toast.success('Expense updated successfully');
+          success = true;
+          console.log('ExpensesTab: Updated categorized expense successfully');
         }
       }
       
-      // Clear edit mode
-      setEditingExpense(null);
-      setEditFormData({});
+      if (success) {
+        toast.success('Expense updated successfully');
+        // Clear edit mode
+        setEditingExpense(null);
+        setEditFormData({});
+      } else {
+        throw new Error('Failed to update expense in any source');
+      }
       
     } catch (error) {
       console.error('Error updating expense:', error);
@@ -802,12 +1218,20 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
 
   // Handle delete expense - show confirmation modal
   const handleDeleteExpense = (expenseId: string) => {
-    const expense = [...expenses, ...categorizedExpenses].find(e => e.id === expenseId);
+    console.log('ExpensesTab: Looking for expense to delete:', expenseId);
+    console.log('ExpensesTab: Available expenses:', [...expenses, ...categorizedExpenses, ...manualExpenses].map(e => e.id));
+    
+    // Look in all possible expense sources
+    const allExpenses = [...expenses, ...categorizedExpenses, ...manualExpenses];
+    const expense = allExpenses.find(e => e.id === expenseId);
+    
     if (expense) {
+      console.log('ExpensesTab: Found expense to delete:', expense);
       setExpenseToDelete(expense);
       setShowDeleteModal(true);
     } else {
-      toast.error('Expense not found');
+      console.error('ExpensesTab: Expense not found in any source:', expenseId);
+      toast.error(`Expense ${expenseId} not found in any data source`);
     }
   };
   
@@ -818,35 +1242,51 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     try {
       console.log('ExpensesTab: Deleting expense', expenseToDelete.id);
       
-      // Determine expense type
-      const isManualExpense = expenses.some(e => e.id === expenseToDelete.id);
+      // Determine expense type and source
+      const isLegacyExpense = expenses.some(e => e.id === expenseToDelete.id);
       const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseToDelete.id);
+      const isStoredExpense = manualExpenses.some(e => e.id === expenseToDelete.id);
       
-      let expenseType: 'manual' | 'categorized' = 'manual';
-      if (isCategorizedExpense) {
-        expenseType = 'categorized';
+      let success = false;
+      
+      if (isStoredExpense) {
+        // Delete from manual expense storage service
+        success = expenseStorageService.deleteExpense(expenseToDelete.id);
+        console.log('ExpensesTab: Deleted from manual expense storage:', success);
+      } else if (isLegacyExpense) {
+        // Delete from legacy expenses (localStorage)
+        const legacyExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+        const filteredExpenses = legacyExpenses.filter((e: any) => e.id !== expenseToDelete.id);
+        localStorage.setItem('expenses', JSON.stringify(filteredExpenses));
+        success = true;
+        console.log('ExpensesTab: Deleted from legacy expenses');
+      } else if (isCategorizedExpense) {
+        // Delete from categorized expenses
+        success = syncService.deleteExpense(expenseToDelete.id, 'categorized');
+        if (success) {
+          await bankStatementService.deleteExpense(expenseToDelete.id, true); // admin delete
+        }
+        console.log('ExpensesTab: Deleted from categorized expenses:', success);
       }
-      
-      // Use sync service to handle deletion (this will update project totals)
-      const success = syncService.deleteExpense(expenseToDelete.id, expenseType);
       
       if (success) {
         console.log('ExpensesTab: Expense deletion successful');
         
-        // For categorized expenses, also delete from bank statement service
-        if (isCategorizedExpense) {
-          await bankStatementService.deleteExpense(expenseToDelete.id);
-        }
+        // Add small delay to ensure localStorage operations complete
+        await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Refresh local data
+        // Refresh all data sources
         await loadCategorizedExpenses();
         loadManualExpenses();
         setRefreshKey(prev => prev + 1);
         
+        // Additional delay to ensure state updates are processed
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         toast.success(`Expense ${expenseToDelete.id} deleted successfully`);
         console.log('Expense deleted successfully:', expenseToDelete.id);
       } else {
-        throw new Error('Failed to delete expense');
+        throw new Error('Failed to delete expense from any source');
       }
     } catch (error) {
       console.error('Error deleting expense:', error);
@@ -1171,6 +1611,24 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             </DialogContent>
           </Dialog>
           
+          <Dialog open={showTestTool} onOpenChange={setShowTestTool}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="border-orange-500 text-orange-700 hover:bg-orange-50 font-sf-pro"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Test Bank Statement
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Bank Statement Test Tool</DialogTitle>
+              </DialogHeader>
+              <BankStatementTestTool />
+            </DialogContent>
+          </Dialog>
+          
 
           
           {/* View Mode Toggle */}
@@ -1305,7 +1763,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                   filteredExpenses.map(expense => (
                     <React.Fragment key={expense.id}>
                       <tr 
-                        className={`hover:bg-white/30 cursor-pointer transition-colors ${selectedExpense === expense.id ? 'bg-white/30' : ''}`}
+                        className={`group hover:bg-white/30 cursor-pointer transition-colors ${selectedExpense === expense.id ? 'bg-white/30' : ''}`}
                         onClick={() => toggleExpenseDetails(expense.id)}
                       >
                         <td className="py-3 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -1351,14 +1809,84 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                             </td>
                           </>
                         )}
-                        <td className="py-3 px-4">
-                          <div className="text-sm text-slate-900 font-sf-pro">{expense.category}</div>
-                          {expense.notes && expense.notes.includes('Subcategory:') && (
-                            <div className="text-xs text-slate-500 font-sf-pro">{expense.notes.replace('Subcategory: ', '')}</div>
-                          )}
-                          <div className="text-xs text-slate-500 font-sf-pro">{expense.paymentMethod}</div>
-                          {categorizedExpenses.find(e => e.id === expense.id)?.vatDeductible && (
-                            <Badge variant="secondary" className="text-xs mt-1">VAT Deductible</Badge>
+                        <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                          {editingCategory === expense.id ? (
+                            <Select
+                              value={`${expense.category}|${expense.notes?.includes('Subcategory:') ? expense.notes.replace('Subcategory: ', '') : ''}`}
+                              onValueChange={(value) => handleInlineCategoryUpdate(expense.id, value)}
+                              onOpenChange={(open) => {
+                                if (!open) {
+                                  setEditingCategory(null);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="operating|Rent & Lease">💼 Operating - Rent & Lease</SelectItem>
+                                <SelectItem value="operating|Utilities">💼 Operating - Utilities</SelectItem>
+                                <SelectItem value="operating|Salaries">💼 Operating - Salaries</SelectItem>
+                                <SelectItem value="operating|Repairs">💼 Operating - Repairs</SelectItem>
+                                <SelectItem value="operating|Security">💼 Operating - Security</SelectItem>
+                                <SelectItem value="operating|Office Supplies">💼 Operating - Office Supplies</SelectItem>
+                                <SelectItem value="operating|Cleaning">💼 Operating - Cleaning</SelectItem>
+                                <SelectItem value="cost_of_sales|Raw Materials">🚚 Cost of Sales - Raw Materials</SelectItem>
+                                <SelectItem value="cost_of_sales|Hiring Equipment">🚚 Cost of Sales - Hiring Equipment</SelectItem>
+                                <SelectItem value="cost_of_sales|Inventory">🚚 Cost of Sales - Inventory</SelectItem>
+                                <SelectItem value="cost_of_sales|Subcontractors">🚚 Cost of Sales - Subcontractors</SelectItem>
+                                <SelectItem value="marketing|Ads">📣 Marketing - Ads</SelectItem>
+                                <SelectItem value="marketing|Promotions">📣 Marketing - Promotions</SelectItem>
+                                <SelectItem value="marketing|Campaigns">📣 Marketing - Campaigns</SelectItem>
+                                <SelectItem value="professional|Legal">🧑‍💻 Professional - Legal</SelectItem>
+                                <SelectItem value="professional|Accounting">🧑‍💻 Professional - Accounting</SelectItem>
+                                <SelectItem value="professional|Consulting">🧑‍💻 Professional - Consulting</SelectItem>
+                                <SelectItem value="financial|Bank Charges">🧾 Financial - Bank Charges</SelectItem>
+                                <SelectItem value="financial|Loan Interest">🧾 Financial - Loan Interest</SelectItem>
+                                <SelectItem value="financial|Insurance">🧾 Financial - Insurance</SelectItem>
+                                <SelectItem value="financial|Fines">🧾 Financial - Fines</SelectItem>
+                                <SelectItem value="it_software|Subscriptions">🖥️ IT & Software - Subscriptions</SelectItem>
+                                <SelectItem value="it_software|Hosting">🖥️ IT & Software - Hosting</SelectItem>
+                                <SelectItem value="it_software|Software">🖥️ IT & Software - Software</SelectItem>
+                                <SelectItem value="travel|Fuel">🚗 Travel - Fuel</SelectItem>
+                                <SelectItem value="travel|Accommodation">🚗 Travel - Accommodation</SelectItem>
+                                <SelectItem value="travel|Flights">🚗 Travel - Flights</SelectItem>
+                                <SelectItem value="travel|Per Diems">🚗 Travel - Per Diems</SelectItem>
+                                <SelectItem value="regulatory|SARS">🏛️ Regulatory - SARS</SelectItem>
+                                <SelectItem value="regulatory|CIPC">🏛️ Regulatory - CIPC</SelectItem>
+                                <SelectItem value="regulatory|Workman's Comp">🏛️ Regulatory - Workman's Comp</SelectItem>
+                                <SelectItem value="training|Courses">🎓 Training - Courses</SelectItem>
+                                <SelectItem value="training|Seminars">🎓 Training - Seminars</SelectItem>
+                                <SelectItem value="miscellaneous|Donations">🎁 Miscellaneous - Donations</SelectItem>
+                                <SelectItem value="miscellaneous|Gifts">🎁 Miscellaneous - Gifts</SelectItem>
+                                <SelectItem value="miscellaneous|Entertainment">🎁 Miscellaneous - Entertainment</SelectItem>
+                                <SelectItem value="miscellaneous|Sundry">🎁 Miscellaneous - Sundry</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div 
+                              className="cursor-pointer hover:bg-white/20 p-1 rounded transition-colors"
+                              onClick={() => setEditingCategory(expense.id)}
+                            >
+                              {categoryUpdateLoading === expense.id ? (
+                                <div className="flex items-center space-x-2">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-mokm-blue-500"></div>
+                                  <span className="text-xs text-slate-500">Updating...</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-sm text-slate-900 font-sf-pro">{expense.category}</div>
+                                  {expense.notes && expense.notes.includes('Subcategory:') && (
+                                    <div className="text-xs text-slate-500 font-sf-pro">{expense.notes.replace('Subcategory: ', '')}</div>
+                                  )}
+                                  <div className="text-xs text-slate-500 font-sf-pro">{expense.paymentMethod}</div>
+                                  {categorizedExpenses.find(e => e.id === expense.id)?.vatDeductible && (
+                                    <Badge variant="secondary" className="text-xs mt-1">VAT Deductible</Badge>
+                                  )}
+                                  <div className="text-xs text-mokm-blue-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</div>
+                                </>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
@@ -1391,45 +1919,20 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                           </td>
                         )}
                         <td className="py-3 px-4 text-center">
-                          {(() => {
-                            const receiptData = slipOCRService.getReceiptData(expense.id);
-                            const status = receiptData?.status || (expense.hasReceipt ? 'attached' : 'missing');
-                            
-                            switch (status) {
-                              case 'attached':
-                                return (
-                                  <div className="flex flex-col items-center space-y-1">
-                                    <CheckCircle className="h-5 w-5 text-mokm-green-500" />
-                                    <span className="text-xs text-mokm-green-600 font-sf-pro">Attached</span>
-                                    {receiptData?.extractedAmount && (
-                                      <span className="text-xs text-slate-500 font-sf-pro">
-                                        R{receiptData.extractedAmount.toFixed(2)}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              case 'rejected':
-                                return (
-                                  <div className="flex flex-col items-center space-y-1">
-                                    <XCircle className="h-5 w-5 text-mokm-red-500" />
-                                    <span className="text-xs text-mokm-red-600 font-sf-pro">Rejected</span>
-                                    {receiptData?.extractedAmount && (
-                                      <span className="text-xs text-slate-500 font-sf-pro">
-                                        R{receiptData.extractedAmount.toFixed(2)}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              default: // missing
-                                return (
-                                  <div className="flex flex-col items-center space-y-1">
-                                    <Receipt className="h-5 w-5 text-mokm-yellow-500" />
-                                    <span className="text-xs text-mokm-yellow-600 font-sf-pro">Missing</span>
-                                  </div>
-                                );
-                            }
-                          })()
-                        }</td>
+                          <div className="flex flex-col items-center space-y-1">
+                            {expense.hasReceipt ? (
+                              <>
+                                <CheckCircle className="h-5 w-5 text-mokm-green-500" />
+                                <span className="text-xs text-mokm-green-600 font-sf-pro">✅ Attached</span>
+                              </>
+                            ) : (
+                              <>
+                                <Receipt className="h-5 w-5 text-mokm-yellow-500" />
+                                <span className="text-xs text-mokm-yellow-600 font-sf-pro">Missing</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end space-x-2">
                             <Button 
@@ -1464,31 +1967,47 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                             <div className="bg-white/30 p-4 border-t border-b border-white/20">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                  <h4 className="text-sm font-medium text-slate-700 mb-2 font-sf-pro">Details</h4>
+                                  <h4 className="text-sm font-medium text-slate-700 mb-3 font-sf-pro">Details</h4>
                                   <div className="text-sm space-y-2">
-                                    <div className="flex justify-between py-1 border-b border-white/20">
-                                      <span className="text-slate-500">Submitted by:</span>
-                                      <span className="font-sf-pro">{expense.submittedBy}</span>
+                                    <div className="flex justify-between items-center py-3 px-4 bg-white/50 rounded-lg border border-white/40 shadow-sm">
+                                      <span className="text-slate-700 font-medium text-xs uppercase tracking-wide">Submitted by:</span>
+                                      <span className="font-sf-pro text-slate-900 font-semibold text-right">
+                                        {user?.user_metadata?.first_name && user?.user_metadata?.last_name 
+                                          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}` 
+                                          : user?.user_metadata?.full_name || user?.email || 'Unknown User'}
+                                      </span>
                                     </div>
-                                    <div className="flex justify-between py-1 border-b border-white/20">
-                                      <span className="text-slate-500">Submitted date:</span>
-                                      <span className="font-sf-pro">{new Date(expense.submittedDate).toLocaleDateString()}</span>
+                                    <div className="flex justify-between items-center py-3 px-4 bg-white/50 rounded-lg border border-white/40 shadow-sm">
+                                      <span className="text-slate-700 font-medium text-xs uppercase tracking-wide">Submitted date:</span>
+                                      <span className="font-sf-pro text-slate-900 font-semibold text-right">
+                                        {(() => {
+                                          if (expense.bankStatementId) {
+                                            const bankStatement = bankStatements.find(bs => bs.id === expense.bankStatementId);
+                                            return bankStatement?.uploadDate 
+                                              ? new Date(bankStatement.uploadDate).toLocaleDateString()
+                                              : new Date(expense.submittedDate).toLocaleDateString();
+                                          }
+                                          return new Date(expense.submittedDate).toLocaleDateString();
+                                        })()} 
+                                      </span>
                                     </div>
                                     {expense.assignedTo && (
-                                      <div className="flex justify-between py-1 border-b border-white/20">
-                                        <span className="text-slate-500">Assigned to:</span>
-                                        <span className="font-sf-pro">{expense.assignedTo}</span>
+                                      <div className="flex justify-between items-center py-3 px-4 bg-white/50 rounded-lg border border-white/40 shadow-sm">
+                                        <span className="text-slate-700 font-medium text-xs uppercase tracking-wide">Assigned to:</span>
+                                        <span className="font-sf-pro text-slate-900 font-semibold text-right">{expense.assignedTo}</span>
                                       </div>
                                     )}
-                                    <div className="flex justify-between py-1 border-b border-white/20">
-                                      <span className="text-slate-500">Payment method:</span>
-                                      <span className="font-sf-pro">{expense.paymentMethod}</span>
-                                    </div>
                                     {categorizedExpenses.find(e => e.id === expense.id) && (
-                                      <div className="py-1 border-b border-white/20">
-                                        <span className="text-slate-500 block mb-1">Category:</span>
+                                       <div className="flex justify-between items-center py-3 px-4 bg-white/50 rounded-lg border border-white/40 shadow-sm">
+                                         <span className="text-slate-700 font-medium text-xs uppercase tracking-wide">Category:</span>
                                         <Select
-                                          value={expense.category}
+                                          value={(() => {
+                                            // Extract subcategory from notes if it exists
+                                            const subcategory = expense.notes?.includes('Subcategory:') 
+                                              ? expense.notes.replace('Subcategory: ', '') 
+                                              : '';
+                                            return `${expense.category}|${subcategory}`;
+                                          })()}
                                           onValueChange={(value) => {
                                             const [category, subcategory] = value.split('|');
                                             handleCategoryChange(expense.id, category, subcategory);
@@ -1521,8 +2040,8 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                         </Select>
                                       </div>
                                     )}
-                                    <div className="py-1 border-b border-white/20">
-                                      <span className="text-slate-500 block mb-1">Project:</span>
+                                    <div className="flex justify-between items-center py-3 px-4 bg-white/50 rounded-lg border border-white/40 shadow-sm">
+                                       <span className="text-slate-700 font-medium text-xs uppercase tracking-wide">Project:</span>
                                       <select
                                         value={expense.projectId || ''}
                                         onChange={(e) => {
@@ -1552,71 +2071,153 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                   <div className="space-y-2">
                                     {editingExpense === expense.id ? (
                                       // Edit Form
-                                      <div className="space-y-3 p-3 bg-white/50 rounded border">
+                                      <div className="space-y-4 p-4 bg-white/60 rounded-lg border border-white/30 shadow-sm">
+                                        <h5 className="text-sm font-semibold text-slate-700 mb-3 font-sf-pro">Edit Expense</h5>
+                                        
                                         <div>
-                                          <label className="text-xs text-slate-600 font-sf-pro">Description</label>
+                                          <label className="block text-xs font-medium text-slate-600 mb-1 font-sf-pro">Description *</label>
                                           <Input
                                             value={editFormData.description || ''}
                                             onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
-                                            className="mt-1"
+                                            className="w-full border-white/30 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20"
+                                            placeholder="Enter expense description"
                                           />
                                         </div>
+                                        
                                         <div>
-                                          <label className="text-xs text-slate-600 font-sf-pro">Amount</label>
-                                          <Input
-                                            type="number"
-                                            value={editFormData.amount || ''}
-                                            onChange={(e) => setEditFormData({...editFormData, amount: parseFloat(e.target.value)})}
-                                            className="mt-1"
-                                          />
+                                          <label className="block text-xs font-medium text-slate-600 mb-1 font-sf-pro">Category *</label>
+                                          <Select
+                                            value={`${editFormData.category || ''}|`}
+                                            onValueChange={(value) => {
+                                              const [category] = value.split('|');
+                                              setEditFormData({...editFormData, category});
+                                            }}
+                                          >
+                                            <SelectTrigger className="w-full border-white/30 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20">
+                                              <SelectValue placeholder="Select a category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="operating|">💼 Operating Expenses</SelectItem>
+                                              <SelectItem value="cost_of_sales|">🚚 Cost of Sales / Direct Costs</SelectItem>
+                                              <SelectItem value="marketing|">📣 Marketing & Advertising</SelectItem>
+                                              <SelectItem value="professional|">🧑‍💻 Professional Services</SelectItem>
+                                              <SelectItem value="financial|">🧾 Financial Expenses</SelectItem>
+                                              <SelectItem value="it_software|">🖥️ IT & Software</SelectItem>
+                                              <SelectItem value="travel|">🚗 Travel & Transport</SelectItem>
+                                              <SelectItem value="regulatory|">🏛️ Regulatory & Government Fees</SelectItem>
+                                              <SelectItem value="training|">🎓 Training & Development</SelectItem>
+                                              <SelectItem value="miscellaneous|">🎁 Miscellaneous / Other</SelectItem>
+                                            </SelectContent>
+                                          </Select>
                                         </div>
+                                        
                                         <div>
-                                          <label className="text-xs text-slate-600 font-sf-pro">Category</label>
-                                          <Input
-                                            value={editFormData.category || ''}
-                                            onChange={(e) => setEditFormData({...editFormData, category: e.target.value})}
-                                            className="mt-1"
-                                          />
-                                        </div>
-                                        <div>
-                                          <label className="text-xs text-slate-600 font-sf-pro">Notes</label>
+                                          <label className="block text-xs font-medium text-slate-600 mb-1 font-sf-pro">Notes</label>
                                           <Input
                                             value={editFormData.notes || ''}
                                             onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                                            className="mt-1"
+                                            className="w-full border-white/30 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20"
+                                            placeholder="Add any additional notes (optional)"
                                           />
                                         </div>
-                                        <div className="flex space-x-2">
-                                          <Button
-                                            size="sm"
-                                            onClick={() => handleSaveEdit(expense.id)}
-                                            className="bg-mokm-green-600 hover:bg-mokm-green-700"
-                                          >
-                                            <Save className="h-4 w-4 mr-1" />
-                                            Save
-                                          </Button>
+                                        
+                                        <div className="flex justify-end space-x-3 pt-2">
                                           <Button
                                             size="sm"
                                             variant="outline"
                                             onClick={handleCancelEdit}
+                                            className="border-slate-300 text-slate-600 hover:bg-slate-50"
                                           >
-                                            <X className="h-4 w-4 mr-1" />
                                             Cancel
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleSaveEdit(expense.id)}
+                                            disabled={!editFormData.description?.trim() || !editFormData.category}
+                                            className="bg-mokm-blue-600 hover:bg-mokm-blue-700 text-white font-medium px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          >
+                                            <Save className="h-4 w-4 mr-2" />
+                                            Save Changes
                                           </Button>
                                         </div>
                                       </div>
                                     ) : (
                                       // Normal Actions
                                       <>
-                                        <SlipUploadWithOCR
-                                          expenseId={expense.id}
-                                          debitAmount={expense.debit || expense.amount}
-                                          onUploadComplete={() => {
-                                            // Refresh the component to show updated status
-                                            setExpenses([...expenses]);
-                                          }}
-                                          className="w-full"
-                                        />
+                                        {(() => {
+                                          const receiptFromMap = receiptData.get(expense.id);
+                                          const receiptFromService = slipOCRService.getReceiptData(expense.id);
+                                          const hasReceipt = receiptFromMap || receiptFromService;
+                                          
+                                          // Enhanced debugging for receipt detection
+                                          console.log(`[DEBUG] Expense ${expense.id} (${expense.description}):`, {
+                                            receiptFromMap,
+                                            receiptFromService,
+                                            hasReceipt,
+                                            expenseHasReceiptFlag: expense.hasReceipt,
+                                            amount: expense.amount
+                                          });
+                                          
+                                          if (hasReceipt) {
+                                            console.log(`[DEBUG] Rendering receipt buttons for expense ${expense.id} (hasReceipt: ${hasReceipt})`);
+                                            return (
+                                              <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-green-600 border-green-200 hover:bg-green-50 flex-1"
+                                                    onClick={() => {
+                                                      console.log('[DEBUG] View button clicked for expense:', expense.id);
+                                                      handleViewReceipt(expense.id);
+                                                    }}
+                                                    disabled={!hasReceipt}
+                                                  >
+                                                    <Eye className="h-4 w-4 mr-1" />
+                                                    View
+                                                  </Button>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-orange-600 border-orange-200 hover:bg-orange-50 flex-1"
+                                                    onClick={() => {
+                                                      console.log('[DEBUG] Replace button clicked for expense:', expense.id);
+                                                      handleReplaceReceipt(expense.id);
+                                                    }}
+                                                    disabled={processingReceipts.has(expense.id)}
+                                                  >
+                                                    <Upload className="h-4 w-4 mr-1" />
+                                                    Replace
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            );
+                                          } else {
+                                            console.log(`[DEBUG] Rendering upload buttons for expense ${expense.id} (no receipt found)`);
+                                            return (
+                                              <div className="space-y-2">
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="text-mokm-blue-600 border-mokm-blue-200 hover:bg-mokm-blue-50 w-full"
+                                                  onClick={() => handleReceiptUpload(expense.id)}
+                                                  disabled={processingReceipts.has(expense.id)}
+                                                >
+                                                  <Upload className="h-4 w-4 mr-1" />
+                                                  {processingReceipts.has(expense.id) ? 'Processing...' : 'Upload Receipt'}
+                                                </Button>
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="text-purple-600 border-purple-200 hover:bg-purple-50 w-full"
+                                                  onClick={() => createTestReceiptData(expense.id)}
+                                                >
+                                                  🧪 Create Test Receipt
+                                                </Button>
+                                              </div>
+                                            );
+                                          }
+                                        })()}
 
                                       </>
                                     )}
@@ -1865,6 +2466,78 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         onSave={handleSaveExpense}
         projects={projects}
       />
+      
+      {/* Receipt Viewer Modal */}
+      <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Receipt for Expense: {currentReceiptData?.expenseId}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto min-h-0">
+            {currentReceiptData && (
+              <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg p-4">
+                {currentReceiptData.isPDF ? (
+                  <div className="w-full h-[60vh] bg-white rounded border">
+                    <iframe
+                      src={currentReceiptData.receiptImage}
+                      className="w-full h-full border-0"
+                      title={`Receipt for expense ${currentReceiptData.expenseId}`}
+                    />
+                  </div>
+                ) : (
+                  <img
+                    src={currentReceiptData.receiptImage}
+                    alt={`Receipt for expense ${currentReceiptData.expenseId}`}
+                    className="max-w-full max-h-[60vh] object-contain rounded shadow-lg"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-4 border-t flex-shrink-0 bg-white">
+            <div className="flex gap-2">
+              {currentReceiptData && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (currentReceiptData) {
+                        const link = document.createElement('a');
+                        link.href = currentReceiptData.receiptImage;
+                        link.download = `receipt-${currentReceiptData.expenseId}.${currentReceiptData.isPDF ? 'pdf' : 'jpg'}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        toast.success('Receipt downloaded successfully');
+                      }
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.print()}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
+                </>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowReceiptModal(false)}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

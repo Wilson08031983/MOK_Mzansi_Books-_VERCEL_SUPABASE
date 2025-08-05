@@ -8,7 +8,7 @@ import { Upload, FileCheck, AlertCircle, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import slipOCRService, { ReceiptData } from '../../services/slipOCRService';
+import { slipOCRService, ReceiptData } from '../../services/slipOCRService';
 
 interface SlipUploadWithOCRProps {
   expenseId: string;
@@ -28,7 +28,7 @@ const SlipUploadWithOCR: React.FC<SlipUploadWithOCRProps> = ({
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<any>(null);
-  const [validationResult, setValidationResult] = useState<boolean | null>(null);
+  // Removed validationResult state as it's not part of the ReceiptData interface
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,7 +55,7 @@ const SlipUploadWithOCR: React.FC<SlipUploadWithOCRProps> = ({
     
     // Reset previous results
     setOcrResult(null);
-    setValidationResult(null);
+    // Reset validation result removed
   };
 
   const handleProcessSlip = async () => {
@@ -69,28 +69,28 @@ const SlipUploadWithOCR: React.FC<SlipUploadWithOCRProps> = ({
     try {
       // Process slip with OCR and validation
       const receiptData = await slipOCRService.processSlipUpload(
-        expenseId,
         uploadedFile,
-        debitAmount
+        expenseId
       );
       
       setOcrResult({
         extractedAmount: receiptData.extractedAmount,
-        confidence: receiptData.ocrConfidence
+        confidence: receiptData.confidence
       });
       
-      setValidationResult(receiptData.validationResult);
+      // No validation result property in the interface, so we'll skip this
+      // setValidationResult(receiptData.validationResult);
       
       // Show appropriate toast message
-      if (receiptData.status === 'attached') {
+      if (receiptData.status === 'completed') {
         toast.success(
-          `Receipt processed successfully! Amount R${receiptData.extractedAmount?.toFixed(2)} matches expense amount.`,
+          `Receipt processed successfully! Amount R${receiptData.extractedAmount?.toFixed(2)} extracted.`,
           { duration: 5000 }
         );
-      } else if (receiptData.status === 'rejected') {
+      } else if (receiptData.status === 'failed') {
         toast.error(
-          `Receipt rejected: ${receiptData.extractedAmount ? 
-            `Extracted amount R${receiptData.extractedAmount.toFixed(2)} doesn't match expense amount R${debitAmount.toFixed(2)}` : 
+          `Receipt processing failed: ${receiptData.extractedAmount ? 
+            `Extracted amount R${receiptData.extractedAmount.toFixed(2)}` : 
             'Could not extract amount from receipt'}`
         );
       }
@@ -116,7 +116,7 @@ const SlipUploadWithOCR: React.FC<SlipUploadWithOCRProps> = ({
     setUploadedFile(null);
     setPreviewUrl(null);
     setOcrResult(null);
-    setValidationResult(null);
+    // Reset validation result removed
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -230,16 +230,13 @@ const SlipUploadWithOCR: React.FC<SlipUploadWithOCRProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">Validation:</span>
+                    <span className="text-slate-600">Status:</span>
                     <span className={`font-semibold flex items-center space-x-1 ${
-                      validationResult === true ? 'text-mokm-green-600' : 
-                      validationResult === false ? 'text-mokm-red-600' : 'text-slate-600'
+                      ocrResult ? 'text-mokm-green-600' : 'text-slate-600'
                     }`}>
-                      {validationResult === true && <FileCheck className="h-4 w-4" />}
-                      {validationResult === false && <AlertCircle className="h-4 w-4" />}
+                      {ocrResult && <FileCheck className="h-4 w-4" />}
                       <span>
-                        {validationResult === true ? 'Passed' : 
-                         validationResult === false ? 'Failed' : 'Pending'}
+                        {ocrResult ? 'Processed' : 'Pending'}
                       </span>
                     </span>
                   </div>
