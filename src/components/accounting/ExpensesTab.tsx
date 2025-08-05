@@ -25,7 +25,8 @@ import {
   CheckCircle,
   XCircle,
   Save,
-  X
+  X,
+  Coins
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ import BankStatementUploadWithSnippets from './BankStatementUploadWithSnippets';
 import BankStatementTestTool from './BankStatementTestTool';
 
 import RecordExpenseModal, { NewExpenseData } from './RecordExpenseModal';
+import PettyCashModal from './PettyCashModal';
 import bankStatementService from '../../services/bankStatementService';
 import expenseCategorizationService, { CategorizedExpense } from '../../services/expenseCategorizationService';
 import expenseStorageService, { StoredExpense } from '../../services/expenseStorageService';
@@ -108,6 +110,9 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   const [showRecordExpenseModal, setShowRecordExpenseModal] = useState(false);
   const [manualExpenses, setManualExpenses] = useState<StoredExpense[]>([]);
   
+  // Petty cash modal state
+  const [showPettyCashModal, setShowPettyCashModal] = useState(false);
+  
   // Force refresh data when component mounts
   const [refreshKey, setRefreshKey] = useState(0);
   
@@ -134,6 +139,16 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   // Receipt viewer modal state
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentReceiptData, setCurrentReceiptData] = useState<{expenseId: string, receiptImage: string, isPDF: boolean} | null>(null);
+  
+  // Receipt verification modal state
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationData, setVerificationData] = useState<{
+    expenseId: string;
+    receiptImage: string;
+    receiptText: string;
+    extractedAmount: number;
+    extractedVAT: number;
+  } | null>(null);
   
 
 
@@ -535,6 +550,24 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             receiptResult = await slipOCRService.processSlipUpload(file, expenseId);
           }
           
+          // Validate amount matching and update receipt status
+          const currentExpense = allExpenses.find(e => e.id === expenseId);
+          if (currentExpense && receiptResult.extractedAmount && !isPDF) {
+            const tolerance = 0.01; // 1 cent tolerance
+            const amountsMatch = Math.abs(receiptResult.extractedAmount - currentExpense.amount) <= tolerance;
+            
+            if (amountsMatch) {
+              receiptResult.status = 'completed';
+              receiptResult.matchStatus = 'verified';
+            } else {
+              receiptResult.status = 'manual_verification_required';
+              receiptResult.matchStatus = 'amount_mismatch';
+            }
+            
+            receiptResult.updatedAt = new Date().toISOString();
+            slipOCRService.saveReceiptData(receiptResult);
+          }
+          
           // Update receipt data state
           setReceiptData(prev => new Map(prev).set(expenseId, receiptResult));
           
@@ -544,9 +577,18 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
               description: 'PDF document has been attached to the expense'
             });
           } else if (receiptResult.status === 'completed' && receiptResult.extractedAmount) {
-            toast.success('Receipt processed successfully!', {
-              description: `Extracted amount: R${receiptResult.extractedAmount.toFixed(2)}${receiptResult.vatAmount ? ` (VAT: R${receiptResult.vatAmount.toFixed(2)})` : ''}`
-            });
+            const tolerance = 0.01;
+            const amountsMatch = currentExpense && Math.abs(receiptResult.extractedAmount - currentExpense.amount) <= tolerance;
+            
+            if (amountsMatch) {
+              toast.success('Receipt processed successfully!', {
+                description: `Amount matches: R${receiptResult.extractedAmount.toFixed(2)}${receiptResult.vatAmount ? ` (VAT: R${receiptResult.vatAmount.toFixed(2)})` : ''}`
+              });
+            } else {
+              toast.warning('Receipt uploaded - amount mismatch detected', {
+                description: `Extracted: R${receiptResult.extractedAmount.toFixed(2)}, Expected: R${currentExpense?.amount.toFixed(2) || '0.00'}`
+              });
+            }
           } else if (receiptResult.status === 'manual_verification_required') {
             toast.warning('Receipt uploaded but needs verification', {
               description: 'Please review the extracted information'
@@ -558,11 +600,10 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
           }
           
           // Update expense to mark as having receipt
-           const expense = allExpenses.find(e => e.id === expenseId);
-           if (expense) {
-             expense.hasReceipt = true;
+           if (currentExpense) {
+             currentExpense.hasReceipt = true;
              // Update in storage if it's a manual expense
-             if (expense.source === 'manual') {
+             if (currentExpense.source === 'manual') {
                const receipt = receiptData.get(expenseId);
                expenseStorageService.updateExpense(expenseId, { receipt: receipt?.receiptImage || '' });
                loadManualExpenses();
@@ -630,6 +671,74 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
       }
     } else {
       toast.error('No receipt found for this expense');
+    }
+  };
+
+  /**
+   * Handle receipt verification
+   */
+  const handleVerifyReceipt = (expenseId: string) => {
+    const receipt = receiptData.get(expenseId) || slipOCRService.getReceiptData(expenseId);
+    
+    if (receipt && receipt.status === 'manual_verification_required') {
+      setVerificationData({
+        expenseId,
+        receiptImage: receipt.receiptImage || '',
+        receiptText: receipt.receiptText || '',
+        extractedAmount: receipt.extractedAmount || 0,
+        extractedVAT: receipt.vatAmount || 0
+      });
+      setShowVerificationModal(true);
+    } else {
+      toast.error('No receipt verification needed for this expense');
+    }
+  };
+
+  /**
+   * Handle saving verified receipt data
+   */
+  const handleSaveVerification = async (updatedData: {
+    receiptText: string;
+    extractedAmount: number;
+    extractedVAT: number;
+  }) => {
+    if (!verificationData) return;
+
+    try {
+      const receipt = receiptData.get(verificationData.expenseId) || slipOCRService.getReceiptData(verificationData.expenseId);
+      
+      if (receipt) {
+        // Validate amount matching
+        const expense = allExpenses.find(e => e.id === verificationData.expenseId);
+        const tolerance = 0.01; // 1 cent tolerance
+        const amountsMatch = expense && Math.abs(updatedData.extractedAmount - expense.amount) <= tolerance;
+        
+        // Update receipt data with verified information
+        const updatedReceipt: ReceiptData = {
+          ...receipt,
+          receiptText: updatedData.receiptText,
+          extractedAmount: updatedData.extractedAmount,
+          vatAmount: updatedData.extractedVAT,
+          status: amountsMatch ? 'completed' : 'manual_verification_required',
+          matchStatus: amountsMatch ? 'verified' : 'amount_mismatch',
+          updatedAt: new Date().toISOString()
+        };
+
+        // Save updated receipt data
+        slipOCRService.saveReceiptData(updatedReceipt);
+        setReceiptData(prev => new Map(prev).set(verificationData.expenseId, updatedReceipt));
+
+        // Close modal and show success message
+        setShowVerificationModal(false);
+        setVerificationData(null);
+        
+        toast.success('Receipt verification completed!', {
+          description: `Verified amount: R${updatedData.extractedAmount.toFixed(2)}${updatedData.extractedVAT ? ` (VAT: R${updatedData.extractedVAT.toFixed(2)})` : ''}`
+        });
+      }
+    } catch (error) {
+      console.error('Error saving verification:', error);
+      toast.error('Failed to save verification data');
     }
   };
 
@@ -831,6 +940,20 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
    */
   const handleCloseRecordExpenseModal = () => {
     setShowRecordExpenseModal(false);
+  };
+
+  /**
+   * Handle opening petty cash modal
+   */
+  const handleOpenPettyCashModal = () => {
+    setShowPettyCashModal(true);
+  };
+
+  /**
+   * Handle closing petty cash modal
+   */
+  const handleClosePettyCashModal = () => {
+    setShowPettyCashModal(false);
   };
 
   /**
@@ -1590,6 +1713,14 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             Record Expense
           </Button>
           
+          <Button
+            onClick={handleOpenPettyCashModal}
+            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 font-sf-pro"
+          >
+            <Coins className="h-4 w-4 mr-2" />
+            Petty Cash
+          </Button>
+          
           <Dialog open={showBankUpload} onOpenChange={setShowBankUpload}>
             <DialogTrigger asChild>
               <Button
@@ -1611,23 +1742,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             </DialogContent>
           </Dialog>
           
-          <Dialog open={showTestTool} onOpenChange={setShowTestTool}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="border-orange-500 text-orange-700 hover:bg-orange-50 font-sf-pro"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Test Bank Statement
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Bank Statement Test Tool</DialogTitle>
-              </DialogHeader>
-              <BankStatementTestTool />
-            </DialogContent>
-          </Dialog>
+
           
 
           
@@ -1920,17 +2035,49 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                         )}
                         <td className="py-3 px-4 text-center">
                           <div className="flex flex-col items-center space-y-1">
-                            {expense.hasReceipt ? (
-                              <>
-                                <CheckCircle className="h-5 w-5 text-mokm-green-500" />
-                                <span className="text-xs text-mokm-green-600 font-sf-pro">✅ Attached</span>
-                              </>
-                            ) : (
-                              <>
-                                <Receipt className="h-5 w-5 text-mokm-yellow-500" />
-                                <span className="text-xs text-mokm-yellow-600 font-sf-pro">Missing</span>
-                              </>
-                            )}
+                            {(() => {
+                              const receiptFromMap = receiptData.get(expense.id);
+                              const receiptFromService = slipOCRService.getReceiptData(expense.id);
+                              const receipt = receiptFromMap || receiptFromService;
+                              
+                              if (!receipt) {
+                                return (
+                                  <>
+                                    <Receipt className="h-5 w-5 text-mokm-yellow-500" />
+                                    <span className="text-xs text-mokm-yellow-600 font-sf-pro">Missing</span>
+                                  </>
+                                );
+                              }
+                              
+                              // Check if amounts match
+                              const extractedAmount = receipt.extractedAmount;
+                              const expenseAmount = expense.amount;
+                              const tolerance = 0.01; // 1 cent tolerance
+                              const amountsMatch = extractedAmount && Math.abs(extractedAmount - expenseAmount) <= tolerance;
+                              
+                              if (receipt.status === 'completed' && amountsMatch) {
+                                return (
+                                  <>
+                                    <CheckCircle className="h-5 w-5 text-mokm-green-500" />
+                                    <span className="text-xs text-mokm-green-600 font-sf-pro">Uploaded</span>
+                                  </>
+                                );
+                              } else if (extractedAmount && !amountsMatch) {
+                                return (
+                                  <>
+                                    <XCircle className="h-5 w-5 text-red-500" />
+                                    <span className="text-xs text-red-600 font-sf-pro">Incorrect</span>
+                                  </>
+                                );
+                              } else {
+                                return (
+                                  <>
+                                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                                    <span className="text-xs text-orange-600 font-sf-pro">Uploaded</span>
+                                  </>
+                                );
+                              }
+                            })()} 
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -2160,6 +2307,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                           
                                           if (hasReceipt) {
                                             console.log(`[DEBUG] Rendering receipt buttons for expense ${expense.id} (hasReceipt: ${hasReceipt})`);
+                                            const needsVerification = hasReceipt.status === 'manual_verification_required';
                                             return (
                                               <div className="space-y-2">
                                                 <div className="flex gap-2">
@@ -2190,6 +2338,20 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                                     Replace
                                                   </Button>
                                                 </div>
+                                                {needsVerification && (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-yellow-600 border-yellow-200 hover:bg-yellow-50 w-full"
+                                                    onClick={() => {
+                                                      console.log('[DEBUG] Verify button clicked for expense:', expense.id);
+                                                      handleVerifyReceipt(expense.id);
+                                                    }}
+                                                  >
+                                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                                    Verify Receipt
+                                                  </Button>
+                                                )}
                                               </div>
                                             );
                                           } else {
@@ -2206,14 +2368,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                                   <Upload className="h-4 w-4 mr-1" />
                                                   {processingReceipts.has(expense.id) ? 'Processing...' : 'Upload Receipt'}
                                                 </Button>
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="text-purple-600 border-purple-200 hover:bg-purple-50 w-full"
-                                                  onClick={() => createTestReceiptData(expense.id)}
-                                                >
-                                                  🧪 Create Test Receipt
-                                                </Button>
+
                                               </div>
                                             );
                                           }
@@ -2467,6 +2622,14 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         projects={projects}
       />
       
+      {/* Petty Cash Modal */}
+      <PettyCashModal
+        isOpen={showPettyCashModal}
+        onClose={handleClosePettyCashModal}
+        onSave={handleSaveExpense}
+        projects={projects}
+      />
+      
       {/* Receipt Viewer Modal */}
       <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
@@ -2534,6 +2697,127 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             >
               <X className="h-4 w-4 mr-2" />
               Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt Verification Modal */}
+      <Dialog open={showVerificationModal} onOpenChange={setShowVerificationModal}>
+        <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-yellow-600" />
+              Verify Receipt Data - Expense: {verificationData?.expenseId}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto min-h-0">
+            {verificationData && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                {/* Receipt Image */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-700">Receipt Image</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 h-[400px] flex items-center justify-center">
+                    <img
+                      src={verificationData.receiptImage}
+                      alt={`Receipt for expense ${verificationData.expenseId}`}
+                      className="max-w-full max-h-full object-contain rounded shadow-lg"
+                    />
+                  </div>
+                </div>
+                
+                {/* Extracted Data Form */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-700">Extracted Data</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Extracted Text
+                      </label>
+                      <textarea
+                        className="w-full p-3 border border-gray-300 rounded-lg resize-none h-32"
+                        value={verificationData.receiptText}
+                        onChange={(e) => setVerificationData(prev => prev ? {
+                          ...prev,
+                          receiptText: e.target.value
+                        } : null)}
+                        placeholder="Extracted text from receipt..."
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Amount (R)
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={verificationData.extractedAmount}
+                          onChange={(e) => setVerificationData(prev => prev ? {
+                            ...prev,
+                            extractedAmount: parseFloat(e.target.value) || 0
+                          } : null)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          VAT Amount (R)
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={verificationData.extractedVAT}
+                          onChange={(e) => setVerificationData(prev => prev ? {
+                            ...prev,
+                            extractedVAT: parseFloat(e.target.value) || 0
+                          } : null)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">Instructions</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        <li>• Review the extracted text and correct any errors</li>
+                        <li>• Verify the amount matches the receipt</li>
+                        <li>• Enter VAT amount if applicable</li>
+                        <li>• Click "Save Verification" when complete</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-4 border-t flex-shrink-0 bg-white">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowVerificationModal(false);
+                setVerificationData(null);
+              }}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (verificationData) {
+                  handleSaveVerification({
+                    receiptText: verificationData.receiptText,
+                    extractedAmount: verificationData.extractedAmount,
+                    extractedVAT: verificationData.extractedVAT
+                  });
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Verification
             </Button>
           </div>
         </DialogContent>
