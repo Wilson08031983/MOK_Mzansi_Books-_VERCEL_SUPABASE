@@ -10,15 +10,26 @@ export interface VATCalculation {
   endDate: string;
   totalSales: number;
   totalPurchases: number;
-  outputVAT: number;
-  inputVAT: number;
+  outputVAT: {
+    invoices: number;
+    sales: number;
+    total: number;
+  };
+  inputVAT: {
+    expenses: number;
+    total: number;
+  };
   netVAT: number;
+  vatPayable: number;
+  vatRefund: number;
   createdDate: string;
 }
 
 export interface VAT201Return {
   id: string;
   period: string;
+  reference: string;
+  dueDate: string;
   calculation: VATCalculation;
   status: 'draft' | 'submitted' | 'approved';
   submissionDate?: string;
@@ -49,40 +60,136 @@ class VATCalculationService {
   }
 
   /**
+   * Calculate VAT Input (VAT collected by business)
+   */
+  private calculateVATInput(start: Date, end: Date): { invoices: number; sales: number; total: number } {
+    let invoicesVAT = 0;
+    let salesVAT = 0;
+
+    try {
+      // Get paid invoices VAT
+      const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+      invoicesVAT = invoices
+        .filter((invoice: any) => {
+          const invoiceDate = new Date(invoice.date);
+          return invoice.status === 'paid' && invoiceDate >= start && invoiceDate <= end;
+        })
+        .reduce((total: number, invoice: any) => {
+          const vatAmount = (invoice.total || 0) * (invoice.vatRate || this.STANDARD_VAT_RATE);
+          return total + vatAmount;
+        }, 0);
+
+      // Get sales VAT from inventory
+      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+      salesVAT = sales
+        .filter((sale: any) => {
+          const saleDate = new Date(sale.date || sale.createdAt);
+          return saleDate >= start && saleDate <= end;
+        })
+        .reduce((total: number, sale: any) => {
+          const vatAmount = (sale.total || 0) * this.STANDARD_VAT_RATE;
+          return total + vatAmount;
+        }, 0);
+    } catch (error) {
+      console.error('Error calculating VAT Input:', error);
+    }
+
+    return {
+      invoices: invoicesVAT,
+      sales: salesVAT,
+      total: invoicesVAT + salesVAT
+    };
+  }
+
+  /**
+   * Calculate VAT Output (VAT paid by business)
+   */
+  private calculateVATOutput(start: Date, end: Date): { expenses: number; total: number } {
+    let expensesVAT = 0;
+
+    try {
+      // Get slip VAT extractions for the period
+      const slipExtractions = this.getSlipVATExtractionsForPeriod(
+        start.toISOString().split('T')[0],
+        end.toISOString().split('T')[0]
+      );
+      
+      // Calculate VAT from slip extractions
+      expensesVAT = slipExtractions.reduce((total: number, extraction: SlipVATExtraction) => {
+        return total + (extraction.vatAmount || 0);
+      }, 0);
+      
+      // Also check for manual expenses with VAT
+      const manualExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+      const categorizedExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+      const allExpenses = [...manualExpenses, ...categorizedExpenses];
+      
+      // Add VAT from manual expenses that don't have slip extractions
+      const manualVAT = allExpenses
+        .filter((expense: any) => {
+          const expenseDate = new Date(expense.date);
+          const isInPeriod = expenseDate >= start && expenseDate <= end;
+          // Only include if no slip extraction exists for this expense
+          const hasSlipExtraction = slipExtractions.some(extraction => extraction.expenseId === expense.id);
+          return isInPeriod && !hasSlipExtraction;
+        })
+        .reduce((total: number, expense: any) => {
+          // Use extractedVAT property if it exists
+          if (expense.extractedVAT) {
+            return total + expense.extractedVAT;
+          }
+          return total;
+        }, 0);
+      
+      expensesVAT += manualVAT;
+      
+      console.log('VAT Output calculation:', {
+        slipExtractionsVAT: slipExtractions.reduce((total, extraction) => total + (extraction.vatAmount || 0), 0),
+        manualVAT,
+        totalExpensesVAT: expensesVAT,
+        slipExtractionsCount: slipExtractions.length
+      });
+      
+    } catch (error) {
+      console.error('Error calculating VAT Output:', error);
+    }
+
+    return {
+      expenses: expensesVAT,
+      total: expensesVAT
+    };
+  }
+
+  /**
    * Calculate VAT for a specific period
    */
   calculateVATForPeriod(startDate: string, endDate: string): VATCalculation {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Calculate VAT Input (VAT collected by business)
+    const vatInput = this.calculateVATInput(start, end);
+    
+    // Calculate VAT Output (VAT paid by business)
+    const vatOutput = this.calculateVATOutput(start, end);
+    
+    // Calculate net VAT
+    const netVAT = vatInput.total - vatOutput.total;
+    
     const calculation: VATCalculation = {
       id: `vat-calc-${Date.now()}`,
       period: `${startDate} to ${endDate}`,
       startDate,
       endDate,
-      totalSales: 0,
-      totalPurchases: 0,
-      outputVAT: 0,
-      inputVAT: 0,
-      netVAT: 0,
+      totalSales: vatInput.invoices / this.STANDARD_VAT_RATE + vatInput.sales / this.STANDARD_VAT_RATE,
+      totalPurchases: vatOutput.expenses / this.STANDARD_VAT_RATE,
+      outputVAT: vatInput,
+      inputVAT: vatOutput,
+      netVAT,
+      vatPayable: netVAT > 0 ? netVAT : 0,
+      vatRefund: netVAT < 0 ? Math.abs(netVAT) : 0,
       createdDate: new Date().toISOString()
     };
-
-    // Get slip VAT extractions for the period
-    const slipExtractions = this.getSlipVATExtractionsForPeriod(startDate, endDate);
-    
-    // Calculate input VAT from slip extractions
-    calculation.inputVAT = slipExtractions.reduce((total, extraction) => {
-      return total + extraction.vatAmount;
-    }, 0);
-
-    calculation.totalPurchases = slipExtractions.reduce((total, extraction) => {
-      return total + extraction.totalAmount;
-    }, 0);
-
-    // For now, we'll use mock data for sales (in a real app, this would come from invoices/sales data)
-    calculation.totalSales = calculation.totalPurchases * 1.5; // Mock sales data
-    calculation.outputVAT = calculation.totalSales * this.STANDARD_VAT_RATE;
-
-    // Calculate net VAT (output VAT - input VAT)
-    calculation.netVAT = calculation.outputVAT - calculation.inputVAT;
 
     // Save calculation
     this.saveVATCalculation(calculation);
@@ -94,9 +201,16 @@ class VATCalculationService {
    * Generate VAT201 return from calculation
    */
   generateVAT201Return(calculation: VATCalculation): VAT201Return {
+    const periodDate = new Date(calculation.endDate);
+    const dueDate = new Date(periodDate);
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    dueDate.setDate(25); // VAT returns are typically due on the 25th of the following month
+
     const vatReturn: VAT201Return = {
       id: `vat201-${Date.now()}`,
       period: calculation.period,
+      reference: `VAT201-${periodDate.getFullYear()}-${String(periodDate.getMonth() + 1).padStart(2, '0')}`,
+      dueDate: dueDate.toISOString().split('T')[0],
       calculation,
       status: 'draft',
       submissionDate: undefined,

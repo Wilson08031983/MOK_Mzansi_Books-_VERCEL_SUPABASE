@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Tabs components removed - no longer needed
 import { 
   Plus, 
   Search, 
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import BusinessTaxCard, { BusinessTaxReturn } from './BusinessTaxCard';
 import AddReturnModal from './AddReturnModal';
-import VAT201Automation from './VAT201Automation';
+
 
 const BusinessTaxTab: React.FC = () => {
   // State management for tax returns
@@ -292,20 +292,8 @@ const BusinessTaxTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Tax Management Tabs */}
-      <Tabs defaultValue="traditional" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="traditional" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Traditional Returns
-          </TabsTrigger>
-          <TabsTrigger value="vat201" className="flex items-center gap-2">
-            <Calculator className="h-4 w-4" />
-            VAT 201 Automation
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="traditional" className="space-y-6">
+      {/* Tax Management Content */}
+      <div className="space-y-6">
           {/* Add Tax Return Button */}
           <div className="flex justify-end">
             <Button
@@ -466,17 +454,7 @@ const BusinessTaxTab: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddTaxReturn}
       />
-        </TabsContent>
-
-        <TabsContent value="vat201" className="space-y-6">
-          <VAT201Automation 
-            onVATReturnCreated={(vatReturn) => {
-              console.log('VAT 201 return created:', vatReturn);
-              // Optionally refresh traditional returns or show notification
-            }}
-          />
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 };

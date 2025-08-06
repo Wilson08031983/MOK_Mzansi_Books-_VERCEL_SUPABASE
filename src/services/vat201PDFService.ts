@@ -105,16 +105,28 @@ class VAT201PDFService {
                     <td class="amount">${calculation.totalSales.toFixed(2)}</td>
                 </tr>
                 <tr>
-                    <td>Output VAT (15%)</td>
-                    <td class="amount">${calculation.outputVAT.toFixed(2)}</td>
+                    <td>VAT Input - Collected (15%)</td>
+                    <td class="amount">${calculation.outputVAT.total.toFixed(2)}</td>
+                </tr>
+                <tr>
+                    <td>&nbsp;&nbsp;• From Paid Invoices</td>
+                    <td class="amount">${calculation.outputVAT.invoices.toFixed(2)}</td>
+                </tr>
+                <tr>
+                    <td>&nbsp;&nbsp;• From Inventory Sales</td>
+                    <td class="amount">${calculation.outputVAT.sales.toFixed(2)}</td>
                 </tr>
                 <tr>
                     <td>Total Purchases (VAT Inclusive)</td>
                     <td class="amount">${calculation.totalPurchases.toFixed(2)}</td>
                 </tr>
                 <tr>
-                    <td>Input VAT (15%)</td>
-                    <td class="amount">${calculation.inputVAT.toFixed(2)}</td>
+                    <td>VAT Output - Paid (15%)</td>
+                    <td class="amount">${calculation.inputVAT.total.toFixed(2)}</td>
+                </tr>
+                <tr>
+                    <td>&nbsp;&nbsp;• From Expense Receipts</td>
+                    <td class="amount">${calculation.inputVAT.expenses.toFixed(2)}</td>
                 </tr>
                 <tr class="total-row">
                     <td><strong>Net VAT ${calculation.netVAT >= 0 ? 'Payable' : 'Refundable'}</strong></td>

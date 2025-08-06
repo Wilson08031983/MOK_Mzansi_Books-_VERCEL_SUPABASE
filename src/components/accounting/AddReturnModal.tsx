@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Plus, Calendar, FileText, DollarSign, Download, Calculator } from 'lucide-react';
 import { BusinessTaxReturn } from './BusinessTaxCard';
-import { calculateVAT201, saveVAT201Return, VAT201Data, parsePeriod } from '../../services/vat201Service';
+import { calculateVAT201, saveVAT201Return, VAT201Data, parsePeriod, getCurrentVATQuarter } from '../../services/vat201Service';
 import { generateVAT201PDF } from '../../utils/vat201PdfGenerator';
 import { toast } from 'sonner';
 
@@ -146,16 +146,35 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
 
   const handleTypeChange = async (value: string) => {
     const selectedType = taxReturnTypes.find(t => t.value === value);
-    setFormData(prev => ({
-      ...prev,
-      type: value as BusinessTaxReturn['type'],
-      name: selectedType?.label || '',
-      description: selectedType?.description || ''
-    }));
-
-    // Auto-calculate VAT 201 when selected
-    if (value === 'VAT201' && formData.period) {
-      await calculateVATAmount();
+    
+    if (value === 'VAT201') {
+      // Auto-generate VAT quarter information for VAT 201
+      const quarterInfo = getCurrentVATQuarter();
+      
+      setFormData(prev => ({
+        ...prev,
+        type: value as BusinessTaxReturn['type'],
+        name: `VAT 201 - ${quarterInfo.period}`,
+        description: selectedType?.description || '',
+        period: quarterInfo.period,
+        dueDate: quarterInfo.dueDate
+      }));
+      
+      // Auto-calculate VAT amounts
+      setTimeout(async () => {
+        await calculateVATAmount();
+      }, 100);
+      
+      toast.success('VAT 201 quarter auto-generated', {
+        description: `Period: ${quarterInfo.period}, Due: ${new Date(quarterInfo.dueDate).toLocaleDateString()}`
+      });
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        type: value as BusinessTaxReturn['type'],
+        name: selectedType?.label || '',
+        description: selectedType?.description || ''
+      }));
     }
   };
 
@@ -191,22 +210,36 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     }
   }, [formData.period, formData.type]);
 
-  const handleDownloadVAT201 = async () => {
+  const handleAddVAT201Return = async () => {
     if (!vat201Data) {
       toast.error('Please calculate VAT 201 first');
       return;
     }
 
     try {
-      await generateVAT201PDF(vat201Data, formData.reference);
+      // Create tax return object
+      const taxReturn: Omit<BusinessTaxReturn, 'id' | 'createdAt' | 'updatedAt'> = {
+        name: formData.name,
+        description: formData.description,
+        type: formData.type,
+        status: formData.status,
+        dueDate: formData.dueDate,
+        amount: parseFloat(formData.amount) || 0,
+        period: formData.period,
+        reference: formData.reference
+      };
       
       // Save VAT 201 return to localStorage
       saveVAT201Return(vat201Data, formData.reference);
-      toast.success('VAT 201 PDF downloaded and saved successfully');
+      
+      // Add to Business Tax Returns
+      onAdd(taxReturn);
+      
+      toast.success('VAT 201 tax return added successfully');
       handleClose();
     } catch (error) {
-      console.error('Error downloading VAT 201:', error);
-      toast.error('Failed to download VAT 201 PDF');
+      console.error('Error adding VAT 201 return:', error);
+      toast.error('Failed to add VAT 201 tax return');
     }
   };
 
@@ -298,7 +331,8 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                   value={formData.period}
                   onChange={(e) => setFormData(prev => ({ ...prev, period: e.target.value }))}
                   placeholder="e.g., June 2025, Q2 2025"
-                  className={`border-slate-200 focus:border-mokm-purple-500 ${errors.period ? 'border-red-300' : ''}`}
+                  className={`border-slate-200 focus:border-mokm-purple-500 ${errors.period ? 'border-red-300' : ''} ${formData.type === 'VAT201' ? 'bg-slate-50' : ''}`}
+                  readOnly={formData.type === 'VAT201'}
                 />
                 {errors.period && <p className="text-red-500 text-xs">{errors.period}</p>}
               </div>
@@ -313,7 +347,8 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                   type="date"
                   value={formData.dueDate}
                   onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-                  className={`border-slate-200 focus:border-mokm-purple-500 ${errors.dueDate ? 'border-red-300' : ''}`}
+                  className={`border-slate-200 focus:border-mokm-purple-500 ${errors.dueDate ? 'border-red-300' : ''} ${formData.type === 'VAT201' ? 'bg-slate-50' : ''}`}
+                  readOnly={formData.type === 'VAT201'}
                 />
                 {errors.dueDate && <p className="text-red-500 text-xs">{errors.dueDate}</p>}
               </div>
@@ -384,6 +419,22 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
               </Select>
             </div>
 
+            {/* VAT 201 Automation Info */}
+            {formData.type === 'VAT201' && (
+              <div className="space-y-3 p-4 bg-gradient-to-r from-mokm-purple-50 to-mokm-orange-50 rounded-lg border border-mokm-purple-200">
+                <div className="flex items-center gap-2">
+                  <Calculator className="h-4 w-4 text-mokm-purple-600" />
+                  <h4 className="font-medium text-mokm-purple-900">VAT 201 Automation Active</h4>
+                </div>
+                <div className="text-sm text-mokm-purple-800 space-y-1">
+                  <p>✓ <strong>Tax Period:</strong> Auto-generated based on current South African VAT quarters</p>
+                  <p>✓ <strong>Due Date:</strong> Automatically set to 25th of month following quarter end</p>
+                  <p>✓ <strong>Input VAT:</strong> Calculated from uploaded expense receipts using OCR extraction</p>
+                  <p>✓ <strong>Output VAT:</strong> Calculated from your invoices and sales records</p>
+                </div>
+              </div>
+            )}
+
             {/* VAT 201 Breakdown */}
             {formData.type === 'VAT201' && showVATBreakdown && vat201Data && (
               <div className="space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
@@ -401,16 +452,23 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="font-medium text-slate-700">Output VAT (Collected)</p>
+                    <p className="font-medium text-slate-700 flex items-center gap-1">
+                      Input VAT (Collected)
+                      <span className="text-xs text-mokm-purple-600 bg-mokm-purple-50 px-2 py-0.5 rounded-full">From Invoices</span>
+                    </p>
                     <p className="text-slate-600">Standard Rate: R {vat201Data.outputVAT.standardRated.toFixed(2)}</p>
                     <p className="text-slate-600">Zero Rate: R {vat201Data.outputVAT.zeroRated.toFixed(2)}</p>
                     <p className="font-medium text-slate-900">Total: R {vat201Data.outputVAT.total.toFixed(2)}</p>
                   </div>
                   <div>
-                    <p className="font-medium text-slate-700">Input VAT (Paid)</p>
+                    <p className="font-medium text-slate-700 flex items-center gap-1">
+                      Output VAT (Paid on Purchases)
+                      <span className="text-xs text-mokm-orange-600 bg-mokm-orange-50 px-2 py-0.5 rounded-full">From Receipts</span>
+                    </p>
                     <p className="text-slate-600">Standard Rate: R {vat201Data.inputVAT.standardRated.toFixed(2)}</p>
                     <p className="text-slate-600">Capital Goods: R {vat201Data.inputVAT.capitalGoods.toFixed(2)}</p>
                     <p className="font-medium text-slate-900">Total: R {vat201Data.inputVAT.total.toFixed(2)}</p>
+                    <p className="text-xs text-slate-500 mt-1">Calculated from uploaded expense receipts</p>
                   </div>
                 </div>
                 <div className="pt-2 border-t border-slate-300">
@@ -435,12 +493,12 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
               {formData.type === 'VAT201' ? (
                 <Button
                   type="button"
-                  onClick={handleDownloadVAT201}
+                  onClick={handleAddVAT201Return}
                   disabled={!vat201Data || isCalculating}
                   className="flex-1 bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 text-white hover:shadow-lg transition-all duration-300 disabled:opacity-50"
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download VAT 201 PDF
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Tax Return
                 </Button>
               ) : (
                 <Button

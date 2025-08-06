@@ -37,7 +37,13 @@ class OCRVATExtractionService {
   private readonly VAT_KEYWORDS = [
     'vat', 'v.a.t', 'value added tax', 'btw', 'tax',
     'vat @', 'vat@', 'vat 15%', 'vat15%', '15% vat',
-    'inclusive', 'incl', 'excl', 'exclusive'
+    'vat amount', 'vat included'
+  ];
+  
+  private readonly EXCLUDE_KEYWORDS = [
+    'total (excl vat)', 'total excl vat', 'subtotal (excl vat)', 'subtotal excl vat',
+    'amount (excl vat)', 'amount excl vat', 'excluding vat', 'ex vat',
+    'before vat', 'net amount', 'subtotal only'
   ];
   private readonly TOTAL_KEYWORDS = [
     'total', 'amount', 'sum', 'grand total', 'final',
@@ -91,12 +97,11 @@ class OCRVATExtractionService {
         // Add to VAT calculation service
         vatCalculationService.addSlipVATExtraction({
           id: extraction.id,
-          description: `OCR VAT from ${file.name}`,
-          amount: extraction.totalAmount,
+          expenseId: extraction.expenseId,
           vatAmount: extraction.vatAmount,
-          date: new Date().toISOString().split('T')[0],
-          reference: extraction.id,
-          ocrConfidence: extraction.confidence
+          totalAmount: extraction.totalAmount,
+          extractionDate: new Date().toISOString().split('T')[0],
+          confidence: extraction.confidence
         });
       } else if (extraction.confidence > 0.5) {
         extraction.status = 'manual_review';
@@ -176,13 +181,67 @@ class OCRVATExtractionService {
     let vatAmount = 0;
     let totalAmount = 0;
     let confidence = 0;
+    let subtotal = 0;
     
     const vatLines: string[] = [];
     const totalLines: string[] = [];
+    const excludedLines: string[] = [];
     const possibleVATAmounts: number[] = [];
     
-    // Look for VAT-related lines
+    console.log('🔍 [OCR VAT] Extracting VAT from text...');
+    
+    // First, identify excluded lines
     lines.forEach(line => {
+      const isExcluded = this.EXCLUDE_KEYWORDS.some(keyword => 
+        line.includes(keyword.toLowerCase())
+      );
+      
+      if (isExcluded) {
+        excludedLines.push(line);
+        console.log(`🚫 [OCR VAT] Excluding line: "${line}"`);
+      }
+    });
+    
+    // Extract subtotal and total for validation (skip excluded lines)
+    lines.forEach(line => {
+      // Skip excluded lines completely
+      if (excludedLines.includes(line)) {
+        return;
+      }
+      
+      // Extract subtotal
+      if (line.includes('subtotal') && !line.includes('excl')) {
+        const numbers = this.extractNumbers(line);
+        if (numbers.length > 0) {
+          subtotal = Math.max(subtotal, Math.max(...numbers));
+          console.log(`📊 [OCR VAT] Found subtotal: R${subtotal}`);
+        }
+      }
+      
+      // Extract total (but not from excluded lines)
+      const hasTotalKeyword = this.TOTAL_KEYWORDS.some(keyword => 
+        line.includes(keyword.toLowerCase())
+      );
+      
+      if (hasTotalKeyword && !line.includes('excl')) {
+        totalLines.push(line);
+        
+        const numbers = this.extractNumbers(line);
+        if (numbers.length > 0) {
+          totalAmount = Math.max(totalAmount, Math.max(...numbers));
+          console.log(`📊 [OCR VAT] Found total: R${totalAmount}`);
+        }
+      }
+    });
+    
+    // Look for VAT-related lines (skip excluded lines)
+    lines.forEach(line => {
+      // Skip excluded lines completely
+      if (excludedLines.includes(line)) {
+        console.log(`🚫 [OCR VAT] Skipping VAT extraction from excluded line: "${line}"`);
+        return;
+      }
+      
       // Check for VAT keywords
       const hasVATKeyword = this.VAT_KEYWORDS.some(keyword => 
         line.includes(keyword.toLowerCase())
@@ -190,50 +249,70 @@ class OCRVATExtractionService {
       
       if (hasVATKeyword) {
         vatLines.push(line);
+        console.log(`💰 [OCR VAT] Found VAT line: "${line}"`);
         
         // Extract numbers from VAT lines
         const numbers = this.extractNumbers(line);
         numbers.forEach(num => {
           if (num > 0 && num < 10000) { // Reasonable VAT amount range
+            // Validate that this is not the total or subtotal amount
+            if (num === totalAmount || num === subtotal) {
+              console.log(`❌ [OCR VAT] Rejecting VAT R${num} - matches total or subtotal`);
+              return;
+            }
+            
             possibleVATAmounts.push(num);
+            console.log(`💰 [OCR VAT] Found potential VAT: R${num}`);
           }
         });
       }
-      
-      // Check for total keywords
-      const hasTotalKeyword = this.TOTAL_KEYWORDS.some(keyword => 
-        line.includes(keyword.toLowerCase())
-      );
-      
-      if (hasTotalKeyword) {
-        totalLines.push(line);
-        
-        // Extract total amount
-        const numbers = this.extractNumbers(line);
-        if (numbers.length > 0) {
-          totalAmount = Math.max(totalAmount, Math.max(...numbers));
-        }
-      }
     });
     
-    // Determine VAT amount
+    // Determine VAT amount with validation
     if (possibleVATAmounts.length > 0) {
       // Use the most likely VAT amount
       vatAmount = this.selectMostLikelyVATAmount(possibleVATAmounts, totalAmount);
-      confidence = 0.8;
+      
+      // Validate calculation if we have subtotal and total
+      if (subtotal > 0 && totalAmount > 0) {
+        const calculatedTotal = subtotal + vatAmount;
+        const tolerance = 0.01;
+        
+        if (Math.abs(calculatedTotal - totalAmount) <= tolerance) {
+          confidence = 0.95;
+          console.log(`✅ [OCR VAT] Accepted VAT R${vatAmount} - validation passed`);
+        } else {
+          console.log(`❌ [OCR VAT] VAT validation failed: ${subtotal} + ${vatAmount} = ${calculatedTotal} ≠ ${totalAmount}`);
+          confidence = 0.6;
+        }
+      } else {
+        confidence = 0.8;
+        console.log(`⚠️ [OCR VAT] Accepted VAT R${vatAmount} - no validation data`);
+      }
+    } else if (subtotal > 0 && totalAmount > 0) {
+      // Calculate VAT from subtotal and total
+      const calculatedVAT = totalAmount - subtotal;
+      if (calculatedVAT > 0 && calculatedVAT < totalAmount) {
+        vatAmount = calculatedVAT;
+        confidence = 0.7;
+        console.log(`🧮 [OCR VAT] Calculated VAT: R${vatAmount} = R${totalAmount} - R${subtotal}`);
+      }
     } else if (totalAmount > 0) {
       // Try to calculate VAT from total (assuming VAT inclusive)
       vatAmount = this.calculateVATFromInclusive(totalAmount);
       confidence = 0.6;
+      console.log(`🏛️ [OCR VAT] Calculated VAT from inclusive total: R${vatAmount}`);
     }
     
     // Validate VAT amount makes sense
     if (vatAmount > 0 && totalAmount > 0) {
       const calculatedRate = vatAmount / (totalAmount - vatAmount);
       if (Math.abs(calculatedRate - this.STANDARD_VAT_RATE) < 0.02) {
-        confidence = Math.min(confidence + 0.2, 1.0);
+        confidence = Math.min(confidence + 0.1, 1.0);
       }
     }
+    
+    console.log(`🎯 [OCR VAT] Final result: VAT=R${vatAmount}, Total=R${totalAmount}, Confidence=${confidence}`);
     
     return {
       vatAmount: Math.round(vatAmount * 100) / 100,
@@ -344,12 +423,11 @@ class OCRVATExtractionService {
           const extraction = extractions[index];
           vatCalculationService.addSlipVATExtraction({
             id: extraction.id,
-            description: `OCR VAT from ${extraction.fileName} (Updated)`,
-            amount: extraction.totalAmount,
+            expenseId: extraction.expenseId,
             vatAmount: extraction.vatAmount,
-            date: new Date().toISOString().split('T')[0],
-            reference: extraction.id,
-            ocrConfidence: extraction.confidence
+            totalAmount: extraction.totalAmount,
+            extractionDate: new Date().toISOString().split('T')[0],
+            confidence: extraction.confidence
           });
         }
         

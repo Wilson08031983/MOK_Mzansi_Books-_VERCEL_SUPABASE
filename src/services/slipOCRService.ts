@@ -271,41 +271,140 @@ export class SlipOCRService {
   }
 
   private extractVATFromText(text: string): { vatAmount?: number; vatIncluded: boolean; vatRate?: number } {
+    // Explicit VAT patterns that should be identified as VAT
     const vatPatterns = [
-      /VAT[\s\(]*15%[\s\)]*[:\s]*R?([0-9,]+\.?[0-9]*)/i,
-      /VAT[:\s]*R?([0-9,]+\.?[0-9]*)/i,
-      /VAT\s+INCLUDED[:\s]*R?([0-9,]+\.?[0-9]*)/i
+      /VAT\s*@\s*15%[:\s]*R?([0-9,]+\.?[0-9]*)/i,
+      /VAT\s*15%[:\s]*R?([0-9,]+\.?[0-9]*)/i,
+      /VAT\s*Amount[:\s]*R?([0-9,]+\.?[0-9]*)/i,
+      /VAT\s*Included[:\s]*R?([0-9,]+\.?[0-9]*)/i,
+      /VAT\s*\([0-9]+%\)[:\s]*R?([0-9,]+\.?[0-9]*)/i,
+      /^VAT[:\s]*R?([0-9,]+\.?[0-9]*)/im
     ];
 
+    // Patterns to EXCLUDE - these are NOT VAT amounts
+    const excludePatterns = [
+      /Total\s*\(\s*Excl\.?\s*VAT\s*\)/i,
+      /Total\s*Excl\.?\s*VAT/i,
+      /Subtotal\s*\(\s*Excl\.?\s*VAT\s*\)/i,
+      /Subtotal\s*Excl\.?\s*VAT/i,
+      /Amount\s*\(\s*Excl\.?\s*VAT\s*\)/i,
+      /Amount\s*Excl\.?\s*VAT/i,
+      /Subtotal\s*Only/i,
+      /Excluding\s*VAT/i,
+      /Ex\s*VAT/i,
+      /Before\s*VAT/i,
+      /Net\s*Amount/i
+    ];
+
+    const lines = text.split('\n').map(line => line.trim());
     let vatAmount: number | undefined;
     let vatIncluded = false;
     let vatRate: number | undefined;
+    let subtotal = 0;
+    let total = 0;
 
-    const vatRegPattern = /VAT\s+REG\s+NO?[:\s]*([0-9]+)/i;
-    const hasVATReg = vatRegPattern.test(text);
+    console.log('🔍 [SlipOCR] Extracting VAT from text...');
 
-    for (const pattern of vatPatterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        const amount = parseFloat(match[1].replace(/,/g, ''));
-        if (!isNaN(amount) && amount > 0) {
-          vatAmount = amount;
+    // First, extract subtotal and total for validation
+    for (const line of lines) {
+      // Skip excluded patterns
+      if (excludePatterns.some(pattern => pattern.test(line))) {
+        console.log(`🚫 [SlipOCR] Excluding line: "${line}"`);
+        continue;
+      }
+
+      // Extract subtotal
+      const subtotalMatch = line.match(/^Subtotal[:\s]*R?([0-9,]+\.?[0-9]*)/im);
+      if (subtotalMatch) {
+        subtotal = parseFloat(subtotalMatch[1].replace(/,/g, ''));
+        console.log(`📊 [SlipOCR] Found subtotal: R${subtotal}`);
+      }
+
+      // Extract total
+      const totalMatch = line.match(/^Total[:\s]*R?([0-9,]+\.?[0-9]*)/im);
+      if (totalMatch) {
+        total = parseFloat(totalMatch[1].replace(/,/g, ''));
+        console.log(`📊 [SlipOCR] Found total: R${total}`);
+      }
+    }
+
+    // Now extract VAT using explicit patterns (skip excluded lines)
+    for (const line of lines) {
+      // CRITICAL: Skip excluded patterns completely
+      if (excludePatterns.some(pattern => pattern.test(line))) {
+        console.log(`🚫 [SlipOCR] Skipping VAT extraction from excluded line: "${line}"`);
+        continue;
+      }
+
+      // Try to match VAT patterns
+      for (const pattern of vatPatterns) {
+        const match = line.match(pattern);
+        if (match && match[1]) {
+          const extractedVAT = parseFloat(match[1].replace(/,/g, ''));
+          console.log(`💰 [SlipOCR] Found potential VAT: R${extractedVAT} from line: "${line}"`);
+
+          // Validate that this is not the total or subtotal amount
+          if (extractedVAT === total || extractedVAT === subtotal) {
+            console.log(`❌ [SlipOCR] Rejecting VAT R${extractedVAT} - matches total or subtotal`);
+            continue;
+          }
+
+          // Validate calculation if we have subtotal and total
+          if (subtotal > 0 && total > 0) {
+            const calculatedTotal = subtotal + extractedVAT;
+            const tolerance = 0.01;
+
+            if (Math.abs(calculatedTotal - total) <= tolerance) {
+              vatAmount = extractedVAT;
+              vatIncluded = true;
+              vatRate = this.VAT_RATE;
+              console.log(`✅ [SlipOCR] Accepted VAT R${extractedVAT} - validation passed`);
+              break;
+            } else {
+              console.log(`❌ [SlipOCR] Rejecting VAT R${extractedVAT} - validation failed`);
+            }
+          } else {
+            // Accept VAT if no validation data available
+            vatAmount = extractedVAT;
+            vatIncluded = true;
+            vatRate = this.VAT_RATE;
+            console.log(`⚠️ [SlipOCR] Accepted VAT R${extractedVAT} - no validation data`);
+            break;
+          }
+        }
+      }
+
+      if (vatAmount) break;
+    }
+
+    // Fallback: If no explicit VAT found but we have subtotal and total, calculate VAT
+    if (!vatAmount && subtotal > 0 && total > 0) {
+      const calculatedVAT = total - subtotal;
+      if (calculatedVAT > 0 && calculatedVAT < total) {
+        vatAmount = calculatedVAT;
+        vatIncluded = true;
+        vatRate = this.VAT_RATE;
+        console.log(`🧮 [SlipOCR] Calculated VAT: R${vatAmount} = R${total} - R${subtotal}`);
+      }
+    }
+
+    // Legacy fallback for VAT registration number
+    if (!vatAmount) {
+      const vatRegPattern = /VAT\s+REG\s+NO?[:\s]*([0-9]+)/i;
+      const hasVATReg = vatRegPattern.test(text);
+      
+      if (hasVATReg) {
+        const totalAmount = this.extractAmountFromText(text);
+        if (totalAmount) {
+          vatAmount = totalAmount * this.VAT_RATE / (1 + this.VAT_RATE);
           vatIncluded = true;
           vatRate = this.VAT_RATE;
-          break;
+          console.log(`🏛️ [SlipOCR] Calculated VAT from VAT reg: R${vatAmount}`);
         }
       }
     }
 
-    if (!vatAmount && hasVATReg) {
-      const totalAmount = this.extractAmountFromText(text);
-      if (totalAmount) {
-        vatAmount = totalAmount * this.VAT_RATE / (1 + this.VAT_RATE);
-        vatIncluded = true;
-        vatRate = this.VAT_RATE;
-      }
-    }
-
+    console.log(`🎯 [SlipOCR] Final VAT result: R${vatAmount || 0}, included: ${vatIncluded}`);
     return { vatAmount, vatIncluded, vatRate };
   }
 

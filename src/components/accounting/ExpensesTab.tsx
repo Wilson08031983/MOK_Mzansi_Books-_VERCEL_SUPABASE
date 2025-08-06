@@ -47,6 +47,8 @@ import fileStorageService from '../../services/fileStorageService';
 import { Project } from '@/types/project';
 import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
 import { slipOCRService, ReceiptData } from '../../services/slipOCRService';
+import ocrVATExtractionService from '../../services/ocrVATExtractionService';
+import vatCalculationService from '../../services/vatCalculationService';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -548,6 +550,14 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
           } else {
             // Process images with OCR
             receiptResult = await slipOCRService.processSlipUpload(file, expenseId);
+            
+            // Also process with VAT extraction service for slip VAT extractions
+            try {
+              await ocrVATExtractionService.processSlipImage(file, expenseId);
+              console.log('VAT extraction completed for expense:', expenseId);
+            } catch (vatError) {
+              console.warn('VAT extraction failed, but receipt processing continues:', vatError);
+            }
           }
           
           // Validate amount matching and update receipt status
@@ -1721,6 +1731,43 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             Petty Cash
           </Button>
           
+          <Button
+            onClick={async () => {
+              try {
+                // Create a test expense first
+                const testExpense: NewExpenseData = {
+                  date: new Date().toISOString().split('T')[0],
+                  description: 'Test Expense with VAT',
+                  amount: 115.00, // R100 + R15 VAT
+                  category: 'Office Supplies',
+                  transactionType: 'slip',
+                  status: 'pending',
+                  notes: 'Test expense for VAT calculation verification'
+                };
+                
+                // Save the test expense
+                const newExpense = expenseStorageService.createExpense(testExpense);
+                
+                // Create test receipt data for this expense
+                createTestReceiptData(newExpense.id);
+                
+                // Refresh the data
+                loadManualExpenses();
+                setRefreshKey(prev => prev + 1);
+                
+                toast.success('Test expense with VAT data created successfully!');
+              } catch (error) {
+                console.error('Error creating test data:', error);
+                toast.error('Failed to create test data');
+              }
+            }}
+            variant="outline"
+            className="border-orange-500 text-orange-700 hover:bg-orange-50 font-sf-pro"
+          >
+            <FileCheck className="h-4 w-4 mr-2" />
+            Create Test VAT Data
+          </Button>
+          
           <Dialog open={showBankUpload} onOpenChange={setShowBankUpload}>
             <DialogTrigger asChild>
               <Button
@@ -2367,6 +2414,15 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                                 >
                                                   <Upload className="h-4 w-4 mr-1" />
                                                   {processingReceipts.has(expense.id) ? 'Processing...' : 'Upload Receipt'}
+                                                </Button>
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="text-green-600 border-green-200 hover:bg-green-50 w-full"
+                                                  onClick={() => createTestReceiptData(expense.id)}
+                                                >
+                                                  <Coins className="h-4 w-4 mr-1" />
+                                                  Create Test VAT Receipt
                                                 </Button>
 
                                               </div>

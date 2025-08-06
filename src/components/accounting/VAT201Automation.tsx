@@ -431,15 +431,17 @@ const VAT201Automation: React.FC<VAT201AutomationProps> = ({ onVATReturnCreated 
                   <div className="flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-green-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Output VAT</p>
+                      <p className="text-sm text-gray-600">VAT Input (Collected)</p>
                       <p className="font-semibold">{formatCurrency(vatReturn.calculation.outputVAT.total)}</p>
+                      <p className="text-xs text-gray-500">Invoices: {formatCurrency(vatReturn.calculation.outputVAT.invoices)} • Sales: {formatCurrency(vatReturn.calculation.outputVAT.sales)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <DollarSign className="h-4 w-4 text-blue-600" />
                     <div>
-                      <p className="text-sm text-gray-600">Input VAT</p>
+                      <p className="text-sm text-gray-600">VAT Output (Paid)</p>
                       <p className="font-semibold">{formatCurrency(vatReturn.calculation.inputVAT.total)}</p>
+                      <p className="text-xs text-gray-500">Expenses: {formatCurrency(vatReturn.calculation.inputVAT.expenses)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -447,6 +449,9 @@ const VAT201Automation: React.FC<VAT201AutomationProps> = ({ onVATReturnCreated 
                     <div>
                       <p className="text-sm text-gray-600">Net VAT</p>
                       <p className="font-semibold">{formatCurrency(vatReturn.calculation.netVAT)}</p>
+                      <p className="text-xs text-gray-500">
+                        {vatReturn.calculation.netVAT > 0 ? 'Amount Payable' : vatReturn.calculation.netVAT < 0 ? 'Refund Due' : 'No Amount Due'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -518,8 +523,8 @@ const VAT201Automation: React.FC<VAT201AutomationProps> = ({ onVATReturnCreated 
                 <div>
                   <h4 className="font-semibold mb-2">VAT Summary</h4>
                   <div className="space-y-1 text-sm">
-                    <p><strong>Output VAT:</strong> {formatCurrency(selectedReturn.calculation.outputVAT.total)}</p>
-                    <p><strong>Input VAT:</strong> {formatCurrency(selectedReturn.calculation.inputVAT.total)}</p>
+                    <p><strong>VAT Input (Collected):</strong> {formatCurrency(selectedReturn.calculation.outputVAT.total)}</p>
+                    <p><strong>VAT Output (Paid):</strong> {formatCurrency(selectedReturn.calculation.inputVAT.total)}</p>
                     <p><strong>Net VAT:</strong> {formatCurrency(selectedReturn.calculation.netVAT)}</p>
                     {selectedReturn.calculation.netVAT > 0 && (
                       <p><strong>Amount Payable:</strong> {formatCurrency(selectedReturn.calculation.vatPayable)}</p>
@@ -532,44 +537,106 @@ const VAT201Automation: React.FC<VAT201AutomationProps> = ({ onVATReturnCreated 
               </div>
               
               {/* Detailed Breakdown */}
-              <Tabs defaultValue="output" className="w-full">
+              <Tabs defaultValue="input" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="output">Output VAT</TabsTrigger>
-                  <TabsTrigger value="input">Input VAT</TabsTrigger>
+                  <TabsTrigger value="input">VAT Input (Collected)</TabsTrigger>
+                  <TabsTrigger value="output">VAT Output (Paid)</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="output" className="space-y-4">
-                  <div className="space-y-3">
-                    <h5 className="font-medium">Standard Rated (15%)</h5>
-                    <div className="bg-gray-50 p-3 rounded text-sm">
-                      <p>Items: {selectedReturn.calculation.outputVAT.standardRated.length}</p>
-                      <p>Total VAT: {formatCurrency(selectedReturn.calculation.outputVAT.standardRated.reduce((sum, item) => sum + item.vatAmount, 0))}</p>
-                    </div>
-                    
-                    <h5 className="font-medium">OCR Extracted (Slips)</h5>
-                    <div className="bg-gray-50 p-3 rounded text-sm">
-                      <p>Items: {selectedReturn.calculation.outputVAT.slipVAT.length}</p>
-                      <p>Total VAT: {formatCurrency(selectedReturn.calculation.outputVAT.slipVAT.reduce((sum, item) => sum + item.vatAmount, 0))}</p>
+                <TabsContent value="input" className="space-y-4">
+                  <div className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h5 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        VAT Input - VAT Collected by Business
+                      </h5>
+                      
+                      <div className="space-y-3">
+                        <div className="bg-white p-3 rounded border">
+                          <h6 className="font-medium text-gray-700 mb-2">Paid Invoices</h6>
+                          <p className="text-sm text-gray-600">VAT from invoices marked as paid</p>
+                          <p className="font-semibold text-lg">{formatCurrency(selectedReturn.calculation.outputVAT.invoices)}</p>
+                        </div>
+                        
+                        <div className="bg-white p-3 rounded border">
+                          <h6 className="font-medium text-gray-700 mb-2">Inventory Sales</h6>
+                          <p className="text-sm text-gray-600">VAT from all sales transactions</p>
+                          <p className="font-semibold text-lg">{formatCurrency(selectedReturn.calculation.outputVAT.sales)}</p>
+                        </div>
+                        
+                        <div className="bg-green-100 p-3 rounded border-2 border-green-300">
+                          <h6 className="font-semibold text-green-800">Total VAT Input</h6>
+                          <p className="font-bold text-xl text-green-800">{formatCurrency(selectedReturn.calculation.outputVAT.total)}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </TabsContent>
                 
-                <TabsContent value="input" className="space-y-4">
-                  <div className="space-y-3">
-                    <h5 className="font-medium">Standard Rated (15%)</h5>
-                    <div className="bg-gray-50 p-3 rounded text-sm">
-                      <p>Items: {selectedReturn.calculation.inputVAT.standardRated.length}</p>
-                      <p>Total VAT: {formatCurrency(selectedReturn.calculation.inputVAT.standardRated.reduce((sum, item) => sum + item.vatAmount, 0))}</p>
-                    </div>
-                    
-                    <h5 className="font-medium">Other Deductible</h5>
-                    <div className="bg-gray-50 p-3 rounded text-sm">
-                      <p>Items: {selectedReturn.calculation.inputVAT.other.length}</p>
-                      <p>Total VAT: {formatCurrency(selectedReturn.calculation.inputVAT.other.reduce((sum, item) => sum + item.vatAmount, 0))}</p>
+                <TabsContent value="output" className="space-y-4">
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h5 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        VAT Output - VAT Paid by Business
+                      </h5>
+                      
+                      <div className="space-y-3">
+                        <div className="bg-white p-3 rounded border">
+                          <h6 className="font-medium text-gray-700 mb-2">Expense Receipts</h6>
+                          <p className="text-sm text-gray-600">VAT from uploaded expense receipts</p>
+                          <p className="font-semibold text-lg">{formatCurrency(selectedReturn.calculation.inputVAT.expenses)}</p>
+                        </div>
+                        
+                        <div className="bg-blue-100 p-3 rounded border-2 border-blue-300">
+                          <h6 className="font-semibold text-blue-800">Total VAT Output</h6>
+                          <p className="font-bold text-xl text-blue-800">{formatCurrency(selectedReturn.calculation.inputVAT.total)}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </TabsContent>
               </Tabs>
+              
+              {/* Net VAT Calculation */}
+              <div className={`p-4 rounded-lg border-2 ${
+                selectedReturn.calculation.netVAT > 0 
+                  ? 'bg-red-50 border-red-300' 
+                  : selectedReturn.calculation.netVAT < 0
+                  ? 'bg-green-50 border-green-300'
+                  : 'bg-gray-50 border-gray-300'
+              }`}>
+                <h5 className="font-semibold mb-2">VAT 201 Calculation</h5>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>VAT Input (Collected):</span>
+                    <span className="font-medium">{formatCurrency(selectedReturn.calculation.outputVAT.total)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>VAT Output (Paid):</span>
+                    <span className="font-medium">-{formatCurrency(selectedReturn.calculation.inputVAT.total)}</span>
+                  </div>
+                  <hr className="my-2" />
+                  <div className="flex justify-between font-semibold text-base">
+                    <span>Net VAT:</span>
+                    <span className={selectedReturn.calculation.netVAT > 0 ? 'text-red-700' : selectedReturn.calculation.netVAT < 0 ? 'text-green-700' : 'text-gray-700'}>
+                      {formatCurrency(selectedReturn.calculation.netVAT)}
+                    </span>
+                  </div>
+                  {selectedReturn.calculation.netVAT > 0 && (
+                    <div className="flex justify-between font-bold text-red-700">
+                      <span>Amount Payable:</span>
+                      <span>{formatCurrency(selectedReturn.calculation.vatPayable)}</span>
+                    </div>
+                  )}
+                  {selectedReturn.calculation.netVAT < 0 && (
+                    <div className="flex justify-between font-bold text-green-700">
+                      <span>Refund Due:</span>
+                      <span>{formatCurrency(selectedReturn.calculation.vatRefund)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>

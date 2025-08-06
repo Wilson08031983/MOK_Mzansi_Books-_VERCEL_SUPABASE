@@ -1,5 +1,7 @@
 import { getInvoices } from './invoiceService';
 import { formatCompanyForPdf } from '../utils/companyUtils';
+import { slipOCRService } from './slipOCRService';
+import vatCalculationService from './vatCalculationService';
 
 export interface VAT201Data {
   period: string;
@@ -73,14 +75,73 @@ export const calculateVAT201 = (startDate: string, endDate: string): VAT201Data 
     total: outputVATTotal
   };
   
-  // Calculate Input VAT (VAT paid on expenses)
-  // Note: Current expense structure doesn't include VAT fields
-  // This would need to be enhanced to track VAT on expenses
+  // Calculate Input VAT (VAT paid on expenses) from uploaded receipts
+  let inputVATTotal = 0;
+  
+  try {
+    // Use vatCalculationService to get the calculated VAT for the period
+    const vatCalculation = vatCalculationService.calculateVATForPeriod(startDate, endDate);
+    inputVATTotal = vatCalculation.inputVAT.total;
+    
+    console.log(`🧮 [VAT201] Using vatCalculationService - Input VAT: R${inputVATTotal.toFixed(2)}`);
+    console.log(`🧮 [VAT201] VAT calculation details:`, {
+      period: vatCalculation.period,
+      inputVAT: vatCalculation.inputVAT,
+      outputVAT: vatCalculation.outputVAT,
+      netVAT: vatCalculation.netVAT
+    });
+    
+    // Also get slip VAT extractions for detailed logging
+    const slipExtractions = vatCalculationService.getAllSlipVATExtractions();
+    const periodExtractions = slipExtractions.filter(extraction => {
+      const extractionDate = new Date(extraction.extractionDate);
+      return extractionDate >= start && extractionDate <= end;
+    });
+    
+    console.log(`🧮 [VAT201] Found ${periodExtractions.length} slip VAT extractions in period`);
+    periodExtractions.forEach(extraction => {
+      console.log(`🧮 [VAT201] Extraction ${extraction.id}: VAT R${extraction.vatAmount}, Expense: ${extraction.expenseId}`);
+    });
+    
+  } catch (error) {
+    console.error('Error calculating Input VAT from vatCalculationService:', error);
+    
+    // Fallback to legacy method if vatCalculationService fails
+    console.log('🧮 [VAT201] Falling back to legacy slipOCRService method');
+    try {
+      const allReceiptData = slipOCRService.getAllReceiptData();
+      console.log(`🧮 [VAT201] Found ${allReceiptData.length} total receipts (legacy)`);
+      
+      const manualExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+      const categorizedExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+      const allExpenses = [...manualExpenses, ...categorizedExpenses];
+      
+      const periodExpenses = allExpenses.filter((expense: any) => {
+        const expenseDate = new Date(expense.date);
+        return expenseDate >= start && expenseDate <= end;
+      });
+      
+      let vatFoundCount = 0;
+      periodExpenses.forEach((expense: any) => {
+        const receipt = allReceiptData.find((r: any) => r.expenseId === expense.id);
+        if (receipt && receipt.vatAmount && receipt.status === 'completed') {
+          inputVATTotal += receipt.vatAmount;
+          vatFoundCount++;
+          console.log(`🧮 [VAT201] ✅ Added VAT R${receipt.vatAmount} from expense ${expense.id} (legacy)`);
+        }
+      });
+      
+      console.log(`🧮 [VAT201] Legacy calculation: ${vatFoundCount} receipts, Total: R${inputVATTotal.toFixed(2)}`);
+    } catch (legacyError) {
+      console.error('Error with legacy VAT calculation:', legacyError);
+    }
+  }
+  
   const inputVAT = {
-    standardRated: 0, // Would be calculated from expenses with VAT
-    capitalGoods: 0,
+    standardRated: inputVATTotal,
+    capitalGoods: 0, // Could be enhanced to categorize capital goods
     importVAT: 0,
-    total: 0
+    total: inputVATTotal
   };
   
   // Calculate net VAT (Output VAT - Input VAT)
@@ -105,6 +166,110 @@ export const calculateVAT201 = (startDate: string, endDate: string): VAT201Data 
  * Parse period string to get start and end dates
  * Supports formats like "June 2025", "Q2 2025", "2025-06"
  */
+/**
+ * Generate current South African VAT quarter information
+ * South African VAT quarters: Jan-Feb, Mar-Apr, May-Jun, Jul-Aug, Sep-Oct, Nov-Dec
+ */
+export const getCurrentVATQuarter = (): { period: string; startDate: string; endDate: string; dueDate: string } => {
+  const now = new Date();
+  const currentMonth = now.getMonth(); // 0-based (0 = January)
+  const currentYear = now.getFullYear();
+  
+  // Determine which VAT quarter we're in
+  let quarterStartMonth: number;
+  let quarterEndMonth: number;
+  let quarterName: string;
+  
+  if (currentMonth >= 0 && currentMonth <= 1) { // Jan-Feb
+    quarterStartMonth = 0; // January
+    quarterEndMonth = 1; // February
+    quarterName = 'Jan-Feb';
+  } else if (currentMonth >= 2 && currentMonth <= 3) { // Mar-Apr
+    quarterStartMonth = 2; // March
+    quarterEndMonth = 3; // April
+    quarterName = 'Mar-Apr';
+  } else if (currentMonth >= 4 && currentMonth <= 5) { // May-Jun
+    quarterStartMonth = 4; // May
+    quarterEndMonth = 5; // June
+    quarterName = 'May-Jun';
+  } else if (currentMonth >= 6 && currentMonth <= 7) { // Jul-Aug
+    quarterStartMonth = 6; // July
+    quarterEndMonth = 7; // August
+    quarterName = 'Jul-Aug';
+  } else if (currentMonth >= 8 && currentMonth <= 9) { // Sep-Oct
+    quarterStartMonth = 8; // September
+    quarterEndMonth = 9; // October
+    quarterName = 'Sep-Oct';
+  } else { // Nov-Dec
+    quarterStartMonth = 10; // November
+    quarterEndMonth = 11; // December
+    quarterName = 'Nov-Dec';
+  }
+  
+  // Calculate start and end dates
+  const startDate = new Date(currentYear, quarterStartMonth, 1);
+  const endDate = new Date(currentYear, quarterEndMonth + 1, 0); // Last day of end month
+  
+  // Calculate due date (25th of the month following the quarter end)
+  const dueDate = new Date(currentYear, quarterEndMonth + 1, 25);
+  
+  return {
+    period: `${quarterName} ${currentYear}`,
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0],
+    dueDate: dueDate.toISOString().split('T')[0]
+  };
+};
+
+/**
+ * Get VAT quarter information for a specific date
+ */
+export const getVATQuarterForDate = (date: Date): { period: string; startDate: string; endDate: string; dueDate: string } => {
+  const month = date.getMonth(); // 0-based
+  const year = date.getFullYear();
+  
+  let quarterStartMonth: number;
+  let quarterEndMonth: number;
+  let quarterName: string;
+  
+  if (month >= 0 && month <= 1) { // Jan-Feb
+    quarterStartMonth = 0;
+    quarterEndMonth = 1;
+    quarterName = 'Jan-Feb';
+  } else if (month >= 2 && month <= 3) { // Mar-Apr
+    quarterStartMonth = 2;
+    quarterEndMonth = 3;
+    quarterName = 'Mar-Apr';
+  } else if (month >= 4 && month <= 5) { // May-Jun
+    quarterStartMonth = 4;
+    quarterEndMonth = 5;
+    quarterName = 'May-Jun';
+  } else if (month >= 6 && month <= 7) { // Jul-Aug
+    quarterStartMonth = 6;
+    quarterEndMonth = 7;
+    quarterName = 'Jul-Aug';
+  } else if (month >= 8 && month <= 9) { // Sep-Oct
+    quarterStartMonth = 8;
+    quarterEndMonth = 9;
+    quarterName = 'Sep-Oct';
+  } else { // Nov-Dec
+    quarterStartMonth = 10;
+    quarterEndMonth = 11;
+    quarterName = 'Nov-Dec';
+  }
+  
+  const startDate = new Date(year, quarterStartMonth, 1);
+  const endDate = new Date(year, quarterEndMonth + 1, 0);
+  const dueDate = new Date(year, quarterEndMonth + 1, 25);
+  
+  return {
+    period: `${quarterName} ${year}`,
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0],
+    dueDate: dueDate.toISOString().split('T')[0]
+  };
+};
+
 export const parsePeriod = (period: string): { startDate: string; endDate: string } => {
   const currentYear = new Date().getFullYear();
   
