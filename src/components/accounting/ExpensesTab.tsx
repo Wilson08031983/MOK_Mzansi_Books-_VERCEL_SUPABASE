@@ -304,8 +304,10 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     return existingExpenses.some(expense => {
       const dateDiff = Math.abs(new Date(expense.date).getTime() - new Date(transaction.date).getTime());
       const amountDiff = Math.abs(expense.amount - Math.abs(transaction.amount));
-      const descriptionMatch = expense.description.toLowerCase().includes(transaction.description.toLowerCase().substring(0, 10)) ||
-                              transaction.description.toLowerCase().includes(expense.description.toLowerCase().substring(0, 10));
+      const descriptionMatch = (expense.description && transaction.description && 
+                              expense.description.toLowerCase().includes(transaction.description.toLowerCase().substring(0, 10))) ||
+                              (expense.description && transaction.description && 
+                              transaction.description.toLowerCase().includes(expense.description.toLowerCase().substring(0, 10)));
       
       // Consider duplicate if same day, similar amount (within R1), and similar description
       return dateDiff < 24 * 60 * 60 * 1000 && amountDiff < 1.0 && descriptionMatch;
@@ -1169,8 +1171,8 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   const filteredExpenses = allExpenses
     .filter(expense => {
       const matchesSearch = 
-        expense.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        expense.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (expense.description && expense.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (expense.id && expense.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (expense.project && expense.project.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (expense.projectName && expense.projectName.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (expense.projectCode && expense.projectCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -1729,43 +1731,6 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
           >
             <Coins className="h-4 w-4 mr-2" />
             Petty Cash
-          </Button>
-          
-          <Button
-            onClick={async () => {
-              try {
-                // Create a test expense first
-                const testExpense: NewExpenseData = {
-                  date: new Date().toISOString().split('T')[0],
-                  description: 'Test Expense with VAT',
-                  amount: 115.00, // R100 + R15 VAT
-                  category: 'Office Supplies',
-                  transactionType: 'slip',
-                  status: 'pending',
-                  notes: 'Test expense for VAT calculation verification'
-                };
-                
-                // Save the test expense
-                const newExpense = expenseStorageService.createExpense(testExpense);
-                
-                // Create test receipt data for this expense
-                createTestReceiptData(newExpense.id);
-                
-                // Refresh the data
-                loadManualExpenses();
-                setRefreshKey(prev => prev + 1);
-                
-                toast.success('Test expense with VAT data created successfully!');
-              } catch (error) {
-                console.error('Error creating test data:', error);
-                toast.error('Failed to create test data');
-              }
-            }}
-            variant="outline"
-            className="border-orange-500 text-orange-700 hover:bg-orange-50 font-sf-pro"
-          >
-            <FileCheck className="h-4 w-4 mr-2" />
-            Create Test VAT Data
           </Button>
           
           <Dialog open={showBankUpload} onOpenChange={setShowBankUpload}>
@@ -2414,15 +2379,6 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                                 >
                                                   <Upload className="h-4 w-4 mr-1" />
                                                   {processingReceipts.has(expense.id) ? 'Processing...' : 'Upload Receipt'}
-                                                </Button>
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="text-green-600 border-green-200 hover:bg-green-50 w-full"
-                                                  onClick={() => createTestReceiptData(expense.id)}
-                                                >
-                                                  <Coins className="h-4 w-4 mr-1" />
-                                                  Create Test VAT Receipt
                                                 </Button>
 
                                               </div>

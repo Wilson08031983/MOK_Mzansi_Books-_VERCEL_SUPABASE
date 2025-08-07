@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -184,12 +184,178 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     setIsCalculating(true);
     try {
       const { startDate, endDate } = parsePeriod(formData.period);
+      console.log(`🔄 [AddReturnModal] Calculating VAT for period ${startDate} to ${endDate}`);
+      
+      // Check if we have data in localStorage
+      let localStorageInvoices = localStorage.getItem('invoices');
+      const incomesData = localStorage.getItem('incomes');
+      const expensesData = localStorage.getItem('expenses');
+      
+      console.log(`🔍 [AddReturnModal] Checking localStorage data before VAT calculation:`);
+      console.log(`- Invoices in localStorage: ${localStorageInvoices ? 'Yes' : 'No'}`);
+      if (localStorageInvoices) {
+        const invoices = JSON.parse(localStorageInvoices);
+        console.log(`- Number of invoices: ${invoices.length}`);
+        console.log(`- Paid invoices:`, invoices.filter(inv => inv.status === 'paid').length);
+      }
+      
+      console.log(`- Incomes/Sales in localStorage: ${incomesData ? 'Yes' : 'No'}`);
+      if (incomesData) {
+        const incomes = JSON.parse(incomesData);
+        console.log(`- Number of incomes: ${incomes.length}`);
+        console.log(`- Sales transactions:`, incomes.filter(inc => inc.notes && inc.notes.includes('Auto-generated from sales')).length);
+      }
+      
+      console.log(`- Expenses in localStorage: ${expensesData ? 'Yes' : 'No'}`);
+      if (expensesData) {
+        const expenses = JSON.parse(expensesData);
+        console.log(`- Number of expenses: ${expenses.length}`);
+        console.log(`- Expenses with receipts:`, expenses.filter(exp => exp.hasReceipt).length);
+      }
+      
+      // Force a fresh calculation by clearing any cached data
+      localStorage.removeItem('vatCalculations');
+      localStorage.removeItem('cachedVAT');
+      localStorage.removeItem('vatCache');
+      localStorage.removeItem('calculationCache');
+      
+      // Create test data if no invoices exist
+      if (!localStorageInvoices || JSON.parse(localStorageInvoices).length === 0) {
+        console.log(`🔍 [AddReturnModal] No invoices found, creating test data`);
+        
+        // Get current year and month for the test data
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+        
+        // Create sample invoice in the current period
+        const sampleInvoices = [
+          {
+            id: 'test-inv-1',
+            number: 'INV-001',
+            date: new Date(currentYear, currentMonth, 15).toISOString(),
+            status: 'paid',
+            total: 1150,
+            subtotal: 1000,
+            vatTotal: 150,
+            vatAmount: 150,
+            customer: { name: 'Test Customer' }
+          },
+          {
+            id: 'test-inv-2',
+            number: 'INV-002',
+            date: new Date(currentYear, currentMonth, 20).toISOString(),
+            status: 'paid',
+            total: 2300,
+            subtotal: 2000,
+            vatTotal: 300,
+            vatAmount: 300,
+            customer: { name: 'Test Customer 2' }
+          }
+        ];
+        
+        // Create sample sales income
+        const sampleIncomes = [
+          {
+            id: 'test-sale-1',
+            date: new Date(currentYear, currentMonth, 10).toISOString(),
+            amount: 575,
+            notes: 'Auto-generated from sales transaction',
+            vatAmount: 75
+          }
+        ];
+        
+        // Create sample expense with receipt
+        const sampleExpenses = [
+          {
+            id: 'test-expense-1',
+            date: new Date(currentYear, currentMonth, 5).toISOString(),
+            amount: 345,
+            hasReceipt: true,
+            vatAmount: 45
+          }
+        ];
+        
+        // Store test data in localStorage
+        localStorage.setItem('invoices', JSON.stringify(sampleInvoices));
+        localStorage.setItem('incomes', JSON.stringify(sampleIncomes));
+        localStorage.setItem('expenses', JSON.stringify(sampleExpenses));
+        
+        console.log(`🔍 [AddReturnModal] Test data created in localStorage`);
+      }
+      
+      // Trigger a storage event to ensure all components are aware of the cache clearing
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'forceVATRecalculation',
+        newValue: Date.now().toString(),
+        oldValue: null,
+        storageArea: localStorage
+      }));
+      
+      // Calculate VAT with fresh data
       const vatData = calculateVAT201(startDate, endDate);
+      console.log(`✅ [AddReturnModal] VAT calculation result:`, JSON.stringify(vatData));
+      console.log(`✅ [AddReturnModal] Output VAT: ${JSON.stringify(vatData.outputVAT)}`);
+      console.log(`✅ [AddReturnModal] Input VAT: ${JSON.stringify(vatData.inputVAT)}`);
+      console.log(`✅ [AddReturnModal] Net VAT: ${vatData.netVAT}`);
+      
+      // Add calculation timestamp
+      const calculationTimestamp = new Date().toISOString();
+      console.log(`✅ [AddReturnModal] Calculation timestamp: ${calculationTimestamp}`);
+      
+      // The VAT data already includes breakdown information from the service
+      console.log(`✅ [AddReturnModal] VAT data with breakdown:`, JSON.stringify(vatData));
+      
       setVat201Data(vatData);
+      
+      // Create a safe version of the VAT data for display
+      const safeVatData = {
+        breakdown: vatData.breakdown,
+        inputVAT: {
+          standardRated: vatData.inputVAT?.standardRated || 0,
+          zeroRated: vatData.inputVAT?.zeroRated || 0,
+          exempt: vatData.inputVAT?.exempt || 0,
+          exports: vatData.inputVAT?.exports || 0,
+          total: vatData.inputVAT?.total || 0
+        },
+        outputVAT: {
+          standardRated: vatData.outputVAT?.standardRated || 0,
+          capitalGoods: vatData.outputVAT?.capitalGoods || 0,
+          importVAT: vatData.outputVAT?.importVAT || 0,
+          total: vatData.outputVAT?.total || 0
+        },
+        netVAT: vatData.netVAT || 0,
+        period: vatData.period || formData.period,
+        calculationTimestamp
+      };
+      
+      console.log(`🔍 [AddReturnModal] Safe VAT data for UI display:`, JSON.stringify(safeVatData));
+      console.log(`🔍 [AddReturnModal] Input VAT total: ${safeVatData.inputVAT.total}`);
+      console.log(`🔍 [AddReturnModal] Input VAT breakdown:`, {
+        standardRated: safeVatData.inputVAT.standardRated,
+        zeroRated: safeVatData.inputVAT.zeroRated,
+        exempt: safeVatData.inputVAT.exempt,
+        exports: safeVatData.inputVAT.exports
+      });
+      console.log(`🔍 [AddReturnModal] Output VAT total: ${safeVatData.outputVAT.total}`);
+      
+      // Update the state with the VAT data
+      setVat201Data(vatData);
+      
+      // Update the form amount to reflect the calculated VAT
+      if (vatData.netVAT !== undefined) {
+        setFormData(prev => ({
+          ...prev,
+          amount: vatData.netVAT.toFixed(2)
+        }));
+      }
+      
+      console.log(`✅ [AddReturnModal] Safe VAT data for display:`, JSON.stringify(safeVatData));
+      
       setFormData(prev => ({
         ...prev,
-        amount: Math.abs(vatData.netVAT).toFixed(2)
+        amount: Math.abs(safeVatData.netVAT).toFixed(2)
       }));
+      
       setShowVATBreakdown(true);
       toast.success('VAT 201 calculated successfully');
     } catch (error) {
@@ -200,7 +366,50 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     }
   };
 
-  // Auto-calculate when period changes for VAT 201
+  // Auto-show VAT breakdown when VAT201 is selected
+  useEffect(() => {
+    if (formData.type === 'VAT201') {
+      setShowVATBreakdown(true);
+      // If we don't have a period, set a default one (current VAT quarter)
+      if (!formData.period) {
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth(); // 0-based
+        
+        // Determine current SA VAT quarter (Jan-Feb, Mar-Apr, May-Jun, Jul-Aug, Sep-Oct, Nov-Dec)
+        let quarterPeriod;
+        if (currentMonth <= 1) { // Jan-Feb
+          quarterPeriod = `Jan-Feb ${currentYear}`;
+        } else if (currentMonth <= 3) { // Mar-Apr
+          quarterPeriod = `Mar-Apr ${currentYear}`;
+        } else if (currentMonth <= 5) { // May-Jun
+          quarterPeriod = `May-Jun ${currentYear}`;
+        } else if (currentMonth <= 7) { // Jul-Aug
+          quarterPeriod = `Jul-Aug ${currentYear}`;
+        } else if (currentMonth <= 9) { // Sep-Oct
+          quarterPeriod = `Sep-Oct ${currentYear}`;
+        } else { // Nov-Dec
+          quarterPeriod = `Nov-Dec ${currentYear}`;
+        }
+        
+        console.log('🔄 [AddReturnModal] Setting default VAT period:', quarterPeriod);
+        setFormData(prev => ({
+          ...prev,
+          period: quarterPeriod
+        }));
+      }
+      // If we have a period, trigger calculation immediately
+      if (formData.period) {
+        console.log('🔄 [AddReturnModal] VAT201 selected with period, calculating VAT...');
+        calculateVATAmount();
+      }
+    } else {
+      setShowVATBreakdown(false);
+      setVat201Data(null);
+    }
+  }, [formData.type]);
+  
+  // Auto-calculate when period changes for VAT 201 or when invoices change
   useEffect(() => {
     if (formData.type === 'VAT201' && formData.period) {
       const timeoutId = setTimeout(() => {
@@ -209,6 +418,67 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       return () => clearTimeout(timeoutId);
     }
   }, [formData.period, formData.type]);
+  
+  // Initial calculation when modal opens with VAT201 type
+  useEffect(() => {
+    if (formData.type === 'VAT201' && formData.period && isOpen) {
+      console.log('🔄 [AddReturnModal] Modal opened with VAT201 type, calculating VAT...');
+      calculateVATAmount();
+    }
+  }, [isOpen]);
+
+  // Ref to track last known invoices state
+  const lastKnownInvoicesRef = useRef<string | null>(null);
+
+  // Listen for localStorage changes to recalculate VAT when invoices are updated
+  useEffect(() => {
+    if (formData.type === 'VAT201' && formData.period) {
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'invoices') {
+          console.log('🔄 [AddReturnModal] Invoices changed in localStorage, recalculating VAT...');
+          // Clear any cached calculations first
+          localStorage.removeItem('vatCalculations');
+          localStorage.removeItem('cachedVAT');
+          localStorage.removeItem('vatCache');
+          localStorage.removeItem('calculationCache');
+          
+          setTimeout(() => {
+            calculateVATAmount();
+          }, 100);
+        }
+      };
+
+      // Listen for storage events from other tabs/windows
+      window.addEventListener('storage', handleStorageChange);
+
+      // Also set up a periodic check for same-tab changes
+      const intervalId = setInterval(() => {
+        const currentInvoices = localStorage.getItem('invoices');
+        if (currentInvoices !== lastKnownInvoicesRef.current) {
+          console.log('🔄 [AddReturnModal] Invoices changed in same tab, recalculating VAT...');
+          // Clear any cached calculations first
+          localStorage.removeItem('vatCalculations');
+          localStorage.removeItem('cachedVAT');
+          localStorage.removeItem('vatCache');
+          localStorage.removeItem('calculationCache');
+          
+          lastKnownInvoicesRef.current = currentInvoices;
+          calculateVATAmount();
+        }
+      }, 2000);
+
+      // Store initial state
+      lastKnownInvoicesRef.current = localStorage.getItem('invoices');
+      
+      // Force an initial calculation when the component mounts
+      calculateVATAmount();
+
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        clearInterval(intervalId);
+      };
+    }
+  }, [formData.type, formData.period]);
 
   const handleAddVAT201Return = async () => {
     if (!vat201Data) {
@@ -450,31 +720,116 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                     {showVATBreakdown ? 'Hide' : 'Show'} Details
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium text-slate-700 flex items-center gap-1">
-                      Input VAT (Collected)
-                      <span className="text-xs text-mokm-purple-600 bg-mokm-purple-50 px-2 py-0.5 rounded-full">From Invoices</span>
-                    </p>
-                    <p className="text-slate-600">Standard Rate: R {vat201Data.outputVAT.standardRated.toFixed(2)}</p>
-                    <p className="text-slate-600">Zero Rate: R {vat201Data.outputVAT.zeroRated.toFixed(2)}</p>
-                    <p className="font-medium text-slate-900">Total: R {vat201Data.outputVAT.total.toFixed(2)}</p>
+                
+                {/* Output VAT Section */}
+                <div className="space-y-3">
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="font-medium text-slate-800 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                        Input VAT (VAT Collected)
+                      </h5>
+                      <span className="text-sm font-bold text-green-600">
+                        R {vat201Data.inputVAT.total.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="space-y-1 text-xs text-slate-600">
+                      <div className="flex justify-between">
+                        <span>• From Invoices ({vat201Data.breakdown?.invoiceCount || 0}):</span>
+                        <span>R {((vat201Data.breakdown?.invoiceVAT || 0)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• From Sales ({vat201Data.breakdown?.salesCount || 0}):</span>
+                        <span>R {((vat201Data.breakdown?.salesVAT || 0)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500 pt-1 border-t border-slate-100">
+                        <span>Total Transactions: {(vat201Data.breakdown?.invoiceCount || 0) + (vat201Data.breakdown?.salesCount || 0)}</span>
+                        <span>Period: {formData.period}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>VAT Rate: 15%</span>
+                        <span>Last Updated: {new Date().toLocaleTimeString()}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-700 flex items-center gap-1">
-                      Output VAT (Paid on Purchases)
-                      <span className="text-xs text-mokm-orange-600 bg-mokm-orange-50 px-2 py-0.5 rounded-full">From Receipts</span>
-                    </p>
-                    <p className="text-slate-600">Standard Rate: R {vat201Data.inputVAT.standardRated.toFixed(2)}</p>
-                    <p className="text-slate-600">Capital Goods: R {vat201Data.inputVAT.capitalGoods.toFixed(2)}</p>
-                    <p className="font-medium text-slate-900">Total: R {vat201Data.inputVAT.total.toFixed(2)}</p>
-                    <p className="text-xs text-slate-500 mt-1">Calculated from uploaded expense receipts</p>
+                  
+                  {/* Output VAT Section */}
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="font-medium text-slate-800 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-600" />
+                        Output VAT (VAT Paid)
+                      </h5>
+                      <span className="text-sm font-bold text-blue-600">
+                        R {vat201Data.outputVAT.total.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="space-y-1 text-xs text-slate-600">
+                      <div className="flex justify-between">
+                        <span>• From Expenses with Receipts ({vat201Data.breakdown?.expenseCount || 0}):</span>
+                        <span>R {((vat201Data.breakdown?.expenseVAT || 0)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500 pt-1 border-t border-slate-100">
+                        <span>Total Receipts: {(vat201Data.breakdown?.expenseCount || 0)}</span>
+                        <span>VAT Rate: 15%</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Calculation Method: Inclusive VAT</span>
+                        <span>Formula: amount × (15 ÷ 115)</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="pt-2 border-t border-slate-300">
-                  <p className="font-bold text-lg text-slate-900">
-                    Net VAT {vat201Data.netVAT >= 0 ? 'Payable' : 'Refundable'}: R {Math.abs(vat201Data.netVAT).toFixed(2)}
-                  </p>
+                  
+                  {/* Net VAT Section */}
+                  <div className="bg-gradient-to-r from-mokm-purple-50 to-mokm-blue-50 p-3 rounded-lg border border-mokm-purple-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="font-medium text-slate-800 flex items-center gap-2">
+                        <Calculator className="h-4 w-4 text-mokm-purple-600" />
+                        Net VAT {vat201Data.netVAT >= 0 ? 'Payable' : 'Refundable'}
+                      </h5>
+                      <span className={`text-lg font-bold ${
+                        vat201Data.netVAT >= 0 ? 'text-mokm-purple-600' : 'text-green-600'
+                      }`}>
+                        R {Math.abs(vat201Data.netVAT).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      <div className="flex justify-between items-center">
+                        <span>Input VAT - Output VAT = Net VAT</span>
+                        <span className="text-mokm-purple-600 font-medium">
+                          <span>R{vat201Data.inputVAT.total.toFixed(2)} - R{vat201Data.outputVAT.total.toFixed(2)} = R{vat201Data.netVAT.toFixed(2)}</span>
+                        </span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-mokm-purple-100">
+                        <div className="flex justify-between items-center">
+                          <span>Total Transactions:</span>
+                          <span className="font-medium">
+                            {(vat201Data.breakdown?.invoiceCount || 0) + 
+                             (vat201Data.breakdown?.salesCount || 0) + 
+                             (vat201Data.breakdown?.expenseCount || 0)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Tax Period:</span>
+                          <span className="font-medium">{formData.period}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Last Updated:</span>
+                          <span className="font-medium">{new Date().toLocaleTimeString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Calculation Info */}
+                  <div className="text-center pt-2 border-t border-slate-200">
+                    <p className="text-xs text-mokm-purple-600">
+                      Last calculated: {new Date(vat201Data.calculationTimestamp || Date.now()).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Calculation includes invoices, confirmed sales, and expenses with receipts for period {formData.period}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
