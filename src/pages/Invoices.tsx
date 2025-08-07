@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import InvoicesHeader from '@/components/invoices/InvoicesHeader';
+import { generateInvoiceNumber } from '@/services/invoiceService';
 import InvoicesSummaryCards from '@/components/invoices/InvoicesSummaryCards';
 import InvoicesSearchAndFilters from '@/components/invoices/InvoicesSearchAndFilters';
 import InvoicesContent from '@/components/invoices/InvoicesContent';
@@ -110,9 +111,9 @@ const Invoices: React.FC = () => {
         clientId: '1',
         clientName: 'ACME Corporation',
         clientEmail: 'billing@acme.com',
-        date: '2024-01-15',
-        invoiceDate: '2024-01-15',
-        dueDate: '2024-02-15',
+        date: '2025-07-15',
+        invoiceDate: '2025-07-15',
+        dueDate: '2025-08-15',
         amount: 5000,
         total: 5000,
         paidAmount: 2500,
@@ -180,10 +181,12 @@ const Invoices: React.FC = () => {
           clientId: '1',
           clientName: 'ACME Corporation',
           clientEmail: 'billing@acme.com',
-          date: '2024-01-15',
-          invoiceDate: '2024-01-15',
-          dueDate: '2024-02-15',
+          date: '15 July 2025',
+          invoiceDate: '15 July 2025',
+          dueDate: '15 August 2025',
           amount: 5000,
+          subtotal: 4347.83,
+          vatTotal: 652.17,
           total: 5000,
           paidAmount: 2500,
           balance: 2500,
@@ -198,15 +201,15 @@ const Invoices: React.FC = () => {
               itemNo: 1,
               description: 'Consulting Services',
               quantity: 10,
-              rate: 500,
-              unitPrice: 500,
+              rate: 434.78,
+              unitPrice: 434.78,
               markupPercent: 0,
               discount: 0,
-              amount: 5000,
+              amount: 4347.83,
             },
           ],
-          createdAt: '2024-01-15T10:00:00Z',
-          updatedAt: '2024-01-15T10:00:00Z',
+          createdAt: '2025-07-15T10:00:00Z',
+          updatedAt: '2025-07-15T10:00:00Z',
         },
         {
           id: '2',
@@ -215,10 +218,12 @@ const Invoices: React.FC = () => {
           clientId: '2',
           clientName: 'Tech Solutions Ltd',
           clientEmail: 'finance@techsolutions.com',
-          date: '2024-01-20',
-          invoiceDate: '2024-01-20',
-          dueDate: '2024-01-10',
+          date: '6 August 2025',
+          invoiceDate: '6 August 2025',
+          dueDate: '6 September 2025',
           amount: 15000,
+          subtotal: 13043.48,
+          vatTotal: 1956.52,
           total: 15000,
           paidAmount: 0,
           balance: 15000,
@@ -233,15 +238,15 @@ const Invoices: React.FC = () => {
               itemNo: 1,
               description: 'Software Development',
               quantity: 20,
-              rate: 750,
-              unitPrice: 750,
+              rate: 652.17,
+              unitPrice: 652.17,
               markupPercent: 0,
               discount: 0,
-              amount: 15000,
+              amount: 13043.48,
             },
           ],
-          createdAt: '2024-01-20T10:00:00Z',
-          updatedAt: '2024-01-20T10:00:00Z',
+          createdAt: '2025-08-06T10:00:00Z',
+          updatedAt: '2025-08-06T10:00:00Z',
         },
       ];
         setInvoices(sampleInvoices);
@@ -264,7 +269,20 @@ const Invoices: React.FC = () => {
       
       // Ensure invoice number is properly set
       // The modal uses invoiceNumber but we need to use number for storage
-      const invoiceNumber = invoice.number || 'INV-' + Date.now();
+      // Always generate a fresh invoice number if one isn't provided
+      // This ensures we never reuse invoice numbers
+      let invoiceNumber;
+      
+      if (invoice.number) {
+        invoiceNumber = invoice.number;
+      } else if ((invoice as any).invoiceNumber) {
+        invoiceNumber = (invoice as any).invoiceNumber;
+      } else {
+        // Generate a fresh invoice number as a last resort
+        invoiceNumber = generateInvoiceNumber();
+      }
+      
+      console.log('Saving invoice with number:', invoiceNumber);
       
       // Generate new invoice with required fields
       const newInvoice: Invoice = {

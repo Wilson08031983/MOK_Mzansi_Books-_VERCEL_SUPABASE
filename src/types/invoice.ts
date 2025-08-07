@@ -39,6 +39,8 @@ export interface Invoice {
   invoiceDate: string; // Alias for date
   dueDate: string;
   amount: number;
+  subtotal?: number; // Subtotal before VAT
+  vatTotal?: number; // VAT amount
   total: number; // Alias for amount
   paidAmount: number;
   balance: number;
@@ -105,32 +107,47 @@ export interface PaginationConfig {
   totalItems: number;
 }
 
+// Service invoice type for API compatibility
+export interface ServiceInvoice {
+  id: string;
+  number: string;
+  client: string | Client;
+  clientId: string;
+  clientEmail?: string;
+  date: string;
+  dueDate: string;
+  amount: number;
+  subtotal?: number;
+  vatTotal?: number;
+  total: number;
+  paidAmount: number;
+  status: InvoiceStatus;
+  currency: string;
+  vatRate: number;
+  reference: string;
+  project?: string;
+  salesperson?: string;
+  salespersonId?: string;
+  tags?: string[];
+  items: InvoiceItem[];
+  notes?: string;
+  terms: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Helper function to map service invoice to UI invoice
 export const mapToLocalInvoice = (invoice: ServiceInvoice): Invoice => {
   const client = typeof invoice.client === 'string' ? 
     { id: invoice.clientId || '', name: invoice.client, email: invoice.clientEmail || '' } : 
-    { 
-      id: invoice.client.id || invoice.clientId || '', 
-      name: invoice.client.name || invoice.client, 
-      email: invoice.client.email || invoice.clientEmail || '' 
-    };
+    invoice.client;
 
   return {
     ...invoice,
     clientName: client.name,
     clientEmail: client.email,
-    clientDetails: {
-      ...client,
-      phone: client.phone || '',
-      address: client.address || '',
-      city: client.city || '',
-      state: client.state || '',
-      zip: client.zip || '',
-      country: client.country || ''
-    },
     invoiceDate: invoice.date,
-    date: invoice.date, // Alias
-    client: client.name, // Alias
+    client: client.name,
     items: invoice.items.map((item, index) => ({
       ...item,
       itemNo: index + 1,
@@ -150,19 +167,34 @@ export const mapToLocalInvoice = (invoice: ServiceInvoice): Invoice => {
 
 // Helper function to map UI invoice to service invoice
 export const mapToServiceInvoice = (invoice: Invoice): ServiceInvoice => {
-  const serviceInvoice: ServiceInvoice = {
-    ...invoice,
+  return {
+    id: invoice.id,
+    number: invoice.number,
     client: invoice.clientName,
     clientId: invoice.clientId,
     clientEmail: invoice.clientEmail,
     date: invoice.invoiceDate,
+    dueDate: invoice.dueDate,
+    amount: invoice.amount,
+    subtotal: invoice.subtotal,
+    vatTotal: invoice.vatTotal,
+    total: invoice.total,
+    paidAmount: invoice.paidAmount,
+    status: invoice.status,
+    currency: invoice.currency,
+    vatRate: invoice.vatRate,
+    reference: invoice.reference,
+    project: invoice.project,
+    salesperson: invoice.salesperson,
+    salespersonId: invoice.salespersonId,
+    tags: invoice.tags,
     items: invoice.items.map(item => ({
       ...item,
       rate: item.unitPrice
-    }))
+    })),
+    notes: invoice.notes,
+    terms: invoice.terms,
+    createdAt: invoice.createdAt,
+    updatedAt: invoice.updatedAt
   };
-  
-  // Remove UI-specific fields
-  const { clientName, clientDetails, invoiceDate, ...rest } = serviceInvoice as any;
-  return rest as ServiceInvoice;
 };

@@ -60,16 +60,22 @@ const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
 }) => {
   if (!invoice) return null;
 
+  // Ensure invoice has items array to prevent map errors
+  const safeInvoice = {
+    ...invoice,
+    items: Array.isArray(invoice.items) ? invoice.items : []
+  };
+
   const handleDownload = async () => {
     try {
       // Make sure invoice has items property
-      if (!invoice.items || !Array.isArray(invoice.items)) {
+      if (!safeInvoice.items || !Array.isArray(safeInvoice.items)) {
         toast.error('Invoice items are missing or invalid');
         return;
       }
       
       // Generate and download the PDF
-      await generateInvoicePdf(invoice);
+      await generateInvoicePdf(safeInvoice);
     } catch (error) {
       console.error('Error downloading invoice:', error);
       toast.error('An error occurred while generating the PDF.');
@@ -92,9 +98,9 @@ const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center justify-between">
-            <span>Invoice #{invoice.number}</span>
-            <Badge className={getStatusColor(invoice.status)}>
-              {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+            <span>Invoice #{safeInvoice.number}</span>
+            <Badge className={getStatusColor(safeInvoice.status)}>
+              {safeInvoice.status.charAt(0).toUpperCase() + safeInvoice.status.slice(1)}
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -102,20 +108,20 @@ const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
         <div className="grid grid-cols-2 gap-6 py-4">
           <div>
             <h3 className="font-semibold mb-2">Client</h3>
-            <p className="text-sm">{invoice.clientName}</p>
-            {invoice.clientEmail && <p className="text-sm">{invoice.clientEmail}</p>}
+            <p className="text-sm">{safeInvoice.clientName}</p>
+            {safeInvoice.clientEmail && <p className="text-sm">{safeInvoice.clientEmail}</p>}
           </div>
           
           <div className="text-right">
             <div className="mb-4">
               <h3 className="font-semibold mb-2">Invoice Details</h3>
-              <p className="text-sm">Date: {formatDate(invoice.date)}</p>
-              <p className="text-sm">Due Date: {formatDate(invoice.dueDate)}</p>
+              <p className="text-sm">Date: {formatDate(safeInvoice.date)}</p>
+              <p className="text-sm">Due Date: {formatDate(safeInvoice.dueDate)}</p>
             </div>
             
             <div>
               <h3 className="font-semibold mb-2">Amount</h3>
-              <p className="text-xl font-bold">{formatCurrency(invoice.total)}</p>
+              <p className="text-xl font-bold">{formatCurrency(safeInvoice.total)}</p>
             </div>
           </div>
         </div>
@@ -133,7 +139,7 @@ const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {invoice.items.map((item, index) => (
+                {safeInvoice.items.map((item, index) => (
                   <tr key={index} className="border-b">
                     <td className="px-4 py-2">{item.description}</td>
                     <td className="px-4 py-2 text-right">{item.quantity}</td>
@@ -145,27 +151,27 @@ const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
               <tfoot className="font-medium">
                 <tr>
                   <td colSpan={3} className="px-4 py-2 text-right">Subtotal:</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(calculateSubtotal(invoice.items))}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(calculateSubtotal(safeInvoice.items))}</td>
                 </tr>
-                {invoice.vatRate > 0 && (
+                {safeInvoice.vatRate > 0 && (
                   <tr>
-                    <td colSpan={3} className="px-4 py-2 text-right">VAT ({invoice.vatRate}%):</td>
-                    <td className="px-4 py-2 text-right">{formatCurrency(calculateVat(invoice.items, invoice.vatRate))}</td>
+                    <td colSpan={3} className="px-4 py-2 text-right">VAT ({safeInvoice.vatRate}%):</td>
+                    <td className="px-4 py-2 text-right">{formatCurrency(calculateVat(safeInvoice.items, safeInvoice.vatRate))}</td>
                   </tr>
                 )}
                 <tr className="font-bold">
                   <td colSpan={3} className="px-4 py-2 text-right">Total:</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(invoice.total)}</td>
+                  <td className="px-4 py-2 text-right">{formatCurrency(safeInvoice.total)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         </div>
         
-        {invoice.notes && (
+        {safeInvoice.notes && (
           <div className="mt-4">
             <h3 className="font-semibold mb-2">Notes</h3>
-            <p className="text-sm whitespace-pre-line">{invoice.notes}</p>
+            <p className="text-sm whitespace-pre-line">{safeInvoice.notes}</p>
           </div>
         )}
         

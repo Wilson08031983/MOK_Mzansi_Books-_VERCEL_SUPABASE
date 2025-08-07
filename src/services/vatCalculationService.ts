@@ -51,6 +51,12 @@ class VATCalculationService {
   private readonly VAT_RETURNS_KEY = 'vat201_returns';
   private readonly SLIP_VAT_EXTRACTIONS_KEY = 'slip_vat_extractions';
   private readonly STANDARD_VAT_RATE = 0.15; // 15% VAT rate for South Africa
+  private readonly ZERO_VAT_RATE = 0.0; // 0%
+
+  // Helper method to calculate invoice subtotal from items
+  private calculateInvoiceSubtotal(items: any[]): number {
+    return items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  }
 
   public static getInstance(): VATCalculationService {
     if (!VATCalculationService.instance) {
@@ -69,15 +75,38 @@ class VATCalculationService {
     try {
       // Get paid invoices VAT
       const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-      invoicesVAT = invoices
-        .filter((invoice: any) => {
-          const invoiceDate = new Date(invoice.date);
-          return invoice.status === 'paid' && invoiceDate >= start && invoiceDate <= end;
-        })
-        .reduce((total: number, invoice: any) => {
-          const vatAmount = (invoice.total || 0) * (invoice.vatRate || this.STANDARD_VAT_RATE);
-          return total + vatAmount;
-        }, 0);
+      console.log('Debug - All invoices:', invoices);
+      
+      const filteredInvoices = invoices.filter((invoice: any) => {
+        const invoiceDate = new Date(invoice.date || invoice.invoiceDate);
+        const isValidStatus = invoice.status !== 'draft' && invoice.status !== 'cancelled';
+        const isInDateRange = invoiceDate >= start && invoiceDate <= end;
+        console.log(`Debug - Invoice ${invoice.id}: status=${invoice.status}, date=${invoice.date || invoice.invoiceDate}, validStatus=${isValidStatus}, inRange=${isInDateRange}`);
+        return isValidStatus && isInDateRange;
+      });
+      
+      console.log('Debug - Filtered invoices:', filteredInvoices);
+      
+      invoicesVAT = filteredInvoices.reduce((total: number, invoice: any) => {
+        // Use vatTotal if available, otherwise calculate from subtotal and vatRate
+        let vatAmount = 0;
+        if (invoice.vatTotal !== undefined) {
+          vatAmount = invoice.vatTotal;
+          console.log(`Debug - Using vatTotal for invoice ${invoice.id}: ${vatAmount}`);
+        } else if (invoice.subtotal !== undefined && invoice.vatRate !== undefined) {
+          vatAmount = invoice.subtotal * (invoice.vatRate / 100);
+          console.log(`Debug - Calculated from subtotal for invoice ${invoice.id}: ${invoice.subtotal} * ${invoice.vatRate}% = ${vatAmount}`);
+        } else if (invoice.items && Array.isArray(invoice.items)) {
+          // Calculate from items if subtotal not available
+          const subtotal = this.calculateInvoiceSubtotal(invoice.items);
+          vatAmount = subtotal * ((invoice.vatRate || this.STANDARD_VAT_RATE * 100) / 100);
+          console.log(`Debug - Calculated from items for invoice ${invoice.id}: ${subtotal} * ${invoice.vatRate || this.STANDARD_VAT_RATE * 100}% = ${vatAmount}`);
+        }
+        console.log(`Debug - Adding VAT amount ${vatAmount} to total ${total}`);
+        return total + vatAmount;
+      }, 0);
+      
+      console.log('Debug - Final invoices VAT:', invoicesVAT);
 
       // Get sales VAT from inventory
       const sales = JSON.parse(localStorage.getItem('sales') || '[]');
@@ -183,8 +212,15 @@ class VATCalculationService {
       endDate,
       totalSales: vatInput.invoices / this.STANDARD_VAT_RATE + vatInput.sales / this.STANDARD_VAT_RATE,
       totalPurchases: vatOutput.expenses / this.STANDARD_VAT_RATE,
-      outputVAT: vatInput,
-      inputVAT: vatOutput,
+      outputVAT: {
+        invoices: vatInput.invoices,
+        sales: vatInput.sales,
+        total: vatInput.total
+      },
+      inputVAT: {
+        expenses: vatOutput.expenses,
+        total: vatOutput.total
+      },
       netVAT,
       vatPayable: netVAT > 0 ? netVAT : 0,
       vatRefund: netVAT < 0 ? Math.abs(netVAT) : 0,

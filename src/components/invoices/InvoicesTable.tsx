@@ -39,7 +39,7 @@ import type { Invoice, InvoiceStatus } from '@/types/invoice';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { toast } from 'sonner';
 
-type SortField = 'number' | 'client' | 'date' | 'amount' | 'status';
+type SortField = 'number' | 'client' | 'date' | 'amount' | 'vat' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 interface InvoicesTableProps {
@@ -211,6 +211,15 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                     </div>
                   </th>
                   <th 
+                    className="text-right p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    onClick={() => onSort('vat')}
+                  >
+                    <div className="flex items-center justify-end gap-2">
+                      VAT Amount
+                      <SortIcon field="vat" />
+                    </div>
+                  </th>
+                  <th 
                     className="text-center p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('status')}
                   >
@@ -245,13 +254,16 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                         {invoice.number}
                       </td>
                       <td className="p-4 text-slate-700 font-sf-pro">
-                        {invoice.client}
+                        {invoice.clientName}
                       </td>
                       <td className="p-4 text-slate-700 text-right font-sf-pro whitespace-nowrap">
                         {formatDate(invoice.date)}
                       </td>
                       <td className="p-4 text-slate-900 font-medium text-right font-sf-pro whitespace-nowrap">
                         {formatCurrency(invoice.amount, invoice.currency || 'ZAR')}
+                      </td>
+                      <td className="p-4 text-slate-700 text-right font-sf-pro whitespace-nowrap">
+                        {formatCurrency(invoice.vatTotal || 0, invoice.currency || 'ZAR')}
                       </td>
                       <td className="p-4">
                         <div className="flex justify-center">

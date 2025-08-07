@@ -131,10 +131,10 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
   }, [clients]);
 
   // Initialize form with useCallback to prevent recreation on every render
-  const initializeForm = useCallback(async () => {
+  const initializeForm = useCallback(() => {
     try {
       if (!editingInvoice) {
-        const newInvoiceNumber = await generateInvoiceNumber();
+        const newInvoiceNumber = generateInvoiceNumber();
         setFormData(prev => ({
           ...prev,
           invoiceNumber: newInvoiceNumber
@@ -180,11 +180,24 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
     }
   }, [editingInvoice, items.length, addItem]);
 
+  // Generate fresh invoice number when modal is opened
+  useEffect(() => {
+    if (isOpen && !editingInvoice) {
+      // Generate a fresh invoice number each time the modal is opened for a new invoice
+      const freshInvoiceNumber = generateInvoiceNumber();
+      console.log('Modal opened: Generated fresh invoice number:', freshInvoiceNumber);
+      setFormData(prev => ({
+        ...prev,
+        invoiceNumber: freshInvoiceNumber
+      }));
+    }
+  }, [isOpen, editingInvoice]);
+
   // Load clients and initialize form on mount
   useEffect(() => {
     const init = async () => {
       await loadClients();
-      await initializeForm();
+      initializeForm();
     };
     
     init();
@@ -321,30 +334,47 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
       // Calculate totals for the current items
       const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
       
+      const clientName = selectedClient?.companyName || `${selectedClient?.firstName} ${selectedClient?.lastName}`.trim() || 'Unknown Client';
+      
       // Prepare invoice data according to the Invoice type
       const invoiceData: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'> = {
         number: formData.invoiceNumber,
+        client: formData.clientId,
         clientId: formData.clientId,
+        clientName: clientName,
+        clientEmail: selectedClient?.email || '',
         date: formData.invoiceDate,
+        invoiceDate: formData.invoiceDate,
         dueDate: formData.dueDate || '',
-        reference: formData.reference || '',
-        notes: formData.notes || '',
-        terms: formData.terms || 'Payment due within 30 days of invoice date.',
+        amount: total,
+        subtotal,
+        vatTotal: vatAmount,
+        total,
+        paidAmount: 0,
+        balance: total,
         status: 'draft',
+        currency: 'ZAR',
         vatRate: Number(formData.vatRate) || 15,
-        items: items.map(item => ({
+        reference: formData.reference || '',
+        project: '',
+        salesperson: '',
+        salespersonId: '',
+        tags: [],
+        items: items.map((item) => ({
           id: item.id,
           itemNo: item.itemNo,
           description: item.description,
           quantity: Number(item.quantity) || 0,
           rate: Number(item.rate) || 0,
+          unitPrice: Number(item.rate) || 0,
           markupPercent: Number(item.markupPercent) || 0,
           discount: Number(item.discount) || 0,
-          amount: Number(item.amount) || 0
+          amount: Number(item.amount) || 0,
+          taxRate: 0,
+          taxAmount: 0
         })),
-        subtotal,
-        vatAmount,
-        total
+        notes: formData.notes || '',
+        terms: formData.terms || 'Payment due within 30 days of invoice date.'
       };
       
       // Call the onSave callback

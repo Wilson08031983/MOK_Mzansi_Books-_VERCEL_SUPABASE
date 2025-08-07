@@ -1,6 +1,6 @@
-import { safeLocalStorage } from '@/utils/safeAccess';
+import { safeLocalStorage, safeString, safeGet } from '@/utils/safeAccess';
 import { withCrashPrevention } from '@/utils/crashPrevention';
-import { Invoice, InvoiceInput, InvoiceResponse, InvoiceItem } from '@/types/invoice';
+import { Invoice, InvoiceInput, InvoiceResponse, InvoiceItem, InvoiceStatus } from '@/types/invoice';
 
 // Define a type for the client object that can be either string or object
 type ClientRef = string | { id: string; name: string; email?: string };
@@ -12,37 +12,50 @@ const mapToInvoice = (data: InvoiceInput, existingInvoice?: Invoice): InvoiceRes
   // Handle client data with proper typing
   const clientId = typeof data.client === 'string' 
     ? data.client 
-    : data.client?.id || '';
+    : (data.client as any)?.id || '';
   
   const clientName = typeof data.client === 'string' 
-    ? (data as { clientName?: string }).clientName || ''
-    : data.client?.name || '';
+    ? (data as any).clientName || 'Unknown Client'
+    : (data.client as any)?.name || 'Unknown Client';
   
   // Map items with proper typing
   const items: InvoiceItem[] = data.items.map((item, index) => {
-    const unitPrice = (item as InvoiceItem & { unitPrice?: number }).unitPrice || item.rate || 0;
-    const quantity = item.quantity || 0;
-    const discount = item.discount || 0;
+    const baseItem = item as any;
+    const unitPrice = baseItem.unitPrice || baseItem.rate || 0;
+    const quantity = baseItem.quantity || 0;
+    const discount = baseItem.discount || 0;
+    const markupPercent = baseItem.markupPercent || 0;
+    const taxRate = baseItem.taxRate || 0;
     const amount = quantity * unitPrice * (1 - discount / 100);
+    const taxAmount = amount * (taxRate / 100);
     
     return {
-      ...item,
-      id: item.id || `item-${Date.now()}-${index}`,
+      id: baseItem.id || `item-${Date.now()}-${index}`,
       itemNo: index + 1,
+      description: baseItem.description || '',
+      quantity,
       rate: unitPrice,
+      unitPrice,
+      markupPercent,
+      discount,
       amount,
+      taxRate,
+      taxAmount,
     };
   });
   
   // Calculate totals
-  const amount = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const subtotal = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const vatRate = data.vatRate || 0;
+  const vatTotal = subtotal * (vatRate / 100);
+  const amount = subtotal + vatTotal;
   const paidAmount = existingInvoice?.paidAmount || 0;
   
-  // Build the invoice response
+  // Build the invoice response with all required properties
   const invoice: InvoiceResponse = {
-    ...data,
     id: existingInvoice?.id || generateInvoiceId(),
-    client: clientId,
+    number: data.number || generateInvoiceNumber(),
+    client: clientName,
     clientId,
     clientName,
     clientEmail: data.clientEmail || '',
@@ -50,6 +63,8 @@ const mapToInvoice = (data: InvoiceInput, existingInvoice?: Invoice): InvoiceRes
     invoiceDate: data.date,
     dueDate: data.dueDate,
     amount,
+    subtotal,
+    vatTotal,
     total: amount,
     paidAmount,
     balance: amount - paidAmount,
@@ -57,10 +72,16 @@ const mapToInvoice = (data: InvoiceInput, existingInvoice?: Invoice): InvoiceRes
     currency: data.currency || 'ZAR',
     vatRate: data.vatRate || 0,
     reference: data.reference || '',
-    terms: data.terms || '',
+    project: data.project,
+    salesperson: data.salesperson,
+    salespersonId: data.salespersonId,
+    tags: data.tags,
     items,
+    notes: data.notes,
+    terms: data.terms || '',
     createdAt: existingInvoice?.createdAt || now,
     updatedAt: now,
+    companyDetails: data.companyDetails,
   };
   
   return invoice;
@@ -71,14 +92,29 @@ const STORAGE_KEY = 'invoices';
 // Get all invoices from localStorage
 export const getInvoices = withCrashPrevention((): InvoiceResponse[] => {
   try {
-    const invoicesData = safeLocalStorage.getItem(STORAGE_KEY);
+    const invoicesData = safeLocalStorage.getItem(STORAGE_KEY, null);
     if (!invoicesData) {
       return [];
     }
     
-    return JSON.parse(invoicesData) as InvoiceResponse[];
+    // Check if data is corrupted (contains '[object Object]')
+    if (typeof invoicesData === 'string' && invoicesData.includes('[object Object]')) {
+      console.warn('Corrupted invoice data detected, clearing localStorage');
+      safeLocalStorage.removeItem(STORAGE_KEY);
+      return [];
+    }
+    
+    // If data is already parsed by safeLocalStorage, return it
+    if (Array.isArray(invoicesData)) {
+      return invoicesData as InvoiceResponse[];
+    }
+    
+    // Otherwise try to parse it
+    return JSON.parse(invoicesData as string) as InvoiceResponse[];
   } catch (error) {
     console.error('Error loading invoices:', error);
+    // Clear corrupted data
+    safeLocalStorage.removeItem(STORAGE_KEY);
     return [];
   }
 }, []);
@@ -139,10 +175,45 @@ export const updateInvoice = withCrashPrevention(async (id: string, updates: Par
   
   if (!existingInvoice) return null;
   
-  const updatedInvoice = mapToInvoice(
-    { ...existingInvoice, ...updates } as InvoiceInput, 
-    existingInvoice
-  );
+  // Create a proper InvoiceInput object from existing invoice and updates
+  const invoiceInput: InvoiceInput = {
+    client: updates.client || existingInvoice.clientId || existingInvoice.client as string,
+    number: updates.number || existingInvoice.number,
+    date: updates.date || existingInvoice.date,
+    dueDate: updates.dueDate || existingInvoice.dueDate,
+    amount: updates.amount || existingInvoice.amount,
+    total: updates.total || existingInvoice.total,
+    paidAmount: updates.paidAmount || existingInvoice.paidAmount,
+    status: updates.status || existingInvoice.status,
+    currency: updates.currency || existingInvoice.currency,
+    vatRate: updates.vatRate || existingInvoice.vatRate,
+    reference: updates.reference || existingInvoice.reference,
+    project: updates.project || existingInvoice.project,
+    salesperson: updates.salesperson || existingInvoice.salesperson,
+    salespersonId: updates.salespersonId || existingInvoice.salespersonId,
+    tags: updates.tags || existingInvoice.tags,
+    items: updates.items || existingInvoice.items.map(item => ({
+       id: item.id || `item-${Date.now()}-${Math.random()}`,
+       itemNo: item.itemNo || 1,
+       description: item.description,
+       quantity: item.quantity,
+       unitPrice: item.unitPrice || item.rate,
+       rate: item.rate,
+       amount: item.amount || (item.quantity * item.rate),
+       markupPercent: item.markupPercent,
+       discount: item.discount,
+       taxRate: item.taxRate,
+       taxAmount: item.taxAmount || ((item.quantity * item.rate) * (item.taxRate / 100)),
+     })),
+    notes: updates.notes || existingInvoice.notes,
+    terms: updates.terms || existingInvoice.terms,
+    clientEmail: updates.clientEmail || existingInvoice.clientEmail,
+    subtotal: updates.subtotal || existingInvoice.subtotal,
+    vatTotal: updates.vatTotal || existingInvoice.vatTotal,
+    companyDetails: updates.companyDetails || existingInvoice.companyDetails,
+  };
+  
+  const updatedInvoice = mapToInvoice(invoiceInput, existingInvoice);
   
   const updatedInvoices = invoices.map(inv => 
     inv.id === id ? updatedInvoice : inv
@@ -175,22 +246,37 @@ export const generateInvoiceNumber = withCrashPrevention((): string => {
   
   // Find the highest invoice number for the current year
   const currentYearInvoices = invoices.filter(invoice => {
-    const invoiceYear = new Date(invoice.createdAt).getFullYear();
-    return invoiceYear === currentYear;
+    // Check if the invoice number contains the current year
+    return invoice.number && invoice.number.includes(`-${currentYear}-`);
   });
   
-  const highestNumber = currentYearInvoices.reduce((max, invoice) => {
-    const match = invoice.number.match(/INV-(\d{4})-(\d{3})/);
-    if (match) {
-      const number = parseInt(match[2], 10);
-      return Math.max(max, number);
-    }
-    return max;
-  }, 0);
+  // Default to 0 if no invoices found for current year
+  if (currentYearInvoices.length === 0) {
+    return `INV-${currentYear}-001`;
+  }
   
+  // Find the highest invoice number
+  let highestNumber = 0;
+  
+  currentYearInvoices.forEach(invoice => {
+    // Extract the numeric part from the invoice number
+    const match = invoice.number.match(/INV-\d{4}-(\d{3,})/);
+    if (match && match[1]) {
+      const number = parseInt(match[1], 10);
+      if (!isNaN(number) && number > highestNumber) {
+        highestNumber = number;
+      }
+    }
+  });
+  
+  // Increment the highest number and pad with zeros
   const nextNumber = (highestNumber + 1).toString().padStart(3, '0');
   return `INV-${currentYear}-${nextNumber}`;
-}, 'INV-2025-001');
+}, () => {
+  // Dynamic fallback that includes current year instead of hardcoded year
+  const currentYear = new Date().getFullYear();
+  return `INV-${currentYear}-001`;
+});
 
 // Calculate invoice totals
 export const calculateInvoiceTotals = withCrashPrevention((items: InvoiceItem[]) => {
@@ -259,11 +345,11 @@ export const getInvoiceStats = withCrashPrevention(() => {
 // Create invoice template with company details
 export const createInvoiceTemplate = withCrashPrevention((invoiceData: Partial<Invoice>): Invoice => {
   try {
-    const companyDetailsData = safeLocalStorage.getItem('companyDetails');
+    const companyDetailsData = safeLocalStorage.getItem('companyDetails', null);
     let companyDetails = null;
     
     if (companyDetailsData) {
-      const parsed = JSON.parse(companyDetailsData);
+      const parsed = typeof companyDetailsData === 'string' ? JSON.parse(companyDetailsData) : companyDetailsData;
       companyDetails = {
         name: safeString(safeGet(parsed, 'name', '')),
         address: safeString(safeGet(parsed, 'address', '')),
@@ -281,14 +367,20 @@ export const createInvoiceTemplate = withCrashPrevention((invoiceData: Partial<I
       number: generateInvoiceNumber(),
       client: '',
       clientId: '',
+      clientName: '',
       clientEmail: '',
       date: new Date().toISOString().split('T')[0],
+      invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
       amount: 0,
+      subtotal: 0,
+      vatTotal: 0,
+      total: 0,
       paidAmount: 0,
       balance: 0,
       status: 'draft' as InvoiceStatus,
       currency: 'ZAR',
+      vatRate: 0,
       reference: '',
       project: '',
       salesperson: '',
@@ -335,12 +427,12 @@ export const saveInvoice = withCrashPrevention((invoice: Invoice): Invoice[] => 
 }, []);
 
 // Update invoice status
-export const updateInvoiceStatus = withCrashPrevention((id: string, status: InvoiceStatus): Invoice | null => {
+export const updateInvoiceStatus = withCrashPrevention((id: string, status: InvoiceStatus): Promise<InvoiceResponse | null> => {
   return updateInvoice(id, { status });
-}, null);
+}, () => Promise.resolve(null));
 
 // Record payment for an invoice
-export const recordPayment = withCrashPrevention((id: string, paymentAmount: number): Invoice | null => {
+export const recordPayment = withCrashPrevention(async (id: string, paymentAmount: number): Promise<InvoiceResponse | null> => {
   const invoice = getInvoiceById(id);
   if (!invoice) return null;
   
@@ -354,12 +446,11 @@ export const recordPayment = withCrashPrevention((id: string, paymentAmount: num
     newStatus = 'partial';
   }
   
-  return updateInvoice(id, {
+  return await updateInvoice(id, {
     paidAmount: newPaidAmount,
-    balance: newBalance,
     status: newStatus
   });
-}, null);
+}, () => Promise.resolve(null));
 
 // Export invoice data for backup
 export const exportInvoices = withCrashPrevention((): string => {
