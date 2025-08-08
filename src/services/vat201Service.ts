@@ -94,6 +94,53 @@ export interface VAT201Return {
  * @param endDate End date of the period (YYYY-MM-DD)
  * @returns VAT201Data object with calculated amounts
  */
+// Debug function to test VAT calculation - can be called from browser console
+export const debugVATCalculation = () => {
+  console.log('🔍 [VAT DEBUG] === DEBUGGING VAT CALCULATION ===');
+  
+  // Check localStorage data
+  const invoicesStr = localStorage.getItem('invoices');
+  const incomesStr = localStorage.getItem('incomes');
+  const expensesStr = localStorage.getItem('expenses');
+  
+  console.log('🔍 [VAT DEBUG] LocalStorage contents:');
+  console.log('- invoices exists:', !!invoicesStr);
+  console.log('- incomes exists:', !!incomesStr);
+  console.log('- expenses exists:', !!expensesStr);
+  
+  if (invoicesStr) {
+    const invoices = JSON.parse(invoicesStr);
+    console.log(`🔍 [VAT DEBUG] Found ${invoices.length} invoices`);
+    
+    invoices.forEach((invoice, index) => {
+      console.log(`🔍 [VAT DEBUG] Invoice ${index + 1}:`, {
+        id: invoice.id,
+        number: invoice.number,
+        date: invoice.date,
+        status: invoice.status,
+        vatAmount: invoice.vatAmount,
+        vatTotal: invoice.vatTotal,
+        total: invoice.total
+      });
+    });
+    
+    // Test with current VAT quarter
+    const quarter = getCurrentVATQuarter();
+    console.log('🔍 [VAT DEBUG] Current VAT quarter:', quarter);
+    
+    // Test calculation
+    const result = calculateVAT201(quarter.startDate, quarter.endDate);
+    console.log('🔍 [VAT DEBUG] VAT calculation result:', result);
+  } else {
+    console.log('🔍 [VAT DEBUG] No invoices found in localStorage');
+  }
+};
+
+// Make debug function available globally
+if (typeof window !== 'undefined') {
+  (window as any).debugVATCalculation = debugVATCalculation;
+}
+
 export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT201Data => {
   console.log(`🧮 [VAT201] === STARTING FRESH VAT CALCULATION ===`);
   console.log(`🧮 [VAT201] Period: ${startDateStr} to ${endDateStr}`);
@@ -112,15 +159,27 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
   const invoicesStr = localStorage.getItem('invoices');
   const incomesStr = localStorage.getItem('incomes');
   const expensesStr = localStorage.getItem('expenses');
+  const manualExpensesStr = localStorage.getItem('manual_expenses');
   
   console.log(`🧮 [VAT201] Raw data from localStorage:`);
   console.log(`- invoices: ${invoicesStr ? invoicesStr.substring(0, 100) + '...' : 'null'}`);
   console.log(`- incomes: ${incomesStr ? incomesStr.substring(0, 100) + '...' : 'null'}`);
   console.log(`- expenses: ${expensesStr ? expensesStr.substring(0, 100) + '...' : 'null'}`);
+  console.log(`- manual_expenses: ${manualExpensesStr ? manualExpensesStr.substring(0, 100) + '...' : 'null'}`);
   
   let allInvoices = invoicesStr ? JSON.parse(invoicesStr) : [];
   let allIncomes = incomesStr ? JSON.parse(incomesStr) : [];
   let allExpenses = expensesStr ? JSON.parse(expensesStr) : [];
+  let manualExpenses = manualExpensesStr ? JSON.parse(manualExpensesStr) : [];
+  
+  // Combine both expense sources
+  allExpenses = [...allExpenses, ...manualExpenses];
+  console.log(`🧮 [VAT201] Combined expenses: ${allExpenses.length} (${expensesStr ? JSON.parse(expensesStr).length : 0} from 'expenses' + ${manualExpenses.length} from 'manual_expenses')`);
+  
+  // Debug expense sources
+  allExpenses.forEach((expense, index) => {
+    console.log(`🧮 [VAT201] Expense ${index + 1}: ID=${expense.id}, Date=${expense.date}, Amount=${expense.amount}, HasReceipt=${expense.hasReceipt}, Source=${expense.source || 'unknown'}`);
+  });
   
   // Use real data from the application - no sample data creation
   console.log(`🧮 [VAT201] Using real application data for VAT calculation.`);
@@ -135,6 +194,42 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
   console.log(`🧮 [VAT201] Start Date Object: ${start.toISOString()}`);
   console.log(`🧮 [VAT201] End Date Object: ${end.toISOString()}`);
   console.log(`🧮 [VAT201] Calculation timestamp: ${new Date().toISOString()}`);
+  
+  // Debug: Log all invoice data to understand structure
+  if (allInvoices.length > 0) {
+    console.log(`🧮 [VAT201] === INVOICE DEBUG INFO ===`);
+    
+    // Count invoices by status
+    const statusCounts = {};
+    allInvoices.forEach(invoice => {
+      const status = invoice.status || 'undefined';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    console.log(`🧮 [VAT201] Invoice status counts:`, statusCounts);
+    
+    allInvoices.forEach((invoice, index) => {
+      console.log(`🧮 [VAT201] Invoice ${index + 1}:`, {
+        id: invoice.id,
+        number: invoice.number,
+        date: invoice.date,
+        status: invoice.status,
+        vatAmount: invoice.vatAmount,
+        vatTotal: invoice.vatTotal,
+        total: invoice.total,
+        subtotal: invoice.subtotal
+      });
+    });
+    console.log(`🧮 [VAT201] === END INVOICE DEBUG ===`);
+  }
+  
+  // Check invoice statuses for VAT calculation
+  const validInvoicesForVAT = allInvoices.filter(inv => inv.status && inv.status !== 'cancelled' && inv.status !== 'void');
+  console.log(`🧮 [VAT201] Found ${validInvoicesForVAT.length} valid invoices for VAT calculation out of ${allInvoices.length} total`);
+  
+  if (validInvoicesForVAT.length === 0 && allInvoices.length > 0) {
+    console.log(`⚠️ [VAT201] WARNING: No valid invoices found for VAT calculation (excluding cancelled/void).`);
+    console.log(`⚠️ [VAT201] Available statuses:`, [...new Set(allInvoices.map(inv => inv.status))]);
+  }
   
   // Filter real invoices for the period (only paid invoices within the VAT period)
   const validInvoices = allInvoices.filter(invoice => {
@@ -172,9 +267,10 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
     const startNoTime = new Date(start.getFullYear(), start.getMonth(), start.getDate());
     const endNoTime = new Date(end.getFullYear(), end.getMonth(), end.getDate());
     
-    // Check if invoice date is within period and status is paid
+    // Check if invoice date is within period
+    // Note: SA VAT law requires VAT to be declared when invoice is issued (tax point), not when paid
     const isInPeriod = invoiceDateNoTime >= startNoTime && invoiceDateNoTime <= endNoTime;
-    const isPaid = invoice.status === 'paid';
+    const isValidInvoice = invoice.status && invoice.status !== 'cancelled' && invoice.status !== 'void';
     
     // Debug logging for real invoices
     console.log(`🧮 [VAT201] Real Invoice ${invoice.number || invoice.id}:`);
@@ -183,15 +279,25 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
     console.log(`  - Date for comparison: ${invoiceDateNoTime.toISOString().split('T')[0]}`);
     console.log(`  - Period: ${startNoTime.toISOString().split('T')[0]} to ${endNoTime.toISOString().split('T')[0]}`);
     console.log(`  - In period: ${isInPeriod}`);
-    console.log(`  - Is paid: ${isPaid}`);
+    console.log(`  - Status: ${invoice.status}`);
+    console.log(`  - Is valid: ${isValidInvoice}`);
     console.log(`  - VAT amount: ${invoice.vatAmount || invoice.vatTotal || 0}`);
     
-    if (isInPeriod && isPaid) {
+    if (isInPeriod && isValidInvoice) {
       console.log(`🧮 [VAT201] ✅ Valid real invoice ${invoice.number || invoice.id}: VAT R${invoice.vatAmount || invoice.vatTotal || 0}`);
     }
     
-    return isInPeriod && isPaid;
+    return isInPeriod && isValidInvoice;
   });
+  
+  // Debug: Log filtered results
+  console.log(`🧮 [VAT201] === FILTERING RESULTS ===`);
+  console.log(`🧮 [VAT201] Total invoices: ${allInvoices.length}`);
+  console.log(`🧮 [VAT201] Valid invoices (paid & in period): ${validInvoices.length}`);
+  if (validInvoices.length > 0) {
+    console.log(`🧮 [VAT201] Valid invoice IDs:`, validInvoices.map(inv => inv.id || inv.number));
+  }
+  console.log(`🧮 [VAT201] === END FILTERING RESULTS ===`);
   
   // Calculate VAT from invoices
   const invoiceVATTotal = validInvoices.reduce((total, invoice) => {
@@ -366,8 +472,11 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
     // Check if expense date is within period
     const isInPeriod = expenseDateNoTime >= startNoTime && expenseDateNoTime <= endNoTime;
     
-    // Only include expenses with receipts (for VAT claims)
-    const hasReceipt = expense.hasReceipt === true;
+    // Check for receipts in multiple ways (for VAT claims)
+    const hasReceiptFlag = expense.hasReceipt === true;
+    const hasReceiptFile = expense.receipt && expense.receipt.length > 0;
+    const hasOCRReceipt = slipOCRService.getReceiptData(expense.id) !== null;
+    const hasReceipt = hasReceiptFlag || hasReceiptFile || hasOCRReceipt;
     
     // Debug logging for real expenses
     console.log(`🧮 [VAT201] Real Expense ${expense.id}:`);
@@ -376,12 +485,17 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
     console.log(`  - Date for comparison: ${expenseDateNoTime.toISOString().split('T')[0]}`);
     console.log(`  - Period: ${startNoTime.toISOString().split('T')[0]} to ${endNoTime.toISOString().split('T')[0]}`);
     console.log(`  - In period: ${isInPeriod}`);
-    console.log(`  - Has receipt: ${hasReceipt}`);
+    console.log(`  - Has receipt flag: ${hasReceiptFlag}`);
+    console.log(`  - Has receipt file: ${hasReceiptFile}`);
+    console.log(`  - Has OCR receipt: ${hasOCRReceipt}`);
+    console.log(`  - Final has receipt: ${hasReceipt}`);
     console.log(`  - Amount: ${expense.amount}`);
     console.log(`  - VAT amount: ${expense.vatAmount || 'N/A (will calculate from amount)'}`);
     
     if (isInPeriod && hasReceipt) {
       console.log(`🧮 [VAT201] ✅ Valid real expense with receipt ${expense.id}: Amount R${expense.amount}`);
+    } else if (isInPeriod && !hasReceipt) {
+      console.log(`🧮 [VAT201] ❌ Expense ${expense.id} in period but no receipt found`);
     }
     
     return isInPeriod && hasReceipt;

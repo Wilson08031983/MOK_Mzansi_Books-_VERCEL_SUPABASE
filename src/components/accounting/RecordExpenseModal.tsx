@@ -93,6 +93,7 @@ const RecordExpenseModal: React.FC<RecordExpenseModalProps> = ({
   const [receiptPreview, setReceiptPreview] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [amountDisplayValue, setAmountDisplayValue] = useState<string>('');
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -108,6 +109,7 @@ const RecordExpenseModal: React.FC<RecordExpenseModalProps> = ({
       setReceiptFile(null);
       setReceiptPreview('');
       setErrors({});
+      setAmountDisplayValue('');
     }
   }, [isOpen]);
 
@@ -242,13 +244,46 @@ const RecordExpenseModal: React.FC<RecordExpenseModalProps> = ({
   };
 
   /**
-   * Format amount input
+   * Handle ZAR amount input - supports both . and , as decimal separators
    */
-  const formatAmount = (value: string) => {
-    // Remove non-numeric characters except decimal point
-    const numericValue = value.replace(/[^0-9.]/g, '');
-    const amount = parseFloat(numericValue) || 0;
-    setFormData(prev => ({ ...prev, amount }));
+  const handleAmountChange = (value: string) => {
+    // Store the raw display value for user input
+    setAmountDisplayValue(value);
+    
+    // Remove R prefix and spaces for processing
+    let cleanValue = value.replace(/^R\s*/, '').trim();
+    
+    // Allow digits, decimal points, and commas
+    cleanValue = cleanValue.replace(/[^0-9.,]/g, '');
+    
+    // Handle empty input
+    if (!cleanValue) {
+      setFormData(prev => ({ ...prev, amount: 0 }));
+      return;
+    }
+    
+    // Convert comma to period for parsing (South African format support)
+    let normalizedValue = cleanValue;
+    if (cleanValue.includes(',')) {
+      // Handle comma as decimal separator
+      normalizedValue = cleanValue.replace(',', '.');
+    }
+    
+    // Ensure only one decimal separator
+    const decimalParts = normalizedValue.split('.');
+    if (decimalParts.length > 2) {
+      normalizedValue = decimalParts[0] + '.' + decimalParts.slice(1).join('');
+    }
+    
+    // Parse the numeric value
+    const numericAmount = parseFloat(normalizedValue);
+    
+    // Update form data with valid number or 0
+    if (!isNaN(numericAmount) && numericAmount >= 0) {
+      setFormData(prev => ({ ...prev, amount: numericAmount }));
+    } else {
+      setFormData(prev => ({ ...prev, amount: 0 }));
+    }
   };
 
   return (
@@ -381,9 +416,9 @@ const RecordExpenseModal: React.FC<RecordExpenseModalProps> = ({
                 <Input
                   id="amount"
                   type="text"
-                  placeholder="0.00"
-                  value={formData.amount > 0 ? formData.amount.toString() : ''}
-                  onChange={(e) => formatAmount(e.target.value)}
+                  placeholder="598.71 or 598,71"
+                  value={amountDisplayValue}
+                  onChange={(e) => handleAmountChange(e.target.value)}
                   className={`pl-8 bg-slate-800/50 border-slate-600 text-white placeholder-slate-400 font-sf-pro ${
                     errors.amount ? 'border-red-500' : 'focus:border-mokm-blue-400'
                   }`}
@@ -458,6 +493,8 @@ const RecordExpenseModal: React.FC<RecordExpenseModalProps> = ({
                   onVATExtracted={(extraction) => {
                     // Auto-fill amount if VAT was extracted
                     if (extraction.totalAmount > 0) {
+                      const amountStr = extraction.totalAmount.toString();
+                      setAmountDisplayValue(amountStr);
                       setFormData(prev => ({
                         ...prev,
                         amount: extraction.totalAmount

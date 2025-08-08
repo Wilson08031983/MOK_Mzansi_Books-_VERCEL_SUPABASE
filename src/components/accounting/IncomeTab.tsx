@@ -182,8 +182,8 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
   const filteredIncomes = incomes
     .filter(income => {
       const matchesSearch = 
-        income.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        income.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (income.description && income.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (income.id && income.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (income.project && income.project.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (income.client && income.client.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (income.invoiceNumber && income.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()));

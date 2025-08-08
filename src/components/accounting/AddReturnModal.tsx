@@ -219,68 +219,11 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       localStorage.removeItem('vatCache');
       localStorage.removeItem('calculationCache');
       
-      // Create test data if no invoices exist
+      // Use only real data - no sample data creation
+      console.log(`🔍 [AddReturnModal] Using only real data from localStorage for VAT calculation`);
+      
       if (!localStorageInvoices || JSON.parse(localStorageInvoices).length === 0) {
-        console.log(`🔍 [AddReturnModal] No invoices found, creating test data`);
-        
-        // Get current year and month for the test data
-        const currentYear = new Date().getFullYear();
-        const currentMonth = new Date().getMonth();
-        
-        // Create sample invoice in the current period
-        const sampleInvoices = [
-          {
-            id: 'test-inv-1',
-            number: 'INV-001',
-            date: new Date(currentYear, currentMonth, 15).toISOString(),
-            status: 'paid',
-            total: 1150,
-            subtotal: 1000,
-            vatTotal: 150,
-            vatAmount: 150,
-            customer: { name: 'Test Customer' }
-          },
-          {
-            id: 'test-inv-2',
-            number: 'INV-002',
-            date: new Date(currentYear, currentMonth, 20).toISOString(),
-            status: 'paid',
-            total: 2300,
-            subtotal: 2000,
-            vatTotal: 300,
-            vatAmount: 300,
-            customer: { name: 'Test Customer 2' }
-          }
-        ];
-        
-        // Create sample sales income
-        const sampleIncomes = [
-          {
-            id: 'test-sale-1',
-            date: new Date(currentYear, currentMonth, 10).toISOString(),
-            amount: 575,
-            notes: 'Auto-generated from sales transaction',
-            vatAmount: 75
-          }
-        ];
-        
-        // Create sample expense with receipt
-        const sampleExpenses = [
-          {
-            id: 'test-expense-1',
-            date: new Date(currentYear, currentMonth, 5).toISOString(),
-            amount: 345,
-            hasReceipt: true,
-            vatAmount: 45
-          }
-        ];
-        
-        // Store test data in localStorage
-        localStorage.setItem('invoices', JSON.stringify(sampleInvoices));
-        localStorage.setItem('incomes', JSON.stringify(sampleIncomes));
-        localStorage.setItem('expenses', JSON.stringify(sampleExpenses));
-        
-        console.log(`🔍 [AddReturnModal] Test data created in localStorage`);
+        console.log(`🔍 [AddReturnModal] No invoices found in localStorage - VAT calculation will use actual data only`);
       }
       
       // Trigger a storage event to ensure all components are aware of the cache clearing
