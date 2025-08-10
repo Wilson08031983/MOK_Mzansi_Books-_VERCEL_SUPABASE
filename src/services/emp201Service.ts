@@ -1,5 +1,6 @@
 import { PayrollCalculation, payrollCalculationService } from './payrollCalculationService';
 import { Employee, getAllEmployees } from './employeeService';
+import { hrAccountingLinkService } from './hrAccountingLinkService';
 
 // South African PAYE/EMP201 Constants for 2024/2025 Tax Year
 const SA_TAX_CONSTANTS = {
@@ -74,6 +75,13 @@ export interface EMP201EmployeeBreakdown {
   // Salary Information
   grossSalary: number;
   taxableIncome: number;
+  rawTaxableIncome?: number; // Original taxable income before adjustments
+  hasNegativeTaxableIncome?: boolean; // Flag for UI warning
+  
+  // Data Quality Warnings
+  missingBaseSalary?: boolean; // Flag when Base Salary is missing or zero
+  missingAttendancePay?: boolean; // Flag when Attendance Pay is missing or zero
+  warningMessage?: string; // Custom warning message for UI display
   
   // PAYE Calculation
   paye: number;
@@ -169,29 +177,96 @@ class EMP201Service {
   }
   
   /**
-   * Get payroll data for a specific period
+   * Get payroll data for a specific period - use the EXACT same data from HR Management
    */
   getPayrollDataForPeriod(period: string): PayrollCalculation[] {
+    console.log(`🔄 [EMP201] Getting HR Management payroll data for period: ${period}`);
+    
     try {
-      const payrollData = localStorage.getItem('payrollCalculations');
-      if (!payrollData) return [];
+      // CRITICAL: Get the exact same payroll data that's displayed in HR Management
+      // This ensures perfect consistency between HR and Accounting modules
       
-      const allPayroll = JSON.parse(payrollData) as PayrollCalculation[];
-      return allPayroll.filter(payroll => payroll.period === period);
+      // First, try to get cached payroll data from HR Management
+      const hrPayrollKey = 'payrollCalculations'; // HR Management cache key
+      const cachedHRPayroll = localStorage.getItem(hrPayrollKey);
+      
+      if (cachedHRPayroll) {
+        const hrPayrollData = JSON.parse(cachedHRPayroll);
+        console.log(`✅ [EMP201] Found HR Management payroll data: ${hrPayrollData.length} employees`);
+        
+        // Log the HR data to verify it matches what's shown in HR Management
+        console.log(`🔍 [EMP201] Verifying employee data mapping:`);
+        hrPayrollData.forEach((payroll: any, index: number) => {
+          console.log(`🔍 [EMP201] Employee ${index + 1}: ${payroll.employeeName} (ID: ${payroll.employeeId})`);
+          console.log(`    Base Salary: R${payroll.baseSalary?.toFixed(2) || 'N/A'}`);
+          console.log(`    Attendance Pay: R${payroll.attendancePay?.toFixed(2) || 'N/A'}`);
+          console.log(`    Gross Salary: R${payroll.grossSalary?.toFixed(2) || 'N/A'}`);
+          console.log(`    Employee ID Verification: ${payroll.employeeId}`);
+        });
+        
+        // Sort by employee name to ensure consistent ordering
+        const sortedPayrollData = hrPayrollData.sort((a: any, b: any) => 
+          a.employeeName.localeCompare(b.employeeName)
+        );
+        
+        console.log(`✅ [EMP201] Sorted payroll data by employee name for consistency`);
+        
+        return sortedPayrollData;
+      }
+      
+      // If no cached HR data, generate fresh data but ensure it matches HR Management calculations
+      console.log(`⚠️ [EMP201] No cached HR payroll data found, generating fresh data...`);
+      const freshPayrollData = payrollCalculationService.calculateAllEmployeesPayroll(period);
+      
+      // Cache this data for consistency
+      localStorage.setItem(hrPayrollKey, JSON.stringify(freshPayrollData));
+      
+      console.log(`✅ [EMP201] Generated and cached fresh payroll data: ${freshPayrollData.length} employees`);
+      
+      // Log the fresh data to verify it's correct
+      freshPayrollData.forEach(payroll => {
+        console.log(`🔍 [EMP201] Fresh payroll - ${payroll.employeeName}:`);
+        console.log(`    Base Salary: R${payroll.baseSalary?.toFixed(2) || 'N/A'}`);
+        console.log(`    Attendance Pay: R${payroll.attendancePay?.toFixed(2) || 'N/A'}`);
+        console.log(`    Gross Salary: R${payroll.grossSalary?.toFixed(2) || 'N/A'}`);
+      });
+      
+      return freshPayrollData;
     } catch (error) {
-      console.error('Error loading payroll data:', error);
+      console.error('❌ [EMP201] Error getting HR Management payroll data:', error);
+      
+      // If all fails, return empty array to avoid using incorrect data
+      console.warn('⚠️ [EMP201] Returning empty array to avoid using incorrect data');
       return [];
     }
   }
   
   /**
    * Calculate EMP201 for a specific period
+   * @param period - The period to calculate for (e.g., "2025-08")
+   * @param selectedEmployeeId - Optional: If provided, only calculate for this specific employee
    */
-  calculateEMP201(period: string): EMP201Calculation {
+  calculateEMP201(period: string, selectedEmployeeId?: string): EMP201Calculation {
     console.log(`🧮 [EMP201] Starting EMP201 calculation for period: ${period}`);
+    if (selectedEmployeeId) {
+      console.log(`🎯 [EMP201] Filtering for specific employee: ${selectedEmployeeId}`);
+    }
     
     // Get payroll data for the period
-    const payrollData = this.getPayrollDataForPeriod(period);
+    let payrollData = this.getPayrollDataForPeriod(period);
+    
+    // Filter for specific employee if requested
+    if (selectedEmployeeId) {
+      const originalCount = payrollData.length;
+      payrollData = payrollData.filter(payroll => payroll.employeeId === selectedEmployeeId);
+      console.log(`🎯 [EMP201] Filtered payroll data: ${originalCount} → ${payrollData.length} employees`);
+      
+      if (payrollData.length === 0) {
+        console.warn(`⚠️ [EMP201] No payroll data found for employee: ${selectedEmployeeId}`);
+      } else {
+        console.log(`✅ [EMP201] Found payroll data for: ${payrollData[0].employeeName} (${payrollData[0].employeeId})`);
+      }
+    }
     console.log(`🧮 [EMP201] Found ${payrollData.length} payroll records for period ${period}`);
     
     if (payrollData.length === 0) {
@@ -213,37 +288,80 @@ class EMP201Service {
     
     // Process each employee's payroll
     for (const payroll of payrollData) {
-      console.log(`🧮 [EMP201] Processing employee: ${payroll.employeeName} (${payroll.employeeId})`);
-      console.log(`🧮 [EMP201] Payroll data - Gross: R${payroll.grossSalary.toFixed(2)}, Net: R${payroll.netSalary.toFixed(2)}`);
+      console.log(`🧮 [EMP201] ===== PROCESSING EMPLOYEE =====`);
+      console.log(`🧮 [EMP201] Employee Name: ${payroll.employeeName}`);
+      console.log(`🧮 [EMP201] Employee ID: ${payroll.employeeId}`);
       
-      const grossSalary = payroll.grossSalary;
-      // Use netSalary from HR Management payroll as taxable income (accounts for days worked)
-      const taxableIncome = payroll.netSalary; // This already accounts for pro-rated salary based on actual working days
+      // CRITICAL: Use HR-Accounting Link Service for proper data mapping
+      // Maps HR Payroll fields to PAYE/EMP201 UI according to requirements:
+      // - Base Salary → Gross Salary (display only)
+      // - Attendance Pay → Taxable Income (used for PAYE calculation)
+      const payeMapping = hrAccountingLinkService.getPAYEDataMapping(payroll.employeeId);
       
-      console.log(`🧮 [EMP201] Using Net Salary as Taxable Income: R${taxableIncome.toFixed(2)} (pro-rated for actual days worked)`);
+      console.log(`🔗 [EMP201] HR-Accounting data mapping for ${payeMapping.employeeName}:`);
+      console.log(`    Gross Salary (from Base Salary): R${payeMapping.grossSalary.toFixed(2)}`);
+      console.log(`    Taxable Income (from Attendance Pay): R${payeMapping.taxableIncome.toFixed(2)}`);
+      console.log(`    Has Valid Data: ${payeMapping.hasValidData}`);
+      console.log(`    Warnings: ${payeMapping.warnings.length}`);
       
-      // Calculate PAYE on the actual taxable income (net salary)
+      // Log any warnings for missing HR data
+      if (payeMapping.warnings.length > 0) {
+        console.warn(`⚠️ [EMP201] HR Data warnings for ${payeMapping.employeeName}:`);
+        payeMapping.warnings.forEach(warning => console.warn(`    - ${warning}`));
+      }
+      
+      // Use mapped values from HR-Accounting Link Service
+      const grossSalary = payeMapping.grossSalary;
+      const rawTaxableIncome = payeMapping.taxableIncome;
+      let taxableIncome = rawTaxableIncome;
+      let hasNegativeTaxableIncome = false;
+      let warningMessage = '';
+      
+      // SAFETY CHECK: If taxableIncome is zero or negative, handle appropriately
+      if (taxableIncome <= 0) {
+        if (taxableIncome < 0) {
+          console.warn(`⚠️ [EMP201] Negative taxable income detected for ${payeMapping.employeeName}: R${taxableIncome.toFixed(2)}`);
+          console.warn(`⚠️ [EMP201] This indicates deductions exceeded attendance pay. Setting PAYE to R0.00.`);
+          hasNegativeTaxableIncome = true;
+          warningMessage = `Taxable income was negative (R${rawTaxableIncome.toFixed(2)}) — set to R0.00. Please review HR deductions.`;
+        } else {
+          console.warn(`⚠️ [EMP201] Zero taxable income for ${payeMapping.employeeName}. PAYE will be R0.00.`);
+          warningMessage = 'Missing Attendance Pay — please review HR attendance data';
+        }
+        taxableIncome = 0; // Set to 0 for PAYE calculation
+      }
+      
+      // Log final values used for calculation
+      console.log(`🔍 [EMP201] Final calculation values for ${payeMapping.employeeName}:`);
+      console.log(`    Gross Salary (from Base Salary): R${grossSalary.toFixed(2)}`);
+      console.log(`    Taxable Income (from Attendance Pay): R${taxableIncome.toFixed(2)}`);
+      console.log(`    Has negative income: ${hasNegativeTaxableIncome}`);
+      console.log(`    Data quality warnings: ${payeMapping.warnings.length}`);
+      
+      // Calculate PAYE on the adjusted taxable income
       const paye = this.calculatePAYE(taxableIncome);
       
       // Calculate UIF on gross salary (as per SARS requirements)
       const uif = this.calculateUIF(grossSalary);
       
-      // Calculate SDL (will be determined based on total payroll)
-      const sdl = 0; // Will be calculated after determining SDL applicability
-      
-      // Create employee breakdown
+      // Create employee breakdown with all calculated values
       const employeeData: EMP201EmployeeBreakdown = {
         employeeId: payroll.employeeId,
-        employeeName: payroll.employeeName,
-        grossSalary,
-        taxableIncome, // Now using net salary from payroll calculations
-        paye,
+        employeeName: payeMapping.employeeName,
+        grossSalary: grossSalary,
+        taxableIncome: taxableIncome, // Adjusted taxable income (0 if negative)
+        rawTaxableIncome: rawTaxableIncome, // Original value for reference
+        hasNegativeTaxableIncome: hasNegativeTaxableIncome, // Warning flag
+        missingBaseSalary: payeMapping.warnings.some(w => w.includes('Base Salary')),
+        missingAttendancePay: payeMapping.warnings.some(w => w.includes('Attendance Pay')),
+        warningMessage: warningMessage || (payeMapping.warnings.length > 0 ? `Warning: ${payeMapping.warnings.join(', ')}` : undefined),
+        paye: paye,
         payeBracket: this.getPAYEBracket(taxableIncome),
         uifSalary: uif.cappedSalary,
         uifEmployee: uif.employee,
         uifEmployer: uif.employer,
         uifTotal: uif.total,
-        sdl: 0, // Will be updated after SDL calculation
+        sdl: 0, // SDL disabled per user request
         totalDeductions: paye + uif.employee, // Employee portion only
         netSalary: taxableIncome - (paye + uif.employee) // Final net after PAYE/UIF deductions
       };
@@ -258,29 +376,16 @@ class EMP201Service {
       totalUIFSalaries += uif.cappedSalary;
       totalGrossSalary += grossSalary;
       
-      console.log(`🧮 [EMP201] Employee ${payroll.employeeName}: PAYE R${paye}, UIF R${uif.total}, Gross R${grossSalary}`);
-    }
-    
-    // Determine SDL applicability
-    const annualPayrollEstimate = this.estimateAnnualPayroll(totalGrossSalary);
-    const isSDLApplicable = annualPayrollEstimate > SA_TAX_CONSTANTS.SDL_ANNUAL_THRESHOLD;
-    
-    console.log(`🧮 [EMP201] Annual payroll estimate: R${annualPayrollEstimate.toLocaleString()}`);
-    console.log(`🧮 [EMP201] SDL applicable: ${isSDLApplicable}`);
-    
-    // Calculate SDL if applicable
-    if (isSDLApplicable) {
-      for (const employee of employeeBreakdown) {
-        employee.sdl = this.calculateSDL(employee.grossSalary, true);
-        employee.totalDeductions += employee.sdl;
-        employee.netSalary -= employee.sdl;
-        totalSDL += employee.sdl;
-        totalSDLSalaries += employee.grossSalary;
-      }
+      console.log(`✅ [EMP201] Employee ${payeMapping.employeeName} processed:`);
+      console.log(`    PAYE: R${paye.toFixed(2)}`);
+      console.log(`    UIF Employee: R${uif.employee.toFixed(2)}`);
+      console.log(`    UIF Employer: R${uif.employer.toFixed(2)}`);
+      console.log(`    Running totals - PAYE: R${totalPAYE.toFixed(2)}, UIF: R${(totalUIFEmployee + totalUIFEmployer).toFixed(2)}`);
     }
     
     const totalUIF = totalUIFEmployee + totalUIFEmployer;
-    const totalEMP201Amount = totalPAYE + totalUIF + totalSDL;
+    // SDL removed per user request - set to 0
+    const totalEMP201Amount = totalPAYE + totalUIF; // SDL removed from total
     
     const result: EMP201Calculation = {
       period,
@@ -292,10 +397,10 @@ class EMP201Service {
       totalUIFEmployee: Math.round(totalUIFEmployee * 100) / 100,
       totalUIFEmployer: Math.round(totalUIFEmployer * 100) / 100,
       totalUIFSalaries: Math.round(totalUIFSalaries * 100) / 100,
-      totalSDL: Math.round(totalSDL * 100) / 100,
-      totalSDLSalaries: Math.round(totalSDLSalaries * 100) / 100,
-      isSDLApplicable,
-      annualPayrollEstimate: Math.round(annualPayrollEstimate * 100) / 100,
+      totalSDL: 0, // SDL disabled per user request
+      totalSDLSalaries: 0, // SDL disabled per user request
+      isSDLApplicable: false, // SDL disabled per user request
+      annualPayrollEstimate: 0, // Not needed without SDL
       totalEMP201Amount: Math.round(totalEMP201Amount * 100) / 100,
       employeeBreakdown,
       calculatedDate: new Date().toISOString()
@@ -304,7 +409,7 @@ class EMP201Service {
     console.log(`✅ [EMP201] EMP201 calculation completed:`);
     console.log(`   - Total PAYE: R${result.totalPAYE.toLocaleString()}`);
     console.log(`   - Total UIF: R${result.totalUIF.toLocaleString()}`);
-    console.log(`   - Total SDL: R${result.totalSDL.toLocaleString()}`);
+    console.log(`   - SDL: Disabled per user request`);
     console.log(`   - Total EMP201: R${result.totalEMP201Amount.toLocaleString()}`);
     
     return result;

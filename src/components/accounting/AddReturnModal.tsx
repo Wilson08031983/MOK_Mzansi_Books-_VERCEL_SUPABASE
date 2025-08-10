@@ -11,6 +11,7 @@ import { calculateVAT201, saveVAT201Return, VAT201Data, parsePeriod, getCurrentV
 import { emp201Service, EMP201Calculation } from '../../services/emp201Service';
 import { getAllEmployees, Employee } from '../../services/employeeService';
 import { payrollCalculationService, PayrollCalculation } from '../../services/payrollCalculationService';
+import { hrAccountingLinkService, AccountingEmployeeOption, HREmployeeData } from '../../services/hrAccountingLinkService';
 import { generateVAT201PDF } from '../../utils/vat201PdfGenerator';
 import { toast } from 'sonner';
 
@@ -38,6 +39,8 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
   const [vat201Data, setVat201Data] = useState<VAT201Data | null>(null);
   const [emp201Data, setEmp201Data] = useState<EMP201Calculation | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [hrEmployeeOptions, setHrEmployeeOptions] = useState<AccountingEmployeeOption[]>([]);
+  const [selectedEmployeeHRData, setSelectedEmployeeHRData] = useState<HREmployeeData | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [showVATBreakdown, setShowVATBreakdown] = useState(false);
   const [showEMP201Breakdown, setShowEMP201Breakdown] = useState(false);
@@ -160,18 +163,44 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
 
   // Load employees when component mounts
   useEffect(() => {
-    const loadEmployees = async () => {
+    const loadEmployeesFromHR = async () => {
       try {
+        console.log('🔗 [AddReturnModal] Loading employees directly from HR Payroll Calculations table...');
+        
+        // Sync HR data to Accounting first
+        const syncSuccess = hrAccountingLinkService.syncHRToAccounting();
+        if (!syncSuccess) {
+          console.warn('⚠️ [AddReturnModal] HR-Accounting sync failed, falling back to regular employee service');
+          const employeeList = getAllEmployees();
+          setEmployees(employeeList);
+          return;
+        }
+        
+        // Get employee options from HR Payroll table
+        const hrOptions = hrAccountingLinkService.getAccountingEmployeeOptions();
+        setHrEmployeeOptions(hrOptions);
+        
+        // Also load regular employees for compatibility
         const employeeList = getAllEmployees();
         setEmployees(employeeList);
-        console.log(`🧮 [AddReturnModal] Loaded ${employeeList.length} employees for PAYE/EMP201`);
+        
+        console.log(`✅ [AddReturnModal] Loaded ${hrOptions.length} HR employees and ${employeeList.length} regular employees`);
+        console.log('🎯 [AddReturnModal] HR Employee Options:', hrOptions.map(opt => ({
+          id: opt.value,
+          name: opt.label,
+          attendancePay: opt.hrData.attendancePay
+        })));
+        
       } catch (error) {
-        console.error('Error loading employees:', error);
+        console.error('❌ [AddReturnModal] Error loading employees from HR:', error);
+        // Fallback to regular employee loading
+        const employeeList = getAllEmployees();
+        setEmployees(employeeList);
       }
     };
     
     if (isOpen) {
-      loadEmployees();
+      loadEmployeesFromHR();
     }
   }, [isOpen]);
 
@@ -483,353 +512,261 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     }
   }, [formData.type, formData.period]);
 
+  // Helper function to ensure payroll data is available for EMP201 calculation
+  const ensurePayrollDataAvailable = async (selectedEmployeeId?: string): Promise<boolean> => {
+    console.log('🔄 [AddReturnModal] Ensuring payroll data is available for EMP201...');
+    
+    try {
+      // Check if payroll data exists in localStorage
+      const existingPayrollData = localStorage.getItem('payrollCalculations');
+      
+      if (existingPayrollData) {
+        const payrollArray = JSON.parse(existingPayrollData);
+        
+        // If filtering for specific employee, check if that employee exists in payroll data
+        if (selectedEmployeeId) {
+          const employeeExists = payrollArray.some((p: any) => p.employeeId === selectedEmployeeId);
+          if (employeeExists) {
+            console.log('✅ [AddReturnModal] Selected employee found in existing payroll data');
+            return true;
+          } else {
+            console.warn(`⚠️ [AddReturnModal] Selected employee ${selectedEmployeeId} not found in payroll data, regenerating...`);
+          }
+        } else {
+          console.log(`✅ [AddReturnModal] Existing payroll data found with ${payrollArray.length} employees`);
+          return true;
+        }
+      }
+      
+      // Generate fresh payroll data using payroll calculation service
+      console.log('🔄 [AddReturnModal] Generating fresh payroll data...');
+      const currentPeriod = new Date().toISOString().slice(0, 7); // "2025-01"
+      const freshPayrollData = payrollCalculationService.calculateAllEmployeesPayroll(currentPeriod);
+      
+      if (freshPayrollData.length === 0) {
+        console.warn('⚠️ [AddReturnModal] No employees available for payroll calculation');
+        return false;
+      }
+      
+      // Cache the fresh data
+      localStorage.setItem('payrollCalculations', JSON.stringify(freshPayrollData));
+      
+      console.log(`✅ [AddReturnModal] Generated and cached fresh payroll data for ${freshPayrollData.length} employees`);
+      
+      // If filtering for specific employee, verify it now exists
+      if (selectedEmployeeId) {
+        const employeeExists = freshPayrollData.some(p => p.employeeId === selectedEmployeeId);
+        if (!employeeExists) {
+          console.error(`❌ [AddReturnModal] Selected employee ${selectedEmployeeId} still not found after regenerating payroll data`);
+          return false;
+        }
+        console.log('✅ [AddReturnModal] Selected employee now available in fresh payroll data');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error ensuring payroll data availability:', error);
+      return false;
+    }
+  };
+
   // PAYE/EMP201 Calculation Function
   const calculateEMP201Amount = async () => {
     if (formData.type !== 'PAYE_EMP201' || !formData.period) return;
 
     setIsCalculating(true);
     try {
-      console.log(`🧮 [AddReturnModal] Starting PAYE/EMP201 calculation for period: ${formData.period}`);
+      console.log(`🔗 [AddReturnModal] Starting PAYE/EMP201 calculation using HR-Accounting Link Service`);
+      console.log(`📊 [AddReturnModal] Period: ${formData.period}`);
+      console.log(`👥 [AddReturnModal] Selection: ${formData.calculateAllEmployees ? 'ALL EMPLOYEES' : 'SINGLE EMPLOYEE'}`);
+      console.log(`🎯 [AddReturnModal] Selected Employee ID: ${formData.selectedEmployee || 'None'}`);
       
-      // Debug: Check what payroll data exists
-      const allPayrollData = localStorage.getItem('payrollCalculations');
-      console.log(`🔍 [AddReturnModal] Payroll data in localStorage:`, allPayrollData ? JSON.parse(allPayrollData) : 'No data found');
+      // CRITICAL: Use HR-Accounting Link Service for proper data mapping
+      // Maps HR Payroll fields to PAYE/EMP201 UI according to requirements:
+      // - Base Salary → Gross Salary (display only, with tooltip)
+      // - Attendance Pay → Taxable Income (used for PAYE calculation)
       
-      // Debug: Check what employees we have
-      console.log(`🔍 [AddReturnModal] Available employees:`, employees.map(emp => ({ 
-        id: emp.id, 
-        name: `${emp.firstName} ${emp.surname}`,
-        salary: emp.salary 
-      })));
-      console.log(`🔍 [AddReturnModal] Selected employee ID:`, formData.selectedEmployee);
-      
-      // Fallback function to create basic payroll data when HR service is unavailable
-      const createFallbackPayrollData = (): PayrollCalculation[] => {
-        console.log(`🔄 [AddReturnModal] Creating fallback payroll data using employee salaries...`);
-        const payrollData: PayrollCalculation[] = [];
-        
-        if (formData.calculateAllEmployees) {
-          for (const employee of employees) {
-            const employeeSalary = employee.salary || 0;
-            payrollData.push(createBasicPayrollRecord(employee, employeeSalary));
-          }
-        } else if (formData.selectedEmployee) {
-          const selectedEmp = employees.find(emp => emp.id === formData.selectedEmployee);
-          if (selectedEmp) {
-            const employeeSalary = selectedEmp.salary || 0;
-            payrollData.push(createBasicPayrollRecord(selectedEmp, employeeSalary));
-          }
-        }
-        
-        return payrollData;
-      };
-      
-      // Helper function to create a basic payroll record
-      const createBasicPayrollRecord = (employee: Employee, salary: number): PayrollCalculation => {
-        const hourlyRate = salary / 173.33; // Standard monthly hours
-        return {
-          employeeId: employee.id,
-          employeeName: `${employee.firstName} ${employee.surname}`,
-          period: formData.period,
-          baseSalary: salary,
-          hourlyRate,
-          regularHours: 173.33,
-          overtimeHours: 0,
-          nightShiftHours: 0,
-          leaveHours: 0,
-          regularPay: salary,
-          overtimePay: 0,
-          nightShiftPay: 0,
-          leavePay: 0,
-          attendancePay: salary,
-          allowances: {
-            thirteenthMonthBonus: 0,
-            housingAllowance: 0,
-            medicalAidAllowance: 0,
-            motorVehicleAllowance: 0,
-            retirementPlan: 0,
-            otherAllowances: 0,
-            totalAllowances: 0
-          },
-          grossSalary: salary,
-          deductions: {
-            tax: 0,
-            uif: 0,
-            medicalAid: 0,
-            retirementFund: 0,
-            salaryAdvance: 0,
-            otherDeductions: 0,
-            totalDeductions: 0
-          },
-          netSalary: salary, // For fallback, use full salary as net salary
-          status: 'calculated' as const,
-          calculatedDate: new Date().toISOString()
-        };
-      };
-      
-      // Use actual payroll calculations from HR Management that account for days worked
-      const getActualPayrollData = () => {
-        console.log(`🧮 [AddReturnModal] Getting actual payroll calculations that account for days worked...`);
-        console.log(`🔍 [AddReturnModal] payrollCalculationService available:`, typeof payrollCalculationService);
-        
-        // Check if payrollCalculationService is available
-        if (typeof payrollCalculationService === 'undefined') {
-          console.error(`❌ [AddReturnModal] payrollCalculationService is not available, using fallback`);
-          return createFallbackPayrollData();
-        }
-        
-        // First, try to get existing payroll calculations from localStorage
-        const existingPayrollData = payrollCalculationService.getPayrollCalculations(formData.period);
-        
-        if (existingPayrollData && existingPayrollData.length > 0) {
-          console.log(`✅ [AddReturnModal] Found existing payroll calculations: ${existingPayrollData.length} employees`);
-          
-          if (formData.calculateAllEmployees) {
-            return existingPayrollData;
-          } else if (formData.selectedEmployee) {
-            const selectedPayroll = existingPayrollData.find(p => p.employeeId === formData.selectedEmployee);
-            return selectedPayroll ? [selectedPayroll] : [];
-          }
-        }
-        
-        // If no existing data, generate new payroll calculations using the proper service
-        console.log(`🧮 [AddReturnModal] No existing payroll data found, generating new calculations using HR Management service...`);
-        
-        let payrollData: PayrollCalculation[] = [];
-        
-        if (formData.calculateAllEmployees) {
-          // Calculate for all employees using the proper payroll service that accounts for attendance/days worked
-          payrollData = payrollCalculationService.calculateAllEmployeesPayroll(formData.period);
-          console.log(`✅ [AddReturnModal] Generated payroll for all employees: ${payrollData.length} calculations`);
-        } else if (formData.selectedEmployee) {
-          // Calculate for selected employee using the proper payroll service
-          const selectedEmp = employees.find(emp => emp.id === formData.selectedEmployee);
-          if (selectedEmp) {
-            try {
-              const calculation = payrollCalculationService.calculateEmployeePayroll(selectedEmp, formData.period);
-              payrollData = [calculation];
-              console.log(`✅ [AddReturnModal] Generated payroll for ${selectedEmp.firstName} ${selectedEmp.surname}:`);
-              console.log(`   - Gross Salary: R${calculation.grossSalary.toFixed(2)}`);
-              console.log(`   - Net Salary (after days worked): R${calculation.netSalary.toFixed(2)}`);
-              console.log(`   - Regular Hours: ${calculation.regularHours}`);
-            } catch (error) {
-              console.error(`❌ [AddReturnModal] Error calculating payroll for ${selectedEmp.firstName} ${selectedEmp.surname}:`, error);
-              // Fallback to basic calculation if HR service fails
-              const employeeSalary = selectedEmp.salary || 0;
-              payrollData = [{
-                employeeId: selectedEmp.id,
-                employeeName: `${selectedEmp.firstName} ${selectedEmp.surname}`,
-                period: formData.period,
-                baseSalary: employeeSalary,
-                hourlyRate: employeeSalary / 173.33,
-                regularHours: 173.33,
-                overtimeHours: 0,
-                nightShiftHours: 0,
-                leaveHours: 0,
-                regularPay: employeeSalary,
-                overtimePay: 0,
-                nightShiftPay: 0,
-                leavePay: 0,
-                attendancePay: employeeSalary,
-                allowances: {
-                  thirteenthMonthBonus: 0,
-                  housingAllowance: 0,
-                  medicalAidAllowance: 0,
-                  motorVehicleAllowance: 0,
-                  retirementPlan: 0,
-                  otherAllowances: 0,
-                  totalAllowances: 0
-                },
-                grossSalary: employeeSalary,
-                deductions: {
-                  tax: 0,
-                  uif: 0,
-                  medicalAid: 0,
-                  retirementFund: 0,
-                  salaryAdvance: 0,
-                  otherDeductions: 0,
-                  totalDeductions: 0
-                },
-                netSalary: employeeSalary, // Fallback to full salary
-                status: 'calculated' as const,
-                calculatedDate: new Date().toISOString()
-              }];
-            }
-          }
-        }
-        
-        return payrollData;
-      };
-      
-      // Get actual payroll data that accounts for days worked
-      const payrollDataToUse = getActualPayrollData();
-      console.log(`🔍 [AddReturnModal] Payroll data retrieved:`, payrollDataToUse.length, 'records');
-      console.log(`🔍 [AddReturnModal] Payroll data sample:`, payrollDataToUse.length > 0 ? {
-        employeeName: payrollDataToUse[0].employeeName,
-        grossSalary: payrollDataToUse[0].grossSalary,
-        netSalary: payrollDataToUse[0].netSalary,
-        period: payrollDataToUse[0].period
-      } : 'No data');
-      
-      if (payrollDataToUse.length > 0) {
-        // Get existing payroll data
-        const existingPayrollData = allPayrollData ? JSON.parse(allPayrollData) : [];
-        
-        // Remove any existing data for this period to avoid duplicates
-        const filteredExistingData = existingPayrollData.filter(p => p.period !== formData.period);
-        
-        // Add new payroll data
-        const updatedPayrollData = [...filteredExistingData, ...payrollDataToUse];
-        
-        localStorage.setItem('payrollCalculations', JSON.stringify(updatedPayrollData));
-        console.log(`✅ [AddReturnModal] Updated payroll data with ${payrollDataToUse.length} employee(s) using actual salaries`);
+      let selectedEmployeeId: string | undefined = undefined;
+      if (!formData.calculateAllEmployees && formData.selectedEmployee) {
+        selectedEmployeeId = formData.selectedEmployee;
       }
       
-      if (formData.calculateAllEmployees) {
-        // Calculate for all employees
-        console.log(`🧮 [AddReturnModal] Calculating EMP201 for all employees`);
-        const emp201Data = emp201Service.calculateEMP201(formData.period);
-        console.log(`🔍 [AddReturnModal] EMP201 calculation result:`, emp201Data);
-        setEmp201Data(emp201Data);
-        
-        // Update form amount with total EMP201 amount
-        setFormData(prev => ({
-          ...prev,
-          amount: emp201Data.totalEMP201Amount.toFixed(2),
-          name: `PAYE/EMP201 - ${emp201Data.periodName} (All Employees)`
-        }));
-        
-        toast.success(`EMP201 calculated for ${emp201Data.totalEmployees} employees`, {
-          description: `Total: R ${emp201Data.totalEMP201Amount.toLocaleString()}`
-        });
-        
-      } else if (formData.selectedEmployee) {
-        // Calculate for single employee
-        console.log(`🧮 [AddReturnModal] Calculating EMP201 for employee: ${formData.selectedEmployee}`);
-        
-        // Get employee details
-        const selectedEmp = employees.find(emp => emp.id === formData.selectedEmployee);
-        if (!selectedEmp) {
-          throw new Error('Selected employee not found');
-        }
-        
-        // Calculate EMP201 for all employees first, then filter for selected employee
-        const fullEmp201Data = emp201Service.calculateEMP201(formData.period);
-        const employeeBreakdown = fullEmp201Data.employeeBreakdown.find(
-          emp => emp.employeeId === formData.selectedEmployee
-        );
-        
-        if (!employeeBreakdown) {
-          throw new Error('No payroll data found for selected employee');
-        }
-        
-        // Create single employee EMP201 data
-        const singleEmployeeEMP201: EMP201Calculation = {
-          ...fullEmp201Data,
-          totalEmployees: 1,
-          totalPAYE: employeeBreakdown.paye,
-          totalTaxableIncome: employeeBreakdown.taxableIncome,
-          totalUIF: employeeBreakdown.uifTotal,
-          totalUIFEmployee: employeeBreakdown.uifEmployee,
-          totalUIFEmployer: employeeBreakdown.uifEmployer,
-          totalUIFSalaries: employeeBreakdown.uifSalary,
-          totalSDL: employeeBreakdown.sdl,
-          totalSDLSalaries: employeeBreakdown.sdl > 0 ? employeeBreakdown.grossSalary : 0,
-          totalEMP201Amount: employeeBreakdown.paye + employeeBreakdown.uifTotal + employeeBreakdown.sdl,
-          employeeBreakdown: [employeeBreakdown]
-        };
-        
-        setEmp201Data(singleEmployeeEMP201);
-        
-        // Update form amount with employee's total
-        setFormData(prev => ({
-          ...prev,
-          amount: singleEmployeeEMP201.totalEMP201Amount.toFixed(2),
-          name: `PAYE/EMP201 - ${singleEmployeeEMP201.periodName} (${selectedEmp.firstName} ${selectedEmp.surname})`
-        }));
-        
-        toast.success(`EMP201 calculated for ${selectedEmp.firstName} ${selectedEmp.surname}`, {
-          description: `Total: R ${singleEmployeeEMP201.totalEMP201Amount.toLocaleString()}`
-        });
-        
-      } else {
-        throw new Error('Please select an employee or choose "Calculate All Employees"');
+      console.log(`🔗 [AddReturnModal] Starting PAYE/EMP201 calculation with HR-Accounting data mapping`);
+      console.log(`📊 [AddReturnModal] Period: ${formData.period}`);
+      console.log(`👥 [AddReturnModal] Selection: ${formData.calculateAllEmployees ? 'ALL EMPLOYEES' : 'SINGLE EMPLOYEE'}`);
+      console.log(`🎯 [AddReturnModal] Selected Employee ID: ${selectedEmployeeId || 'None'}`);
+      
+      // Get HR employee options to validate selection
+      const hrEmployeeOptions = hrAccountingLinkService.getAccountingEmployeeOptions();
+      
+      if (hrEmployeeOptions.length === 0) {
+        throw new Error('No HR Payroll data found. Please calculate payroll in HR Management first.');
       }
       
-      // Always show the breakdown after successful calculation
-      setShowEMP201Breakdown(true);
-      console.log(`✅ [AddReturnModal] EMP201 calculation completed - showing breakdown`);
+      console.log(`✅ [AddReturnModal] Found ${hrEmployeeOptions.length} employees in HR Payroll`);
       
-      // Force a re-render to ensure the breakdown shows
-      setTimeout(() => {
-        setShowEMP201Breakdown(true);
-        console.log(`🔍 [AddReturnModal] Forced breakdown visibility after timeout`);
-      }, 100);
+      // Validate selected employee if specified
+      if (selectedEmployeeId) {
+        const selectedOption = hrEmployeeOptions.find(opt => opt.value === selectedEmployeeId);
+        if (!selectedOption) {
+          throw new Error(`Selected employee (${selectedEmployeeId}) not found in HR Payroll data. Please ensure payroll is calculated first.`);
+        }
+        
+        // Get PAYE-specific data mapping for the selected employee
+        const payeMapping = hrAccountingLinkService.getPAYEDataMapping(selectedEmployeeId);
+        
+        console.log(`🔗 [AddReturnModal] PAYE data mapping for ${payeMapping.employeeName}:`);
+        console.log(`    Gross Salary (from Base Salary): R${payeMapping.grossSalary.toFixed(2)}`);
+        console.log(`    Taxable Income (from Attendance Pay): R${payeMapping.taxableIncome.toFixed(2)}`);
+        console.log(`    Has Valid Data: ${payeMapping.hasValidData}`);
+        
+        if (payeMapping.warnings.length > 0) {
+          console.warn(`⚠️ [AddReturnModal] HR Data warnings for ${payeMapping.employeeName}:`);
+          payeMapping.warnings.forEach(warning => console.warn(`    - ${warning}`));
+        }
+      }
       
-    } catch (error) {
-      console.error('❌ [AddReturnModal] Error calculating PAYE/EMP201:', error);
-      console.error('❌ [AddReturnModal] Error details:', {
-        selectedEmployee: formData.selectedEmployee,
-        calculateAllEmployees: formData.calculateAllEmployees,
-        period: formData.period,
-        employeesCount: employees.length,
-        error: error instanceof Error ? error.message : String(error)
+      // Get filtered payroll data using HR-Accounting link service
+      const filteredPayrollData = hrAccountingLinkService.getFilteredPayrollForEMP201(selectedEmployeeId);
+      
+      if (filteredPayrollData.length === 0) {
+        throw new Error('No payroll data found for the selected employee(s). Please ensure HR payroll calculations are completed first.');
+      }
+      
+      console.log(`✅ [AddReturnModal] Retrieved ${filteredPayrollData.length} payroll record(s) from HR with proper field mapping`);
+      
+      // Call EMP201 service with the employee filter
+      console.log(`🧮 [AddReturnModal] Calling EMP201 service with filtered data...`);
+      const emp201Result = emp201Service.calculateEMP201(formData.period, selectedEmployeeId);
+      
+      console.log(`✅ [AddReturnModal] EMP201 calculation completed:`, {
+        totalEmployees: emp201Result.totalEmployees,
+        totalTaxableIncome: emp201Result.totalTaxableIncome,
+        totalPAYE: emp201Result.totalPAYE,
+        totalEMP201Amount: emp201Result.totalEMP201Amount,
+        employeeBreakdownCount: emp201Result.employeeBreakdown?.length || 0
       });
       
-      let errorMessage = 'Failed to calculate PAYE/EMP201';
-      let errorDescription = 'Please check your employee and payroll data';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('No payroll data found')) {
-          errorDescription = 'No payroll data found for the selected employee(s)';
-        } else if (error.message.includes('Selected employee not found')) {
-          errorDescription = 'Selected employee not found in the system';
+      // Verify the result matches our selection
+      if (selectedEmployeeId && emp201Result.employeeBreakdown) {
+        const expectedCount = 1;
+        const actualCount = emp201Result.employeeBreakdown.length;
+        
+        if (actualCount !== expectedCount) {
+          console.error(`❌ [AddReturnModal] Employee count mismatch: Expected ${expectedCount}, got ${actualCount}`);
+          console.error(`❌ [AddReturnModal] Employee breakdown:`, emp201Result.employeeBreakdown.map(emp => ({
+            id: emp.employeeId,
+            name: emp.employeeName,
+            taxableIncome: emp.taxableIncome
+          })));
         } else {
-          errorDescription = error.message;
+          const employee = emp201Result.employeeBreakdown[0];
+          console.log(`✅ [AddReturnModal] Single employee verification passed:`, {
+            id: employee.employeeId,
+            name: employee.employeeName,
+            taxableIncome: employee.taxableIncome,
+            matchesSelection: employee.employeeId === selectedEmployeeId
+          });
         }
       }
       
-      // Check if we have employees but no salary data
-      if (employees.length === 0) {
-        errorDescription = 'No employees found. Please add employees in HR Management first.';
-      } else if (formData.selectedEmployee) {
-        const selectedEmp = employees.find(emp => emp.id === formData.selectedEmployee);
-        if (selectedEmp && (!selectedEmp.salary || selectedEmp.salary === 0)) {
-          errorDescription = `Employee ${selectedEmp.firstName} ${selectedEmp.surname} has no salary configured. Please update their salary in HR Management.`;
-        }
-      }
+      setEmp201Data(emp201Result);
+      setShowEMP201Breakdown(true);
       
-      toast.error(errorMessage, {
-        description: errorDescription
+      // Update form amount
+      setFormData(prev => ({
+        ...prev,
+        amount: emp201Result.totalEMP201Amount.toFixed(2)
+      }));
+      
+      const employeeDescription = selectedEmployeeId 
+        ? `(${filteredPayrollData[0]?.employeeName || 'Selected Employee'})`
+        : `(${emp201Result.totalEmployees} employees)`;
+      
+      toast.success(`EMP201 calculated successfully ${employeeDescription}`, {
+        description: `Total: R ${emp201Result.totalEMP201Amount.toLocaleString()}`
       });
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error calculating EMP201:', error);
+      toast.error(`Failed to calculate EMP201: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setEmp201Data(null);
+      setShowEMP201Breakdown(false);
     } finally {
       setIsCalculating(false);
     }
   };
 
-  // Handle employee selection change
+  // Handle employee selection change with HR-Accounting linking
   const handleEmployeeSelectionChange = (value: string) => {
+    console.log(`🔗 [AddReturnModal] Employee selection changed:`, value);
+    
+    // CRITICAL: Clear all cached data to prevent employee mixing
+    hrAccountingLinkService.clearCache();
+    localStorage.removeItem('emp201Calculations');
+    localStorage.removeItem('cachedEMP201');
+    localStorage.removeItem('emp201Cache');
+    
+    // Clear current EMP201 data to prevent mixing
+    setEmp201Data(null);
+    setShowEMP201Breakdown(false);
+    
     if (value === 'all_employees') {
       setFormData(prev => ({
         ...prev,
         selectedEmployee: '',
         calculateAllEmployees: true
       }));
+      setSelectedEmployeeHRData(null);
+      console.log(`📊 [AddReturnModal] Selected: Calculate All Employees`);
     } else {
       setFormData(prev => ({
         ...prev,
         selectedEmployee: value,
         calculateAllEmployees: false
       }));
+      
+      // Validate employee selection against HR data
+      const isValid = hrAccountingLinkService.validateEmployeeSelection(value);
+      if (!isValid) {
+        console.error(`❌ [AddReturnModal] Invalid employee selection - not found in HR Payroll table`);
+        toast.error('Selected employee not found in HR Payroll data. Please ensure payroll is calculated first.');
+        return;
+      }
+      
+      // Get HR data for the selected employee
+      const hrData = hrAccountingLinkService.getEmployeeHRData(value);
+      if (hrData) {
+        console.log(`✅ [AddReturnModal] Found HR data for employee:`, {
+          name: hrData.employeeName,
+          baseSalary: hrData.baseSalary,
+          attendancePay: hrData.attendancePay,
+          grossSalary: hrData.grossSalary
+        });
+        setSelectedEmployeeHRData(hrData);
+        
+        // Check for missing HR data and show warnings
+        if (!hrData.baseSalary || hrData.baseSalary === 0) {
+          toast.warning(`Missing HR Payroll value: Base Salary. Please review employee payroll record.`);
+        }
+        if (!hrData.attendancePay || hrData.attendancePay === 0) {
+          toast.warning(`Missing HR Payroll value: Attendance Pay. Please review employee payroll record.`);
+        }
+      } else {
+        console.warn(`⚠️ [AddReturnModal] No HR data found for employee: ${value}`);
+        setSelectedEmployeeHRData(null);
+        toast.warning(`No HR data found for selected employee. Please ensure payroll is calculated first.`);
+      }
     }
     
-    // Auto-calculate when selection changes
+    // Trigger EMP201 recalculation if period is set
     if (formData.type === 'PAYE_EMP201' && formData.period) {
       setTimeout(() => {
         calculateEMP201Amount();
       }, 100);
     }
   };
+
+
 
   // Auto-calculate EMP201 when type changes to PAYE_EMP201
   useEffect(() => {
@@ -1038,23 +975,46 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                       <div className="flex items-center gap-2">
                         <Calculator className="h-4 w-4 text-mokm-purple-500" />
                         <span className="font-medium">Calculate All Employees</span>
-                        <span className="text-xs text-slate-500">({employees.length} employees)</span>
+                        <span className="text-xs text-slate-500">
+                          ({hrEmployeeOptions.length > 0 ? hrEmployeeOptions.length : employees.length} employees from HR Payroll)
+                        </span>
                       </div>
                     </SelectItem>
                     <SelectSeparator />
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 bg-mokm-purple-100 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-medium text-mokm-purple-700">
-                              {employee.firstName.charAt(0)}{employee.surname.charAt(0)}
-                            </span>
+                    {/* Use HR Employee Options if available, otherwise fallback to regular employees */}
+                    {hrEmployeeOptions.length > 0 ? (
+                      hrEmployeeOptions.map((hrOption) => (
+                        <SelectItem key={hrOption.value} value={hrOption.value}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-mokm-purple-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-mokm-purple-700">
+                                {hrOption.hrData.employeeName.split(' ').map(n => n.charAt(0)).join('')}
+                              </span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{hrOption.hrData.employeeName}</span>
+                              <span className="text-xs text-slate-500">
+                                HR Payroll: R {hrOption.hrData.attendancePay.toFixed(2)} taxable income
+                              </span>
+                            </div>
                           </div>
-                          <span>{employee.firstName} {employee.surname}</span>
-                          <span className="text-xs text-slate-500">({employee.employeeNumber})</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      employees.map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-mokm-purple-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-mokm-purple-700">
+                                {employee.firstName.charAt(0)}{employee.surname.charAt(0)}
+                              </span>
+                            </div>
+                            <span>{employee.firstName} {employee.surname}</span>
+                            <span className="text-xs text-slate-500">({employee.employeeNumber})</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 {employees.length === 0 && (
@@ -1417,29 +1377,55 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                         </thead>
                         <tbody>
                           {emp201Data.employeeBreakdown.map((employee, index) => (
-                            <tr key={employee.employeeId} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-25'}>
-                              <td className="px-3 py-2 font-medium text-slate-800">
-                                {employee.employeeName}
-                              </td>
-                              <td className="px-3 py-2 text-right text-slate-600">
-                                R {employee.grossSalary.toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2 text-right text-slate-600">
-                                R {employee.taxableIncome.toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2 text-right text-red-600 font-medium">
-                                R {employee.paye.toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2 text-right text-blue-600 font-medium">
-                                R {employee.uifTotal.toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2 text-right text-green-600 font-medium">
-                                R {employee.sdl.toFixed(2)}
-                              </td>
-                              <td className="px-3 py-2 text-right font-bold text-slate-800">
-                                R {(employee.paye + employee.uifTotal + employee.sdl).toFixed(2)}
-                              </td>
-                            </tr>
+                            <React.Fragment key={employee.employeeId}>
+                              <tr className={index % 2 === 0 ? 'bg-white' : 'bg-slate-25'}>
+                                <td className="px-3 py-2 font-medium text-slate-800">
+                                  {employee.employeeName}
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-600">
+                                  <div className="flex flex-col items-end">
+                                    <span>R {employee.grossSalary.toFixed(2)}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-600">
+                                  <div className="flex flex-col items-end">
+                                    <span>R {employee.taxableIncome.toFixed(2)}</span>
+                                    {employee.hasNegativeTaxableIncome && (
+                                      <span className="text-xs text-amber-600 italic">
+                                        Adjusted from R{employee.rawTaxableIncome?.toFixed(2) || '0.00'}
+                                      </span>
+                                    )}
+                                    {employee.taxableIncome <= 0 && (
+                                      <span className="text-xs text-amber-600 italic">
+                                        Attendance Pay is zero/negative — PAYE set to R0.00. Review HR payroll deductions.
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-right text-red-600 font-medium">
+                                  R {employee.paye.toFixed(2)}
+                                </td>
+                                <td className="px-3 py-2 text-right text-blue-600 font-medium">
+                                  R {employee.uifTotal.toFixed(2)}
+                                </td>
+                                <td className="px-3 py-2 text-right text-green-600 font-medium">
+                                  R {employee.sdl.toFixed(2)}
+                                </td>
+                                <td className="px-3 py-2 text-right font-bold text-slate-800">
+                                  R {(employee.paye + employee.uifTotal + employee.sdl).toFixed(2)}
+                                </td>
+                              </tr>
+                              {employee.hasNegativeTaxableIncome && (
+                                <tr className={index % 2 === 0 ? 'bg-amber-50' : 'bg-amber-25'}>
+                                  <td colSpan={7} className="px-3 py-2 text-xs text-amber-700 border-l-4 border-amber-400">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">⚠️ Warning:</span>
+                                      <span>Taxable income was negative (R{employee.rawTaxableIncome?.toFixed(2) || '0.00'}) — set to R0.00. Please review HR deductions.</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           ))}
                         </tbody>
                       </table>
