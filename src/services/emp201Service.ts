@@ -2,17 +2,17 @@ import { PayrollCalculation, payrollCalculationService } from './payrollCalculat
 import { Employee, getAllEmployees } from './employeeService';
 import { hrAccountingLinkService } from './hrAccountingLinkService';
 
-// South African PAYE/EMP201 Constants for 2024/2025 Tax Year
+// South African PAYE/EMP201 Constants for 2025/2026 Tax Year
 const SA_TAX_CONSTANTS = {
-  // PAYE Tax Brackets (Monthly) - 2024/2025 Tax Year
+  // PAYE Tax Brackets (Monthly) - 1 March 2025 – 28 Feb 2026
   PAYE_BRACKETS: [
-    { min: 0, max: 19758, rate: 0.18, rebate: 0 },
-    { min: 19759, max: 30875, rate: 0.26, rebate: 1564 },
-    { min: 30876, max: 42733, rate: 0.31, rebate: 3109 },
-    { min: 42734, max: 56083, rate: 0.36, rebate: 5245 },
-    { min: 56084, max: 71492, rate: 0.39, rebate: 6927 },
-    { min: 71493, max: 151417, rate: 0.41, rebate: 8358 },
-    { min: 151418, max: Infinity, rate: 0.45, rebate: 14414 }
+    { min: 0, max: 19758, rate: 0.18, baseAmount: 0 },
+    { min: 19758.42, max: 30875, rate: 0.26, baseAmount: 3556.50 },
+    { min: 30875.01, max: 42733.33, rate: 0.31, baseAmount: 6446.83 },
+    { min: 42733.34, max: 56083.33, rate: 0.36, baseAmount: 10122.92 },
+    { min: 56083.34, max: 71491.67, rate: 0.39, baseAmount: 14928.92 },
+    { min: 71491.68, max: 151416.67, rate: 0.41, baseAmount: 20938.17 },
+    { min: 151416.68, max: Infinity, rate: 0.45, baseAmount: 53707.42 }
   ],
   
   // Primary Rebate (Monthly)
@@ -109,38 +109,33 @@ class EMP201Service {
   calculatePAYE(taxableIncome: number): number {
     if (taxableIncome <= 0) return 0;
     
-    let tax = 0;
-    let remainingIncome = taxableIncome;
+    console.log(`🧮 [EMP201] Calculating PAYE for taxable income: R${taxableIncome.toFixed(2)} using 2025-2026 tax brackets`);
     
-    console.log(`🧮 [EMP201] Calculating PAYE for taxable income: R${taxableIncome.toFixed(2)}`);
-    
+    // Find the appropriate tax bracket
+    let applicableBracket = null;
     for (const bracket of SA_TAX_CONSTANTS.PAYE_BRACKETS) {
-      if (remainingIncome <= 0) break;
-      
-      const bracketMin = bracket.min;
-      const bracketMax = bracket.max === Infinity ? remainingIncome + bracketMin : bracket.max;
-      
-      if (taxableIncome > bracketMin) {
-        const taxableInBracket = Math.min(remainingIncome, bracketMax - bracketMin);
-        const bracketTax = taxableInBracket * bracket.rate;
-        tax += bracketTax;
-        
-        console.log(`🧮 [EMP201] Bracket R${bracketMin}-R${bracketMax === Infinity ? '∞' : bracketMax}: R${taxableInBracket.toFixed(2)} × ${(bracket.rate * 100).toFixed(0)}% = R${bracketTax.toFixed(2)}`);
-        
-        remainingIncome -= taxableInBracket;
+      if (taxableIncome >= bracket.min && taxableIncome <= bracket.max) {
+        applicableBracket = bracket;
+        break;
       }
-      
-      if (taxableIncome <= bracket.max) break;
     }
     
-    console.log(`🧮 [EMP201] Total tax before rebate: R${tax.toFixed(2)}`);
+    if (!applicableBracket) {
+      console.error(`🧮 [EMP201] No tax bracket found for income: R${taxableIncome.toFixed(2)}`);
+      return 0;
+    }
     
-    // Apply primary rebate
-    const finalTax = Math.max(0, tax - SA_TAX_CONSTANTS.PRIMARY_REBATE);
+    // Calculate tax using the 2025-2026 formula: baseAmount + rate × (income - bracket.min)
+    const excessIncome = taxableIncome - applicableBracket.min;
+    const tax = applicableBracket.baseAmount + (applicableBracket.rate * excessIncome);
     
-    console.log(`🧮 [EMP201] Tax after primary rebate (R${SA_TAX_CONSTANTS.PRIMARY_REBATE}): R${finalTax.toFixed(2)}`);
+    console.log(`🧮 [EMP201] Tax bracket: R${applicableBracket.min.toFixed(2)} - R${applicableBracket.max === Infinity ? '∞' : applicableBracket.max.toFixed(2)}`);
+    console.log(`🧮 [EMP201] Base amount: R${applicableBracket.baseAmount.toFixed(2)}`);
+    console.log(`🧮 [EMP201] Excess income: R${excessIncome.toFixed(2)} (R${taxableIncome.toFixed(2)} - R${applicableBracket.min.toFixed(2)})`);
+    console.log(`🧮 [EMP201] Tax on excess: R${excessIncome.toFixed(2)} × ${(applicableBracket.rate * 100).toFixed(0)}% = R${(applicableBracket.rate * excessIncome).toFixed(2)}`);
+    console.log(`🧮 [EMP201] Total PAYE: R${applicableBracket.baseAmount.toFixed(2)} + R${(applicableBracket.rate * excessIncome).toFixed(2)} = R${tax.toFixed(2)}`);
     
-    return Math.round(finalTax * 100) / 100;
+    return Math.round(tax * 100) / 100;
   }
   
   /**
