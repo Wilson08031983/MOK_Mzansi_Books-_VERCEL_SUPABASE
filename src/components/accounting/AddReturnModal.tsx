@@ -12,6 +12,9 @@ import { emp201Service, EMP201Calculation } from '../../services/emp201Service';
 import { getAllEmployees, Employee } from '../../services/employeeService';
 import { payrollCalculationService, PayrollCalculation } from '../../services/payrollCalculationService';
 import { hrAccountingLinkService, AccountingEmployeeOption, HREmployeeData } from '../../services/hrAccountingLinkService';
+import { directDeductionsLinkService, DirectPAYEUIFData } from '../../services/directDeductionsLinkService';
+import { accountingPayeUifCalculatorService } from '../../services/accountingPayeUifCalculatorService';
+import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 import { generateVAT201PDF } from '../../utils/vat201PdfGenerator';
 import { toast } from 'sonner';
 
@@ -44,6 +47,11 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
   const [isCalculating, setIsCalculating] = useState(false);
   const [showVATBreakdown, setShowVATBreakdown] = useState(false);
   const [showEMP201Breakdown, setShowEMP201Breakdown] = useState(false);
+  // HR authoritative linkage state (read-only in Accounting)
+  const [hrLinkedPAYE, setHrLinkedPAYE] = useState<number | null>(null);
+  const [hrLinkedUIF, setHrLinkedUIF] = useState<number | null>(null);
+  const [hrLinkedTotals, setHrLinkedTotals] = useState<{ paye: number; uif: number } | null>(null);
+  const [isRefreshingHR, setIsRefreshingHR] = useState(false);
 
   const taxReturnTypes = [
     {
@@ -162,45 +170,58 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
   };
 
   // Load employees when component mounts
-  useEffect(() => {
-    const loadEmployeesFromHR = async () => {
-      try {
-        console.log('🔗 [AddReturnModal] Loading employees directly from HR Payroll Calculations table...');
-        
-        // Sync HR data to Accounting first
-        const syncSuccess = hrAccountingLinkService.syncHRToAccounting();
-        if (!syncSuccess) {
-          console.warn('⚠️ [AddReturnModal] HR-Accounting sync failed, falling back to regular employee service');
-          const employeeList = getAllEmployees();
-          setEmployees(employeeList);
-          return;
-        }
-        
-        // Get employee options from HR Payroll table
-        const hrOptions = hrAccountingLinkService.getAccountingEmployeeOptions();
-        setHrEmployeeOptions(hrOptions);
-        
-        // Also load regular employees for compatibility
+  const loadEmployees = async () => {
+    try {
+      console.log('🔗 [AddReturnModal] Loading employees directly from HR Payroll Calculations table...');
+      
+      // Sync HR data to Accounting first
+      const syncSuccess = hrAccountingLinkService.syncHRToAccounting();
+      if (!syncSuccess) {
+        console.warn('⚠️ [AddReturnModal] HR-Accounting sync failed, falling back to regular employee service');
         const employeeList = getAllEmployees();
         setEmployees(employeeList);
-        
-        console.log(`✅ [AddReturnModal] Loaded ${hrOptions.length} HR employees and ${employeeList.length} regular employees`);
-        console.log('🎯 [AddReturnModal] HR Employee Options:', hrOptions.map(opt => ({
-          id: opt.value,
-          name: opt.label,
-          attendancePay: opt.hrData.attendancePay
-        })));
-        
-      } catch (error) {
-        console.error('❌ [AddReturnModal] Error loading employees from HR:', error);
-        // Fallback to regular employee loading
-        const employeeList = getAllEmployees();
-        setEmployees(employeeList);
+        return;
       }
-    };
-    
+      
+      // Get employee options from HR Payroll table
+      const hrOptions = hrAccountingLinkService.getAccountingEmployeeOptions();
+      setHrEmployeeOptions(hrOptions);
+      
+      // Also load regular employees for compatibility
+      const employeeList = getAllEmployees();
+      setEmployees(employeeList);
+      
+      console.log(`✅ [AddReturnModal] Loaded ${hrOptions.length} HR employees and ${employeeList.length} regular employees`);
+      console.log('🎯 [AddReturnModal] HR Employee Options:', hrOptions.map(opt => ({
+        id: opt.value,
+        name: opt.label,
+        attendancePay: opt.hrData.attendancePay
+      })));
+      
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error loading employees from HR:', error);
+      // Fallback to regular employee loading
+      const employeeList = getAllEmployees();
+      setEmployees(employeeList);
+    }
+  };
+
+  const loadHREmployeeOptions = async () => {
+    try {
+      const hrOptions = hrAccountingLinkService.getAccountingEmployeeOptions();
+      setHrEmployeeOptions(hrOptions);
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error loading HR employee options:', error);
+    }
+  };
+
+  useEffect(() => {
     if (isOpen) {
-      loadEmployeesFromHR();
+      loadEmployees();
+      loadHREmployeeOptions();
+      
+      // Clean up any stuck PAYE sync toasts when modal opens
+      stuckToastCleanupService.forceCleanupAndShowStatus();
     }
   }, [isOpen]);
 
@@ -249,6 +270,10 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       }));
       
       setShowEMP201Breakdown(true);
+      // Load authoritative HR values for display
+      setTimeout(() => {
+        loadHRLinkedValues();
+      }, 50);
       
       toast.success('PAYE/EMP201 period auto-generated', {
         description: `Period: ${currentMonth}, Due: ${dueDate.toLocaleDateString()}`
@@ -264,6 +289,129 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       }));
       
       setShowEMP201Breakdown(false);
+    }
+  };
+
+  // Load authoritative HR Payroll PAYE/UIF values for selected scope
+  const loadHRLinkedValues = () => {
+    if (formData.type !== 'PAYE_EMP201' || !formData.period) return;
+    try {
+      const periodKey = `payroll_calculations_${formData.period}`;
+      const raw = localStorage.getItem(periodKey) || localStorage.getItem('payrollCalculations');
+      if (!raw) {
+        setHrLinkedPAYE(null);
+        setHrLinkedUIF(null);
+        setHrLinkedTotals(null);
+        console.warn('⚠️ [AddReturnModal] No HR payroll data found when loading HR-linked values');
+        toast.warning('Payroll deductions not found', {
+          description: 'Please open HR → Payroll → View Payroll Details to calculate payroll first.'
+        });
+        return;
+      }
+      const records: PayrollCalculation[] = JSON.parse(raw);
+      const ts = new Date().toISOString();
+      if (formData.calculateAllEmployees) {
+        const paye = records.reduce((s, r) => s + (r.deductions?.tax || 0), 0);
+        const uif = records.reduce((s, r) => s + (r.deductions?.uif || 0), 0);
+        const payeRounded = Math.round(paye * 100) / 100;
+        const uifRounded = Math.round(uif * 100) / 100;
+        
+        // Validate UIF cap (R177.12 per employee max)
+        const maxUIF = records.length * 177.12;
+        const cappedUIF = Math.min(uifRounded, maxUIF);
+        
+        setHrLinkedTotals({ paye: payeRounded, uif: cappedUIF });
+        setHrLinkedPAYE(null);
+        setHrLinkedUIF(null);
+        localStorage.setItem('accounting_hr_link_snapshot', JSON.stringify({
+          period: formData.period,
+          scope: 'all',
+          paye: payeRounded || 0,
+          uif: cappedUIF || 0,
+          timestamp: ts,
+          employeeCount: records.length
+        }));
+        console.log(`🔗 [AddReturnModal] HR-linked totals refreshed for ${formData.period}: PAYE R${(payeRounded || 0).toFixed(2)}, UIF R${(cappedUIF || 0).toFixed(2)} (${records.length} employees) @ ${ts}`);
+        
+        if (uifRounded > maxUIF) {
+          console.warn(`⚠️ [AddReturnModal] UIF exceeds cap: R${(uifRounded || 0).toFixed(2)} > R${(maxUIF || 0).toFixed(2)} (capped)`);
+        }
+      } else if (formData.selectedEmployee) {
+        const rec = records.find(r => r.employeeId === formData.selectedEmployee);
+        if (!rec) {
+          setHrLinkedPAYE(null);
+          setHrLinkedUIF(null);
+          setHrLinkedTotals(null);
+          console.warn('⚠️ [AddReturnModal] Selected employee not found in HR payroll when loading HR-linked values');
+          toast.warning('Employee payroll not found', {
+            description: 'Please calculate payroll for this employee in HR Management first.'
+          });
+          return;
+        }
+        const paye = Math.round((rec.deductions?.tax || 0) * 100) / 100;
+        const rawUIF = Math.round((rec.deductions?.uif || 0) * 100) / 100;
+        const cappedUIF = Math.min(rawUIF, 177.12); // Cap UIF at monthly maximum
+        
+        setHrLinkedPAYE(paye);
+        setHrLinkedUIF(cappedUIF);
+        setHrLinkedTotals(null);
+        localStorage.setItem('accounting_hr_link_snapshot', JSON.stringify({
+          period: formData.period,
+          scope: 'single',
+          employeeId: rec.employeeId,
+          employeeName: rec.employeeName,
+          paye,
+          uif: cappedUIF,
+          timestamp: ts
+        }));
+        console.log(`🔗 [AddReturnModal] HR-linked values refreshed for ${rec.employeeName} (${rec.employeeId}) in ${formData.period}: PAYE R${(paye || 0).toFixed(2)}, UIF R${(cappedUIF || 0).toFixed(2)} @ ${ts}`);
+        
+        if (rawUIF > 177.12) {
+          console.warn(`⚠️ [AddReturnModal] Employee UIF exceeds cap: R${(rawUIF || 0).toFixed(2)} > R177.12 (capped)`);
+        }
+      } else {
+        setHrLinkedPAYE(null);
+        setHrLinkedUIF(null);
+        setHrLinkedTotals(null);
+      }
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Failed to load HR-linked PAYE/UIF:', error);
+      setHrLinkedPAYE(null);
+      setHrLinkedUIF(null);
+      setHrLinkedTotals(null);
+      toast.error('Failed to load HR payroll values', {
+        description: 'Please check console for details and try refreshing.'
+      });
+    }
+  };
+
+  // Manual refresh handler
+  const handleRefreshFromHR = async () => {
+    if (formData.type !== 'PAYE_EMP201') return;
+    setIsRefreshingHR(true);
+    try {
+      console.log('🔄 [AddReturnModal] Refreshing from HR Payroll...');
+      // Clear caches to avoid stale data
+      hrAccountingLinkService.clearCache();
+      localStorage.removeItem('emp201Calculations');
+      localStorage.removeItem('cachedEMP201');
+      localStorage.removeItem('accounting_hr_link_snapshot');
+      
+      // First load HR values, then recalculate EMP201
+      loadHRLinkedValues();
+      await calculateEMP201Amount();
+      
+      const scope = formData.calculateAllEmployees ? 'all employees' : (formData.selectedEmployee ? 'selected employee' : 'none');
+      toast.success('Refreshed from HR Payroll', {
+        description: `PAYE and UIF values reloaded for ${scope} (read-only in Accounting)`
+      });
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error refreshing from HR:', error);
+      toast.error('Failed to refresh from HR Payroll', {
+        description: 'Please check that payroll is calculated in HR Management first.'
+      });
+    } finally {
+      setIsRefreshingHR(false);
     }
   };
 
@@ -377,7 +525,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       if (vatData.netVAT !== undefined) {
         setFormData(prev => ({
           ...prev,
-          amount: vatData.netVAT.toFixed(2)
+          amount: (vatData.netVAT || 0).toFixed(2)
         }));
       }
       
@@ -385,7 +533,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       
       setFormData(prev => ({
         ...prev,
-        amount: Math.abs(safeVatData.netVAT).toFixed(2)
+        amount: Math.abs(safeVatData.netVAT || 0).toFixed(2)
       }));
       
       setShowVATBreakdown(true);
@@ -581,10 +729,9 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       console.log(`👥 [AddReturnModal] Selection: ${formData.calculateAllEmployees ? 'ALL EMPLOYEES' : 'SINGLE EMPLOYEE'}`);
       console.log(`🎯 [AddReturnModal] Selected Employee ID: ${formData.selectedEmployee || 'None'}`);
       
-      // CRITICAL: Use HR-Accounting Link Service for proper data mapping
-      // Maps HR Payroll fields to PAYE/EMP201 UI according to requirements:
-      // - Base Salary → Gross Salary (display only, with tooltip)
-      // - Attendance Pay → Taxable Income (used for PAYE calculation)
+      // NEW APPROACH: Use Direct Employee Deductions Management as authoritative source
+      // PAYE and UIF values come directly from Employee Deductions Management
+      // This replaces the failed Payroll Details sync approach
       
       let selectedEmployeeId: string | undefined = undefined;
       if (!formData.calculateAllEmployees && formData.selectedEmployee) {
@@ -616,8 +763,8 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
         const payeMapping = hrAccountingLinkService.getPAYEDataMapping(selectedEmployeeId);
         
         console.log(`🔗 [AddReturnModal] PAYE data mapping for ${payeMapping.employeeName}:`);
-        console.log(`    Gross Salary (from Base Salary): R${payeMapping.grossSalary.toFixed(2)}`);
-        console.log(`    Taxable Income (from Attendance Pay): R${payeMapping.taxableIncome.toFixed(2)}`);
+        console.log(`    Gross Salary (from Base Salary): R${(payeMapping.grossSalary || 0).toFixed(2)}`);
+        console.log(`    Taxable Income (from Attendance Pay): R${(payeMapping.taxableIncome || 0).toFixed(2)}`);
         console.log(`    Has Valid Data: ${payeMapping.hasValidData}`);
         
         if (payeMapping.warnings.length > 0) {
@@ -635,9 +782,9 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       
       console.log(`✅ [AddReturnModal] Retrieved ${filteredPayrollData.length} payroll record(s) from HR with proper field mapping`);
       
-      // Call EMP201 service with the employee filter
-      console.log(`🧮 [AddReturnModal] Calling EMP201 service with filtered data...`);
-      const emp201Result = emp201Service.calculateEMP201(formData.period, selectedEmployeeId);
+      // ACCOUNTING CALCULATION: Calculate EMP201 using Accounting PAYE/UIF Calculator from Taxable Income
+      console.log(`🧮 [AddReturnModal] Calculating EMP201 using Accounting PAYE/UIF Calculator from Taxable Income...`);
+      const emp201Result = createEMP201FromTaxableIncome(formData.period, filteredPayrollData, selectedEmployeeId);
       
       console.log(`✅ [AddReturnModal] EMP201 calculation completed:`, {
         totalEmployees: emp201Result.totalEmployees,
@@ -676,8 +823,11 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       // Update form amount
       setFormData(prev => ({
         ...prev,
-        amount: emp201Result.totalEMP201Amount.toFixed(2)
+        amount: (emp201Result.totalEMP201Amount || 0).toFixed(2)
       }));
+      
+      // NEW APPROACH: Values now come directly from Employee Deductions Management (authoritative source)
+      console.log('✅ [AddReturnModal] PAYE/UIF values sourced directly from Employee Deductions Management (authoritative source)');
       
       const employeeDescription = selectedEmployeeId 
         ? `(${filteredPayrollData[0]?.employeeName || 'Selected Employee'})`
@@ -695,6 +845,128 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       setIsCalculating(false);
     }
   };
+
+  // NEW APPROACH: Direct fetch from Employee Deductions Management
+  const fetchPAYEUIFFromDeductions = React.useCallback((employeeId: string): DirectPAYEUIFData => {
+    console.log('🔗 [AddReturnModal] Fetching PAYE/UIF directly from Employee Deductions Management...');
+    return directDeductionsLinkService.fetchPAYEUIFFromDeductions(employeeId);
+  }, []);
+
+  // ACCOUNTING PAYE/UIF CALCULATION: Calculate directly from Taxable Income using SA tax requirements
+  const createEMP201FromTaxableIncome = React.useCallback((period: string, payrollData: PayrollCalculation[], selectedEmployeeId?: string): EMP201Calculation => {
+    console.log('💼 [AddReturnModal] Creating EMP201 using Accounting PAYE/UIF Calculator from Taxable Income');
+    
+    const periodName = formatPeriodName(period);
+    const employeesWithMissingData: string[] = [];
+    
+    // Prepare employee data for batch calculation
+    const employeesForCalculation = payrollData.map(payroll => {
+      const taxableIncome = payroll.attendancePay || 0; // Use attendancePay as Taxable Income
+      
+      // Validate taxable income
+      const validation = accountingPayeUifCalculatorService.validateTaxableIncome(taxableIncome);
+      if (!validation.valid) {
+        employeesWithMissingData.push(payroll.employeeName);
+        console.warn(`⚠️ [AddReturnModal] ${payroll.employeeName}: ${validation.message}`);
+      }
+      
+      return {
+        employeeId: payroll.employeeId,
+        employeeName: payroll.employeeName,
+        taxableIncome: taxableIncome
+      };
+    });
+    
+    // Calculate PAYE and UIF using Accounting calculator
+    const calculationResult = accountingPayeUifCalculatorService.calculateBatch(employeesForCalculation);
+    
+    // Build employee breakdown
+    const employeeBreakdown = calculationResult.results.map(result => {
+      const payrollRecord = payrollData.find(p => p.employeeId === result.employeeId);
+      const grossSalary = payrollRecord?.baseSalary || 0;
+      const uifSalary = Math.min(result.taxableIncome, 17712); // UIF salary cap
+      const totalDeductions = result.paye + result.uif;
+      const netSalary = grossSalary - totalDeductions;
+      
+      // Determine PAYE bracket for display
+      let payeBracket = 'R0 - R7,100 (18%)';
+      if (result.taxableIncome > 64733) payeBracket = 'R64,733+ (45%)';
+      else if (result.taxableIncome > 36800) payeBracket = 'R36,800 - R64,733 (41%)';
+      else if (result.taxableIncome > 26183) payeBracket = 'R26,183 - R36,800 (39%)';
+      else if (result.taxableIncome > 19133) payeBracket = 'R19,133 - R26,183 (36%)';
+      else if (result.taxableIncome > 11600) payeBracket = 'R11,600 - R19,133 (31%)';
+      else if (result.taxableIncome > 7100) payeBracket = 'R7,100 - R11,600 (26%)';
+      
+      return {
+        employeeId: result.employeeId,
+        employeeName: result.employeeName,
+        grossSalary: grossSalary,
+        taxableIncome: result.taxableIncome,
+        paye: result.paye,
+        payeBracket: payeBracket,
+        uifSalary: uifSalary,
+        uifEmployee: result.uif,
+        uifTotal: result.uif, // Only employee UIF for accounting
+        sdl: 0, // SDL disabled per user request
+        totalDeductions: totalDeductions,
+        netSalary: netSalary,
+        // Optional warning properties
+        missingBaseSalary: grossSalary === 0,
+        missingAttendancePay: result.taxableIncome === 0,
+        warningMessage: result.taxableIncome === 0 ? 'Taxable Income missing — cannot calculate PAYE/UIF. Please set Taxable Income in HR/Payroll.' : undefined
+      };
+    });
+    
+    // Show warning if any employees have missing taxable income data
+    if (employeesWithMissingData.length > 0) {
+      const warningMessage = `Taxable Income missing for ${employeesWithMissingData.length} employee(s): ${employeesWithMissingData.join(', ')}. Please set Taxable Income in HR/Payroll.`;
+      console.warn(`⚠️ [AddReturnModal] ${warningMessage}`);
+      toast.warning('Missing Taxable Income', {
+        description: warningMessage
+      });
+    }
+    
+    const totalTaxableIncome = calculationResult.results.reduce((sum, r) => sum + r.taxableIncome, 0);
+    
+    const result: EMP201Calculation = {
+      period,
+      periodName,
+      totalEmployees: payrollData.length,
+      totalPAYE: calculationResult.totalPAYE,
+      totalTaxableIncome: Math.round(totalTaxableIncome * 100) / 100,
+      totalUIF: calculationResult.totalUIF,
+      totalUIFEmployee: calculationResult.totalUIF,
+      totalUIFSalaries: Math.round(payrollData.reduce((sum, p) => sum + Math.min(p.attendancePay || 0, 17712), 0) * 100) / 100,
+      totalSDL: 0, // Disabled per user request
+      totalSDLSalaries: 0,
+      isSDLApplicable: false,
+      annualPayrollEstimate: Math.round(totalTaxableIncome * 12 * 100) / 100,
+      totalEMP201Amount: Math.round((calculationResult.totalPAYE + calculationResult.totalUIF) * 100) / 100,
+      employeeBreakdown,
+      calculatedDate: calculationResult.calculatedAt
+    };
+    
+    console.log('✅ [AddReturnModal] EMP201 created using Accounting PAYE/UIF Calculator:', {
+      totalPAYE: result.totalPAYE,
+      totalUIF: result.totalUIF,
+      totalEMP201Amount: result.totalEMP201Amount,
+      source: 'Accounting Calculation from Taxable Income',
+      employeesWithMissingData: employeesWithMissingData.length
+    });
+    
+    return result;
+  }, []);
+
+  // Format period name for display
+  const formatPeriodName = React.useCallback((period: string): string => {
+    try {
+      const [year, month] = period.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1);
+      return date.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+    } catch (error) {
+      return period;
+    }
+  }, []);
 
   // Handle employee selection change with HR-Accounting linking
   const handleEmployeeSelectionChange = (value: string) => {
@@ -762,6 +1034,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     if (formData.type === 'PAYE_EMP201' && formData.period) {
       setTimeout(() => {
         calculateEMP201Amount();
+        loadHRLinkedValues();
       }, 100);
     }
   };
@@ -772,9 +1045,13 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
   useEffect(() => {
     if (formData.type === 'PAYE_EMP201' && formData.period && (formData.selectedEmployee || formData.calculateAllEmployees)) {
       calculateEMP201Amount();
+      loadHRLinkedValues();
     } else if (formData.type !== 'PAYE_EMP201') {
       setShowEMP201Breakdown(false);
       setEmp201Data(null);
+      setHrLinkedPAYE(null);
+      setHrLinkedUIF(null);
+      setHrLinkedTotals(null);
     }
   }, [formData.type, formData.selectedEmployee, formData.calculateAllEmployees]);
 
@@ -994,7 +1271,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                             <div className="flex flex-col">
                               <span className="font-medium">{hrOption.hrData.employeeName}</span>
                               <span className="text-xs text-slate-500">
-                                HR Payroll: R {hrOption.hrData.attendancePay.toFixed(2)} taxable income
+                                HR Payroll: R {(hrOption.hrData.attendancePay || 0).toFixed(2)} taxable income
                               </span>
                             </div>
                           </div>
@@ -1053,12 +1330,12 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                 {errors.amount && <p className="text-red-500 text-xs">{errors.amount}</p>}
                 {formData.type === 'VAT201' && vat201Data && (
                   <p className="text-xs text-slate-600">
-                    Net VAT {vat201Data.netVAT >= 0 ? 'Payable' : 'Refundable'}: R {Math.abs(vat201Data.netVAT).toFixed(2)}
+                    Net VAT {vat201Data.netVAT >= 0 ? 'Payable' : 'Refundable'}: R {Math.abs(vat201Data.netVAT || 0).toFixed(2)}
                   </p>
                 )}
                 {formData.type === 'PAYE_EMP201' && emp201Data && (
                   <p className="text-xs text-slate-600">
-                    Total EMP201 Amount: R {emp201Data.totalEMP201Amount.toFixed(2)} 
+                    Total EMP201 Amount: R {(emp201Data.totalEMP201Amount || 0).toFixed(2)} 
                     ({emp201Data.totalEmployees} employee{emp201Data.totalEmployees !== 1 ? 's' : ''})
                   </p>
                 )}
@@ -1137,7 +1414,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                         Input VAT (VAT Collected)
                       </h5>
                       <span className="text-sm font-bold text-green-600">
-                        R {vat201Data.inputVAT.total.toFixed(2)}
+                        R {(vat201Data.inputVAT.total || 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="space-y-1 text-xs text-slate-600">
@@ -1168,7 +1445,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                         Output VAT (VAT Paid)
                       </h5>
                       <span className="text-sm font-bold text-blue-600">
-                        R {vat201Data.outputVAT.total.toFixed(2)}
+                        R {(vat201Data.outputVAT.total || 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="space-y-1 text-xs text-slate-600">
@@ -1197,14 +1474,14 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                       <span className={`text-lg font-bold ${
                         vat201Data.netVAT >= 0 ? 'text-mokm-purple-600' : 'text-green-600'
                       }`}>
-                        R {Math.abs(vat201Data.netVAT).toFixed(2)}
+                        R {Math.abs(vat201Data.netVAT || 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="text-xs text-slate-600">
                       <div className="flex justify-between items-center">
                         <span>Input VAT - Output VAT = Net VAT</span>
                         <span className="text-mokm-purple-600 font-medium">
-                          <span>R{vat201Data.inputVAT.total.toFixed(2)} - R{vat201Data.outputVAT.total.toFixed(2)} = R{vat201Data.netVAT.toFixed(2)}</span>
+                          <span>R{(vat201Data.inputVAT.total || 0).toFixed(2)} - R{(vat201Data.outputVAT.total || 0).toFixed(2)} = R{(vat201Data.netVAT || 0).toFixed(2)}</span>
                         </span>
                       </div>
                       <div className="mt-2 pt-2 border-t border-mokm-purple-100">
@@ -1251,8 +1528,102 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                 <div className="text-sm text-mokm-purple-800 space-y-1">
                   <p>✓ <strong>Tax Period:</strong> Auto-generated based on current month</p>
                   <p>✓ <strong>Due Date:</strong> Automatically set to 7th of following month</p>
-                  <p>✓ <strong>PAYE:</strong> Calculated from employee payroll data using SARS 2024/2025 tax brackets</p>
-                  <p>✓ <strong>UIF & SDL:</strong> Calculated according to South African labor law requirements</p>
+                  <p>✓ <strong>PAYE & UIF:</strong> Calculated from Taxable Income using South African tax requirements</p>
+                </div>
+              </div>
+            )}
+
+            {/* HR Payroll Linked Values (read-only) */}
+            {formData.type === 'PAYE_EMP201' && (
+              <div className="space-y-3 p-4 bg-white rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="font-medium text-slate-900">HR Payroll Linked Values (read-only)</h5>
+                    <p className="text-xs text-slate-500">Source: HR Management › Payroll › Deductions Breakdown. Edit in HR Payroll only.</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={handleRefreshFromHR} disabled={isRefreshingHR}>
+                    {isRefreshingHR ? 'Refreshing…' : 'Refresh from HR'}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {formData.calculateAllEmployees ? (
+                    <>
+                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                        <div className="text-xs text-slate-600 flex items-center gap-1">
+                          Total PAYE (HR)
+                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions">i</span>
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900">
+                          R {hrLinkedTotals ? (hrLinkedTotals.paye || 0).toFixed(2) : '0.00'}
+                        </div>
+                        {hrLinkedTotals && hrLinkedTotals.paye !== (emp201Data?.totalPAYE || 0) && (
+                          <div className="text-[10px] text-amber-700 mt-1">Payroll value differs — showing HR Payroll value.</div>
+                        )}
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                        <div className="text-xs text-slate-600 flex items-center gap-1">
+                          Total UIF (HR)
+                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions">i</span>
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900">
+                          R {hrLinkedTotals ? (hrLinkedTotals.uif || 0).toFixed(2) : '0.00'}
+                        </div>
+                        {emp201Data && emp201Data.totalUIFSalaries < emp201Data.totalTaxableIncome && (
+                          <div className="text-[10px] text-amber-700 mt-1">UIF capped at R17,712 salary per employee</div>
+                        )}
+                        {hrLinkedTotals && hrLinkedTotals.uif > 177.12 && (
+                          <div className="text-[10px] text-amber-700 mt-1">UIF exceeds monthly cap (R177.12) — capped in calculation</div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                        <div className="text-xs text-slate-600 flex items-center gap-1">
+                          Employee PAYE (HR)
+                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions Breakdown">i</span>
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900">
+                          R {hrLinkedPAYE !== null ? (hrLinkedPAYE || 0).toFixed(2) : '0.00'}
+                        </div>
+                        {hrLinkedPAYE !== null && emp201Data?.employeeBreakdown?.[0] && hrLinkedPAYE !== emp201Data.employeeBreakdown[0].paye && (
+                          <div className="text-[10px] text-amber-700 mt-1">Payroll value differs — showing HR Payroll value.</div>
+                        )}
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                        <div className="text-xs text-slate-600 flex items-center gap-1">
+                          Employee UIF (HR)
+                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions Breakdown">i</span>
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900">
+                          R {hrLinkedUIF !== null ? (hrLinkedUIF || 0).toFixed(2) : '0.00'}
+                        </div>
+                        {(() => {
+                          const b = emp201Data?.employeeBreakdown?.[0];
+                          return b && b.uifSalary < b.taxableIncome ? (
+                            <div className="text-[10px] text-amber-700 mt-1">UIF capped at R17,712 salary</div>
+                          ) : null;
+                        })()}
+                        {hrLinkedUIF !== null && hrLinkedUIF > 177.12 && (
+                          <div className="text-[10px] text-amber-700 mt-1">UIF exceeds monthly cap (R177.12) — capped in calculation</div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="text-center pt-2 border-t border-slate-200">
+                  <p className="text-xs text-slate-500">
+                    Last synced: {(() => {
+                      try {
+                        const snapshot = localStorage.getItem('accounting_hr_link_snapshot');
+                        if (snapshot) {
+                          const data = JSON.parse(snapshot);
+                          return new Date(data.timestamp).toLocaleString();
+                        }
+                      } catch (e) {}
+                      return 'Never';
+                    })()}
+                  </p>
                 </div>
               </div>
             )}
@@ -1292,6 +1663,12 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                       <h5 className="font-medium text-slate-800 flex items-center gap-2">
                         <DollarSign className="h-4 w-4 text-red-600" />
                         PAYE
+                        <span 
+                          className="flex w-3 h-3 bg-blue-100 rounded-full text-[8px] text-blue-700 items-center justify-center cursor-help" 
+                          title="Calculated from Taxable Income (source field)"
+                        >
+                          ✓
+                        </span>
                       </h5>
                       <span className="text-sm font-bold text-red-600">
                         R {emp201Data?.totalPAYE?.toFixed(2) || '0.00'}
@@ -1315,6 +1692,12 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                       <h5 className="font-medium text-slate-800 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-blue-600" />
                         UIF
+                        <span 
+                          className="flex w-3 h-3 bg-blue-100 rounded-full text-[8px] text-blue-700 items-center justify-center cursor-help" 
+                          title="Calculated from Taxable Income (source field)"
+                        >
+                          ✓
+                        </span>
                       </h5>
                       <span className="text-sm font-bold text-blue-600">
                         R {emp201Data?.totalUIF?.toFixed(2) || '0.00'}
@@ -1327,7 +1710,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                       </div>
                       <div className="flex justify-between">
                         <span>Employer (1%):</span>
-                        <span>R {emp201Data?.totalUIFEmployer?.toFixed(2) || '0.00'}</span>
+                        <span>R {emp201Data?.totalUIFEmployee?.toFixed(2) || '0.00'}</span>
                       </div>
                     </div>
                   </div>
@@ -1384,15 +1767,15 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                                 </td>
                                 <td className="px-3 py-2 text-right text-slate-600">
                                   <div className="flex flex-col items-end">
-                                    <span>R {employee.grossSalary.toFixed(2)}</span>
+                                    <span>R {(employee.grossSalary || 0).toFixed(2)}</span>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 text-right text-slate-600">
                                   <div className="flex flex-col items-end">
-                                    <span>R {employee.taxableIncome.toFixed(2)}</span>
+                                    <span>R {(employee.taxableIncome || 0).toFixed(2)}</span>
                                     {employee.hasNegativeTaxableIncome && (
                                       <span className="text-xs text-amber-600 italic">
-                                        Adjusted from R{employee.rawTaxableIncome?.toFixed(2) || '0.00'}
+                                        Adjusted from R{(employee.rawTaxableIncome || 0).toFixed(2)}
                                       </span>
                                     )}
                                     {employee.taxableIncome <= 0 && (
@@ -1403,16 +1786,16 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 text-right text-red-600 font-medium">
-                                  R {employee.paye.toFixed(2)}
+                                  R {(employee.paye || 0).toFixed(2)}
                                 </td>
                                 <td className="px-3 py-2 text-right text-blue-600 font-medium">
-                                  R {employee.uifTotal.toFixed(2)}
+                                  R {(employee.uifTotal || 0).toFixed(2)}
                                 </td>
                                 <td className="px-3 py-2 text-right text-green-600 font-medium">
-                                  R {employee.sdl.toFixed(2)}
+                                  R {(employee.sdl || 0).toFixed(2)}
                                 </td>
                                 <td className="px-3 py-2 text-right font-bold text-slate-800">
-                                  R {(employee.paye + employee.uifTotal + employee.sdl).toFixed(2)}
+                                  R {((employee.paye || 0) + (employee.uifTotal || 0) + (employee.sdl || 0)).toFixed(2)}
                                 </td>
                               </tr>
                               {employee.hasNegativeTaxableIncome && (
@@ -1420,7 +1803,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                                   <td colSpan={7} className="px-3 py-2 text-xs text-amber-700 border-l-4 border-amber-400">
                                     <div className="flex items-center gap-2">
                                       <span className="font-medium">⚠️ Warning:</span>
-                                      <span>Taxable income was negative (R{employee.rawTaxableIncome?.toFixed(2) || '0.00'}) — set to R0.00. Please review HR deductions.</span>
+                                      <span>Taxable income was negative (R{(employee.rawTaxableIncome || 0).toFixed(2)}) — set to R0.00. Please review HR deductions.</span>
                                     </div>
                                   </td>
                                 </tr>
@@ -1448,7 +1831,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                     <div className="flex justify-between items-center">
                       <span>PAYE + UIF + SDL = Total</span>
                       <span className="text-mokm-purple-600 font-medium">
-                        R{emp201Data?.totalPAYE?.toFixed(2) || '0.00'} + R{emp201Data?.totalUIF?.toFixed(2) || '0.00'} + R{emp201Data?.totalSDL?.toFixed(2) || '0.00'} = R{emp201Data?.totalEMP201Amount?.toFixed(2) || '0.00'}
+                        R{(emp201Data?.totalPAYE || 0).toFixed(2)} + R{(emp201Data?.totalUIF || 0).toFixed(2)} + R{(emp201Data?.totalSDL || 0).toFixed(2)} = R{(emp201Data?.totalEMP201Amount || 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="mt-2 pt-2 border-t border-mokm-purple-100">
@@ -1474,8 +1857,13 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                     Last calculated: {new Date().toLocaleString()}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    Calculation based on payroll data for period {emp201Data?.periodName || 'N/A'} using SARS 2024/2025 tax brackets
+                    <strong>Calculated from Taxable Income (source field).</strong> PAYE uses SARS 2025/2026 tax brackets. UIF is 1% of Taxable Income, capped at R177.12 monthly.
                   </p>
+                  {emp201Data?.employeeBreakdown?.some(emp => emp.warningMessage) && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Some employees have missing Taxable Income — please set Taxable Income in HR/Payroll.
+                    </p>
+                  )}
                 </div>
               </div>
             )}

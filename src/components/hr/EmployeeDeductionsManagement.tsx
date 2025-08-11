@@ -11,7 +11,10 @@ import {
   Filter,
   Download,
   Eye,
-  X
+  X,
+  Calculator,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +29,8 @@ import { toast } from 'sonner';
 import { employeeDeductionsService, EmployeeDeduction, DeductionType, DEDUCTION_TYPES } from '@/services/employeeDeductionsService';
 import { getAllEmployees, Employee } from '@/services/employeeService';
 import { formatCurrency } from '@/lib/utils';
+import { saPayrollCalculatorService, SAPayrollCalculation } from '@/services/saPayrollCalculatorService';
+import { payrollCalculationService } from '@/services/payrollCalculationService';
 
 interface EmployeeDeductionsManagementProps {
   onClose?: () => void;
@@ -42,6 +47,11 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedDeduction, setSelectedDeduction] = useState<EmployeeDeduction | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // PAYE/UIF calculation state
+  const [payeUifCalculations, setPayeUifCalculations] = useState<SAPayrollCalculation[]>([]);
+  const [showPayeUifSection, setShowPayeUifSection] = useState(true);
+  const [isCalculatingPayeUif, setIsCalculatingPayeUif] = useState(false);
 
   // Form state for add/edit deduction
   const [deductionForm, setDeductionForm] = useState({
@@ -60,7 +70,74 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
   useEffect(() => {
     loadDeductions();
     loadEmployees();
+    calculatePayeUifForAllEmployees();
   }, []);
+
+  // Calculate PAYE and UIF for all employees using Attendance Pay
+  const calculatePayeUifForAllEmployees = async () => {
+    setIsCalculatingPayeUif(true);
+    
+    try {
+      console.log('🧮 [EmployeeDeductionsManagement] Starting PAYE/UIF calculations using Attendance Pay');
+      
+      // Get all payroll calculations to access Attendance Pay
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+      const allPayrollCalculations = payrollCalculationService.getPayrollCalculations(currentMonth);
+      console.log(`📊 Found ${allPayrollCalculations.length} payroll calculations for ${currentMonth}`);
+      
+      if (allPayrollCalculations.length === 0) {
+        console.warn('⚠️ No payroll calculations found - cannot calculate PAYE/UIF');
+        toast.warning('No payroll calculations found', {
+          description: 'Please calculate payroll first to generate PAYE/UIF deductions.'
+        });
+        setPayeUifCalculations([]);
+        return;
+      }
+
+      // Prepare employee data with Attendance Pay
+      const employeesWithAttendancePay = allPayrollCalculations
+        .filter(calc => calc.attendancePay > 0) // Only employees with attendance pay
+        .map(calc => ({
+          employeeId: calc.employeeId,
+          employeeName: calc.employeeName,
+          attendancePay: calc.attendancePay
+        }));
+
+      console.log(`👥 Processing ${employeesWithAttendancePay.length} employees with Attendance Pay`);
+
+      if (employeesWithAttendancePay.length === 0) {
+        console.warn('⚠️ No employees with Attendance Pay found');
+        toast.warning('No Attendance Pay data found', {
+          description: 'No employees have Attendance Pay calculated. Please ensure payroll is processed.'
+        });
+        setPayeUifCalculations([]);
+        return;
+      }
+
+      // Calculate PAYE/UIF using South African regulations
+      const batchResult = saPayrollCalculatorService.calculateBatchPayroll(employeesWithAttendancePay);
+      
+      console.log('✅ PAYE/UIF calculations completed:');
+      console.log(`    Total PAYE: R${batchResult.totalPAYE.toFixed(2)}`);
+      console.log(`    Total UIF Employee: R${batchResult.totalUIFEmployee.toFixed(2)}`);
+      console.log(`    Total UIF Employer: R${batchResult.totalUIFEmployer.toFixed(2)}`);
+
+      setPayeUifCalculations(batchResult.calculations);
+      
+      toast.success('PAYE/UIF calculations completed', {
+        description: `Calculated for ${batchResult.calculations.length} employees using Attendance Pay`
+      });
+
+    } catch (error) {
+      console.error('❌ Error calculating PAYE/UIF:', error);
+      toast.error('Failed to calculate PAYE/UIF', {
+        description: 'Please try again or check console for details.'
+      });
+      setPayeUifCalculations([]);
+    } finally {
+      setIsCalculatingPayeUif(false);
+    }
+  };
 
   const loadDeductions = () => {
     const allDeductions = employeeDeductionsService.getAllDeductions();
@@ -69,7 +146,13 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
 
   const loadEmployees = () => {
     const allEmployees = getAllEmployees();
-    setEmployees(allEmployees);
+    // Exclude the seeded Regular User from appearing in this modal
+    const filtered = allEmployees.filter(emp => {
+      const byEmail = (emp.email || '').toLowerCase() === 'user@mokmzansibooks.com';
+      const byName = (emp.firstName?.trim() === 'Regular' && emp.surname?.trim() === 'User');
+      return !(byEmail || byName);
+    });
+    setEmployees(filtered);
   };
 
   // Filter deductions based on search and filters
@@ -297,6 +380,162 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
           </CardContent>
         </Card>
       </div>
+
+      {/* PAYE/UIF Calculations Section */}
+      {showPayeUifSection && (
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <Calculator className="h-5 w-5 text-mokm-purple-500" />
+                  PAYE & UIF Calculations
+                </CardTitle>
+                <p className="text-sm text-slate-600 mt-1">
+                  Calculated from Attendance Pay using South African tax regulations
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={calculatePayeUifForAllEmployees}
+                  disabled={isCalculatingPayeUif}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isCalculatingPayeUif ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Calculating...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Recalculate
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={() => setShowPayeUifSection(false)}
+                  variant="ghost"
+                  size="sm"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {payeUifCalculations.length === 0 ? (
+              <div className="text-center py-8">
+                <AlertCircle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                <p className="text-slate-600 mb-2">No PAYE/UIF calculations available</p>
+                <p className="text-sm text-slate-500">
+                  No Attendance Pay found — unable to calculate UIF/PAYE.
+                </p>
+                <Button
+                  onClick={calculatePayeUifForAllEmployees}
+                  className="mt-4"
+                  disabled={isCalculatingPayeUif}
+                >
+                  Calculate Now
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* Summary totals */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gradient-to-r from-mokm-purple-50 to-mokm-blue-50 p-4 rounded-lg border border-mokm-purple-200">
+                    <p className="text-sm font-medium text-mokm-purple-700">Total PAYE</p>
+                    <p className="text-xl font-bold text-mokm-purple-900">
+                      R {payeUifCalculations.reduce((sum, calc) => sum + calc.paye, 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-r from-mokm-blue-50 to-mokm-pink-50 p-4 rounded-lg border border-mokm-blue-200">
+                    <p className="text-sm font-medium text-mokm-blue-700">Total UIF (Employee)</p>
+                    <p className="text-xl font-bold text-mokm-blue-900">
+                      R {payeUifCalculations.reduce((sum, calc) => sum + calc.uifEmployee, 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-r from-mokm-pink-50 to-mokm-purple-50 p-4 rounded-lg border border-mokm-pink-200">
+                    <p className="text-sm font-medium text-mokm-pink-700">Total UIF (Employer)</p>
+                    <p className="text-xl font-bold text-mokm-pink-900">
+                      R {payeUifCalculations.reduce((sum, calc) => sum + calc.uifEmployer, 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-4 rounded-lg border border-slate-200">
+                    <p className="text-sm font-medium text-slate-700">Employees</p>
+                    <p className="text-xl font-bold text-slate-900">{payeUifCalculations.length}</p>
+                  </div>
+                </div>
+
+                {/* Individual calculations table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="text-left py-3 px-4 font-medium text-slate-600">Employee</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-600">
+                          Attendance Pay
+                          <span 
+                            className="flex ml-1 w-3 h-3 bg-green-100 rounded-full text-[8px] text-green-700 items-center justify-center cursor-help" 
+                            title="Calculated from Attendance Pay – South African Compliance"
+                          >
+                            ✓
+                          </span>
+                        </th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-600">PAYE</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-600">UIF (Employee)</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-600">UIF (Employer)</th>
+                        <th className="text-left py-3 px-4 font-medium text-slate-600">Net Pay</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payeUifCalculations.map((calc) => (
+                        <tr key={calc.employeeId} className="border-b border-slate-100 hover:bg-slate-50/50">
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-medium text-slate-900">{calc.employeeName}</p>
+                              <p className="text-xs text-slate-500">{calc.employeeId}</p>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-slate-900">R {calc.attendancePay.toFixed(2)}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className="bg-mokm-purple-50 text-mokm-purple-700 border-mokm-purple-200">
+                              R {calc.paye.toFixed(2)}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className="bg-mokm-blue-50 text-mokm-blue-700 border-mokm-blue-200">
+                              R {calc.uifEmployee.toFixed(2)}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge variant="outline" className="bg-mokm-pink-50 text-mokm-pink-700 border-mokm-pink-200">
+                              R {calc.uifEmployer.toFixed(2)}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-green-700">R {calc.netPay.toFixed(2)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 p-3 bg-mokm-purple-50 rounded-lg border border-mokm-purple-200">
+                  <p className="text-sm text-mokm-purple-800">
+                    <strong>Note:</strong> PAYE and UIF calculations are based on Attendance Pay from Employee Payroll Calculations 
+                    and comply with South African tax regulations. UIF is capped at R177.12 per month per employee.
+                  </p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20">

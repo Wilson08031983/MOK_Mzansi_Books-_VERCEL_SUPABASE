@@ -30,8 +30,12 @@ import { PayslipService } from '@/services/payslipService';
 import { Employee, getAllEmployees } from '@/services/employeeService';
 import EmployeeDeductionsManagement from '@/components/hr/EmployeeDeductionsManagement';
 import { employeeDeductionsService } from '@/services/employeeDeductionsService';
+import { saPayrollCalculatorService } from '@/services/saPayrollCalculatorService';
 import PayrollExpenseIntegration from '@/components/payroll/PayrollExpenseIntegration';
 import PayrollTestRunner from '@/components/testing/PayrollTestRunner';
+
+import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
+// Removed PAYE sync from Accounting feature
 
 // Import salary calculation functions from AllowanceManagement
 interface MonthlyAttendance {
@@ -106,6 +110,51 @@ const UIF_CONSTANTS = {
 
 const STANDARD_MONTHLY_HOURS = 173.33;
 
+// South African PAYE tax brackets for 2024/2025
+const SA_TAX_CONSTANTS = {
+  PAYE_BRACKETS: [
+    { min: 0, max: 237100, rate: 0.18 },
+    { min: 237100, max: 370500, rate: 0.26 },
+    { min: 370500, max: 512800, rate: 0.31 },
+    { min: 512800, max: 673000, rate: 0.36 },
+    { min: 673000, max: 857900, rate: 0.39 },
+    { min: 857900, max: 1817000, rate: 0.41 },
+    { min: 1817000, max: Infinity, rate: 0.45 }
+  ],
+  PRIMARY_REBATE: 17235 // Annual primary rebate for 2024/2025
+};
+
+const calculatePAYE = (annualTaxableIncome: number): number => {
+  if (annualTaxableIncome <= 0) return 0;
+  
+  // Convert monthly to annual for calculation
+  const annualIncome = annualTaxableIncome * 12;
+  
+  let tax = 0;
+  let remainingIncome = annualIncome;
+  
+  for (const bracket of SA_TAX_CONSTANTS.PAYE_BRACKETS) {
+    if (remainingIncome <= 0) break;
+    
+    const bracketMin = bracket.min;
+    const bracketMax = bracket.max === Infinity ? remainingIncome + bracketMin : bracket.max;
+    
+    if (annualIncome > bracketMin) {
+      const taxableInBracket = Math.min(remainingIncome, bracketMax - bracketMin);
+      const bracketTax = taxableInBracket * bracket.rate;
+      tax += bracketTax;
+      remainingIncome -= taxableInBracket;
+    }
+  }
+  
+  // Subtract primary rebate
+  tax -= SA_TAX_CONSTANTS.PRIMARY_REBATE;
+  if (tax < 0) tax = 0;
+  
+  // Convert back to monthly
+  return tax / 12;
+};
+
 const calculateUIF = (grossSalary: number): UIFCalculation => {
   const cappedSalary = Math.min(grossSalary, UIF_CONSTANTS.MONTHLY_SALARY_CAP);
   const employeeContribution = Math.min(cappedSalary * UIF_CONSTANTS.EMPLOYEE_RATE, UIF_CONSTANTS.MAX_MONTHLY_CONTRIBUTION);
@@ -177,8 +226,19 @@ const getMonthlyAttendance = (employeeId: string): MonthlyAttendance => {
 };
 
 const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendance, allowances: EmployeeAllowances): SalaryBreakdown => {
+  console.log(`🔍 [calculateEmployeeSalary] Starting calculation for: ${employee.firstName} ${employee.surname}`);
+  console.log(`🔍 [calculateEmployeeSalary] Employee ID: ${employee.id}`);
+  console.log(`🔍 [calculateEmployeeSalary] Employee Salary: R${employee.salary}`);
+  
   const baseSalary = employee.salary || 0;
   const hourlyRate = baseSalary / STANDARD_MONTHLY_HOURS;
+  
+  console.log(`🔍 [calculateEmployeeSalary] Base Salary: R${baseSalary}, Hourly Rate: R${hourlyRate.toFixed(2)}`);
+  console.log(`🔍 [calculateEmployeeSalary] Attendance Hours:`, {
+    regular: attendance.regularHours,
+    overtime: attendance.overtimeHours,
+    nightShift: attendance.nightShiftHours
+  });
   
   // Calculate attendance-based pay with proper South African labor law rates
   const regularPay = attendance.regularHours * hourlyRate;
@@ -186,14 +246,21 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   const nightShiftPay = attendance.nightShiftHours * hourlyRate * 0.1; // 10% night shift allowance
   const attendancePay = regularPay + overtimePay + nightShiftPay;
   
+  console.log(`🔍 [calculateEmployeeSalary] Pay Breakdown:`, {
+    regularPay: regularPay.toFixed(2),
+    overtimePay: overtimePay.toFixed(2),
+    nightShiftPay: nightShiftPay.toFixed(2),
+    totalAttendancePay: attendancePay.toFixed(2)
+  });
+  
   // Calculate total allowances
   const totalAllowances = Object.values(allowances).reduce((sum, val) => sum + val, 0);
   
   // Calculate gross salary (attendance-based pay + allowances)
   const grossSalary = attendancePay + totalAllowances;
   
-  // Calculate deductions
-  const tax = grossSalary * ((employee.taxPercentage || 0) / 100);
+  // Calculate deductions using PAYE (South African tax brackets)
+  const tax = calculatePAYE(attendancePay); // Use attendance pay as taxable income
   const uif = calculateUIF(grossSalary);
   
   // Calculate salary advance deductions for approved advances in current period
@@ -205,6 +272,12 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
     );
   const salaryAdvanceDeduction = approvedAdvances.reduce((sum, advance) => sum + advance.amount, 0);
   
+  console.log(`Salary advance calculation for ${employee.firstName} ${employee.surname}:`);
+  console.log(`  - Current period: ${currentPeriod}`);
+  console.log(`  - All advances:`, payrollCalculationService.getSalaryAdvances(employee.id));
+  console.log(`  - Approved advances for current period:`, approvedAdvances);
+  console.log(`  - Total advance deduction: R${salaryAdvanceDeduction.toFixed(2)}`);
+  
   // Calculate employee deductions from Employee Deductions Management
   const deductionCalculation = employeeDeductionsService.calculateEmployeeDeductions(employee.id, grossSalary);
   const employeeDeductions = deductionCalculation.totalDeductions;
@@ -214,7 +287,7 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   
   console.log(`Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = R${attendancePay.toFixed(2)}, Advance Deduction = R${salaryAdvanceDeduction.toFixed(2)}, Employee Deductions = R${employeeDeductions.toFixed(2)}`);
   
-  return {
+  const finalCalculation = {
     employeeId: employee.id,
     employeeName: `${employee.firstName} ${employee.surname}`,
     baseSalary,
@@ -227,6 +300,17 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
     employeeDeductions,
     netSalary
   };
+  
+  console.log(`🎯 [calculateEmployeeSalary] FINAL RESULT for ${employee.firstName} ${employee.surname}:`, {
+    employeeId: finalCalculation.employeeId,
+    employeeName: finalCalculation.employeeName,
+    baseSalary: `R${finalCalculation.baseSalary.toFixed(2)}`,
+    attendancePay: `R${finalCalculation.attendancePay.toFixed(2)}`,
+    grossSalary: `R${finalCalculation.grossSalary.toFixed(2)}`,
+    netSalary: `R${finalCalculation.netSalary.toFixed(2)}`
+  });
+  
+  return finalCalculation;
 };
 
 const PayrollManagement: React.FC = () => {
@@ -250,14 +334,148 @@ const PayrollManagement: React.FC = () => {
   
   // Load data on component mount
   useEffect(() => {
+    initializeSampleData();
     loadSalaryData();
     loadSalaryAdvances();
-  }, [periodFilter]);
+    
+    // Initialize cleanup service to remove stuck PAYE sync toasts
+    stuckToastCleanupService.initialize();
+    
+    // Listen for localStorage changes from Accounting EMP201 sync
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'payrollCalculations' || e.key === 'accounting_hr_sync_audit') {
+        console.log('🔄 [PayrollManagement] Payroll data updated by Accounting sync, refreshing...');
+        loadSalaryData();
+        
+        // If payroll details modal is open, refresh the selected data
+        if (showPayrollDetails && selectedPayrollData) {
+          const updatedData = localStorage.getItem('payrollCalculations');
+          if (updatedData) {
+            const payrollArray = JSON.parse(updatedData);
+            const updatedPayroll = payrollArray.find((p: any) => p.employeeId === selectedPayrollData.employeeId);
+            if (updatedPayroll) {
+              console.log('🔄 [PayrollManagement] Refreshing payroll details modal with updated data');
+              setSelectedPayrollData(updatedPayroll);
+            }
+          }
+        }
+      }
+    };
+
+    // Listen for storage events from other tabs/windows
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also set up a periodic check for same-tab changes (since Accounting sync happens in same tab)
+    const intervalId = setInterval(() => {
+      const syncAudit = localStorage.getItem('accounting_hr_sync_audit');
+      if (syncAudit) {
+        try {
+          const audit = JSON.parse(syncAudit);
+          const auditTime = new Date(audit.timestamp).getTime();
+          const now = new Date().getTime();
+          
+          // If sync happened in last 5 seconds, refresh data
+          if (now - auditTime < 5000) {
+            console.log('🔄 [PayrollManagement] Recent Accounting sync detected, refreshing payroll data');
+            loadSalaryData();
+            
+            // Refresh payroll details modal if open
+            if (showPayrollDetails && selectedPayrollData) {
+              const updatedData = localStorage.getItem('payrollCalculations');
+              if (updatedData) {
+                const payrollArray = JSON.parse(updatedData);
+                const updatedPayroll = payrollArray.find((p: any) => p.employeeId === selectedPayrollData.employeeId);
+                if (updatedPayroll) {
+                  console.log('🔄 [PayrollManagement] Refreshing payroll details modal with synced data');
+                  setSelectedPayrollData(updatedPayroll);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          // Ignore parsing errors
+        }
+      }
+    }, 2000); // Check every 2 seconds
+    
+    // Cleanup on unmount
+    return () => {
+      stuckToastCleanupService.stop();
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(intervalId);
+    };
+  }, [periodFilter, showPayrollDetails, selectedPayrollData]);
+
+  const initializeSampleData = () => {
+    // Initialize sample employee deductions if none exist
+    const existingDeductions = employeeDeductionsService.getAllDeductions();
+    if (existingDeductions.length === 0) {
+      const employees = getAllEmployees();
+      if (employees.length > 0) {
+        // Add sample deduction for Admin User
+        const adminUser = employees.find(emp => emp.firstName === 'Admin' && emp.surname === 'User');
+        if (adminUser) {
+          employeeDeductionsService.addDeduction({
+            employeeId: adminUser.id,
+            employeeName: `${adminUser.firstName} ${adminUser.surname}`,
+            deductionType: 'medical',
+            amount: 850,
+            isPercentage: false,
+            description: 'Medical Aid Contribution',
+            isActive: true,
+            startDate: new Date().toISOString().slice(0, 10),
+          });
+        }
+
+
+      }
+    }
+
+    // Initialize sample salary advances if none exist
+    const existingAdvances = payrollCalculationService.getSalaryAdvances();
+    if (existingAdvances.length === 0) {
+      const employees = getAllEmployees();
+      if (employees.length > 0) {
+        const currentPeriod = new Date().toISOString().slice(0, 7);
+        
+        // Add sample salary advance for Admin User
+        const adminUser = employees.find(emp => emp.firstName === 'Admin' && emp.surname === 'User');
+        if (adminUser) {
+          payrollCalculationService.requestSalaryAdvance(
+            adminUser.id,
+            `${adminUser.firstName} ${adminUser.surname}`,
+            5000,
+            'Emergency medical expenses'
+          );
+          // Approve it immediately for sample data
+          const advances = payrollCalculationService.getSalaryAdvances(adminUser.id);
+          const latestAdvance = advances[advances.length - 1];
+          if (latestAdvance) {
+            payrollCalculationService.approveSalaryAdvance(latestAdvance.id, 'System');
+          }
+        }
+
+
+      }
+    }
+  };
   
   const loadSalaryData = () => {
     const employees = getAllEmployees();
-    const calculatedSalaries: SalaryBreakdown[] = employees.map(employee => {
+    console.log('🔄 [PayrollManagement] Loading salary data for employees:', employees.map(e => `${e.firstName} ${e.surname} (${e.id})`));
+    
+    // Exclude the seeded Regular User from payroll calculations
+    const filteredEmployees = employees.filter(emp => {
+      const byEmail = (emp.email || '').toLowerCase() === 'user@mokmzansibooks.com';
+      const byName = (emp.firstName?.trim() === 'Regular' && emp.surname?.trim() === 'User');
+      return !(byEmail || byName);
+    });
+    
+    const calculatedSalaries: SalaryBreakdown[] = filteredEmployees.map(employee => {
+      console.log(`🧮 [PayrollManagement] Calculating salary for: ${employee.firstName} ${employee.surname} (${employee.id})`);
+      
       const attendance = getMonthlyAttendance(employee.id);
+      console.log(`📊 [PayrollManagement] Attendance for ${employee.firstName} ${employee.surname}:`, attendance);
       
       // Get allowances from localStorage with default values
       const storedAllowances = JSON.parse(localStorage.getItem('employeeAllowances') || '{}');
@@ -270,15 +488,35 @@ const PayrollManagement: React.FC = () => {
         otherAllowances: 0
       };
       
-      return calculateEmployeeSalary(employee, attendance, employeeAllowances);
+      console.log(`💰 [PayrollManagement] Allowances for ${employee.firstName} ${employee.surname}:`, employeeAllowances);
+      
+      const salaryCalculation = calculateEmployeeSalary(employee, attendance, employeeAllowances);
+      console.log(`✅ [PayrollManagement] Final calculation for ${employee.firstName} ${employee.surname}:`, salaryCalculation);
+      
+      return salaryCalculation;
     });
     
+    // CRITICAL: Cache the payroll data for EMP201 service to use
+    console.log('💾 [PayrollManagement] Caching payroll calculations for EMP201 service...');
+    localStorage.setItem('payrollCalculations', JSON.stringify(calculatedSalaries));
+    
+    // Also cache with period-specific key for consistency
+    const currentPeriod = new Date().toISOString().slice(0, 7);
+    localStorage.setItem(`payroll_calculations_${currentPeriod}`, JSON.stringify(calculatedSalaries));
+    
+    console.log('✅ [PayrollManagement] Payroll data cached successfully');
     setSalaryData(calculatedSalaries);
   };
   
   const loadSalaryAdvances = () => {
-    const advances = payrollCalculationService.getSalaryAdvances();
-    setSalaryAdvances(advances);
+    try {
+      const advances = payrollCalculationService.getSalaryAdvances();
+      console.log('Loaded salary advances:', advances);
+      setSalaryAdvances(advances);
+    } catch (error) {
+      console.error('Error loading salary advances:', error);
+      setSalaryAdvances([]);
+    }
   };
   
   // Calculate payroll for all employees
@@ -328,19 +566,109 @@ const PayrollManagement: React.FC = () => {
   
   // Approve salary advance
   const handleApproveSalaryAdvance = (advanceId: string) => {
-    const success = payrollCalculationService.approveSalaryAdvance(advanceId, 'Admin User');
-    if (success) {
-      loadSalaryAdvances();
-      // Recalculate payroll to reflect the salary advance deduction
-      loadSalaryData();
-      toast.success('Salary advance approved and deducted from payroll');
-    } else {
-      toast.error('Failed to approve salary advance');
+    try {
+      console.log('Approving salary advance:', advanceId);
+      const success = payrollCalculationService.approveSalaryAdvance(advanceId, 'Admin User');
+      if (success) {
+        console.log('Salary advance approved successfully');
+        
+        // Force immediate refresh of salary advances
+        setTimeout(() => {
+          loadSalaryAdvances();
+          loadSalaryData();
+        }, 100);
+        
+        toast.success('Salary advance approved and deducted from payroll');
+      } else {
+        console.error('Failed to approve salary advance');
+        toast.error('Failed to approve salary advance');
+      }
+    } catch (error) {
+      console.error('Error approving salary advance:', error);
+      toast.error('Error approving salary advance');
+    }
+  };
+
+  // Reject salary advance
+  const handleRejectSalaryAdvance = (advanceId: string) => {
+    try {
+      console.log('Rejecting salary advance:', advanceId);
+      const success = payrollCalculationService.rejectSalaryAdvance(advanceId, 'Admin User');
+      if (success) {
+        console.log('Salary advance rejected successfully');
+        
+        // Force immediate refresh of salary advances
+        setTimeout(() => {
+          loadSalaryAdvances();
+        }, 100);
+        
+        toast.success('Salary advance request rejected');
+      } else {
+        console.error('Failed to reject salary advance');
+        toast.error('Failed to reject salary advance');
+      }
+    } catch (error) {
+      console.error('Error rejecting salary advance:', error);
+      toast.error('Error rejecting salary advance');
     }
   };
   
   // View payroll details
   const handleViewPayrollDetails = (calculation: SalaryBreakdown) => {
+    console.log('🔍 [PayrollManagement] Opening payroll details modal, loading fresh data from localStorage...');
+    
+    // CRITICAL: Load fresh payroll data from localStorage (may have been updated by Accounting sync)
+    const freshPayrollData = localStorage.getItem('payrollCalculations');
+    let currentCalculation = calculation;
+    
+    if (freshPayrollData) {
+      try {
+        const payrollArray = JSON.parse(freshPayrollData);
+        let freshCalculation = payrollArray.find((p: any) => p.employeeId === calculation.employeeId);
+        
+        // Fallback: sometimes Accounting and HR use different IDs for the same person.
+        // If no ID match, try matching by employeeName (case-insensitive, trimmed)
+        if (!freshCalculation) {
+          const targetName = (calculation.employeeName || '').trim().toLowerCase();
+          freshCalculation = payrollArray.find((p: any) => (p.employeeName || '').trim().toLowerCase() === targetName);
+          if (freshCalculation) {
+            console.log('🧩 [PayrollManagement] No ID match; matched fresh payroll by name:', {
+              employeeName: calculation.employeeName,
+              originalId: calculation.employeeId,
+              freshId: freshCalculation.employeeId
+            });
+          } else {
+            console.log('❓ [PayrollManagement] No fresh payroll match by ID or name; using existing state values');
+          }
+        }
+        
+        if (freshCalculation) {
+          console.log('✅ [PayrollManagement] Found fresh payroll data for employee:', {
+            employeeId: calculation.employeeId,
+            oldPAYE: calculation.tax,
+            freshPAYE: freshCalculation.deductions?.tax || calculation.tax,
+            oldUIF: calculation.uif?.employeeContribution || 0,
+            freshUIF: freshCalculation.deductions?.uif || 0
+          });
+          
+          // Use fresh data from localStorage (updated by Accounting sync)
+          currentCalculation = {
+            ...calculation,
+            tax: freshCalculation.deductions?.tax || calculation.tax,
+            uif: {
+              employeeContribution: freshCalculation.deductions?.uif || calculation.uif?.employeeContribution || 0,
+              employerContribution: freshCalculation.deductions?.uif || calculation.uif?.employerContribution || 0,
+              cappedSalary: Math.min(freshCalculation.attendancePay || calculation.attendancePay, 17712)
+            },
+            netSalary: freshCalculation.netSalary || calculation.netSalary,
+            grossSalary: freshCalculation.grossSalary || calculation.grossSalary
+          };
+        }
+      } catch (error) {
+        console.warn('⚠️ [PayrollManagement] Error parsing fresh payroll data, using original calculation');
+      }
+    }
+    
     // Get attendance data for this employee
     const attendance = getMonthlyAttendance(calculation.employeeId);
     
@@ -356,11 +684,49 @@ const PayrollManagement: React.FC = () => {
     };
     
     // Get deduction calculation for detailed breakdown
-    const deductionCalculation = employeeDeductionsService.calculateEmployeeDeductions(calculation.employeeId, calculation.grossSalary);
+    const deductionCalculation = employeeDeductionsService.calculateEmployeeDeductions(calculation.employeeId, currentCalculation.grossSalary);
     
-    // Structure the data properly for the modal
+    // SYNC WITH EMPLOYEE DEDUCTIONS MANAGEMENT: Get PAYE and UIF from Employee Deductions calculations
+    console.log('🔗 [PayrollManagement] Syncing PAYE/UIF from Employee Deductions Management for modal...');
+    
+    let linkedPAYE = currentCalculation.tax;
+    let linkedUIF = currentCalculation.uif.employeeContribution;
+    
+    try {
+      // Calculate PAYE and UIF using Employee Deductions Management logic (SA Payroll Calculator)
+      const attendancePay = currentCalculation.attendancePay || 0;
+      
+      if (attendancePay > 0) {
+        const employeeDeductionsResult = saPayrollCalculatorService.calculateEmployeePayroll(
+          calculation.employeeId,
+          calculation.employeeName,
+          attendancePay
+        );
+        
+        linkedPAYE = employeeDeductionsResult.paye;
+        linkedUIF = employeeDeductionsResult.uif.employee;
+        
+        console.log('✅ [PayrollManagement] Successfully synced PAYE/UIF from Employee Deductions Management:', {
+          employeeId: calculation.employeeId,
+          employeeName: calculation.employeeName,
+          attendancePay: `R${attendancePay.toFixed(2)}`,
+          originalPAYE: `R${currentCalculation.tax.toFixed(2)}`,
+          linkedPAYE: `R${linkedPAYE.toFixed(2)}`,
+          originalUIF: `R${currentCalculation.uif.employeeContribution.toFixed(2)}`,
+          linkedUIF: `R${linkedUIF.toFixed(2)}`,
+          source: 'Employee Deductions Management (SA Payroll Calculator)'
+        });
+      } else {
+        console.warn('⚠️ [PayrollManagement] No Attendance Pay found, using original PAYE/UIF values');
+      }
+    } catch (error) {
+      console.error('❌ [PayrollManagement] Error syncing PAYE/UIF from Employee Deductions Management:', error);
+      // Fall back to original values
+    }
+    
+    // Structure the data properly for the modal using fresh data
     const detailedPayrollData = {
-      ...calculation,
+      ...currentCalculation,
       period: periodFilter,
       status: 'calculated',
       regularHours: attendance.regularHours,
@@ -374,25 +740,34 @@ const PayrollManagement: React.FC = () => {
         motorVehicleAllowance: employeeAllowances.motorVehicleAllowance || 0,
         medicalAidAllowance: employeeAllowances.medicalAidAllowance || 0,
         otherAllowances: employeeAllowances.otherAllowances || 0,
-        totalAllowances: calculation.totalAllowances
+        totalAllowances: currentCalculation.totalAllowances
       },
       deductions: {
-        tax: calculation.tax,
-        uif: calculation.uif.employeeContribution,
+        tax: linkedPAYE, // Now synced from Employee Deductions Management
+        uif: linkedUIF, // Now synced from Employee Deductions Management
         medicalAid: deductionCalculation.deductions.medical || 0,
         retirementFund: deductionCalculation.deductions.retirement_plans || 0,
-        salaryAdvance: calculation.salaryAdvanceDeduction,
-        employeeDeductions: calculation.employeeDeductions,
+        salaryAdvance: currentCalculation.salaryAdvanceDeduction,
+        employeeDeductions: currentCalculation.employeeDeductions,
         otherDeductions: Object.entries(deductionCalculation.deductions)
           .filter(([key]) => !['medical', 'retirement_plans'].includes(key))
           .reduce((sum, [, value]) => sum + (value || 0), 0),
-        totalDeductions: calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction + calculation.employeeDeductions
+        totalDeductions: linkedPAYE + linkedUIF + currentCalculation.salaryAdvanceDeduction + currentCalculation.employeeDeductions
       }
     };
+    
+    console.log('✅ [PayrollManagement] Payroll details modal data prepared with Employee Deductions sync:', {
+      employeeName: detailedPayrollData.employeeName,
+      PAYE: `R${detailedPayrollData.deductions.tax.toFixed(2)}`,
+      UIF: `R${detailedPayrollData.deductions.uif.toFixed(2)}`,
+      source: 'Synced from Employee Deductions Management (SA Payroll Calculator)'
+    });
     
     setSelectedPayrollData(detailedPayrollData);
     setShowPayrollDetails(true);
   };
+
+  // Removed PAYE sync from Accounting handler and state
   
   // Download payslip
   const [downloadingPayslips, setDownloadingPayslips] = useState<Set<string>>(new Set());
@@ -501,11 +876,9 @@ const PayrollManagement: React.FC = () => {
       </div>
 
       <Tabs defaultValue="payroll" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="payroll">Payroll Calculations</TabsTrigger>
           <TabsTrigger value="advances">Salary Advances</TabsTrigger>
-          <TabsTrigger value="expenses">Expense Integration</TabsTrigger>
-          <TabsTrigger value="testing">Testing</TabsTrigger>
         </TabsList>
         
         <TabsContent value="payroll" className="space-y-6">
@@ -574,6 +947,8 @@ const PayrollManagement: React.FC = () => {
               </DialogContent>
             </Dialog>
             
+            {/* PAYE sync button removed as requested */}
+            
             <Button
               onClick={handleCalculatePayroll}
               disabled={isCalculating}
@@ -587,6 +962,8 @@ const PayrollManagement: React.FC = () => {
               {isCalculating ? 'Calculating...' : 'Calculate Payroll'}
             </Button>
           </div>
+
+
       
       {/* Payroll Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -763,7 +1140,9 @@ const PayrollManagement: React.FC = () => {
                       <td className="py-3 px-4 font-sf-pro">R {calculation.attendancePay.toLocaleString()}</td>
                       <td className="py-3 px-4 font-sf-pro">R {calculation.totalAllowances.toLocaleString()}</td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-green-600">R {calculation.grossSalary.toLocaleString()}</td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">-R {calculation.salaryAdvanceDeduction.toLocaleString()}</td>
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">
+                        {calculation.salaryAdvanceDeduction > 0 ? `-R ${calculation.salaryAdvanceDeduction.toLocaleString()}` : 'R 0'}
+                      </td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">-R {calculation.employeeDeductions.toLocaleString()}</td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-mokm-purple-600">R {calculation.netSalary.toLocaleString()}</td>
                       <td className="py-3 px-4">
@@ -963,11 +1342,17 @@ const PayrollManagement: React.FC = () => {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Tax:</span>
+                    <span className="text-slate-600 font-sf-pro flex items-center gap-1">
+                      PAYE:
+                      <span className="flex w-3 h-3 bg-green-100 rounded-full text-[8px] text-green-700 items-center justify-center" title="Synced from Employee Deductions Management (SA Payroll Calculator)">✓</span>
+                    </span>
                     <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.tax?.toLocaleString() || '0'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">UIF:</span>
+                    <span className="text-slate-600 font-sf-pro flex items-center gap-1">
+                      UIF:
+                      <span className="flex w-3 h-3 bg-green-100 rounded-full text-[8px] text-green-700 items-center justify-center" title="Synced from Employee Deductions Management (SA Payroll Calculator)">✓</span>
+                    </span>
                     <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.uif?.toLocaleString() || '0'}</span>
                   </div>
                   <div className="flex justify-between">
@@ -1078,12 +1463,13 @@ const PayrollManagement: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="advances" className="space-y-6">
+          {/* Request New Salary Advance */}
           <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Salary Advance Management</CardTitle>
+              <CardTitle className="font-sf-pro">Request Salary Advance</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-slate-600 font-sf-pro mb-4">Manage employee salary advance requests and approvals.</p>
+              <p className="text-slate-600 font-sf-pro mb-4">Submit new salary advance requests for employees.</p>
               <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
                 <DialogTrigger asChild>
                   <Button className="font-sf-pro">
@@ -1140,15 +1526,103 @@ const PayrollManagement: React.FC = () => {
               </Dialog>
             </CardContent>
           </Card>
+
+          {/* Existing Salary Advances */}
+          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <CardHeader>
+              <CardTitle className="font-sf-pro">Salary Advance Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Employee</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Amount</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Reason</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Request Date</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Deduction Period</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Status</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salaryAdvances.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-8 text-slate-500 font-sf-pro">
+                          No salary advances found. Click "New Salary Advance Request" to create one.
+                        </td>
+                      </tr>
+                    ) : (
+                      salaryAdvances.map((advance) => (
+                        <tr key={advance.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-medium text-slate-900 font-sf-pro">{advance.employeeName}</p>
+                              <p className="text-sm text-slate-500 font-sf-pro">{advance.employeeId}</p>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-sf-pro font-semibold text-green-600">
+                            R {advance.amount.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 font-sf-pro text-slate-600">
+                            {advance.reason}
+                          </td>
+                          <td className="py-3 px-4 font-sf-pro text-slate-600">
+                            {new Date(advance.requestDate).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-4 font-sf-pro text-slate-600">
+                            {advance.deductionPeriod}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge 
+                              variant={advance.status === 'approved' ? 'default' : advance.status === 'pending' ? 'secondary' : 'destructive'}
+                              className="font-sf-pro"
+                            >
+                              {advance.status}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex gap-2">
+                              {advance.status === 'pending' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleApproveSalaryAdvance(advance.id)}
+                                  className="font-sf-pro text-green-600 border-green-600 hover:bg-green-50"
+                                >
+                                  Approve
+                                </Button>
+                              )}
+                              {advance.status === 'pending' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRejectSalaryAdvance(advance.id)}
+                                  className="font-sf-pro text-red-600 border-red-600 hover:bg-red-50"
+                                >
+                                  Reject
+                                </Button>
+                              )}
+                              {advance.status === 'approved' && (
+                                <Badge variant="outline" className="font-sf-pro text-green-600">
+                                  Deducted from Payroll
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
         
-        <TabsContent value="expenses" className="space-y-6">
-           <PayrollExpenseIntegration companyId="default-company" />
-         </TabsContent>
-         
-        <TabsContent value="testing" className="space-y-6">
-           <PayrollTestRunner />
-         </TabsContent>
+
+        
       </Tabs>
     </div>
   );
