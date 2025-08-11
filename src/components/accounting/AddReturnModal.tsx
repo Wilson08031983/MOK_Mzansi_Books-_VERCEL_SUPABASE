@@ -14,6 +14,8 @@ import { payrollCalculationService, PayrollCalculation } from '../../services/pa
 import { hrAccountingLinkService, AccountingEmployeeOption, HREmployeeData } from '../../services/hrAccountingLinkService';
 import { directDeductionsLinkService, DirectPAYEUIFData } from '../../services/directDeductionsLinkService';
 import { accountingPayeUifCalculatorService } from '../../services/accountingPayeUifCalculatorService';
+import { turnoverTaxCalculatorService, TurnoverTaxCalculation, TurnoverTaxPeriod } from '../../services/turnoverTaxCalculatorService';
+import { manualTaxReturnsService, ManualTaxReturn, ManualTaxFile, IRP6Inputs, ITR14Inputs, DTR01Inputs, CustomsInputs } from '../../services/manualTaxReturnsService';
 import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 import { generateVAT201PDF } from '../../utils/vat201PdfGenerator';
 import { toast } from 'sonner';
@@ -47,6 +49,20 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
   const [isCalculating, setIsCalculating] = useState(false);
   const [showVATBreakdown, setShowVATBreakdown] = useState(false);
   const [showEMP201Breakdown, setShowEMP201Breakdown] = useState(false);
+  // Turnover Tax state
+  const [turnoverTaxData, setTurnoverTaxData] = useState<TurnoverTaxCalculation | null>(null);
+  const [showTurnoverBreakdown, setShowTurnoverBreakdown] = useState(false);
+  const [turnoverTaxPeriods, setTurnoverTaxPeriods] = useState<TurnoverTaxPeriod[]>([]);
+  
+  // Manual Tax Returns state
+  const [currentManualReturn, setCurrentManualReturn] = useState<ManualTaxReturn | null>(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualInputs, setManualInputs] = useState<Record<string, any>>({});
+  const [manualComputed, setManualComputed] = useState<Record<string, number>>({});
+  const [manualOverrides, setManualOverrides] = useState<Record<string, number>>({});
+  const [uploadedFiles, setUploadedFiles] = useState<ManualTaxFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  
   // HR authoritative linkage state (read-only in Accounting)
   const [hrLinkedPAYE, setHrLinkedPAYE] = useState<number | null>(null);
   const [hrLinkedUIF, setHrLinkedUIF] = useState<number | null>(null);
@@ -166,6 +182,17 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     setEmp201Data(null);
     setShowVATBreakdown(false);
     setShowEMP201Breakdown(false);
+    setShowTurnoverBreakdown(false);
+    
+    // Reset manual tax form state
+    setCurrentManualReturn(null);
+    setShowManualForm(false);
+    setManualInputs({});
+    setManualComputed({});
+    setManualOverrides({});
+    setUploadedFiles([]);
+    setIsUploading(false);
+    
     onClose();
   };
 
@@ -219,6 +246,11 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     if (isOpen) {
       loadEmployees();
       loadHREmployeeOptions();
+      
+      // Initialize turnover tax periods
+      const currentYear = new Date().getFullYear();
+      const periods = turnoverTaxCalculatorService.generateTaxPeriods(currentYear);
+      setTurnoverTaxPeriods(periods);
       
       // Clean up any stuck PAYE sync toasts when modal opens
       stuckToastCleanupService.forceCleanupAndShowStatus();
@@ -278,6 +310,54 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       toast.success('PAYE/EMP201 period auto-generated', {
         description: `Period: ${currentMonth}, Due: ${dueDate.toLocaleDateString()}`
       });
+    } else if (value === 'TURNOVER') {
+      // Auto-generate Turnover Tax information
+      const currentPeriod = turnoverTaxCalculatorService.getCurrentTaxPeriod();
+      
+      setFormData(prev => ({
+        ...prev,
+        type: value as BusinessTaxReturn['type'],
+        name: `Turnover Tax - ${currentPeriod.label}`,
+        description: selectedType?.description || '',
+        period: currentPeriod.label,
+        dueDate: '' // Will be set after calculation
+      }));
+      
+      // Auto-calculate Turnover Tax
+      setTimeout(() => {
+        handleCalculateTurnoverTax(currentPeriod);
+      }, 100);
+      
+      setShowTurnoverBreakdown(true);
+      
+      toast.success('Turnover Tax period auto-generated', {
+        description: `Period: ${currentPeriod.label}`
+      });
+    } else if (['IRP6', 'ITR14', 'DTR01', 'CUSTOMS'].includes(value)) {
+      // Handle manual tax types
+      const currentYear = new Date().getFullYear();
+      const defaultPeriod = `${currentYear}`;
+      
+      setFormData(prev => ({
+        ...prev,
+        type: value as BusinessTaxReturn['type'],
+        name: `${selectedType?.label} - ${defaultPeriod}`,
+        description: selectedType?.description || '',
+        period: defaultPeriod,
+        selectedEmployee: '',
+        calculateAllEmployees: false
+      }));
+      
+      // Initialize manual tax return
+      initializeManualTaxReturn(value as 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS', defaultPeriod);
+      
+      setShowEMP201Breakdown(false);
+      setShowTurnoverBreakdown(false);
+      setShowManualForm(true);
+      
+      toast.success(`${selectedType?.label} form initialized`, {
+        description: 'Manual entry form ready for input'
+      });
     } else {
       setFormData(prev => ({
         ...prev,
@@ -289,6 +369,8 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       }));
       
       setShowEMP201Breakdown(false);
+      setShowTurnoverBreakdown(false);
+      setShowManualForm(false);
     }
   };
 
@@ -385,6 +467,68 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
     }
   };
 
+  // Calculate Turnover Tax for selected period
+  const handleCalculateTurnoverTax = async (period: TurnoverTaxPeriod) => {
+    setIsCalculating(true);
+    try {
+      console.log(`🧮 [AddReturnModal] Calculating Turnover Tax for period: ${period.label}`);
+      
+      const calculation = turnoverTaxCalculatorService.calculateTurnoverTax(
+        period.startDate,
+        period.endDate,
+        period.label
+      );
+      
+      setTurnoverTaxData(calculation);
+      
+      // Update form with calculated amount
+      setFormData(prev => ({
+        ...prev,
+        amount: calculation.taxAmount.toFixed(2),
+        dueDate: calculateTurnoverTaxDueDate(period.endDate)
+      }));
+      
+      toast.success('Turnover Tax calculated successfully', {
+        description: `Tax amount: R${calculation.taxAmount.toFixed(2)} ${calculation.isExempt ? '(Exempt)' : ''}`
+      });
+      
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error calculating Turnover Tax:', error);
+      toast.error('Failed to calculate Turnover Tax', {
+        description: 'Please check console for details and try again.'
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Calculate due date for Turnover Tax (typically 7th of following month after period end)
+  const calculateTurnoverTaxDueDate = (periodEndDate: string): string => {
+    const endDate = new Date(periodEndDate);
+    const dueDate = new Date(endDate);
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    dueDate.setDate(7); // 7th of following month
+    return dueDate.toISOString().split('T')[0];
+  };
+
+  // Save Turnover Tax calculation
+  const handleSaveTurnoverTax = () => {
+    if (!turnoverTaxData) {
+      toast.error('No Turnover Tax calculation to save');
+      return;
+    }
+    
+    try {
+      turnoverTaxCalculatorService.saveTurnoverTaxRecord(turnoverTaxData);
+      toast.success('Turnover Tax calculation saved', {
+        description: `Record ID: ${turnoverTaxData.id}`
+      });
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error saving Turnover Tax:', error);
+      toast.error('Failed to save Turnover Tax calculation');
+    }
+  };
+
   // Manual refresh handler
   const handleRefreshFromHR = async () => {
     if (formData.type !== 'PAYE_EMP201') return;
@@ -412,6 +556,217 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       });
     } finally {
       setIsRefreshingHR(false);
+    }
+  };
+
+  // Initialize manual tax return
+  const initializeManualTaxReturn = (taxType: 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS', period: string) => {
+    const defaultInputs = getDefaultInputsForTaxType(taxType);
+    setManualInputs(defaultInputs);
+    setManualComputed({});
+    setManualOverrides({});
+    setUploadedFiles([]);
+    
+    console.log(`📋 [AddReturnModal] Initialized ${taxType} manual form for period ${period}`);
+  };
+
+  // Get default inputs for each tax type
+  const getDefaultInputsForTaxType = (taxType: 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS'): Record<string, any> => {
+    switch (taxType) {
+      case 'IRP6':
+        return {
+          taxPeriod: formData.period,
+          taxableIncome: 0,
+          estimatedTaxableIncome: 0,
+          taxRate: 28, // Default SA corporate tax rate
+          effectiveRate: 28,
+          calculatedTaxDue: 0,
+          paymentsAlreadyMade: 0,
+          balanceDue: 0,
+          assumptions: ''
+        } as IRP6Inputs;
+      
+      case 'ITR14':
+        return {
+          taxableProfitBeforeAdjustments: 0,
+          additions: [],
+          deductions: [],
+          taxableIncomeAfterAdjustments: 0,
+          taxRate: 28,
+          taxPayable: 0,
+          taxCredits: 0,
+          balanceOrRefund: 0,
+          breakdownData: ''
+        } as ITR14Inputs;
+      
+      case 'DTR01':
+        return {
+          grossDividendsDeclared: 0,
+          exemptions: 0,
+          taxableDividends: 0,
+          dividendsTaxRate: 20, // Default SA dividends tax rate
+          taxWithheld: 0,
+          balanceDue: 0,
+          isLocalResident: true,
+          isExemptRecipient: false,
+          hasRateOverride: false,
+          overrideRate: 20,
+          scenarioNotes: ''
+        } as DTR01Inputs;
+      
+      case 'CUSTOMS':
+        return {
+          lineItems: [{
+            id: '1',
+            goodsType: '',
+            tariffCode: '',
+            customsValue: 0,
+            dutyRate: 0,
+            exciseAmount: 0,
+            vatOnImport: 0,
+            totalImportLiability: 0
+          }],
+          totalCustomsValue: 0,
+          totalDutyAmount: 0,
+          totalExciseAmount: 0,
+          totalVATOnImport: 0,
+          totalImportLiability: 0
+        } as CustomsInputs;
+      
+      default:
+        return {};
+    }
+  };
+
+  // Update manual input and recalculate
+  const updateManualInput = (field: string, value: any) => {
+    const updatedInputs = { ...manualInputs, [field]: value };
+    setManualInputs(updatedInputs);
+    
+    // Auto-calculate based on tax type
+    const computed = calculateManualTaxFields(formData.type as 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS', updatedInputs);
+    setManualComputed(computed);
+    
+    // Update form amount if not manually overridden
+    if (!manualOverrides.amount) {
+      const taxDue = computed.taxDue || computed.balanceDue || computed.totalImportLiability || 0;
+      setFormData(prev => ({ ...prev, amount: taxDue.toFixed(2) }));
+    }
+  };
+
+  // Calculate computed fields for manual tax types
+  const calculateManualTaxFields = (taxType: 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS', inputs: Record<string, any>): Record<string, number> => {
+    switch (taxType) {
+      case 'IRP6':
+        const taxDue = manualTaxReturnsService.calculateIRP6TaxDue(inputs);
+        const balanceDue = taxDue - (inputs.paymentsAlreadyMade || 0);
+        return { taxDue, balanceDue };
+      
+      case 'ITR14':
+        const taxableIncome = manualTaxReturnsService.calculateITR14TaxableIncome(inputs);
+        const taxPayable = taxableIncome * ((inputs.taxRate || 0) / 100);
+        const balanceOrRefund = taxPayable - (inputs.taxCredits || 0);
+        return { taxableIncome, taxPayable, balanceOrRefund };
+      
+      case 'DTR01':
+        const taxableDividends = manualTaxReturnsService.calculateDTR01TaxableDividends(inputs);
+        const effectiveRate = inputs.hasRateOverride ? (inputs.overrideRate || 0) : (inputs.dividendsTaxRate || 0);
+        const taxDueOnDividends = taxableDividends * (effectiveRate / 100);
+        const dividendBalanceDue = taxDueOnDividends - (inputs.taxWithheld || 0);
+        return { taxableDividends, taxDue: taxDueOnDividends, balanceDue: dividendBalanceDue };
+      
+      case 'CUSTOMS':
+        const totalLiability = manualTaxReturnsService.calculateCustomsTotalLiability(inputs);
+        return { totalImportLiability: totalLiability };
+      
+      default:
+        return {};
+    }
+  };
+
+  // Override computed value manually
+  const overrideComputedValue = (field: string, value: number) => {
+    setManualOverrides(prev => ({ ...prev, [field]: value }));
+    
+    if (field === 'amount') {
+      setFormData(prev => ({ ...prev, amount: value.toFixed(2) }));
+    }
+    
+    console.log(`🔧 [AddReturnModal] Manual override applied: ${field} = ${value}`);
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    setIsUploading(true);
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        // Create a temporary return ID for upload
+        const tempReturnId = currentManualReturn?.id || 'temp-' + Date.now();
+        return await manualTaxReturnsService.uploadFile(tempReturnId, file);
+      });
+      
+      const uploadedFileData = await Promise.all(uploadPromises);
+      setUploadedFiles(prev => [...prev, ...uploadedFileData]);
+      
+      toast.success(`${uploadedFileData.length} file(s) uploaded successfully`);
+    } catch (error) {
+      console.error('❌ [AddReturnModal] File upload error:', error);
+      toast.error('File upload failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Remove uploaded file
+  const removeUploadedFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+    toast.success('File removed');
+  };
+
+  // Save manual tax return
+  const saveManualTaxReturn = (status: 'draft' | 'finalized' = 'draft') => {
+    try {
+      const taxReturn: Partial<ManualTaxReturn> = {
+        id: currentManualReturn?.id,
+        taxType: formData.type as 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS',
+        period: formData.period,
+        inputs: manualInputs,
+        computed: manualComputed,
+        manualOverrides,
+        files: uploadedFiles,
+        notes: formData.description,
+        status
+      };
+      
+      const savedReturn = manualTaxReturnsService.saveReturn(taxReturn);
+      setCurrentManualReturn(savedReturn);
+      
+      toast.success(`Manual tax return ${status === 'draft' ? 'saved as draft' : 'finalized'}`, {
+        description: `ID: ${savedReturn.id}`
+      });
+      
+      if (status === 'finalized') {
+        // Add to main tax returns list
+        onAdd({
+          name: formData.name,
+          description: formData.description,
+          type: formData.type,
+          status: 'pending',
+          dueDate: formData.dueDate,
+          amount: parseFloat(formData.amount || '0'),
+          period: formData.period,
+          reference: formData.reference || `MANUAL-${savedReturn.id.slice(0, 8)}`
+        });
+        
+        handleClose();
+      }
+    } catch (error) {
+      console.error('❌ [AddReturnModal] Error saving manual tax return:', error);
+      toast.error('Failed to save tax return');
     }
   };
 
@@ -1533,97 +1888,130 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
               </div>
             )}
 
-            {/* HR Payroll Linked Values (read-only) */}
-            {formData.type === 'PAYE_EMP201' && (
-              <div className="space-y-3 p-4 bg-white rounded-lg border border-slate-200">
+            {/* Turnover Tax Breakdown */}
+            {formData.type === 'TURNOVER' && showTurnoverBreakdown && turnoverTaxData && (
+              <div className="space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h5 className="font-medium text-slate-900">HR Payroll Linked Values (read-only)</h5>
-                    <p className="text-xs text-slate-500">Source: HR Management › Payroll › Deductions Breakdown. Edit in HR Payroll only.</p>
+                    <h4 className="font-medium text-slate-900">Turnover Tax Calculation Breakdown</h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Turnover tax computed for selected half-year. Source: invoices + confirmed sales + manual adjustments.
+                    </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handleRefreshFromHR} disabled={isRefreshingHR}>
-                    {isRefreshingHR ? 'Refreshing…' : 'Refresh from HR'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSaveTurnoverTax}
+                      className="text-xs"
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Save TT02
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowTurnoverBreakdown(!showTurnoverBreakdown)}
+                      className="text-xs"
+                    >
+                      {showTurnoverBreakdown ? 'Hide' : 'Show'} Details
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {formData.calculateAllEmployees ? (
-                    <>
-                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                        <div className="text-xs text-slate-600 flex items-center gap-1">
-                          Total PAYE (HR)
-                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions">i</span>
-                        </div>
-                        <div className="text-lg font-semibold text-slate-900">
-                          R {hrLinkedTotals ? (hrLinkedTotals.paye || 0).toFixed(2) : '0.00'}
-                        </div>
-                        {hrLinkedTotals && hrLinkedTotals.paye !== (emp201Data?.totalPAYE || 0) && (
-                          <div className="text-[10px] text-amber-700 mt-1">Payroll value differs — showing HR Payroll value.</div>
-                        )}
+                
+                {/* Tax Period Info */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="font-medium text-slate-800 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      Tax Period
+                    </h5>
+                    <span className="text-sm font-bold text-blue-600">
+                      {turnoverTaxData.periodLabel}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <div className="flex justify-between">
+                      <span>Start Date:</span>
+                      <span>{new Date(turnoverTaxData.startDate).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>End Date:</span>
+                      <span>{new Date(turnoverTaxData.endDate).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Taxable Turnover Breakdown */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="font-medium text-slate-800 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      Taxable Turnover
+                    </h5>
+                    <span className="text-sm font-bold text-green-600">
+                      R {turnoverTaxData.taxableTurnover.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-xs text-slate-600">
+                    <div className="flex justify-between">
+                      <span>• Invoices ({turnoverTaxData.breakdown.invoices.count}):</span>
+                      <span>R {turnoverTaxData.breakdown.invoices.total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Sales ({turnoverTaxData.breakdown.sales.count}):</span>
+                      <span>R {turnoverTaxData.breakdown.sales.total.toFixed(2)}</span>
+                    </div>
+                    {turnoverTaxData.breakdown.manualAdjustments.total > 0 && (
+                      <div className="flex justify-between">
+                        <span>• Manual Adjustments ({turnoverTaxData.breakdown.manualAdjustments.count}):</span>
+                        <span>R {turnoverTaxData.breakdown.manualAdjustments.total.toFixed(2)}</span>
                       </div>
-                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                        <div className="text-xs text-slate-600 flex items-center gap-1">
-                          Total UIF (HR)
-                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions">i</span>
-                        </div>
-                        <div className="text-lg font-semibold text-slate-900">
-                          R {hrLinkedTotals ? (hrLinkedTotals.uif || 0).toFixed(2) : '0.00'}
-                        </div>
-                        {emp201Data && emp201Data.totalUIFSalaries < emp201Data.totalTaxableIncome && (
-                          <div className="text-[10px] text-amber-700 mt-1">UIF capped at R17,712 salary per employee</div>
-                        )}
-                        {hrLinkedTotals && hrLinkedTotals.uif > 177.12 && (
-                          <div className="text-[10px] text-amber-700 mt-1">UIF exceeds monthly cap (R177.12) — capped in calculation</div>
-                        )}
+                    )}
+                    {turnoverTaxData.breakdown.exclusions.total > 0 && (
+                      <div className="flex justify-between text-red-600">
+                        <span>• Exclusions ({turnoverTaxData.breakdown.exclusions.count}):</span>
+                        <span>-R {turnoverTaxData.breakdown.exclusions.total.toFixed(2)}</span>
                       </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                        <div className="text-xs text-slate-600 flex items-center gap-1">
-                          Employee PAYE (HR)
-                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions Breakdown">i</span>
-                        </div>
-                        <div className="text-lg font-semibold text-slate-900">
-                          R {hrLinkedPAYE !== null ? (hrLinkedPAYE || 0).toFixed(2) : '0.00'}
-                        </div>
-                        {hrLinkedPAYE !== null && emp201Data?.employeeBreakdown?.[0] && hrLinkedPAYE !== emp201Data.employeeBreakdown[0].paye && (
-                          <div className="text-[10px] text-amber-700 mt-1">Payroll value differs — showing HR Payroll value.</div>
-                        )}
-                      </div>
-                      <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                        <div className="text-xs text-slate-600 flex items-center gap-1">
-                          Employee UIF (HR)
-                          <span className="flex w-3 h-3 bg-mokm-purple-100 rounded-full text-[8px] text-mokm-purple-700 items-center justify-center" title="Source: HR Payroll → Deductions Breakdown">i</span>
-                        </div>
-                        <div className="text-lg font-semibold text-slate-900">
-                          R {hrLinkedUIF !== null ? (hrLinkedUIF || 0).toFixed(2) : '0.00'}
-                        </div>
-                        {(() => {
-                          const b = emp201Data?.employeeBreakdown?.[0];
-                          return b && b.uifSalary < b.taxableIncome ? (
-                            <div className="text-[10px] text-amber-700 mt-1">UIF capped at R17,712 salary</div>
-                          ) : null;
-                        })()}
-                        {hrLinkedUIF !== null && hrLinkedUIF > 177.12 && (
-                          <div className="text-[10px] text-amber-700 mt-1">UIF exceeds monthly cap (R177.12) — capped in calculation</div>
-                        )}
-                      </div>
-                    </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tax Calculation */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="font-medium text-slate-800 flex items-center gap-2">
+                      <Calculator className="h-4 w-4 text-purple-600" />
+                      Tax Calculation
+                    </h5>
+                    <span className={`text-sm font-bold ${turnoverTaxData.isExempt ? 'text-green-600' : 'text-purple-600'}`}>
+                      R {turnoverTaxData.taxAmount.toFixed(2)}
+                      {turnoverTaxData.isExempt && ' (Exempt)'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <div className="bg-slate-50 p-2 rounded border">
+                      <div className="font-medium mb-1">Applicable Bracket:</div>
+                      <div>{turnoverTaxData.applicableBracket.description}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary */}
+                <div className="border-t pt-3 mt-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-medium text-slate-700">Total Turnover Tax Due:</span>
+                    <span className={`font-bold text-lg ${turnoverTaxData.isExempt ? 'text-green-600' : 'text-purple-600'}`}>
+                      R {turnoverTaxData.taxAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  {turnoverTaxData.isExempt && (
+                    <div className="text-xs text-green-600 mt-1">
+                      ✓ Turnover below R335,000 threshold - No tax payable
+                    </div>
                   )}
-                </div>
-                <div className="text-center pt-2 border-t border-slate-200">
-                  <p className="text-xs text-slate-500">
-                    Last synced: {(() => {
-                      try {
-                        const snapshot = localStorage.getItem('accounting_hr_link_snapshot');
-                        if (snapshot) {
-                          const data = JSON.parse(snapshot);
-                          return new Date(data.timestamp).toLocaleString();
-                        }
-                      } catch (e) {}
-                      return 'Never';
-                    })()}
-                  </p>
                 </div>
               </div>
             )}
@@ -1865,6 +2253,545 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
                     </p>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Manual Tax Entry Forms */}
+            {showManualForm && ['IRP6', 'ITR14', 'DTR01', 'CUSTOMS'].includes(formData.type) && (
+              <div className="space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-slate-900">Manual Tax Entry - {formData.type}</h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Enter tax calculation details manually. All numeric fields support decimal input.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => saveManualTaxReturn('draft')}
+                      className="text-xs"
+                    >
+                      Save Draft
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Finalize tax return? You will not be able to edit without creating a new record.')) {
+                          saveManualTaxReturn('finalized');
+                        }
+                      }}
+                      className="text-xs"
+                    >
+                      Finalize
+                    </Button>
+                  </div>
+                </div>
+
+                {/* IRP6 Form */}
+                {formData.type === 'IRP6' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="taxableIncome">Taxable Income *</Label>
+                        <Input
+                          id="taxableIncome"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.taxableIncome || ''}
+                          onChange={(e) => updateManualInput('taxableIncome', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="estimatedTaxableIncome">Estimated Taxable Income</Label>
+                        <Input
+                          id="estimatedTaxableIncome"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.estimatedTaxableIncome || ''}
+                          onChange={(e) => updateManualInput('estimatedTaxableIncome', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="taxRate">Tax Rate (%)</Label>
+                        <Input
+                          id="taxRate"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.taxRate || ''}
+                          onChange={(e) => updateManualInput('taxRate', parseFloat(e.target.value) || 0)}
+                          placeholder="28.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="paymentsAlreadyMade">Payments Already Made</Label>
+                        <Input
+                          id="paymentsAlreadyMade"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.paymentsAlreadyMade || ''}
+                          onChange={(e) => updateManualInput('paymentsAlreadyMade', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="assumptions">Assumptions / Notes</Label>
+                      <Textarea
+                        id="assumptions"
+                        value={manualInputs.assumptions || ''}
+                        onChange={(e) => updateManualInput('assumptions', e.target.value)}
+                        placeholder="Enter any assumptions or explanations for the calculation..."
+                        rows={3}
+                      />
+                    </div>
+
+                    {/* Computed Values */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <h5 className="font-medium text-slate-800 mb-2">Calculated Values</h5>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex justify-between">
+                          <span>Tax Due:</span>
+                          <span className="font-medium">R {manualComputed.taxDue?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Balance Due:</span>
+                          <span className="font-medium">R {manualComputed.balanceDue?.toFixed(2) || '0.00'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ITR14 Form */}
+                {formData.type === 'ITR14' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="taxableProfitBeforeAdjustments">Taxable Profit (Before Adjustments) *</Label>
+                        <Input
+                          id="taxableProfitBeforeAdjustments"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.taxableProfitBeforeAdjustments || ''}
+                          onChange={(e) => updateManualInput('taxableProfitBeforeAdjustments', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="taxRate">Tax Rate (%)</Label>
+                        <Input
+                          id="taxRate"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.taxRate || ''}
+                          onChange={(e) => updateManualInput('taxRate', parseFloat(e.target.value) || 0)}
+                          placeholder="28.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="taxCredits">Tax Credits</Label>
+                        <Input
+                          id="taxCredits"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.taxCredits || ''}
+                          onChange={(e) => updateManualInput('taxCredits', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="breakdownData">Breakdown Data (CSV/JSON - Optional)</Label>
+                      <Textarea
+                        id="breakdownData"
+                        value={manualInputs.breakdownData || ''}
+                        onChange={(e) => updateManualInput('breakdownData', e.target.value)}
+                        placeholder="Paste CSV or JSON data for detailed breakdown..."
+                        rows={4}
+                      />
+                    </div>
+
+                    {/* Computed Values */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <h5 className="font-medium text-slate-800 mb-2">Calculated Values</h5>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex justify-between">
+                          <span>Taxable Income:</span>
+                          <span className="font-medium">R {manualComputed.taxableIncome?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Tax Payable:</span>
+                          <span className="font-medium">R {manualComputed.taxPayable?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Balance/Refund:</span>
+                          <span className="font-medium">R {manualComputed.balanceOrRefund?.toFixed(2) || '0.00'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* DTR01 Form */}
+                {formData.type === 'DTR01' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="grossDividendsDeclared">Gross Dividends Declared *</Label>
+                        <Input
+                          id="grossDividendsDeclared"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.grossDividendsDeclared || ''}
+                          onChange={(e) => updateManualInput('grossDividendsDeclared', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="exemptions">Exemptions</Label>
+                        <Input
+                          id="exemptions"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.exemptions || ''}
+                          onChange={(e) => updateManualInput('exemptions', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="dividendsTaxRate">Dividends Tax Rate (%)</Label>
+                        <Input
+                          id="dividendsTaxRate"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.dividendsTaxRate || ''}
+                          onChange={(e) => updateManualInput('dividendsTaxRate', parseFloat(e.target.value) || 0)}
+                          placeholder="20.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="taxWithheld">Tax Withheld</Label>
+                        <Input
+                          id="taxWithheld"
+                          type="number"
+                          step="0.01"
+                          value={manualInputs.taxWithheld || ''}
+                          onChange={(e) => updateManualInput('taxWithheld', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Scenario Checkboxes */}
+                    <div className="space-y-2">
+                      <Label>Scenario Options</Label>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={manualInputs.isLocalResident || false}
+                            onChange={(e) => updateManualInput('isLocalResident', e.target.checked)}
+                          />
+                          <span className="text-sm">Local Resident</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={manualInputs.isExemptRecipient || false}
+                            onChange={(e) => updateManualInput('isExemptRecipient', e.target.checked)}
+                          />
+                          <span className="text-sm">Exempt Recipient</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={manualInputs.hasRateOverride || false}
+                            onChange={(e) => updateManualInput('hasRateOverride', e.target.checked)}
+                          />
+                          <span className="text-sm">Rate Override</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="scenarioNotes">Scenario Notes</Label>
+                      <Textarea
+                        id="scenarioNotes"
+                        value={manualInputs.scenarioNotes || ''}
+                        onChange={(e) => updateManualInput('scenarioNotes', e.target.value)}
+                        placeholder="Enter notes about the dividend scenario..."
+                        rows={3}
+                      />
+                    </div>
+
+                    {/* Computed Values */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <h5 className="font-medium text-slate-800 mb-2">Calculated Values</h5>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex justify-between">
+                          <span>Taxable Dividends:</span>
+                          <span className="font-medium">R {manualComputed.taxableDividends?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Tax Due:</span>
+                          <span className="font-medium">R {manualComputed.taxDue?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Balance Due:</span>
+                          <span className="font-medium">R {manualComputed.balanceDue?.toFixed(2) || '0.00'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* CUSTOMS Form */}
+                {formData.type === 'CUSTOMS' && (
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Import Line Items</Label>
+                      {(manualInputs.lineItems || []).map((item: any, index: number) => (
+                        <div key={item.id} className="bg-white p-3 rounded-lg border border-slate-200 mb-3">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                              <Label htmlFor={`goodsType-${index}`}>Goods Type</Label>
+                              <Input
+                                id={`goodsType-${index}`}
+                                value={item.goodsType || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(manualInputs.lineItems || [])];
+                                  updatedItems[index] = { ...item, goodsType: e.target.value };
+                                  updateManualInput('lineItems', updatedItems);
+                                }}
+                                placeholder="e.g., Electronics"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`tariffCode-${index}`}>Tariff Code</Label>
+                              <Input
+                                id={`tariffCode-${index}`}
+                                value={item.tariffCode || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(manualInputs.lineItems || [])];
+                                  updatedItems[index] = { ...item, tariffCode: e.target.value };
+                                  updateManualInput('lineItems', updatedItems);
+                                }}
+                                placeholder="e.g., 8517.12.00"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`customsValue-${index}`}>Customs Value</Label>
+                              <Input
+                                id={`customsValue-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.customsValue || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(manualInputs.lineItems || [])];
+                                  updatedItems[index] = { ...item, customsValue: parseFloat(e.target.value) || 0 };
+                                  updateManualInput('lineItems', updatedItems);
+                                }}
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`dutyRate-${index}`}>Duty Rate (%)</Label>
+                              <Input
+                                id={`dutyRate-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.dutyRate || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(manualInputs.lineItems || [])];
+                                  updatedItems[index] = { ...item, dutyRate: parseFloat(e.target.value) || 0 };
+                                  updateManualInput('lineItems', updatedItems);
+                                }}
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`exciseAmount-${index}`}>Excise Amount</Label>
+                              <Input
+                                id={`exciseAmount-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.exciseAmount || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(manualInputs.lineItems || [])];
+                                  updatedItems[index] = { ...item, exciseAmount: parseFloat(e.target.value) || 0 };
+                                  updateManualInput('lineItems', updatedItems);
+                                }}
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`vatOnImport-${index}`}>VAT on Import</Label>
+                              <Input
+                                id={`vatOnImport-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.vatOnImport || ''}
+                                onChange={(e) => {
+                                  const updatedItems = [...(manualInputs.lineItems || [])];
+                                  updatedItems[index] = { ...item, vatOnImport: parseFloat(e.target.value) || 0 };
+                                  updateManualInput('lineItems', updatedItems);
+                                }}
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center mt-3 pt-2 border-t">
+                            <span className="text-sm font-medium">Line Total: R {((item.customsValue || 0) * (item.dutyRate || 0) / 100 + (item.exciseAmount || 0) + (item.vatOnImport || 0)).toFixed(2)}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const updatedItems = (manualInputs.lineItems || []).filter((_: any, i: number) => i !== index);
+                                updateManualInput('lineItems', updatedItems);
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newItem = {
+                            id: Date.now().toString(),
+                            goodsType: '',
+                            tariffCode: '',
+                            customsValue: 0,
+                            dutyRate: 0,
+                            exciseAmount: 0,
+                            vatOnImport: 0,
+                            totalImportLiability: 0
+                          };
+                          updateManualInput('lineItems', [...(manualInputs.lineItems || []), newItem]);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Line Item
+                      </Button>
+                    </div>
+
+                    {/* Computed Values */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <h5 className="font-medium text-slate-800 mb-2">Total Import Liability</h5>
+                      <div className="text-lg font-bold text-purple-600">
+                        R {manualComputed.totalImportLiability?.toFixed(2) || '0.00'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* File Upload Section */}
+                <div className="space-y-3">
+                  <Label>Supporting Documents</Label>
+                  <div className="border-2 border-dashed border-slate-300 rounded-lg p-4">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.heic"
+                      onChange={(e) => handleFileUpload(e.target.files)}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className="cursor-pointer flex flex-col items-center justify-center space-y-2"
+                    >
+                      <FileText className="h-8 w-8 text-slate-400" />
+                      <span className="text-sm text-slate-600">
+                        Click to upload files or drag and drop
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        PDF, JPG, PNG, HEIC up to 10MB each
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Uploaded Files */}
+                  {uploadedFiles.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Uploaded Files ({uploadedFiles.length})</Label>
+                      {uploadedFiles.map((file) => (
+                        <div key={file.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="h-4 w-4 text-slate-500" />
+                            <div>
+                              <div className="text-sm font-medium">{file.name}</div>
+                              <div className="text-xs text-slate-500">
+                                {(file.size / 1024).toFixed(1)}KB • {new Date(file.uploadedAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => manualTaxReturnsService.downloadFile(file)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeUploadedFile(file.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Override Indicators */}
+                {Object.keys(manualOverrides).length > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Overridden manually
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setManualOverrides({});
+                          // Recalculate
+                          const computed = calculateManualTaxFields(formData.type as 'IRP6' | 'ITR14' | 'DTR01' | 'CUSTOMS', manualInputs);
+                          setManualComputed(computed);
+                          const taxDue = computed.taxDue || computed.balanceDue || computed.totalImportLiability || 0;
+                          setFormData(prev => ({ ...prev, amount: taxDue.toFixed(2) }));
+                        }}
+                        className="text-xs"
+                      >
+                        Undo
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
