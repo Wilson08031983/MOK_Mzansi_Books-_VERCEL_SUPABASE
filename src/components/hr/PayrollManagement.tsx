@@ -263,19 +263,15 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   const tax = calculatePAYE(attendancePay); // Use attendance pay as taxable income
   const uif = calculateUIF(grossSalary);
   
-  // Calculate salary advance deductions for approved advances in current period
-  const currentPeriod = new Date().toISOString().slice(0, 7);
+  // Calculate salary advance deductions for approved advances
+  // Check for advances that are approved and should be deducted
   const approvedAdvances = payrollCalculationService.getSalaryAdvances(employee.id)
-    .filter(advance => 
-      advance.status === 'approved' && 
-      advance.deductionPeriod === currentPeriod
-    );
+    .filter(advance => advance.status === 'approved');
   const salaryAdvanceDeduction = approvedAdvances.reduce((sum, advance) => sum + advance.amount, 0);
   
   console.log(`Salary advance calculation for ${employee.firstName} ${employee.surname}:`);
-  console.log(`  - Current period: ${currentPeriod}`);
   console.log(`  - All advances:`, payrollCalculationService.getSalaryAdvances(employee.id));
-  console.log(`  - Approved advances for current period:`, approvedAdvances);
+  console.log(`  - Approved advances:`, approvedAdvances);
   console.log(`  - Total advance deduction: R${salaryAdvanceDeduction.toFixed(2)}`);
   
   // Calculate employee deductions from Employee Deductions Management
@@ -1143,7 +1139,9 @@ const PayrollManagement: React.FC = () => {
                       <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">
                         {calculation.salaryAdvanceDeduction > 0 ? `-R ${calculation.salaryAdvanceDeduction.toLocaleString()}` : 'R 0'}
                       </td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">-R {calculation.employeeDeductions.toLocaleString()}</td>
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">
+                        -R {(calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction + calculation.employeeDeductions).toLocaleString()}
+                      </td>
                       <td className="py-3 px-4 font-sf-pro font-semibold text-mokm-purple-600">R {calculation.netSalary.toLocaleString()}</td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2">
