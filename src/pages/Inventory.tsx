@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -101,6 +102,7 @@ import { InventoryItem, StockHistoryEntry, STOCK_STATUS } from '@/types/inventor
 
 
 const Inventory = () => {
+  const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings, formatNumber: localizeNumber, formatDate: localizeDate } = useLocalization();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('all-stock');
   const [searchTerm, setSearchTerm] = useState('');
@@ -120,7 +122,7 @@ const Inventory = () => {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [stockHistory, setStockHistory] = useState<StockHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState<string[]>([]);
@@ -141,7 +143,7 @@ const Inventory = () => {
       
       // Get all inventory items with a cache-busting approach
       const items = getAllInventoryItems();
-      setInventoryItems(items);
+      setItems(items);
       
       // Extract unique categories and filter out empty/undefined values
       const uniqueCategories = Array.from(new Set(items.map(item => item.category)))
@@ -207,7 +209,7 @@ const Inventory = () => {
 
   const handleBarcodeResult = (result: string) => {
     // Check if barcode exists in inventory
-    const item = inventoryItems.find(item => item.barcode === result);
+    const item = items.find(item => item.barcode === result);
     if (item) {
       setSelectedItem(item);
       setShowUpdateStockForm(true);
@@ -371,7 +373,7 @@ const Inventory = () => {
   };
 
   // Filter inventory based on search term, category, and status
-  const filteredInventory = inventoryItems.filter(item => {
+  const filteredInventory = items.filter(item => {
     // Apply search filter
     const searchTermLower = searchTerm.toLowerCase();
     const matchesSearch = searchTerm === '' || 
@@ -424,7 +426,7 @@ const Inventory = () => {
               </Link>
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent font-sf-pro">
-              Inventory Management
+              {t('inventory.title')}
             </h1>
             <p className="text-xl text-slate-600 mt-2 font-sf-pro">
               Track, manage, and optimize your inventory
@@ -623,14 +625,12 @@ const Inventory = () => {
                               {stockHistory.map((entry) => (
                                 <TableRow key={entry.id}>
                                   <TableCell>
-                                    {new Date(entry.date).toLocaleDateString('en-ZA', { 
-                                      day: 'numeric', month: 'short', year: 'numeric' 
-                                    })}
+                                    {localizeDate(new Date(entry.date))}
                                   </TableCell>
                                   <TableCell>
                                     <div className="font-medium">{entry.inventoryItemId}</div>
                                     {(() => {
-                                      const item = inventoryItems.find(i => i.id === entry.inventoryItemId);
+                                      const item = items.find(i => i.id === entry.inventoryItemId);
                                       return item ? <div className="text-xs text-slate-500">{item.name}</div> : null;
                                     })()}
                                   </TableCell>
@@ -773,7 +773,7 @@ const Inventory = () => {
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .map((entry, index) => (
                         <TableRow key={`history-${index}`}>
-                          <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                          <TableCell>{localizeDate(new Date(entry.date))}</TableCell>
                           <TableCell>
                             <Badge className={getHistoryTypeBadgeClass(entry.type)}>
                               {entry.type}
@@ -810,7 +810,7 @@ const Inventory = () => {
           onClose={() => setShowUpdateWithBarcodeModal(false)}
           onSuccess={(updatedItem) => {
             // Update the local state with the updated item
-            setInventoryItems(prev => 
+            setItems(prev => 
               prev.map(item => item.id === updatedItem.id ? updatedItem : item)
             );
             setShowUpdateWithBarcodeModal(false);

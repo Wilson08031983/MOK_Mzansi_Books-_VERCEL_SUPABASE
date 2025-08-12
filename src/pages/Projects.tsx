@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Project } from '@/types/project';
 import { calculateProjectSalaryExpenses } from '@/services/projectEmployeeService';
 import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
@@ -55,8 +56,13 @@ const Projects = () => {
   const [sortBy, setSortBy] = useState<string>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Sample projects data
+  const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings } = useLocalization();
   const [projects, setProjects] = useState<Project[]>([]);
+
+  // Update document title when language changes
+  useEffect(() => {
+    document.title = `${t('projects.title')} - MOK Mzansi Books`;
+  }, [t]);
 
   // Initialize sync service
   const syncService = ExpenseProjectSyncService.getInstance();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useLocalization } from '@/hooks/useLocalization';
 import { 
   CheckCircle,
   Clock,
@@ -63,8 +64,14 @@ interface ClientDisplay {
 }
 
 const Clients = () => {
+  const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings } = useLocalization();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
+  // Update document title when language changes
+  useEffect(() => {
+    document.title = `${t('clients.title')} - MOK Mzansi Books`;
+  }, [t]);
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [clients, setClients] = useState<ClientDisplay[]>([]);
@@ -305,7 +312,7 @@ const Clients = () => {
             Back to Dashboard
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">Clients</h1>
+            <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">{t('clients.title')}</h1>
             <p className="text-slate-600 font-sf-pro">Manage your business clients and their information</p>
           </div>
         </div>

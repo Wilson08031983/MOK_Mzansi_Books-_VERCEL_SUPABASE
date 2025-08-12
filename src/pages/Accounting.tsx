@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,10 +8,13 @@ import { Calculator, Receipt, FileText, TrendingUp, DollarSign, CreditCard, Chev
 import ExpensesTab from '@/components/accounting/ExpensesTab';
 import IncomeTab from '@/components/accounting/IncomeTab';
 import TaxTab from '@/components/accounting/TaxTab';
+import ReportsTab from '@/components/accounting/ReportsTab';
 import AddIncomeModal from '@/components/accounting/AddIncomeModal';
 import EditIncomeModal from '@/components/accounting/EditIncomeModal';
+import { financialSummaryService, FinancialSummary } from '../services/financialSummaryService';
 
 const Accounting = () => {
+  const { t, formatCurrency, getCurrencySymbol } = useLocalization();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -19,6 +23,7 @@ const Accounting = () => {
   const [showAddIncomeModal, setShowAddIncomeModal] = useState(false);
   const [showEditIncomeModal, setShowEditIncomeModal] = useState(false);
   const [editingIncome, setEditingIncome] = useState(null);
+  const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   
   // Get or generate company ID
   const getCompanyId = () => {
@@ -35,6 +40,21 @@ const Accounting = () => {
   };
   
   const [companyId] = useState(getCompanyId());
+
+  // Load financial summary on component mount and when data changes
+  useEffect(() => {
+    const loadFinancialSummary = () => {
+      const summary = financialSummaryService.getFinancialSummary();
+      setFinancialSummary(summary);
+    };
+
+    loadFinancialSummary();
+
+    // Set up interval to refresh data every 30 seconds
+    const interval = setInterval(loadFinancialSummary, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Handle navigation from HR Management
   useEffect(() => {
@@ -79,7 +99,7 @@ const Accounting = () => {
         {/* Header */}
         <div className="mb-8 animate-fade-in">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent mb-4 font-sf-pro">
-            Accounting & Finance
+            {t('accounting.title')}
           </h1>
           <p className="text-xl text-slate-600 font-sf-pro">
             Manage your business finances, expenses, and financial documents
@@ -93,10 +113,12 @@ const Accounting = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-slate-900">R125,430</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {financialSummary ? formatCurrency(financialSummary.totalRevenue) : formatCurrency(0)}
+                  </p>
                   <p className="text-xs text-green-600 flex items-center mt-1">
                     <TrendingUp className="h-3 w-3 mr-1" />
-                    +12.5% vs last month
+                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.revenueChange) : '+0.0%'} vs last month
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center">
@@ -111,10 +133,12 @@ const Accounting = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Total Expenses</p>
-                  <p className="text-2xl font-bold text-slate-900">R45,280</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {financialSummary ? formatCurrency(financialSummary.totalExpenses) : formatCurrency(0)}
+                  </p>
                   <p className="text-xs text-red-600 flex items-center mt-1">
                     <TrendingUp className="h-3 w-3 mr-1 rotate-180" />
-                    +8.2% vs last month
+                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.expensesChange) : '+0.0%'} vs last month
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
@@ -129,10 +153,18 @@ const Accounting = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Net Profit</p>
-                  <p className="text-2xl font-bold text-slate-900">R80,150</p>
-                  <p className="text-xs text-green-600 flex items-center mt-1">
-                    <TrendingUp className="h-3 w-3 mr-1" />
-                    +15.3% vs last month
+                  <p className={`text-2xl font-bold ${
+                    financialSummary && financialSummary.netProfit >= 0 ? 'text-slate-900' : 'text-red-600'
+                  }`}>
+                    {financialSummary ? formatCurrency(financialSummary.netProfit) : formatCurrency(0)}
+                  </p>
+                  <p className={`text-xs flex items-center mt-1 ${
+                    financialSummary && financialSummary.monthlyComparison.profitChange >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    <TrendingUp className={`h-3 w-3 mr-1 ${
+                      financialSummary && financialSummary.monthlyComparison.profitChange < 0 ? 'rotate-180' : ''
+                    }`} />
+                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.profitChange) : '+0.0%'} vs last month
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 rounded-xl flex items-center justify-center">
@@ -147,10 +179,12 @@ const Accounting = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">Outstanding</p>
-                  <p className="text-2xl font-bold text-slate-900">R22,840</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {financialSummary ? formatCurrency(financialSummary.outstanding) : formatCurrency(0)}
+                  </p>
                   <p className="text-xs text-orange-600 flex items-center mt-1">
                     <CreditCard className="h-3 w-3 mr-1" />
-                    5 pending payments
+                    {financialSummary ? financialSummary.pendingPayments : 0} pending payments
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
@@ -203,22 +237,26 @@ const Accounting = () => {
                   <CardContent className="p-6">
                     <h3 className="text-lg font-semibold text-slate-900 mb-4 font-sf-pro">Recent Transactions</h3>
                     <div className="space-y-3">
-                      {[
-                        { description: "Office Supplies", amount: "-R1,250", date: "Today", type: "expense" },
-                        { description: "Client Payment - ABC Corp", amount: "+R15,000", date: "Yesterday", type: "income" },
-                        { description: "Software Subscription", amount: "-R450", date: "2 days ago", type: "expense" },
-                        { description: "Consulting Fee", amount: "+R8,500", date: "3 days ago", type: "income" },
-                      ].map((transaction, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
-                          <div>
-                            <p className="font-medium text-slate-900">{transaction.description}</p>
-                            <p className="text-sm text-slate-600">{transaction.date}</p>
+                      {financialSummary && financialSummary.recentTransactions.length > 0 ? (
+                        financialSummary.recentTransactions.slice(0, 5).map((transaction, index) => (
+                          <div key={transaction.id || index} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                            <div>
+                              <p className="font-medium text-slate-900">{transaction.description}</p>
+                              <p className="text-sm text-slate-600">
+                                {financialSummaryService.getRelativeTime(transaction.date)}
+                              </p>
+                            </div>
+                            <span className={`font-semibold ${transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount)}
+                            </span>
                           </div>
-                          <span className={`font-semibold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                            {transaction.amount}
-                          </span>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-slate-500">
+                          <p className="text-sm">No recent transactions found</p>
+                          <p className="text-xs mt-1">Add some expenses or income to see them here</p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -229,20 +267,30 @@ const Accounting = () => {
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <span className="text-slate-600">Monthly Revenue</span>
-                        <span className="font-semibold text-slate-900">R125,430</span>
+                        <span className="font-semibold text-slate-900">
+                          {financialSummary ? formatCurrency(financialSummary.totalRevenue) : formatCurrency(0)}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-600">Monthly Expenses</span>
-                        <span className="font-semibold text-slate-900">R45,280</span>
+                        <span className="font-semibold text-slate-900">
+                          {financialSummary ? formatCurrency(financialSummary.totalExpenses) : formatCurrency(0)}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-600">Tax Liability</span>
-                        <span className="font-semibold text-slate-900">R12,060</span>
+                        <span className="font-semibold text-slate-900">
+                          {financialSummary ? formatCurrency(financialSummary.taxLiability) : formatCurrency(0)}
+                        </span>
                       </div>
                       <div className="border-t pt-4">
                         <div className="flex justify-between items-center">
                           <span className="text-slate-600 font-medium">Net Income</span>
-                          <span className="font-bold text-green-600 text-lg">R68,090</span>
+                          <span className={`font-bold text-lg ${
+                            financialSummary && financialSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {financialSummary ? formatCurrency(financialSummary.netProfit) : formatCurrency(0)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -268,12 +316,7 @@ const Accounting = () => {
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-6">
-              <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4 font-sf-pro">Financial Reports</h3>
-                  <p className="text-slate-600">Financial reporting features coming soon. Generate comprehensive reports for your business.</p>
-                </CardContent>
-              </Card>
+              <ReportsTab companyId={companyId} />
             </TabsContent>
           </Tabs>
         </div>

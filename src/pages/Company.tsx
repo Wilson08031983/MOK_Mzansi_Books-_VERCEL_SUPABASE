@@ -1,18 +1,25 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 import CompanyDetails from '@/components/company/CompanyDetails';
 import TeamManagement from '@/components/company/TeamManagement';
 import ActivityLog from '@/components/company/ActivityLog';
 
 const Company = () => {
+  const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings } = useLocalization();
   const location = useLocation();
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('company-details');
+
+  // Update document title when language changes
+  useEffect(() => {
+    document.title = `${t('company.title')} - MOK Mzansi Books`;
+  }, [t]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -34,15 +41,15 @@ const Company = () => {
                     className="text-slate-600 hover:text-mokm-purple-600 hover:bg-white/50 rounded-xl transition-all duration-300 font-sf-pro"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Dashboard
+                    {t('common.back')}
                   </Button>
                 </Link>
               </div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent font-sf-pro">
-                My Company
+                {t('company.title')}
               </h1>
               <p className="text-slate-600 text-lg font-sf-pro mt-2">
-                Manage your company details, team and view activity logs
+                {t('company.details')}
               </p>
             </div>
           </div>

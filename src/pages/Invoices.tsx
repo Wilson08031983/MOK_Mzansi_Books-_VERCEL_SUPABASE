@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Link } from 'react-router-dom';
 import InvoicesHeader from '@/components/invoices/InvoicesHeader';
 import { generateInvoiceNumber } from '@/services/invoiceService';
@@ -41,7 +42,16 @@ interface ModalInvoiceData {
 
 const Invoices: React.FC = () => {
   const { user } = useAuth();
+  const { t, formatCurrency: localizeCurrency, formatDate: localizeDate, settings, getCurrencySymbol } = useLocalization();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  // Update document title when language changes
+  useEffect(() => {
+    document.title = `${t('invoices.title')} - MOK Mzansi Books`;
+  }, [t]);
+
+  // Update page title in UI
+  const pageTitle = t('invoices.title');
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -119,7 +129,7 @@ const Invoices: React.FC = () => {
         paidAmount: 2500,
         balance: 2500,
         status: 'partial',
-        currency: 'ZAR',
+        currency: settings.currency,
         vatRate: 15,
         reference: 'PO-12345',
         terms: 'Net 30 days',
@@ -191,7 +201,7 @@ const Invoices: React.FC = () => {
           paidAmount: 2500,
           balance: 2500,
           status: 'partial',
-          currency: 'ZAR',
+          currency: settings.currency,
           vatRate: 15,
           reference: 'PO-12345',
           terms: 'Net 30 days',
@@ -228,7 +238,7 @@ const Invoices: React.FC = () => {
           paidAmount: 0,
           balance: 15000,
           status: 'overdue',
-          currency: 'ZAR',
+          currency: settings.currency,
           vatRate: 15,
           reference: 'PO-67890',
           terms: 'Net 30 days',
@@ -303,7 +313,7 @@ const Invoices: React.FC = () => {
         amount: invoice.total || invoice.amount || 0,
         total: invoice.total || invoice.amount || 0,
         client: invoice.clientId,
-        currency: invoice.currency || 'ZAR',
+        currency: invoice.currency || settings.currency,
         terms: invoice.terms || 'Net 30 days',
         reference: invoice.reference || '',
         vatRate: invoice.vatRate || 0,

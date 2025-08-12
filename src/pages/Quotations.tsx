@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { 
   CheckCircle,
   Clock,
@@ -22,7 +23,13 @@ import { getQuotations, deleteQuotation, Quotation } from '@/services/quotationS
 import { toast } from 'sonner';
 
 const Quotations = () => {
+  const { t, formatCurrency, settings } = useLocalization();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
+  // Update document title when language changes
+  useEffect(() => {
+    document.title = `${t('quotations.title')} - MOK Mzansi Books`;
+  }, [t]);
   const [isCreateQuotationModalOpen, setIsCreateQuotationModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuotations, setSelectedQuotations] = useState<string[]>([]);
@@ -64,6 +71,11 @@ const Quotations = () => {
   // Load quotations from localStorage using the quotationService
   const [quotations, setQuotations] = useState<Quotation[]>([]);
 
+  // Update page title when language changes
+  useEffect(() => {
+    document.title = `${t('quotations.title')} - MOK Mzansi Books`;
+  }, [t]);
+
   // Load quotations from localStorage
   const loadQuotations = () => {
     try {
@@ -87,7 +99,7 @@ const Quotations = () => {
     loadQuotations();
     
     // Show feedback to user
-    toast.success('Quotations refreshed');
+    toast.success(t('common.success'));
   };
 
   // Load quotations on component mount

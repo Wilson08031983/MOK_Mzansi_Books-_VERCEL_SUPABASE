@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft,
@@ -28,19 +29,33 @@ import AllowanceManagement from '@/components/hr/AllowanceManagement';
 import PerformanceManagement from '@/components/hr/PerformanceManagement';
 import DisciplinaryManagement from '@/components/hr/DisciplinaryManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
+
 import { Employee, getAllEmployees, initializeEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
+import { cleanupAllSampleData } from '@/services/cleanupSampleData';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
+import { createSampleEmployeesWithData } from '@/services/sampleDataGenerator';
 
 // Using shared types from LeaveManagementTypes
 
 const HRManagement: React.FC = () => {
+  const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings } = useLocalization();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'disciplinary' | 'allowance' | 'payroll'>('dashboard');
   const [viewingProfile, setViewingProfile] = useState<boolean>(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   
   // Initialize employees state
   const [employees, setEmployees] = useState<Employee[]>([]);
-  
+
+  // Helper to identify the seeded Regular User account globally
+  const isDefaultRegularUser = (emp: Employee): boolean => {
+    const byEmail = (emp.email || '').toLowerCase() === 'user@mokmzansibooks.com';
+    const byName = (emp.firstName?.trim() === 'Regular' && emp.surname?.trim() === 'User');
+    return byEmail || byName;
+  };
+
+  // Employees to pass into child tabs/components (exclude the default Regular User)
+  const filteredEmployees = employees.filter(emp => !isDefaultRegularUser(emp));
+
   // State for HR metrics that updates when employees change
   const [hrMetrics, setHrMetrics] = useState({
     totalEmployees: 0,
@@ -58,8 +73,28 @@ const HRManagement: React.FC = () => {
     const currentYear = today.getFullYear();
     const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     
-    // Total active employees
-    const totalEmployees = employees.filter(emp => emp.status === 'active').length;
+    // Total active employees (excluding default Regular User to match Employee tab display)
+    const activeEmployees = employees.filter(emp => {
+      // Only count active employees
+      if (emp.status !== 'active') return false;
+      
+      // Exclude the default Regular User (same logic as EmployeeManagement component)
+      const isDefaultRegularUser = (emp.email || '').toLowerCase() === 'user@mokmzansibooks.com' ||
+                                  (emp.firstName?.trim() === 'Regular' && emp.surname?.trim() === 'User');
+      
+      return !isDefaultRegularUser;
+    });
+    const totalEmployees = activeEmployees.length;
+    
+    // Debug logging to show which employees are being counted
+    console.log('🔍 [HRMetrics] Active employees being counted (excluding Regular User):', activeEmployees.map(emp => ({
+      id: emp.id,
+      name: `${emp.firstName} ${emp.surname}`,
+      email: emp.email,
+      status: emp.status,
+      position: emp.position
+    })));
+    console.log(`📊 [HRMetrics] Total active employees displayed: ${totalEmployees}`);
     
     // New hires this month
     const newHires = employees.filter(emp => {
@@ -103,14 +138,41 @@ const HRManagement: React.FC = () => {
     // The LeaveManagement component will show pending leave requests
   };
 
+  // Sample data creation handler
+  const handleCreateSampleData = () => {
+    try {
+      console.log('🚀 Creating sample employees with Time & Attendance and Allowances...');
+      const result = createSampleEmployeesWithData();
+      
+      if (result.success) {
+        console.log(`✅ Successfully created ${result.employeesCreated} employees with complete data`);
+        // Refresh employees list
+        const updatedEmployees = getAllEmployees();
+        setEmployees(updatedEmployees);
+      } else {
+        console.error('❌ Some errors occurred during sample data creation:', result.errors);
+      }
+    } catch (error) {
+      console.error('❌ Failed to create sample data:', error);
+    }
+  };
 
+  // Make sample data creation available globally for console access
+  useEffect(() => {
+    (window as any).createSampleEmployeesWithData = handleCreateSampleData;
+    console.log('📝 Sample data creation available. Run createSampleEmployeesWithData() in console to create employees.');
+  }, []);
 
   // Load employees from localStorage on component mount
   useEffect(() => {
     // Always force cleanup duplicates to ensure clean state
     forceCleanupDuplicates();
     
-    // Initialize employees if needed
+    // Remove all sample employees and related data, preserving only Admin
+    const cleanupResult = cleanupAllSampleData();
+    console.log('🧹 [HR] Cleanup result:', cleanupResult);
+    
+    // Ensure at least Admin exists after cleanup
     initializeEmployees();
     
     // Load employees from localStorage
@@ -208,6 +270,13 @@ const HRManagement: React.FC = () => {
     rejectedReason: 'Critical project deadline'
   }
   ]);
+
+  // After employees load/change, drop any leave data that references non-existing employees
+  useEffect(() => {
+    const ids = new Set(employees.map(e => e.id));
+    setLeaveRequests(prev => prev.filter(item => ids.has(item.employeeId)));
+    setLeaveBalances(prev => prev.filter(item => ids.has(item.employeeId)));
+  }, [employees]);
 
   // Sample leave balances based on South African BCEA laws
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([
@@ -345,7 +414,8 @@ const HRManagement: React.FC = () => {
             { id: 'performance', label: 'Performance', icon: <Target className="h-4 w-4" /> },
             { id: 'disciplinary', label: 'Disciplinary', icon: <AlertTriangle className="h-4 w-4" /> },
             { id: 'allowance', label: 'Allowance', icon: <PiggyBank className="h-4 w-4" /> },
-            { id: 'payroll', label: 'Payroll', icon: <DollarSign className="h-4 w-4" /> }
+            { id: 'payroll', label: 'Payroll', icon: <DollarSign className="h-4 w-4" /> },
+
           ].map((tab) => (
             <button
               key={tab.id}
@@ -371,10 +441,10 @@ const HRManagement: React.FC = () => {
             onAddEmployee={handleAddEmployee}
             onApproveLeave={handleApproveLeave}
           />}
-          {activeTab === 'employees' && <EmployeeManagement employees={employees} setEmployees={setEmployees} />}
+          {activeTab === 'employees' && <EmployeeManagement employees={filteredEmployees} setEmployees={setEmployees} />}
           {activeTab === 'directory' && !viewingProfile && (
             <EmployeeDirectory 
-              employees={employees} 
+              employees={filteredEmployees} 
               onViewProfile={(employee) => {
                 setSelectedEmployee(employee);
                 setViewingProfile(true);
@@ -396,36 +466,37 @@ const HRManagement: React.FC = () => {
               setLeaveRequests={setLeaveRequests}
               leaveBalances={leaveBalances}
               hrMetrics={hrMetrics}
-              employees={employees}
+              employees={filteredEmployees}
             />
           )}
           {activeTab === 'attendance' && (
             <TimeAttendance
-              employees={employees}
+              employees={filteredEmployees}
             />
           )}
           {activeTab === 'training' && (
             <TrainingManagement
-              employees={employees}
+              employees={filteredEmployees}
               setEmployees={setEmployees}
             />
           )}
           {activeTab === 'performance' && (
             <PerformanceManagement
-              employees={employees}
+              employees={filteredEmployees}
             />
           )}
           {activeTab === 'disciplinary' && (
             <DisciplinaryManagement
-              employees={employees}
+              employees={filteredEmployees}
             />
           )}
           {activeTab === 'allowance' && (
             <AllowanceManagement
-              employees={employees}
+              employees={filteredEmployees}
             />
           )}
           {activeTab === 'payroll' && <PayrollManagement />}
+
         </div>
       </div>
     </div>
