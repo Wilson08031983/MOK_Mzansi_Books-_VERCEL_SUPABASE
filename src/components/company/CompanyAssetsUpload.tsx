@@ -94,6 +94,13 @@ const CompanyAssetsUpload = () => {
                 aspectRatio: width / height
               }
             }));
+            
+            // Dispatch logo update event for Settings page sync
+            if (assetType === 'Logo') {
+              window.dispatchEvent(new CustomEvent('companyLogoUpdated', {
+                detail: { logo: optimizedDataUrl }
+              }));
+            }
           };
           img.src = result;
         } else {

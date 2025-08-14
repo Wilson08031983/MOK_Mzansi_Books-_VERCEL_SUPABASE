@@ -2,32 +2,35 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { FileText, Users, Plus, Receipt } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 const QuickActions = () => {
+  const { t } = useLocalization();
+  
   const actions = [
     {
-      title: 'Create Invoice',
+      title: t('invoices.createInvoice'),
       icon: FileText,
       bgGradient: 'from-mokm-blue-500 to-mokm-purple-500',
       hoverGradient: 'from-mokm-blue-600 to-mokm-purple-600',
       onClick: () => console.log('Navigate to create invoice')
     },
     {
-      title: 'Add Client',
+      title: t('clients.addClient'),
       icon: Users,
       bgGradient: 'from-mokm-purple-500 to-mokm-pink-500',
       hoverGradient: 'from-mokm-purple-600 to-mokm-pink-600',
       onClick: () => console.log('Navigate to add client')
     },
     {
-      title: 'New Quotation',
+      title: t('quotations.createQuotation'),
       icon: Plus,
       bgGradient: 'from-mokm-pink-500 to-mokm-orange-500',
       hoverGradient: 'from-mokm-pink-600 to-mokm-orange-600',
       onClick: () => console.log('Navigate to create quotation')
     },
     {
-      title: 'Record Expense',
+      title: t('common.recordExpense'),
       icon: Receipt,
       bgGradient: 'from-mokm-orange-500 to-mokm-pink-500',
       hoverGradient: 'from-mokm-orange-600 to-mokm-pink-600',

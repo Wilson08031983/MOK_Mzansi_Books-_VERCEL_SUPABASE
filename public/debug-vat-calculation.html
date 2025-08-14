@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug VAT Calculation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #005a87;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Debug VAT Calculation</h1>
+    
+    <div class="section">
+        <h2>Actions</h2>
+        <button class="button" onclick="checkInvoices()">Check Invoices in localStorage</button>
+        <button class="button" onclick="createTestInvoices()">Create Test Invoices</button>
+        <button class="button" onclick="testVATCalculation()">Test VAT Calculation</button>
+        <button class="button" onclick="clearLog()">Clear Log</button>
+        <button class="button" onclick="openMainApp()">Open Main App</button>
+    </div>
+    
+    <div class="section">
+        <h2>Debug Log</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        function checkInvoices() {
+            log('=== Checking Invoices in localStorage ===');
+            const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+            log(`Found ${invoices.length} invoices in localStorage`);
+            
+            if (invoices.length > 0) {
+                invoices.forEach((invoice, index) => {
+                    log(`Invoice ${index + 1}:`);
+                    log(`  ID: ${invoice.id || 'N/A'}`);
+                    log(`  Number: ${invoice.number || 'N/A'}`);
+                    log(`  Date: ${invoice.date || 'N/A'}`);
+                    log(`  Status: ${invoice.status || 'N/A'}`);
+                    log(`  Subtotal: ${invoice.subtotal || 'N/A'}`);
+                    log(`  VAT Rate: ${invoice.vatRate || 'N/A'}`);
+                    log(`  VAT Total: ${invoice.vatTotal || 'N/A'}`);
+                    log(`  Total: ${invoice.total || 'N/A'}`);
+                    log('  ---');
+                });
+            } else {
+                log('No invoices found in localStorage');
+            }
+        }
+
+        function createTestInvoices() {
+            log('=== Creating Test Invoices ===');
+            
+            // Clear existing invoices
+            localStorage.removeItem('invoices');
+            log('Cleared existing invoices');
+            
+            // Create test invoices for Q2 2025 (April-June)
+            const testInvoices = [
+                {
+                    id: 'test-001',
+                    number: 'INV-001',
+                    date: '2025-04-15',
+                    status: 'paid',
+                    subtotal: 1000,
+                    vatRate: 15,
+                    vatTotal: 150,
+                    total: 1150,
+                    clientName: 'Test Client 1'
+                },
+                {
+                    id: 'test-002',
+                    number: 'INV-002',
+                    date: '2025-05-20',
+                    status: 'paid',
+                    subtotal: 2000,
+                    vatRate: 15,
+                    vatTotal: 300,
+                    total: 2300,
+                    clientName: 'Test Client 2'
+                },
+                {
+                    id: 'test-003',
+                    number: 'INV-003',
+                    date: '2025-06-10',
+                    status: 'paid',
+                    subtotal: 15000,
+                    vatRate: 15,
+                    vatTotal: 2250,
+                    total: 17250,
+                    clientName: 'Test Client 3'
+                },
+                {
+                    id: 'test-004',
+                    number: 'INV-004',
+                    date: '2025-07-01', // Outside Q2 2025
+                    status: 'paid',
+                    subtotal: 5000,
+                    vatRate: 15,
+                    vatTotal: 750,
+                    total: 5750,
+                    clientName: 'Test Client 4'
+                }
+            ];
+            
+            localStorage.setItem('invoices', JSON.stringify(testInvoices));
+            log(`Created ${testInvoices.length} test invoices`);
+            
+            // Calculate expected VAT for Q2 2025
+            const q2Invoices = testInvoices.filter(inv => {
+                const date = new Date(inv.date);
+                return date >= new Date('2025-04-01') && date <= new Date('2025-06-30');
+            });
+            
+            const expectedVAT = q2Invoices.reduce((sum, inv) => sum + inv.vatTotal, 0);
+            log(`Expected VAT for Q2 2025: R${expectedVAT.toFixed(2)}`);
+            
+            // Trigger storage event
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'invoices',
+                newValue: JSON.stringify(testInvoices),
+                oldValue: null,
+                storageArea: localStorage
+            }));
+        }
+
+        function testVATCalculation() {
+            log('=== Testing VAT Calculation ===');
+            
+            try {
+                // Import the VAT calculation function (simulate)
+                const startDate = '2025-04-01';
+                const endDate = '2025-06-30';
+                
+                log(`Calculating VAT for period: ${startDate} to ${endDate}`);
+                
+                // Clear caches
+                localStorage.removeItem('vatCalculations');
+                localStorage.removeItem('cachedVAT');
+                localStorage.removeItem('vatCache');
+                localStorage.removeItem('calculationCache');
+                log('Cleared VAT calculation caches');
+                
+                // Get invoices
+                const allInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+                log(`Found ${allInvoices.length} total invoices`);
+                
+                // Filter invoices by date and status
+                const validInvoices = allInvoices.filter(invoice => {
+                    const invoiceDate = new Date(invoice.date);
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    
+                    const isInPeriod = invoiceDate >= start && invoiceDate <= end;
+                    const isValidStatus = invoice.status === 'paid' || invoice.status === 'sent';
+                    
+                    return isInPeriod && isValidStatus;
+                });
+                
+                log(`Found ${validInvoices.length} valid invoices for the period`);
+                
+                // Calculate output VAT
+                let outputVATTotal = 0;
+                validInvoices.forEach(invoice => {
+                    let invoiceVAT = 0;
+                    
+                    if (invoice.vatTotal !== undefined && invoice.vatTotal !== null) {
+                        invoiceVAT = parseFloat(invoice.vatTotal) || 0;
+                    } else if (invoice.subtotal !== undefined && invoice.vatRate !== undefined) {
+                        const subtotal = parseFloat(invoice.subtotal) || 0;
+                        const vatRate = parseFloat(invoice.vatRate) || 0;
+                        invoiceVAT = subtotal * (vatRate / 100);
+                    }
+                    
+                    outputVATTotal += invoiceVAT;
+                    log(`Invoice ${invoice.number}: VAT = R${invoiceVAT.toFixed(2)}`);
+                });
+                
+                log(`Total Output VAT: R${outputVATTotal.toFixed(2)}`);
+                
+                // Create result object
+                const result = {
+                    outputVAT: {
+                        standardRated: outputVATTotal,
+                        zeroRated: 0,
+                        exempt: 0,
+                        exports: 0,
+                        total: outputVATTotal
+                    },
+                    inputVAT: {
+                        standardRated: 0,
+                        capitalGoods: 0,
+                        importVAT: 0,
+                        total: 0
+                    },
+                    netVAT: outputVATTotal,
+                    calculationTimestamp: new Date().toLocaleString()
+                };
+                
+                log('VAT Calculation Result:');
+                log(JSON.stringify(result, null, 2));
+                
+            } catch (error) {
+                log(`Error during VAT calculation: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function openMainApp() {
+            window.open('/', '_blank');
+        }
+
+        // Auto-run checks on page load
+        window.addEventListener('load', () => {
+            log('Debug page loaded');
+            checkInvoices();
+        });
+    </script>
+</body>
+</html>

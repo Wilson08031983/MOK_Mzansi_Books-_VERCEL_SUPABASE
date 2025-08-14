@@ -38,7 +38,6 @@ const convertTeamMemberToEmployee = (teamMember: TeamMember): Omit<Employee, 'id
     startDate: new Date().toISOString().split('T')[0], // Today's date
     paymentCycle: 'Monthly' as const,
     salary: roleBasedDefaults.salary,
-    taxPercentage: 25, // Default tax percentage
     department: roleBasedDefaults.department,
     position: roleBasedDefaults.position,
     location: 'Head Office',
@@ -261,10 +260,9 @@ export const syncDefaultUsers = (): {
     let syncedCount = 0;
     const errors: string[] = [];
 
-    // Find the default admin and regular user
+    // Find only the default admin user (Regular User will no longer be auto-synced)
     const defaultUsers = teamMembers.filter(member => 
-      member.email === 'admin@mokmzansibooks.com' || 
-      member.email === 'user@mokmzansibooks.com'
+      member.email === 'admin@mokmzansibooks.com'
     );
 
     defaultUsers.forEach(defaultUser => {

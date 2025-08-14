@@ -201,8 +201,8 @@ const Clients = () => {
           
           return {
             id: client.id || '',
-            name: client.contactPerson || 'No Name',
-            company: client.companyName || 'No Company',
+            name: client.contactPerson || t('clients.noName'),
+            company: client.companyName || t('clients.noCompany'),
             email: client.email || '',
             phone: client.phone || '',
             totalValue: calculatedTotalValue, // Use the calculated value
@@ -215,7 +215,7 @@ const Clients = () => {
       
       setClients(processedClients);
     } catch (error) {
-      console.error('Error loading clients:', error);
+      console.error(t('clients.errorLoadingClients'), error);
       setClients([]);
     }
   };
@@ -309,11 +309,11 @@ const Clients = () => {
             className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
+            {t('common.backToDashboard')}
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">{t('clients.title')}</h1>
-            <p className="text-slate-600 font-sf-pro">Manage your business clients and their information</p>
+            <p className="text-slate-600 font-sf-pro">{t('clients.manageClients')}</p>
           </div>
         </div>
         
@@ -324,7 +324,7 @@ const Clients = () => {
             className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            {t('common.refresh')}
           </Button>
           
           <div className="flex items-center border border-slate-300 rounded-xl p-1">
@@ -351,7 +351,7 @@ const Clients = () => {
             className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Client
+            {t('clients.addClient')}
           </Button>
         </div>
       </div>
@@ -368,7 +368,7 @@ const Clients = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search clients by name, email, or company"
+                placeholder={t('clients.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
@@ -392,11 +392,11 @@ const Clients = () => {
                   onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
                   className="px-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
                 >
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="pending">Pending</option>
+                  <option value="all">{t('clients.allStatus')}</option>
+                  <option value="active">{t('clients.active')}</option>
+                  <option value="inactive">{t('clients.inactive')}</option>
+                  <option value="overdue">{t('clients.overdue')}</option>
+                  <option value="pending">{t('clients.pending')}</option>
                 </select>
               </div>
               
@@ -405,10 +405,10 @@ const Clients = () => {
                 onChange={(e) => setFilters(prev => ({ ...prev, clientType: e.target.value }))}
                 className="px-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
               >
-                <option value="all">All Types</option>
-                <option value="individual">Individual</option>
-                <option value="business">Business</option>
-                <option value="government">Government</option>
+                <option value="all">{t('clients.allTypes')}</option>
+                <option value="individual">{t('clients.individual')}</option>
+                <option value="business">{t('clients.business')}</option>
+                <option value="government">{t('clients.government')}</option>
               </select>
               
               <Button
@@ -416,7 +416,7 @@ const Clients = () => {
                 onClick={handleClearFilters}
                 className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
               >
-                Clear Filters
+                {t('clients.clearFilters')}
               </Button>
             </div>
           </div>
@@ -430,7 +430,7 @@ const Clients = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <span className="text-sm font-medium text-slate-700 font-sf-pro">
-                  {selectedClients.length} client{selectedClients.length !== 1 ? 's' : ''} selected
+                  {selectedClients.length} {selectedClients.length !== 1 ? t('clients.clients') : t('clients.client')} {t('clients.selected')}
                 </span>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -438,7 +438,7 @@ const Clients = () => {
                     size="sm"
                     className="font-sf-pro rounded-lg"
                   >
-                    Change Status
+                    {t('clients.changeStatus')}
                   </Button>
                   <Button
                     variant="outline"
@@ -446,7 +446,7 @@ const Clients = () => {
                     className="font-sf-pro rounded-lg"
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    Download PDF
+                    {t('common.downloadPDF')}
                   </Button>
                   <Button
                     variant="outline"
@@ -454,7 +454,7 @@ const Clients = () => {
                     className="font-sf-pro rounded-lg text-red-600 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Selected
+                    {t('clients.deleteSelected')}
                   </Button>
                 </div>
               </div>
@@ -465,7 +465,7 @@ const Clients = () => {
                 onClick={() => setSelectedClients([])}
                 className="font-sf-pro"
               >
-                Clear Selection
+                {t('clients.clearSelection')}
               </Button>
             </div>
           </CardContent>
@@ -476,7 +476,7 @@ const Clients = () => {
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader>
           <CardTitle className="text-slate-900 font-sf-pro text-xl">
-            {filteredClients.length} Client{filteredClients.length !== 1 ? 's' : ''}
+            {filteredClients.length} {filteredClients.length !== 1 ? t('clients.clients') : t('clients.client')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -534,14 +534,14 @@ const Clients = () => {
               <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Search className="h-8 w-8 text-slate-400" />
               </div>
-              <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">No clients found</h3>
-              <p className="text-slate-600 font-sf-pro text-sm mb-4">Try adjusting your search terms or filters</p>
+              <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">{t('clients.noClientsFound')}</h3>
+              <p className="text-slate-600 font-sf-pro text-sm mb-4">{t('clients.adjustSearchFilters')}</p>
               <Button
                 onClick={() => setIsAddClientModalOpen(true)}
                 className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Your First Client
+                {t('clients.addFirstClient')}
               </Button>
             </div>
           )}

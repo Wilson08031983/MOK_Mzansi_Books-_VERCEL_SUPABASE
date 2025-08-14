@@ -27,6 +27,7 @@ import {
   User
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
+import { useLocalization } from '@/hooks/useLocalization';
 
 export type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'partial' | 'paid' | 'overdue' | 'cancelled';
 
@@ -170,6 +171,7 @@ const getSampleInvoice = (id: string): Invoice => {
 const InvoiceDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { formatDate, formatDateTime, getTimezoneDisplayName } = useLocalization();
   const invoiceId = id || '';
   
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -433,7 +435,7 @@ const InvoiceDetail: React.FC = () => {
                   </h2>
                   {invoice.status === 'sent' && (
                     <p className="text-sm text-slate-600 font-sf-pro">
-                      Payment due by {new Date(invoice.dueDate).toLocaleDateString('en-ZA')}
+                      Payment due by {formatDate(new Date(invoice.dueDate))}
                     </p>
                   )}
                   {invoice.status === 'paid' && (
@@ -443,7 +445,7 @@ const InvoiceDetail: React.FC = () => {
                   )}
                   {invoice.status === 'overdue' && (
                     <p className="text-sm text-red-600 font-sf-pro">
-                      Payment was due on {new Date(invoice.dueDate).toLocaleDateString('en-ZA')}
+                      Payment was due on {formatDate(new Date(invoice.dueDate))}
                     </p>
                   )}
                 </div>
@@ -566,12 +568,12 @@ const InvoiceDetail: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 font-sf-pro">Issue Date</h3>
-                  <p className="text-sm text-slate-600 font-sf-pro">{new Date(invoice.issueDate).toLocaleDateString('en-ZA')}</p>
+                  <p className="text-sm text-slate-600 font-sf-pro">{formatDate(new Date(invoice.issueDate))}</p>
                 </div>
                 
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 font-sf-pro">Due Date</h3>
-                  <p className="text-sm text-slate-600 font-sf-pro">{new Date(invoice.dueDate).toLocaleDateString('en-ZA')}</p>
+                  <p className="text-sm text-slate-600 font-sf-pro">{formatDate(new Date(invoice.dueDate))}</p>
                 </div>
                 
                 <div>
@@ -582,7 +584,7 @@ const InvoiceDetail: React.FC = () => {
                 {invoice.paymentDate && (
                   <div>
                     <h3 className="text-sm font-medium text-slate-700 font-sf-pro">Payment Date</h3>
-                    <p className="text-sm text-slate-600 font-sf-pro">{new Date(invoice.paymentDate).toLocaleDateString('en-ZA')}</p>
+                    <p className="text-sm text-slate-600 font-sf-pro">{formatDate(new Date(invoice.paymentDate))}</p>
                   </div>
                 )}
               </div>

@@ -3,8 +3,10 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Search, Filter, Download, User, FileText, Settings, Shield } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 const ActivityLog = () => {
+  const { t } = useLocalization();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
 
@@ -92,8 +94,8 @@ const ActivityLog = () => {
       {/* Header and Controls */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Activity Log</h2>
-          <p className="text-slate-600 font-sf-pro">Track all activities and changes in your account</p>
+          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">{t('common.activityLog')}</h2>
+          <p className="text-slate-600 font-sf-pro">{t('common.trackActivities')}</p>
         </div>
         
         <div className="flex items-center space-x-4">
@@ -102,7 +104,7 @@ const ActivityLog = () => {
             className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
           >
             <Download className="h-4 w-4 mr-2" />
-            Download PDF
+            {t('common.downloadPDF')}
           </Button>
         </div>
       </div>
@@ -115,7 +117,7 @@ const ActivityLog = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search activities..."
+                placeholder={t('common.searchActivities')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
@@ -129,11 +131,11 @@ const ActivityLog = () => {
                 onChange={(e) => setFilterType(e.target.value)}
                 className="px-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
               >
-                <option value="all">All Activities</option>
-                <option value="user">User Actions</option>
-                <option value="document">Documents</option>
-                <option value="settings">Settings</option>
-                <option value="security">Security</option>
+                <option value="all">{t('common.allActivities')}</option>
+                <option value="user">{t('common.userActions')}</option>
+                <option value="document">{t('common.documents')}</option>
+                <option value="settings">{t('common.settings')}</option>
+                <option value="security">{t('common.security')}</option>
               </select>
             </div>
           </div>
@@ -143,7 +145,7 @@ const ActivityLog = () => {
       {/* Activity Timeline */}
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader>
-          <CardTitle className="text-slate-900 font-sf-pro text-xl">Recent Activities</CardTitle>
+          <CardTitle className="text-slate-900 font-sf-pro text-xl">{t('common.recentActivities')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -173,8 +175,8 @@ const ActivityLog = () => {
               <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Search className="h-8 w-8 text-slate-400" />
               </div>
-              <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">No activities found</h3>
-              <p className="text-slate-600 font-sf-pro text-sm">Try adjusting your search terms or filters</p>
+              <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">{t('common.noActivitiesFound')}</h3>
+              <p className="text-slate-600 font-sf-pro text-sm">{t('common.adjustSearchFilters')}</p>
             </div>
           )}
         </CardContent>

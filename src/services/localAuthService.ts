@@ -118,27 +118,15 @@ export const initializeDefaultUsers = (): void => {
       permissions: getAdminPermissions()
     };
     
-    // Create default regular user
-    const regularUser: StoredUserCredential = {
-      email: 'user@mokmzansibooks.com',
-      password: 'user123',
-      fullName: 'Regular User',
-      role: 'Staff',
-      permissions: getDefaultPermissions()
-    };
-    
     credentials['default-admin'] = adminUser;
-    credentials['default-user'] = regularUser;
     safeSet<StoredCredentials>('userCredentials', credentials);
   } else {
-    // Check for and add specific users if they don't exist
+    // Check for and add admin user if it doesn't exist
     let adminExists = false;
-    let regularUserExists = false;
     
-    // Check if admin and regular user exist
+    // Check if admin exists
     Object.values(credentials).forEach(user => {
       if (user.email === 'admin@mokmzansibooks.com') adminExists = true;
-      if (user.email === 'user@mokmzansibooks.com') regularUserExists = true;
     });
     
     // Add admin if not exists
@@ -151,22 +139,6 @@ export const initializeDefaultUsers = (): void => {
         permissions: getAdminPermissions()
       };
       credentials['default-admin'] = adminUser;
-    }
-    
-    // Add regular user if not exists
-    if (!regularUserExists) {
-      const regularUser: StoredUserCredential = {
-        email: 'user@mokmzansibooks.com',
-        password: 'user123',
-        fullName: 'Regular User',
-        role: 'Staff',
-        permissions: getDefaultPermissions()
-      };
-      credentials['default-user'] = regularUser;
-    }
-    
-    // Save any changes
-    if (!adminExists || !regularUserExists) {
       safeSet<StoredCredentials>('userCredentials', credentials);
     }
   }

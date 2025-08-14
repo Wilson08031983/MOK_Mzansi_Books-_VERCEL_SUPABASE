@@ -31,6 +31,9 @@ import {
 interface ReportsGridProps {
   reports: Report[];
   onToggleFavorite: (reportId: string) => void;
+  onExecuteReport?: (reportId: string) => Promise<void>;
+  onClearFilters?: () => void;
+  onReportClick?: (report: Report) => void;
 }
 
 const getCategoryColor = (category: string): string => {
@@ -57,7 +60,7 @@ const getCategoryIcon = (category: string) => {
   }
 };
 
-const ReportsGrid: React.FC<ReportsGridProps> = ({ reports, onToggleFavorite }) => {
+const ReportsGrid: React.FC<ReportsGridProps> = ({ reports, onToggleFavorite, onExecuteReport, onClearFilters, onReportClick }) => {
   if (reports.length === 0) {
     return (
       <div className="text-center p-10 bg-white rounded-lg shadow-business">
@@ -66,7 +69,10 @@ const ReportsGrid: React.FC<ReportsGridProps> = ({ reports, onToggleFavorite }) 
         <p className="text-gray-600 mb-6">
           No reports match your current filters. Try adjusting your search criteria.
         </p>
-        <Button className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white shadow-business hover:shadow-business-lg transition-all duration-300">
+        <Button 
+          onClick={onClearFilters}
+          className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white shadow-business hover:shadow-business-lg transition-all duration-300"
+        >
           Clear Filters
         </Button>
       </div>
@@ -78,7 +84,8 @@ const ReportsGrid: React.FC<ReportsGridProps> = ({ reports, onToggleFavorite }) 
       {reports.map((report) => (
         <Card 
           key={report.id} 
-          className="shadow-business hover:shadow-business-lg transition-all duration-300 overflow-hidden"
+          className="shadow-business hover:shadow-business-lg transition-all duration-300 overflow-hidden cursor-pointer"
+          onClick={() => onReportClick?.(report)}
         >
           <CardHeader className="pb-0 pt-6 px-6 flex flex-row items-start justify-between">
             <div>
@@ -133,6 +140,7 @@ const ReportsGrid: React.FC<ReportsGridProps> = ({ reports, onToggleFavorite }) 
             <div className="flex gap-2">
               <Button
                 size="sm"
+                onClick={() => onExecuteReport?.(report.id)}
                 className="bg-mokm-purple-500 hover:bg-mokm-purple-600 text-white"
               >
                 <PlayCircle className="h-4 w-4" />

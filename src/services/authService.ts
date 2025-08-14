@@ -4,6 +4,7 @@ import {
   getAdminPermissions, 
   type UserPermissions
 } from './permissionService';
+import { safeLocalStorage } from '@/utils/safeAccess';
 
 // Define user roles and types
 type UserRole = 'CEO' | 'Manager' | 'Bookkeeper' | 'Director' | 'Founder' | 'Staff';
@@ -29,32 +30,13 @@ export interface AuthUser {
   permissions?: UserPermissions;
 }
 
-// Helper functions for localStorage with type safety
-const safeGet = <T>(key: string, defaultValue: T): T => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (error) {
-    console.error(`Error accessing localStorage key "${key}":`, error);
-    return defaultValue;
-  }
-};
-
-const safeSet = <T>(key: string, value: T): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error setting localStorage key "${key}":`, error);
-  }
-};
-
 // Type guard for user role
 const isValidUserRole = (role: string): role is UserRole => 
   [...ADMIN_ROLES, 'Staff'].includes(role as UserRole);
 
 // Initialize with default admin user if no users exist
 export const initializeAuth = (): void => {
-  const credentials = safeGet<StoredCredentials>('userCredentials', {});
+  const credentials = safeLocalStorage.getItem<StoredCredentials>('userCredentials', {});
   
   if (Object.keys(credentials).length === 0) {
     // Create default admin user if no users exist
@@ -67,7 +49,7 @@ export const initializeAuth = (): void => {
     };
     
     credentials['default-admin'] = defaultAdmin;
-    safeSet('userCredentials', credentials);
+    safeLocalStorage.setItem('userCredentials', credentials);
     console.log('Default admin user created');
   }
 };
@@ -82,7 +64,7 @@ export const authenticateUser = async (
       return { user: null, error: 'Email and password are required' };
     }
 
-    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const credentials = safeLocalStorage.getItem<StoredCredentials>('userCredentials', {});
     const userEntry = Object.entries(credentials).find(
       ([_, cred]) => cred.email.toLowerCase() === email.toLowerCase()
     );
@@ -106,7 +88,7 @@ export const authenticateUser = async (
     };
 
     // Store current user in localStorage
-    safeSet('currentUser', user);
+    safeLocalStorage.setItem('currentUser', user);
     
     return { user, error: null };
   } catch (error) {
@@ -117,45 +99,35 @@ export const authenticateUser = async (
 
 // Get current authenticated user
 export const getCurrentUser = (): AuthUser | null => {
-  return safeGet<AuthUser | null>('currentUser', null);
+  return safeLocalStorage.getItem<AuthUser | null>('currentUser', null);
 };
 
-// Sign out current user
 export const signOut = (): void => {
-  localStorage.removeItem('currentUser');
+  safeLocalStorage.removeItem('currentUser');
 };
 
-// Check if user has admin role
 export const isAdmin = (user: AuthUser | null): boolean => {
   return user ? ADMIN_ROLES.includes(user.role) : false;
 };
 
-// Get all team members (excluding sensitive data like passwords)
 export const getAllTeamMembers = () => {
-  try {
-    const credentials = safeGet<StoredCredentials>('userCredentials', {});
-    
-    return Object.entries(credentials).map(([id, user]) => ({
-      id,
-      email: user.email,
-      fullName: user.fullName || user.email.split('@')[0],
-      role: user.role,
-      isAdmin: ADMIN_ROLES.includes(user.role)
-    }));
-  } catch (error) {
-    console.error('Error fetching team members:', error);
-    return [];
-  }
+  const credentials = safeLocalStorage.getItem<StoredCredentials>('userCredentials', {});
+  
+  return Object.entries(credentials).map(([id, credential]) => ({
+    id,
+    email: credential.email,
+    fullName: credential.fullName || 'Unknown',
+    role: credential.role,
+    permissions: credential.permissions,
+    created: new Date().toISOString()
+  }));
 };
 
-// Reset authentication state (for testing/development)
 export const resetAuthState = (): void => {
-  localStorage.removeItem('userCredentials');
-  localStorage.removeItem('currentUser');
-  initializeAuth(); // Re-initialize with default users
+  safeLocalStorage.removeItem('userCredentials');
+  safeLocalStorage.removeItem('currentUser');
 };
 
-// Add a new user with specified credentials
 export const addUser = (email: string, password: string, role: UserRole = 'Staff', fullName?: string): { success: boolean; error?: string } => {
   try {
     if (!email || !password) {
@@ -166,33 +138,36 @@ export const addUser = (email: string, password: string, role: UserRole = 'Staff
       return { success: false, error: 'Invalid user role' };
     }
 
-    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const credentials = safeLocalStorage.getItem<StoredCredentials>('userCredentials', {});
     
-    // Check if email already exists
-    const emailExists = Object.values(credentials).some(
+    // Check if user already exists
+    const existingUser = Object.values(credentials).find(
       cred => cred.email.toLowerCase() === email.toLowerCase()
     );
     
-    if (emailExists) {
-      return { success: false, error: 'A user with this email already exists' };
+    if (existingUser) {
+      return { success: false, error: 'User with this email already exists' };
     }
 
-    // Generate a new user ID
+    // Generate user ID
     const userId = `user-${Date.now()}`;
     
-    // Create new user with appropriate permissions
+    // Determine permissions based on role
+    const permissions = ADMIN_ROLES.includes(role) ? getAdminPermissions() : getDefaultPermissions();
+    
+    // Create new user
     const newUser: StoredUserCredential = {
       email,
       password,
       fullName,
       role,
-      permissions: isAdmin(role) ? getAdminPermissions() : getDefaultPermissions()
+      permissions
     };
-
-    // Save updated credentials
-    credentials[userId] = newUser;
-    safeSet('userCredentials', credentials);
     
+    credentials[userId] = newUser;
+    safeLocalStorage.setItem('userCredentials', credentials);
+    
+    console.log(`User ${email} added with role ${role}`);
     return { success: true };
   } catch (error) {
     console.error('Error adding user:', error);

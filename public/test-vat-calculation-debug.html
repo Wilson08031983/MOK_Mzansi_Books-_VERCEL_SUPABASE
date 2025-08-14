@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAT Calculation Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .invoice-item {
+            background: #f9f9f9;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .vat-total {
+            font-weight: bold;
+            color: #28a745;
+            font-size: 1.2em;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧮 VAT Calculation Debug Tool</h1>
+        <p>This tool helps debug VAT calculation issues by testing the period parsing and invoice filtering logic.</p>
+        
+        <div class="debug-section">
+            <h3>📅 Test Period Parsing</h3>
+            <input type="text" id="testPeriod" placeholder="Enter period (e.g., Jul-Aug 2025)" value="Jul-Aug 2025" style="width: 200px; padding: 5px;">
+            <button onclick="testPeriodParsing()">Test Period Parsing</button>
+            <div id="periodResult"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>📋 Current Invoices</h3>
+            <button onclick="loadInvoices()">Load Current Invoices</button>
+            <div id="invoicesResult"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>🧮 VAT Calculation Test</h3>
+            <button onclick="testVATCalculation()">Test VAT Calculation</button>
+            <div id="vatResult"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>📊 Console Logs</h3>
+            <div id="consoleLogs" style="max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Capture console logs
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        const logs = [];
+        
+        function addLog(type, message) {
+            logs.push({ type, message, timestamp: new Date().toLocaleTimeString() });
+            updateConsoleLogs();
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addLog('log', args.join(' '));
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addLog('warn', args.join(' '));
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addLog('error', args.join(' '));
+        };
+        
+        function updateConsoleLogs() {
+            const container = document.getElementById('consoleLogs');
+            container.innerHTML = logs.slice(-20).map(log => 
+                `<div style="color: ${log.type === 'error' ? '#dc3545' : log.type === 'warn' ? '#ffc107' : '#333'}">
+                    [${log.timestamp}] ${log.message}
+                </div>`
+            ).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // Mock parsePeriod function (simplified version)
+        function parsePeriod(period) {
+            console.log(`🔍 [parsePeriod] Parsing period: "${period}"`);
+            
+            // Handle "Month-Month YYYY" format (e.g., "Jul-Aug 2025")
+            const monthRangeMatch = period.match(/^(\w{3})-(\w{3})\s+(\d{4})$/);
+            if (monthRangeMatch) {
+                const [, startMonthAbbr, endMonthAbbr, year] = monthRangeMatch;
+                
+                const monthMap = {
+                    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+                };
+                
+                const startMonthIndex = monthMap[startMonthAbbr];
+                const endMonthIndex = monthMap[endMonthAbbr];
+                
+                if (startMonthIndex !== undefined && endMonthIndex !== undefined) {
+                    const startDate = new Date(parseInt(year), startMonthIndex, 1);
+                    const endDate = new Date(parseInt(year), endMonthIndex + 1, 0);
+                    
+                    const result = {
+                        startDate: startDate.toISOString().split('T')[0],
+                        endDate: endDate.toISOString().split('T')[0]
+                    };
+                    
+                    console.log(`🔍 [parsePeriod] Month range parsed: ${result.startDate} to ${result.endDate}`);
+                    return result;
+                }
+            }
+            
+            console.log(`⚠️ [parsePeriod] No pattern matched, using current month`);
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            
+            return {
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0]
+            };
+        }
+        
+        function testPeriodParsing() {
+            const period = document.getElementById('testPeriod').value;
+            const result = parsePeriod(period);
+            
+            document.getElementById('periodResult').innerHTML = `
+                <div class="success">✅ Period Parsed Successfully</div>
+                <p><strong>Input:</strong> ${period}</p>
+                <p><strong>Start Date:</strong> ${result.startDate}</p>
+                <p><strong>End Date:</strong> ${result.endDate}</p>
+                <p><strong>Date Range:</strong> ${new Date(result.startDate).toLocaleDateString()} to ${new Date(result.endDate).toLocaleDateString()}</p>
+            `;
+        }
+        
+        function loadInvoices() {
+            try {
+                const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+                console.log(`📋 Found ${invoices.length} invoices in localStorage`);
+                
+                if (invoices.length === 0) {
+                    document.getElementById('invoicesResult').innerHTML = `
+                        <div class="warning">⚠️ No invoices found in localStorage</div>
+                        <p>Please create some invoices first or check if you're on the correct domain.</p>
+                    `;
+                    return;
+                }
+                
+                let html = `<div class="success">✅ Found ${invoices.length} invoices</div>`;
+                
+                invoices.forEach((invoice, index) => {
+                    const rawDate = invoice.date || invoice.invoiceDate;
+                    const vatTotal = invoice.vatTotal || 0;
+                    const status = invoice.status || 'unknown';
+                    
+                    html += `
+                        <div class="invoice-item">
+                            <strong>${invoice.number || invoice.id || `Invoice ${index + 1}`}</strong><br>
+                            <strong>Date:</strong> ${rawDate}<br>
+                            <strong>Status:</strong> ${status}<br>
+                            <strong>VAT Total:</strong> R ${vatTotal}<br>
+                            <strong>Client:</strong> ${invoice.clientName || 'Unknown'}
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('invoicesResult').innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading invoices:', error);
+                document.getElementById('invoicesResult').innerHTML = `
+                    <div class="error">❌ Error loading invoices: ${error.message}</div>
+                `;
+            }
+        }
+        
+        function testVATCalculation() {
+            try {
+                const period = document.getElementById('testPeriod').value || 'Jul-Aug 2025';
+                const { startDate, endDate } = parsePeriod(period);
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                
+                console.log(`🧮 Testing VAT calculation for period: ${startDate} to ${endDate}`);
+                
+                const allInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+                console.log(`🧮 Total invoices in system: ${allInvoices.length}`);
+                
+                let validInvoices = [];
+                let totalVAT = 0;
+                
+                allInvoices.forEach(invoice => {
+                    const rawDate = invoice.date || invoice.invoiceDate;
+                    let invoiceDate;
+                    
+                    // Handle different date formats
+                    if (typeof rawDate === 'string') {
+                        invoiceDate = new Date(rawDate);
+                        
+                        if (isNaN(invoiceDate.getTime())) {
+                            const dayMonthYearMatch = rawDate.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+                            if (dayMonthYearMatch) {
+                                const [, day, monthName, year] = dayMonthYearMatch;
+                                invoiceDate = new Date(`${monthName} ${day}, ${year}`);
+                            }
+                        }
+                    } else {
+                        invoiceDate = new Date(rawDate);
+                    }
+                    
+                    if (isNaN(invoiceDate.getTime())) {
+                        console.warn(`Invalid date for invoice ${invoice.id || invoice.number}: ${rawDate}`);
+                        return;
+                    }
+                    
+                    const isValidStatus = invoice.status !== 'draft' && invoice.status !== 'cancelled';
+                    const isInDateRange = invoiceDate >= start && invoiceDate <= end;
+                    
+                    console.log(`Checking invoice ${invoice.number || invoice.id}:`);
+                    console.log(`  - Date: ${rawDate} -> ${invoiceDate.toISOString()}`);
+                    console.log(`  - Status: ${invoice.status} (valid: ${isValidStatus})`);
+                    console.log(`  - In range: ${isInDateRange}`);
+                    
+                    if (isValidStatus && isInDateRange) {
+                        const vatAmount = parseFloat(invoice.vatTotal) || 0;
+                        validInvoices.push({
+                            ...invoice,
+                            parsedDate: invoiceDate,
+                            vatAmount
+                        });
+                        totalVAT += vatAmount;
+                        console.log(`✅ Valid invoice: ${invoice.number || invoice.id}, VAT: R${vatAmount}`);
+                    }
+                });
+                
+                let html = `
+                    <div class="success">✅ VAT Calculation Complete</div>
+                    <p><strong>Period:</strong> ${period} (${startDate} to ${endDate})</p>
+                    <p><strong>Valid Invoices:</strong> ${validInvoices.length} out of ${allInvoices.length}</p>
+                    <div class="vat-total">💰 Total VAT: R ${totalVAT.toFixed(2)}</div>
+                `;
+                
+                if (validInvoices.length > 0) {
+                    html += '<h4>Valid Invoices:</h4>';
+                    validInvoices.forEach(invoice => {
+                        html += `
+                            <div class="invoice-item">
+                                <strong>${invoice.number || invoice.id}</strong><br>
+                                <strong>Date:</strong> ${invoice.date || invoice.invoiceDate} (${invoice.parsedDate.toLocaleDateString()})<br>
+                                <strong>Status:</strong> ${invoice.status}<br>
+                                <strong>VAT:</strong> R ${invoice.vatAmount.toFixed(2)}
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += '<div class="warning">⚠️ No valid invoices found for this period</div>';
+                }
+                
+                document.getElementById('vatResult').innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error in VAT calculation:', error);
+                document.getElementById('vatResult').innerHTML = `
+                    <div class="error">❌ Error in VAT calculation: ${error.message}</div>
+                `;
+            }
+        }
+        
+        // Auto-load invoices on page load
+        window.addEventListener('load', () => {
+            loadInvoices();
+            testPeriodParsing();
+        });
+    </script>
+</body>
+</html>

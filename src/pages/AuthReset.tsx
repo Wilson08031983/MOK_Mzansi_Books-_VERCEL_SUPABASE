@@ -4,20 +4,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner';
 import { resetAuthState } from '@/services/localAuthService';
 import { useNavigate } from 'react-router-dom';
+import { useLocalization } from '@/hooks/useLocalization';
 
 const AuthReset = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [message, setMessage] = useState<string>('');
   const navigate = useNavigate();
+  const { t } = useLocalization();
   
   useEffect(() => {
-    document.title = 'Reset Auth - MOK Mzansi Books';
-  }, []);
+    document.title = t('auth.authReset.title');
+  }, [t]);
   
   const handleReset = () => {
     try {
       setIsResetting(true);
-      setMessage('Resetting...');
+      setMessage(t('auth.authReset.resetting'));
       
       // Use the existing resetAuthState function
       resetAuthState();
@@ -28,16 +30,16 @@ const AuthReset = () => {
         const credentials = JSON.parse(storedCredentials);
         const userCount = Object.keys(credentials).length;
         
-        setMessage(`Success! ${userCount} test users reset.`);
-        toast.success('Auth reset successful!');
+        setMessage(t('auth.authReset.successCount', { count: userCount }));
+        toast.success(t('auth.authReset.successMessage'));
       } else {
-        setMessage('Failed to reset auth. No user credentials found.');
-        toast.error('Auth reset failed!');
+        setMessage(t('auth.authReset.noCredentialsError'));
+        toast.error(t('auth.authReset.failedMessage'));
       }
     } catch (error) {
-      console.error('Error resetting auth:', error);
-      setMessage('Failed to reset auth due to an error.');
-      toast.error('Auth reset failed!');
+      console.error(`${t('auth.authReset.errorPrefix')}`, error);
+      setMessage(t('auth.authReset.generalError'));
+      toast.error(t('auth.authReset.failedMessage'));
     } finally {
       setIsResetting(false);
     }
@@ -47,21 +49,14 @@ const AuthReset = () => {
     return (
       <div className="grid gap-3 mt-4 text-sm font-sf-pro">
         <div className="grid grid-cols-2">
-          <span className="font-semibold">Admin User:</span>
+          <span className="font-semibold">{t('auth.authReset.adminUser')}</span>
           <span>admin@mokmzansibooks.com</span>
         </div>
         <div className="grid grid-cols-2">
-          <span className="font-semibold">Admin Password:</span>
+          <span className="font-semibold">{t('auth.authReset.adminPassword')}</span>
           <span>admin123</span>
         </div>
-        <div className="grid grid-cols-2">
-          <span className="font-semibold">Regular User:</span>
-          <span>user@mokmzansibooks.com</span>
-        </div>
-        <div className="grid grid-cols-2">
-          <span className="font-semibold">Regular Password:</span>
-          <span>user123</span>
-        </div>
+
       </div>
     );
   };
@@ -70,16 +65,15 @@ const AuthReset = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4 font-sf-pro">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center border-b border-slate-200">
-          <CardTitle className="text-xl font-semibold text-slate-900">Authentication Reset</CardTitle>
+          <CardTitle className="text-xl font-semibold text-slate-900">{t('auth.authReset.heading')}</CardTitle>
           <CardDescription>
-            Reset the authentication system to its default state
+            {t('auth.authReset.description')}
           </CardDescription>
         </CardHeader>
         
         <CardContent className="pt-6">
           <p className="mb-4 text-slate-700">
-            Use this tool to reset all authentication credentials to the default test accounts.
-            This is useful if you're having trouble logging in.
+            {t('auth.authReset.toolDescription')}
           </p>
           
           {message && (
@@ -93,19 +87,19 @@ const AuthReset = () => {
             disabled={isResetting}
             className="w-full bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white"
           >
-            {isResetting ? 'Resetting...' : 'Reset Authentication'}
+            {isResetting ? t('auth.authReset.resetting') : t('auth.authReset.resetButton')}
           </Button>
           
           {message.includes('Success') && getDefaultLogins()}
         </CardContent>
         
         <CardFooter className="border-t border-slate-200 flex justify-between">
-          <Button variant="ghost" onClick={() => navigate('/')}>
-            Return to Dashboard
+          <Button variant="ghost" onClick={() => navigate('/')}> 
+            {t('auth.authReset.backToHome')}
           </Button>
           
           <Button variant="outline" onClick={() => navigate('/login')}>
-            Go to Login
+            {t('auth.authReset.goToLogin')}
           </Button>
         </CardFooter>
       </Card>

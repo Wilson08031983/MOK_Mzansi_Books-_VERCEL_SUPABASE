@@ -9,6 +9,7 @@ import {
   List,
   ArrowLeft
 } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface InvoicesHeaderProps {
   title?: string;
@@ -31,6 +32,7 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
   className = '',
   hasSelectedInvoice = false
 }) => {
+  const { t } = useLocalization();
   return (
     <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${className}`}>
       <div className="flex items-center gap-4">
@@ -39,10 +41,10 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
           className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-white/50 rounded-lg transition-colors font-sf-pro"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Back to Dashboard</span>
+          <span>{t('common.back')} {t('nav.dashboard')}</span>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 font-sf-pro">{title}</h1>
+          <h1 className="text-2xl font-bold text-slate-900 font-sf-pro">{title || t('invoices.title')}</h1>
           <p className="text-xs text-slate-600 font-sf-pro">{description}</p>
         </div>
       </div>
@@ -54,6 +56,7 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
             size="sm"
             onClick={() => onViewModeChange('table')}
             className={`rounded-md ${viewMode === 'table' ? 'text-white shadow' : 'text-slate-600'}`}
+            title={t('common.view')}
           >
             <List className="h-4 w-4" />
           </Button>
@@ -62,6 +65,7 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
             size="sm"
             onClick={() => onViewModeChange('grid')}
             className={`rounded-md ${viewMode === 'grid' ? 'text-white shadow' : 'text-slate-600'}`}
+            title={t('common.view')}
           >
             <Grid3X3 className="h-4 w-4" />
           </Button>
@@ -76,10 +80,10 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
                 ? 'hover:bg-slate-50 text-slate-900' 
                 : 'text-slate-400 cursor-not-allowed opacity-60'
             }`}
-            title={hasSelectedInvoice ? 'Record payment for selected invoice' : 'Select an invoice to record payment'}
+            title={hasSelectedInvoice ? t('invoices.recordPaymentTooltip') : t('invoices.selectInvoiceToRecordPayment')}
           >
             <CreditCard className="h-4 w-4 mr-2" />
-            Receive Payment
+            {t('invoices.receivePayment')}
           </Button>
           <Button 
             variant="gradient"
@@ -87,7 +91,7 @@ const InvoicesHeader: React.FC<InvoicesHeaderProps> = ({
             className="font-sf-pro hover:opacity-90 transition-opacity"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Create Invoice
+            {t('invoices.createInvoice')}
           </Button>
         </div>
       </div>

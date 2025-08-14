@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuthHook';
 import { getUserPermissions, isAdminRole } from '@/services/permissionService';
 import { syncTeamMembersToEmployees, getSyncStatus } from '@/services/teamEmployeeSyncService';
+import { userLinkingService } from '@/services/userLinkingService';
 
 const TeamManagement = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -149,14 +150,7 @@ const TeamManagement = () => {
   const openDeleteConfirmation = (member: { id: string; email: string; role: string; fullName?: string; }) => {
     setSelectedMember(member);
     
-    // If the current user is Wilson with CEO credentials, proceed directly (case-insensitive)
-    if (user?.email && user.email.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com') {
-      console.log('CEO admin verification bypassed for user deletion');
-      handleAuthVerifiedForDeletion();
-      return;
-    }
-    
-    // For other users, require admin verification
+    // Require admin verification for all users
     setAuthAction('delete');
     setIsAuthVerificationModalOpen(true);
   };
@@ -165,14 +159,7 @@ const TeamManagement = () => {
   const openPermissionsWithVerification = (member: { id: string; email: string; role: string; fullName?: string; }) => {
     setSelectedMember(member);
     
-    // If the current user is Wilson with CEO credentials, skip verification (case-insensitive)
-    if (user?.email && user.email.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com') {
-      console.log('CEO admin verification bypassed for permissions update');
-      setIsPermissionModalOpen(true);
-      return;
-    }
-    
-    // For other users, require admin verification
+    // Require admin verification for all users
     setAuthAction('update');
     setIsAuthVerificationModalOpen(true);
   };
@@ -187,6 +174,18 @@ const TeamManagement = () => {
   // Handle user deletion after admin verification
   const handleAuthVerifiedForDeletion = async () => {
     if (selectedMember) {
+      // Check if user can be deleted (primary user protection)
+      const canDelete = userLinkingService.canDeleteUser(selectedMember.id);
+      
+      if (!canDelete) {
+        toast({
+          title: "Cannot Delete User",
+          description: "This user is the primary company representative and cannot be deleted.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       const { success } = deleteUser(selectedMember.id);
       
       if (success) {

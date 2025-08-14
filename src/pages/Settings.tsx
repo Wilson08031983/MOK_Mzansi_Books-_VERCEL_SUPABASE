@@ -1,7 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLocalization } from '@/hooks/useLocalization';
 import { 
   Settings as SettingsIcon, 
   Building2, 
@@ -22,7 +25,8 @@ import {
   Calendar,
   BarChart3,
   Lock,
-  Monitor
+  Monitor,
+  ArrowLeft
 } from 'lucide-react';
 import GeneralSettingsTab from '@/components/settings/GeneralSettingsTab';
 import UserManagementTab from '@/components/settings/UserManagementTab';
@@ -45,7 +49,13 @@ import DataSecurityTab from '@/components/settings/DataSecurityTab';
 import SystemMaintenanceTab from '@/components/settings/SystemMaintenanceTab';
 
 const Settings = () => {
+  const { t } = useLocalization();
   const [activeTab, setActiveTab] = useState('general');
+
+  // Update document title when language changes
+  useEffect(() => {
+    document.title = `${t('settings.title')} - MOK Mzansi Books`;
+  }, [t]);
 
   const settingsTabs = [
     { id: 'general', label: 'General', icon: SettingsIcon, component: GeneralSettingsTab },
@@ -73,11 +83,23 @@ const Settings = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       <div className="container mx-auto p-8">
         <div className="mb-8 animate-fade-in">
+          <div className="flex items-center space-x-4 mb-6">
+            <Link to="/dashboard">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-slate-600 hover:text-mokm-purple-600 hover:bg-white/50 rounded-xl transition-all duration-300 font-sf-pro"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {t('common.back')}
+              </Button>
+            </Link>
+          </div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent mb-4 font-sf-pro">
-            Settings
+            {t('settings.title')}
           </h1>
           <p className="text-xl text-slate-600 font-sf-pro">
-            Configure your MOKMzansiBooks application settings
+            {t('settings.description')}
           </p>
         </div>
 

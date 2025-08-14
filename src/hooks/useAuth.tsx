@@ -2,12 +2,14 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getUserCredentialsByEmail } from '@/services/localAuthService';
+import { getCurrentDeviceSession, addDeviceSession, sendLoginNotification } from '@/services/securityService';
 
 // Properly typed user interface without Supabase dependency
 export interface User {
   id: string;
   email: string;
   user_metadata?: UserMetadata;
+  role?: string; // Add role at root level for mock auth compatibility
 }
 
 export interface UserMetadata {
@@ -89,6 +91,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('Saving user to localStorage:', authenticatedUser);
         localStorage.setItem('mokUser', JSON.stringify(authenticatedUser));
         setUser(authenticatedUser);
+        
+        // Device session tracking + login notification
+        try {
+          const deviceSession = getCurrentDeviceSession();
+          addDeviceSession(deviceSession);
+          await sendLoginNotification(authenticatedUser.email, deviceSession);
+        } catch (e) {
+          console.warn('Non-blocking: failed to process device session or login notification', e);
+        }
         
         console.log('User successfully logged in and saved');
         return Promise.resolve();

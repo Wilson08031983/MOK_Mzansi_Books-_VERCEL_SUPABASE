@@ -591,20 +591,104 @@ Date Description Debit Credit Balance
     
     let transactionId = 1;
     
-    console.log('Parsing transactions from text:', text.substring(0, 500));
-    console.log('Total lines to process:', lines.length);
+    console.log('🔍 [OCR Parser] Starting transaction parsing');
+    console.log('🔍 [OCR Parser] Total lines to process:', lines.length);
+    console.log('🔍 [OCR Parser] Sample text:', text.substring(0, 500));
     
-    for (const line of lines) {
-      const trimmedLine = line.trim();
+    // Enhanced line processing with better filtering
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
       
-      // Skip header lines and empty lines
-      if (this.isHeaderLine(line) || line.length < 10) continue;
+      // Skip obvious non-transaction lines
+      if (this.isHeaderLine(line) || line.length < 10) {
+        console.log('⏭️ [OCR Parser] Skipping header/short line:', line.substring(0, 50));
+        continue;
+      }
       
-      console.log('Processing line:', line);
+      console.log(`📝 [OCR Parser] Processing line ${i + 1}:`, line);
       
-      // ENHANCED UNIVERSAL PATTERN MATCHING
-      // Try to detect any line with date + amounts pattern first
-      const universalPattern = /(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?).+?([\d,]+\.\d{2}).+?([\d,]+\.\d{2})/;
+      // ENHANCED NEDBANK 5-COLUMN FORMAT PATTERN
+      // Format: DD/MM/YYYY DESCRIPTION FEES(R) DEBITS(R) CREDITS(R) BALANCE(R)
+      // Example: "27/03/2025 VAT 25/02-26/03 = R24.97 0.00 2.65 -102.71"
+      // Example: "02/06/2025 WIMPY QUAGGA C431413XXXXXX5986 381.70 8,559.31"
+      const nedbank5ColPattern = /(\d{1,2}\/\d{1,2}\/\d{4})\s+(.+?)\s+([\d,]+\.\d{2})\s*\*?\s+([\d,]+\.\d{2})\s*\*?\s+([\d,]+\.\d{2})\s*\*?\s+(-?[\d,]+\.\d{2})\s*\*?$/;
+      const nedbank5ColMatch = line.match(nedbank5ColPattern);
+      
+      if (nedbank5ColMatch) {
+        const [, dateStr, description, feesStr, debitsStr, creditsStr, balanceStr] = nedbank5ColMatch;
+        
+        const fees = parseFloat(feesStr.replace(/[,\s\*]/g, ''));
+        const debits = parseFloat(debitsStr.replace(/[,\s\*]/g, ''));
+        const credits = parseFloat(creditsStr.replace(/[,\s\*]/g, ''));
+        const balance = parseFloat(balanceStr.replace(/[,\s\*]/g, ''));
+        
+        // Determine main transaction amount and type
+        let amount = 0;
+        let type: 'debit' | 'credit' = 'debit';
+        
+        if (credits > 0) {
+          amount = credits;
+          type = 'credit';
+        } else if (debits > 0) {
+          amount = debits;
+          type = 'debit';
+        } else if (fees > 0) {
+          amount = fees;
+          type = 'debit';
+        }
+        
+        if (amount > 0) {
+          const transaction: ExtractedTransaction = {
+            id: `${fileName}_${transactionId++}`,
+            date: this.normalizeDate(dateStr),
+            description: description.trim(),
+            amount,
+            type,
+            balance,
+            rawText: line
+          };
+          
+          console.log('✅ [OCR Parser] Parsed Nedbank 5-col transaction:', transaction);
+          transactions.push(transaction);
+          continue;
+        }
+      }
+      
+      // ENHANCED NEDBANK 4-COLUMN FORMAT PATTERN  
+      // Format: DD/MM/YYYY DESCRIPTION AMOUNT BALANCE
+      // Example: "31/03/2025 SOBY1003C RAMATLADI 500.00 77,702.02"
+      // Example: "02/06/2025 HPY*REEM FASHI431413XXXXXX5986 1,470.00 17,871.93"
+      const nedbank4ColPattern = /(\d{1,2}\/\d{1,2}\/\d{4})\s+(.+?)\s+([\d,]+\.\d{2})\s*\*?\s+(-?[\d,]+\.\d{2})\s*\*?$/;
+      const nedbank4ColMatch = line.match(nedbank4ColPattern);
+      
+      if (nedbank4ColMatch) {
+        const [, dateStr, description, amountStr, balanceStr] = nedbank4ColMatch;
+        
+        const amount = parseFloat(amountStr.replace(/[,\s\*]/g, ''));
+        const balance = parseFloat(balanceStr.replace(/[,\s\*]/g, ''));
+        
+        if (amount > 0) {
+          const type = this.determineTransactionType(description, amountStr);
+          
+          const transaction: ExtractedTransaction = {
+            id: `${fileName}_${transactionId++}`,
+            date: this.normalizeDate(dateStr),
+            description: description.trim(),
+            amount,
+            type,
+            balance,
+            rawText: line
+          };
+          
+          console.log('✅ [OCR Parser] Parsed Nedbank 4-col transaction:', transaction);
+          transactions.push(transaction);
+          continue;
+        }
+      }
+      
+      // ENHANCED UNIVERSAL PATTERN MATCHING (fallback)
+      // Try to detect any line with date + amounts pattern
+      const universalPattern = /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?).+?([\d,]+\.\d{2}).+?([\d,]+\.\d{2})/;
       const universalMatch = line.match(universalPattern);
       
       if (universalMatch) {
@@ -632,128 +716,48 @@ Date Description Debit Credit Balance
               rawText: line
             };
             
-            console.log('Parsed universal pattern transaction:', transaction);
+            console.log('\u2705 [OCR Parser] Parsed universal pattern transaction:', transaction);
             transactions.push(transaction);
             continue;
           }
         }
       }
       
-      // ENHANCED NEDBANK FORMAT PATTERNS
-      // Pattern N1: Nedbank format with fees, debits, credits, balance
-      // Format: DD/MM/YYYY DESCRIPTION FEES(R) DEBITS(R) CREDITS(R) BALANCE(R)
-      // Example: 30/05/2025 SAPOLISIE 90 PAY7153410500164 48,951.93 48,862.81
-      const nedbankPattern1 = /^(\d{1,2}\/\d{1,2}\/\d{4})\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/;
-      const nedbankMatch1 = line.match(nedbankPattern1);
+      // SUPER FLEXIBLE PATTERN - Last resort for missed transactions
+      // Look for any line with a date and at least one amount
+      const flexiblePattern = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+(.+?)\s+([\d,]+\.\d{2})/;
+      const flexibleMatch = line.match(flexiblePattern);
       
-      if (nedbankMatch1) {
-        const [, dateStr, description, amount1, amount2] = nedbankMatch1;
+      if (flexibleMatch) {
+        const [, dateStr, description, amountStr] = flexibleMatch;
         
-        // In Nedbank format, typically the first amount is the transaction amount, second is balance
-        const amount = parseFloat(amount1.replace(/[,\s]/g, ''));
-        const balance = parseFloat(amount2.replace(/[,\s]/g, ''));
+        const amount = parseFloat(amountStr.replace(/[,\s]/g, ''));
         
-        if (isNaN(amount) || amount === 0) continue;
-        
-        const type = this.determineTransactionType(description, amount1);
-        
-        const transaction: ExtractedTransaction = {
-          id: `${fileName}_${transactionId++}`,
-          date: this.normalizeDate(dateStr),
-          description: description.trim(),
-          amount,
-          type,
-          balance,
-          rawText: line
-        };
-        
-        console.log('Parsed Nedbank full date transaction:', transaction);
-        transactions.push(transaction);
-        continue;
-      }
-      
-      // Pattern N2: Nedbank format with DD-MM date format
-      // Format: DD-MM DESCRIPTION AMOUNT BALANCE
-      // Example: 10-03 PREAUTHORIZED CREDIT 783.01 828.74
-      const nedbankPattern2 = /^(\d{1,2}-\d{1,2})\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/;
-      const nedbankMatch2 = line.match(nedbankPattern2);
-      
-      if (nedbankMatch2) {
-        const [, dateStr, description, amount1, amount2] = nedbankMatch2;
-        
-        const amount = parseFloat(amount1.replace(/[,\s]/g, ''));
-        const balance = parseFloat(amount2.replace(/[,\s]/g, ''));
-        
-        if (isNaN(amount) || amount === 0) continue;
-        
-        const type = this.determineTransactionType(description, amount1);
-        
-        // Add current year to DD-MM format
-        const currentYear = new Date().getFullYear();
-        const fullDateStr = `${dateStr}/${currentYear}`;
-        
-        const transaction: ExtractedTransaction = {
-          id: `${fileName}_${transactionId++}`,
-          date: this.normalizeDate(fullDateStr),
-          description: description.trim(),
-          amount,
-          type,
-          balance,
-          rawText: line
-        };
-        
-        console.log('Parsed Nedbank DD-MM transaction:', transaction);
-        transactions.push(transaction);
-        continue;
-      }
-      
-      // Pattern N3: Nedbank format with 5 columns (Date, Description, Fees, Debits, Credits, Balance)
-      // Example: 10-03 PREAUTHORIZED 0.00 0.00 783.01 828.74
-      const nedbankPattern3 = /^(\d{1,2}-\d{1,2})\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/;
-      const nedbankMatch3 = line.match(nedbankPattern3);
-      
-      if (nedbankMatch3) {
-        const [, dateStr, description, fees, debits, credits, balance] = nedbankMatch3;
-        
-        const feesAmount = parseFloat(fees.replace(/[,\s]/g, ''));
-        const debitsAmount = parseFloat(debits.replace(/[,\s]/g, ''));
-        const creditsAmount = parseFloat(credits.replace(/[,\s]/g, ''));
-        const balanceAmount = parseFloat(balance.replace(/[,\s]/g, ''));
-        
-        // Determine the main transaction amount (non-zero value)
-        let amount = 0;
-        let type: 'debit' | 'credit' = 'debit';
-        
-        if (creditsAmount > 0) {
-          amount = creditsAmount;
-          type = 'credit';
-        } else if (debitsAmount > 0) {
-          amount = debitsAmount;
-          type = 'debit';
-        } else if (feesAmount > 0) {
-          amount = feesAmount;
-          type = 'debit';
+        if (!isNaN(amount) && amount > 0 && description.trim().length > 3) {
+          // Try to find balance in the rest of the line
+          const remainingLine = line.substring(line.indexOf(amountStr) + amountStr.length);
+          const balanceMatch = remainingLine.match(/([\d,]+\.\d{2})/);
+          const balance = balanceMatch ? parseFloat(balanceMatch[1].replace(/[,\s]/g, '')) : undefined;
+          
+          const type = this.determineTransactionType(description, amountStr);
+          
+          const transaction: ExtractedTransaction = {
+            id: `${fileName}_${transactionId++}`,
+            date: this.normalizeDate(dateStr),
+            description: description.trim(),
+            amount,
+            type,
+            balance,
+            rawText: line
+          };
+          
+          console.log('\u2705 [OCR Parser] Parsed flexible pattern transaction:', transaction);
+          transactions.push(transaction);
+          continue;
         }
-        
-        if (amount === 0) continue;
-        
-        const currentYear = new Date().getFullYear();
-        const fullDateStr = `${dateStr}/${currentYear}`;
-        
-        const transaction: ExtractedTransaction = {
-          id: `${fileName}_${transactionId++}`,
-          date: this.normalizeDate(fullDateStr),
-          description: description.trim(),
-          amount,
-          type,
-          balance: balanceAmount,
-          rawText: line
-        };
-        
-        console.log('Parsed Nedbank 5-column transaction:', transaction);
-        transactions.push(transaction);
-        continue;
       }
+      
+      console.log('\u274c [OCR Parser] No pattern matched for line:', line.substring(0, 100));
       
       // STANDARD PATTERNS (keeping existing logic)
       // Pattern 0: Handle the specific format from the user's bank statement
@@ -930,14 +934,27 @@ Date Description Debit Credit Balance
       }
     }
     
-    console.log('Total transactions parsed:', transactions.length);
+    console.log('🎯 [OCR Parser] ===== PARSING COMPLETE =====');
+    console.log('🎯 [OCR Parser] Total transactions extracted:', transactions.length);
+    console.log('🎯 [OCR Parser] Total lines processed:', lines.length);
+    
+    if (transactions.length > 0) {
+      console.log('🎯 [OCR Parser] Sample transactions:');
+      transactions.slice(0, 3).forEach((t, i) => {
+        console.log(`   ${i + 1}. ${t.date} | ${t.description.substring(0, 30)} | ${t.type} ${t.amount} | Balance: ${t.balance}`);
+      });
+      if (transactions.length > 3) {
+        console.log(`   ... and ${transactions.length - 3} more transactions`);
+      }
+    }
     
     // If no transactions found with patterns, try fallback parsing
     if (transactions.length === 0) {
-      console.log('No transactions found with patterns, trying fallback parsing');
+      console.log('⚠️ [OCR Parser] No transactions found with patterns, trying fallback parsing');
       return this.fallbackTransactionParsing(text, fileName);
     }
     
+    console.log('✅ [OCR Parser] Successfully extracted all transactions!');
     return transactions;
   }
 
@@ -984,19 +1001,46 @@ Date Description Debit Credit Balance
     // Skip empty or very short lines
     if (lowerLine.length < 3) return true;
     
-    // Only definite header patterns - be more conservative
-    const headerPatterns = [
+    console.log('🔍 [Header Check] Checking line:', line.substring(0, 100));
+    
+    // NEDBANK-SPECIFIC HEADER PATTERNS
+    const nedbankHeaderPatterns = [
+      /^tran\s+list\s+no/i,                          // "Tran list no"
+      /^date\s+description\s+fees/i,                 // Column headers
+      /^balance\s+brought\s+forward/i,               // "Balance brought forward"
+      /^balance\s+carried\s+forward/i,               // "Balance carried forward"
+      /^closing\s+balance/i,                         // "Closing balance"
+      /^opening\s+balance/i,                         // "Opening balance"
+      /^see\s+money\s+differently/i,                 // Nedbank slogan
+      /^nedbank/i,                                   // Bank name
+      /^page\s+\d+\s+of\s+\d+/i,                     // "Page 2 of 5"
+      /^we\s+subscribe\s+to\s+the\s+code/i,          // Footer text
+      /^through\s+the\s+ombudsman/i,                 // Footer text
+      /^nedbank\s+ltd\s+reg\s+no/i,                  // Registration info
+    ];
+    
+    // Check for Nedbank-specific headers
+    for (const pattern of nedbankHeaderPatterns) {
+      if (pattern.test(lowerLine)) {
+        console.log('✅ [Header Check] Identified Nedbank header:', line.substring(0, 50));
+        return true;
+      }
+    }
+    
+    // General header patterns - be more conservative
+    const generalHeaderPatterns = [
       /^(statement|bank)\s+(number|no\.?|name)\s*:/,  // Only with colon
       /^(account\s+number|account\s+name)\s*:/,       // Only with colon
-      /^(opening|closing)\s+(balance)\s*:/,           // Only with colon
       /^(statement\s+period|statement\s+date)\s*:/,   // Only with colon
-      /^(page|continued|brought forward|carried forward)$/,
       /^(total|subtotal)\s*$/,                        // Only standalone
     ];
     
-    // Check for definite header patterns
-    for (const pattern of headerPatterns) {
-      if (pattern.test(lowerLine)) return true;
+    // Check for general header patterns
+    for (const pattern of generalHeaderPatterns) {
+      if (pattern.test(lowerLine)) {
+        console.log('✅ [Header Check] Identified general header:', line.substring(0, 50));
+        return true;
+      }
     }
     
     // Check for lines that are ONLY column headers (exact matches)
@@ -1005,29 +1049,39 @@ Date Description Debit Credit Balance
       'date description debit credit balance',
       'date description fees(r) debits(r) credits(r) balance(r)',
       'date description fees debits credits balance',
-      'date description reference amount balance'
+      'date description reference amount balance',
+      'tran list no date description fees r debits r credits r balance r'
     ];
     
     const normalizedLine = lowerLine.replace(/[\(\)]/g, '').replace(/\s+/g, ' ');
     if (exactHeaderLines.includes(normalizedLine)) {
+      console.log('✅ [Header Check] Identified column header:', line.substring(0, 50));
       return true;
     }
     
-    // Only skip lines that clearly have no transaction data
+    // Check for transaction indicators - if present, it's NOT a header
     const hasAmount = /[\d,]+\.\d{2}/.test(line);
     const hasDate = this.extractDate(line) !== null;
+    const hasTransactionId = /^\d{6}\s/.test(line); // Nedbank transaction IDs
     
-    // If it has amounts or dates, it's likely a transaction
-    if (hasAmount || hasDate) {
+    // If it has transaction indicators, it's likely a transaction
+    if (hasAmount || hasDate || hasTransactionId) {
+      console.log('❌ [Header Check] Has transaction indicators, not a header:', line.substring(0, 50));
       return false;
     }
     
     // Only skip if it's clearly a header with specific keywords AND no transaction data
-    const strongHeaderKeywords = ['statement period', 'account holder', 'bank name', 'branch code'];
+    const strongHeaderKeywords = [
+      'statement period', 'account holder', 'bank name', 'branch code',
+      'authorised financial', 'registered credit provider'
+    ];
+    
     if (strongHeaderKeywords.some(keyword => lowerLine.includes(keyword))) {
+      console.log('✅ [Header Check] Strong header keyword found:', line.substring(0, 50));
       return true;
     }
     
+    console.log('❌ [Header Check] Not identified as header:', line.substring(0, 50));
     return false;
   }
 

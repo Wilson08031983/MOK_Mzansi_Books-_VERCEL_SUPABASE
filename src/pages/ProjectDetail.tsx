@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Project, Task } from '@/types/project';
+import { formatCurrency } from '@/utils/formatters';
+import { useLocalization } from '@/hooks/useLocalization';
 import {
   Calendar,
   CheckSquare,
@@ -49,6 +49,7 @@ interface ProjectDetail extends Omit<BaseProject, 'status' | 'tasks'> {
 
 const ProjectDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { formatDate, formatDateTime, getTimezoneDisplayName } = useLocalization();
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'financials'>('overview');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showPettyCashModal, setShowPettyCashModal] = useState(false);
@@ -444,7 +445,7 @@ const ProjectDetail: React.FC = () => {
                                 {task.dueDate && (
                                   <span className="text-gray-500 flex items-center">
                                     <Clock className="h-3 w-3 mr-1" />
-                                    Due: {new Date(task.dueDate).toLocaleDateString()}
+                                    Due: {formatDate(new Date(task.dueDate))}
                                   </span>
                                 )}
                               </div>
@@ -524,7 +525,7 @@ const ProjectDetail: React.FC = () => {
                                 {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                               </span>
                               <span className="text-gray-500">
-                                Date: {new Date(item.date).toLocaleDateString()}
+                                Date: {formatDate(new Date(item.date))}
                               </span>
                             </div>
                           </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase';
 import { DatabaseUser } from '@/integrations/supabase';
 import { User } from '@/hooks/useAuth'; // Using same User type for consistency
+import { getCurrentDeviceSession, addDeviceSession, sendLoginNotification } from '@/services/securityService';
 
 export interface SupabaseAuthContextType {
   user: User | null;
@@ -111,6 +112,15 @@ export const SupabaseAuthProvider = ({ children }: { children: React.ReactNode }
         user_metadata: data.user.user_metadata
       };
       setUser(userToSet);
+
+      // Device session tracking + login notification
+      try {
+        const deviceSession = getCurrentDeviceSession();
+        addDeviceSession(deviceSession);
+        await sendLoginNotification(userToSet.email, deviceSession);
+      } catch (e) {
+        console.warn('Non-blocking: failed to process device session or login notification', e);
+      }
     }
   };
 

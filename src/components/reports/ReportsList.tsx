@@ -30,6 +30,9 @@ import type { Report } from '@/pages/Reports';
 interface ReportsListProps {
   reports: Report[];
   onToggleFavorite: (reportId: string) => void;
+  onExecuteReport?: (reportId: string) => Promise<void>;
+  onClearFilters?: () => void;
+  onReportClick?: (report: Report) => void;
 }
 
 const getCategoryColor = (category: string): string => {
@@ -49,14 +52,20 @@ const getCategoryColor = (category: string): string => {
   return colors[category] || 'bg-gray-100 text-gray-800';
 };
 
-const ReportsList: React.FC<ReportsListProps> = ({ reports, onToggleFavorite }) => {
+const ReportsList: React.FC<ReportsListProps> = ({ reports, onToggleFavorite, onExecuteReport, onClearFilters, onReportClick }) => {
   if (reports.length === 0) {
     return (
       <div className="text-center p-10 bg-white rounded-lg shadow-business">
         <h3 className="text-xl font-semibold text-gray-800 mb-2">No Reports Found</h3>
-        <p className="text-gray-600">
+        <p className="text-gray-600 mb-6">
           No reports match your current filters. Try adjusting your search criteria.
         </p>
+        <Button 
+          onClick={onClearFilters}
+          className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white shadow-business hover:shadow-business-lg transition-all duration-300"
+        >
+          Clear Filters
+        </Button>
       </div>
     );
   }
@@ -76,7 +85,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ reports, onToggleFavorite }) 
         </TableHeader>
         <TableBody>
           {reports.map((report) => (
-            <TableRow key={report.id}>
+            <TableRow key={report.id} className="cursor-pointer hover:bg-gray-50" onClick={() => onReportClick?.(report)}>
               <TableCell>
                 <Button 
                   variant="ghost" 
@@ -117,6 +126,7 @@ const ReportsList: React.FC<ReportsListProps> = ({ reports, onToggleFavorite }) 
                 <div className="flex justify-end gap-2">
                   <Button
                     size="sm"
+                    onClick={() => onExecuteReport?.(report.id)}
                     className="bg-mokm-purple-500 hover:bg-mokm-purple-600 text-white"
                   >
                     <PlayCircle className="h-4 w-4" />

@@ -13,6 +13,7 @@ import DashboardLoadingScreen from '@/components/dashboard/DashboardLoadingScree
 import DashboardSidebarOverlay from '@/components/dashboard/DashboardSidebarOverlay';
 import DashboardContent from '@/components/dashboard/DashboardContent';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useLocalization } from '@/hooks/useLocalization';
 import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters';
 
 // Define TypeScript types
@@ -43,6 +44,15 @@ type TaskItem = {
 };
 
 const Dashboard = () => {
+  const { 
+    t, 
+    formatCurrency: localizeCurrency, 
+    formatNumber: localizeNumber, 
+    formatDate: localizeDate,
+    formatTime: localizeTime,
+    formatDateTime: localizeDateTime,
+    getTimezoneDisplayName
+  } = useLocalization();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [period, setPeriod] = useState('month');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -71,45 +81,48 @@ const Dashboard = () => {
       const clientCount = clients.length;
       const quotationCount = quotations.length;
       
-      // Set stats with real values and MOKMzansiBooks brand colors
-      setStats([
-        { 
-          name: 'Total Revenue', 
-          value: formatCurrency(totalRevenue), 
-          change: '+8.2%', 
-          trend: 'up', 
-          icon: DollarSign, 
-          color: 'text-mokm-orange-600',
-          bgGradient: 'from-mokm-orange-500 to-mokm-pink-500'
+      // Define stats data with proper typing and localization
+      const computedStats: StatItem[] = [
+        {
+          name: t('dashboard.stats.totalRevenue'),
+          value: localizeCurrency(totalRevenue || 0),
+          change: '+12%',
+          trend: 'up' as const,
+          icon: DollarSign,
+          color: 'text-green-600',
+          bgGradient: 'from-green-500 to-emerald-600'
         },
-        { 
-          name: 'Active Clients', 
-          value: formatNumber(clientCount), 
-          change: '+12', 
-          trend: 'up', 
-          icon: Users, 
-          color: 'text-mokm-blue-600',
-          bgGradient: 'from-mokm-blue-500 to-mokm-purple-500'
+        {
+          name: t('dashboard.stats.activeProjects'),
+          value: localizeNumber(quotationCount || 0),
+          change: '+3',
+          trend: 'up' as const,
+          icon: FileText,
+          color: 'text-blue-600',
+          bgGradient: 'from-blue-500 to-cyan-600'
         },
-        { 
-          name: 'Pending Invoices', 
-          value: formatNumber(invoices.filter(i => i.status === 'sent').length), 
-          change: formatCurrency(invoices.filter(i => i.status === 'sent').reduce((sum, i) => sum + i.total, 0)), 
-          trend: 'up', 
-          icon: FileText, 
-          color: 'text-mokm-purple-600',
-          bgGradient: 'from-mokm-purple-500 to-mokm-pink-500'
+        {
+          name: t('dashboard.stats.pendingInvoices'),
+          value: localizeNumber(invoices.filter(inv => inv.status !== 'paid').length || 0),
+          change: '-2',
+          trend: 'down' as const,
+          icon: FileText,
+          color: 'text-orange-600',
+          bgGradient: 'from-orange-500 to-red-600'
         },
-        { 
-          name: 'Monthly Growth', 
-          value: '12.5%', 
-          change: '+2.1%', 
-          trend: 'up', 
-          icon: TrendingUp, 
+        {
+          name: t('dashboard.stats.totalClients'),
+          value: localizeNumber(clientCount || 0),
+          change: '+5',
+          trend: 'up' as const,
+          icon: Users,
           color: 'text-mokm-pink-600',
           bgGradient: 'from-mokm-pink-500 to-mokm-orange-500'
         }
-      ]);
+      ];
+
+      // Update state with computed stats
+      setStats(computedStats);
 
       // Generate recent activities
       const recentInvoices = invoices.slice(0, 2).map(invoice => ({

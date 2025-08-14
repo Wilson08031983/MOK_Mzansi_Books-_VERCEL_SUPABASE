@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,6 +29,10 @@ import ReportsGrid from '@/components/reports/ReportsGrid';
 import ReportsList from '@/components/reports/ReportsList';
 import ReportCategorySidebar from '@/components/reports/ReportCategorySidebar';
 import { Badge } from '@/components/ui/badge';
+import { reportsDataService } from '../services/reportsDataService';
+import { toast } from 'sonner';
+import NewReportModal from '../components/reports/NewReportModal';
+import ReportDetailModal from '../components/reports/ReportDetailModal';
 
 // Report types and data structures
 export interface Report {
@@ -196,7 +200,29 @@ const Reports = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [reports, setReports] = useState<Report[]>(mockReports);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isNewReportModalOpen, setIsNewReportModalOpen] = useState(false);
+  const [selectedReportForDetail, setSelectedReportForDetail] = useState<Report | null>(null);
+
+  // Load reports on component mount
+  useEffect(() => {
+    const loadReports = () => {
+      try {
+        console.log('📊 [REPORTS PAGE] Loading reports...');
+        const loadedReports = reportsDataService.getReports();
+        setReports(loadedReports);
+        console.log('✅ [REPORTS PAGE] Reports loaded:', loadedReports.length);
+      } catch (error) {
+        console.error('❌ [REPORTS PAGE] Error loading reports:', error);
+        toast.error('Failed to load reports');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadReports();
+  }, []);
 
   // Filter reports based on active tab, search query, and selected category
   const filteredReports = reports.filter(report => {
@@ -222,11 +248,73 @@ const Reports = () => {
 
   // Toggle favorite status for a report
   const toggleFavorite = (reportId: string) => {
-    setReports(
-      reports.map(report =>
-        report.id === reportId ? { ...report, isFavorite: !report.isFavorite } : report
-      )
-    );
+    try {
+      reportsDataService.toggleFavorite(reportId);
+      // Reload reports to reflect the change
+      const updatedReports = reportsDataService.getReports();
+      setReports(updatedReports);
+      toast.success('Report favorite status updated');
+    } catch (error) {
+      console.error('❌ [REPORTS PAGE] Error toggling favorite:', error);
+      toast.error('Failed to update favorite status');
+    }
+  };
+
+  // Execute a report
+  const executeReport = async (reportId: string) => {
+    try {
+      toast.loading('Executing report...');
+      await reportsDataService.executeReport(reportId);
+      
+      // Reload reports to update last run date
+      const updatedReports = reportsDataService.getReports();
+      setReports(updatedReports);
+      
+      toast.success('Report executed successfully');
+    } catch (error) {
+      console.error('❌ [REPORTS PAGE] Error executing report:', error);
+      toast.error('Failed to execute report');
+    }
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory(null);
+    setActiveTab('all');
+    toast.success('Filters cleared');
+  };
+
+  // Handle new report creation
+  const handleNewReport = () => {
+    console.log('📝 [REPORTS PAGE] Opening new report modal');
+    setIsNewReportModalOpen(true);
+  };
+
+  // Handle report created
+  const handleReportCreated = (newReport: Report) => {
+    console.log('✅ [REPORTS PAGE] New report created:', newReport);
+    // Reload reports to include the new one
+    const updatedReports = reportsDataService.getReports();
+    setReports(updatedReports);
+  };
+
+  // Handle report tile click
+  const handleReportClick = (report: Report) => {
+    console.log('🔍 [REPORTS PAGE] Opening report detail:', report.id);
+    setSelectedReportForDetail(report);
+  };
+
+  // Handle report updated
+  const handleReportUpdated = (updatedReport: Report) => {
+    console.log('🔄 [REPORTS PAGE] Report updated:', updatedReport.id);
+    // Update the reports list
+    const updatedReports = reportsDataService.getReports();
+    setReports(updatedReports);
+    // Update the selected report if it's the same one
+    if (selectedReportForDetail?.id === updatedReport.id) {
+      setSelectedReportForDetail(updatedReport);
+    }
   };
 
   return (
@@ -266,7 +354,10 @@ const Reports = () => {
             {/* Action buttons */}
             <div className="flex flex-wrap gap-3 justify-between items-center">
               <div className="flex flex-wrap gap-3">
-                <Button className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white shadow-business hover:shadow-business-lg transition-all duration-300">
+                <Button 
+                  onClick={handleNewReport}
+                  className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white shadow-business hover:shadow-business-lg transition-all duration-300"
+                >
                   <Plus className="h-4 w-4 mr-2" /> New Report
                 </Button>
                 <Button variant="outline" className="shadow-business hover:shadow-business-lg transition-all duration-300">
@@ -331,35 +422,67 @@ const Reports = () => {
                 </TabsList>
                 
                 <TabsContent value="all" className="mt-6">
-                  {viewMode === 'grid' ? (
-                    <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                  {isLoading ? (
+                    <div className="text-center p-10 bg-white rounded-lg shadow-business">
+                      <div className="animate-spin h-8 w-8 border-4 border-mokm-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading reports...</p>
+                    </div>
+                  ) : viewMode === 'grid' ? (
+                    <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} onExecuteReport={executeReport} onClearFilters={clearFilters} />
                   ) : (
-                    <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                    <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} onExecuteReport={executeReport} onClearFilters={clearFilters} />
                   )}
                 </TabsContent>
                 
                 <TabsContent value="favorites" className="mt-6">
-                  {viewMode === 'grid' ? (
-                    <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                  {isLoading ? (
+                    <div className="text-center p-10 bg-white rounded-lg shadow-business">
+                      <div className="animate-spin h-8 w-8 border-4 border-mokm-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading reports...</p>
+                    </div>
+                  ) : viewMode === 'grid' ? (
+                    <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} onExecuteReport={executeReport} onClearFilters={clearFilters} />
                   ) : (
-                    <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                    <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} onExecuteReport={executeReport} onClearFilters={clearFilters} />
                   )}
                 </TabsContent>
                 
                 <TabsContent value="recent" className="mt-6">
-                  {viewMode === 'grid' ? (
-                    <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                  {isLoading ? (
+                    <div className="text-center p-10 bg-white rounded-lg shadow-business">
+                      <div className="animate-spin h-8 w-8 border-4 border-mokm-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading reports...</p>
+                    </div>
+                  ) : viewMode === 'grid' ? (
+                    <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} onExecuteReport={executeReport} onClearFilters={clearFilters} />
                   ) : (
-                    <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                    <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} onExecuteReport={executeReport} onClearFilters={clearFilters} />
                   )}
                 </TabsContent>
                 
                 <TabsContent value="scheduled" className="mt-6">
-                  {filteredReports.length > 0 ? (
+                  {isLoading ? (
+                    <div className="text-center p-10 bg-white rounded-lg shadow-business">
+                      <div className="animate-spin h-8 w-8 border-4 border-mokm-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading reports...</p>
+                    </div>
+                  ) : filteredReports.length > 0 ? (
                     viewMode === 'grid' ? (
-                      <ReportsGrid reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                      <ReportsGrid 
+                        reports={filteredReports} 
+                        onToggleFavorite={toggleFavorite} 
+                        onExecuteReport={executeReport} 
+                        onClearFilters={clearFilters}
+                        onReportClick={handleReportClick}
+                      />
                     ) : (
-                      <ReportsList reports={filteredReports} onToggleFavorite={toggleFavorite} />
+                      <ReportsList 
+                        reports={filteredReports} 
+                        onToggleFavorite={toggleFavorite} 
+                        onExecuteReport={executeReport} 
+                        onClearFilters={clearFilters}
+                        onReportClick={handleReportClick}
+                      />
                     )
                   ) : (
                     <div className="text-center p-10 bg-white rounded-lg shadow-business">
@@ -379,6 +502,22 @@ const Reports = () => {
           </div>
         </div>
       </div>
+
+      {/* New Report Modal */}
+      <NewReportModal
+        isOpen={isNewReportModalOpen}
+        onClose={() => setIsNewReportModalOpen(false)}
+        onReportCreated={handleReportCreated}
+        selectedCategory={selectedCategory}
+      />
+
+      {/* Report Detail Modal */}
+      <ReportDetailModal
+        isOpen={!!selectedReportForDetail}
+        onClose={() => setSelectedReportForDetail(null)}
+        report={selectedReportForDetail}
+        onReportUpdated={handleReportUpdated}
+      />
     </div>
   );
 };

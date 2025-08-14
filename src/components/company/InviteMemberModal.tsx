@@ -44,10 +44,13 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
   // Role options list
   const roleOptions = [
     'CEO',
-    'Manager',
-    'Bookkeeper',
+    'Managing Director',
     'Director',
     'Founder',
+    'General Manager',
+    'Operations Manager',
+    'Finance Manager',
+    'Bookkeeper',
     'Staff Member'
   ];
   
@@ -110,23 +113,17 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
     setInvitationLink('');
     
     try {
-      // Special case for Wilson Moabelo - use case-insensitive check
-      if (adminEmail.toLowerCase().trim() === 'mokgethwamoabelo@gmail.com' && adminPassword === 'Ka!gi#so123J') {
-        console.log('CEO admin verification bypassed for Wilson');
-        // Proceed directly as this account is always granted CEO admin access
-      } else {
-        // Log verification attempt for debugging
-        console.log(`Verifying admin permissions for: ${adminEmail}`);
-        
-        // Verify admin credentials for other accounts
-        const isAdmin = await verifyAdminPermission(adminEmail, adminPassword);
-        console.log(`Verification result: ${isAdmin ? 'Success' : 'Failed'}`);
-        
-        if (!isAdmin) {
-          setError('Admin verification failed. Please check your credentials or permissions.');
-          setLoading(false);
-          return;
-        }
+      // Log verification attempt for debugging
+      console.log(`Verifying admin permissions for: ${adminEmail}`);
+      
+      // Verify admin credentials
+      const isAdmin = await verifyAdminPermission(adminEmail, adminPassword);
+      console.log(`Verification result: ${isAdmin ? 'Success' : 'Failed'}`);
+      
+      if (!isAdmin) {
+        setError('Admin verification failed. Please check your credentials or permissions.');
+        setLoading(false);
+        return;
       }
       
       // Calculate admin name based on credentials (for personalization)

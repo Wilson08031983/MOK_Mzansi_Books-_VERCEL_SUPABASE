@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useLocalization } from '@/hooks/useLocalization';
 
 // Define the invitation data type
 interface InvitationData {
@@ -24,6 +25,7 @@ const AcceptInvitation = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLocalization();
   const token = searchParams.get('token');
   
   const [loading, setLoading] = useState(false);
@@ -50,9 +52,9 @@ const AcceptInvitation = () => {
       
       if (!invitation) {
         toast({
-          title: "Invalid Invitation",
-          description: "This invitation link is invalid or has expired.",
-          variant: "destructive"
+          title: t('auth.acceptInvitation.invalidInvitation'),
+          description: t('auth.acceptInvitation.invalidInvitation'),
+          variant: 'destructive'
         });
         navigate('/');
         return;
@@ -66,7 +68,7 @@ const AcceptInvitation = () => {
     } finally {
       setVerifying(false);
     }
-  }, [token, navigate, toast]);
+  }, [token, navigate, toast, t]);
 
   useEffect(() => {
     if (!token) {
@@ -82,18 +84,18 @@ const AcceptInvitation = () => {
     
     if (formData.password !== formData.confirmPassword) {
       toast({
-        title: "Password Mismatch",
-        description: "Passwords do not match",
-        variant: "destructive"
+        title: t('auth.acceptInvitation.passwordMismatch'),
+        description: t('auth.acceptInvitation.passwordMismatchMessage'),
+        variant: 'destructive'
       });
       return;
     }
 
     if (formData.password.length < 6) {
       toast({
-        title: "Password Too Short",
-        description: "Password must be at least 6 characters",
-        variant: "destructive"
+        title: t('auth.acceptInvitation.passwordTooShort'),
+        description: t('auth.acceptInvitation.passwordTooShortMessage'),
+        variant: 'destructive'
       });
       return;
     }
@@ -125,9 +127,9 @@ const AcceptInvitation = () => {
     } catch (error) {
       console.error('Error accepting invitation:', error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to accept invitation",
-        variant: "destructive"
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('auth.acceptInvitation.errorAccepting'),
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -140,7 +142,7 @@ const AcceptInvitation = () => {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-            <p>Verifying invitation...</p>
+            <p>{t('auth.acceptInvitation.verifyingInvitation')}</p>
           </CardContent>
         </Card>
       </div>
@@ -161,7 +163,7 @@ const AcceptInvitation = () => {
             className="text-gray-600 hover:text-purple-600"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
+            {t('common.backToHome')}
           </Button>
         </div>
 
@@ -171,12 +173,13 @@ const AcceptInvitation = () => {
               <Mail className="h-8 w-8 text-white" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900">Accept Invitation</CardTitle>
+              <CardTitle className="text-2xl font-bold text-gray-900">{t('auth.acceptInvitation.title')}</CardTitle>
               <p className="text-gray-600 mt-2">
-                You've been invited to join <strong>MOK Mzansi Books</strong>
+                {t('auth.invitedSignup.invitationTitle')}
               </p>
               <p className="text-sm text-gray-500">
-                Invited by: {invitationData?.invited_email}
+                {/* No explicit key for Invited by label; using static label with dynamic email */}
+                {t('common.email')}: {invitationData?.invited_email}
               </p>
             </div>
           </CardHeader>
@@ -184,13 +187,13 @@ const AcceptInvitation = () => {
           <CardContent className="space-y-6">
             <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
               <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <p className="text-green-800 font-medium">Invitation Verified</p>
-              <p className="text-green-700 text-sm">Please create your password to continue</p>
+              <p className="text-green-800 font-medium">{t('common.success')}</p>
+              <p className="text-green-700 text-sm">{t('auth.acceptInvitation.subtitle')}</p>
             </div>
 
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Create Password</Label>
+                <Label htmlFor="password">{t('auth.acceptInvitation.passwordLabel')}</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -198,6 +201,7 @@ const AcceptInvitation = () => {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500 pr-12"
+                    placeholder={t('auth.acceptInvitation.passwordPlaceholder')}
                     required
                     minLength={6}
                   />
@@ -212,13 +216,14 @@ const AcceptInvitation = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Label htmlFor="confirmPassword">{t('auth.acceptInvitation.confirmPasswordLabel')}</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                  placeholder={t('auth.acceptInvitation.confirmPasswordPlaceholder')}
                   required
                 />
               </div>
@@ -228,7 +233,7 @@ const AcceptInvitation = () => {
                 disabled={loading}
                 className="w-full h-12 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
               >
-                {loading ? 'Creating Account...' : 'Create Password & Continue'}
+                {loading ? t('auth.acceptInvitation.acceptingButton') : t('auth.acceptInvitation.acceptButton')}
               </Button>
             </form>
           </CardContent>

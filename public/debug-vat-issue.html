@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug VAT Issue</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .invoice-item {
+            background: #f9f9f9;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug VAT Issue</h1>
+        <p>Investigating why Output VAT is R 0.00 while Input VAT has changed.</p>
+        
+        <div class="debug-section">
+            <h3>📋 Current localStorage Data</h3>
+            <button onclick="checkLocalStorage()">Check localStorage</button>
+            <div id="localStorageResult"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>🧮 Manual VAT Calculation Test</h3>
+            <button onclick="testManualVATCalculation()">Test Manual Calculation</button>
+            <div id="manualCalcResult"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>📊 Console Output</h3>
+            <div id="consoleOutput" style="max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Capture console output
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        const logs = [];
+        
+        function addLog(type, message) {
+            logs.push({ type, message, timestamp: new Date().toLocaleTimeString() });
+            updateConsoleOutput();
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addLog('log', args.join(' '));
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addLog('warn', args.join(' '));
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addLog('error', args.join(' '));
+        };
+        
+        function updateConsoleOutput() {
+            const container = document.getElementById('consoleOutput');
+            container.innerHTML = logs.slice(-50).map(log => 
+                `<div style="color: ${log.type === 'error' ? '#dc3545' : log.type === 'warn' ? '#ffc107' : '#333'}; font-size: 11px; margin: 2px 0;">
+                    [${log.timestamp}] ${log.message}
+                </div>`
+            ).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function checkLocalStorage() {
+            console.log('🔍 === CHECKING LOCALSTORAGE ===');
+            
+            const result = document.getElementById('localStorageResult');
+            let html = '';
+            
+            try {
+                // Check invoices
+                const invoicesStr = localStorage.getItem('invoices');
+                console.log('Raw invoices string:', invoicesStr);
+                
+                if (invoicesStr) {
+                    const invoices = JSON.parse(invoicesStr);
+                    console.log('Parsed invoices:', invoices);
+                    
+                    html += `<div class="success">✅ Found ${invoices.length} invoices</div>`;
+                    
+                    invoices.forEach((invoice, index) => {
+                        console.log(`Invoice ${index + 1}:`, invoice);
+                        html += `
+                            <div class="invoice-item">
+                                <strong>${invoice.number || invoice.id || `Invoice ${index + 1}`}</strong><br>
+                                <strong>Date:</strong> ${invoice.date || invoice.invoiceDate || 'No date'}<br>
+                                <strong>Status:</strong> ${invoice.status || 'No status'}<br>
+                                <strong>VAT Total:</strong> R ${invoice.vatTotal || 0}<br>
+                                <strong>Subtotal:</strong> R ${invoice.subtotal || 0}<br>
+                                <strong>VAT Rate:</strong> ${invoice.vatRate || 0}%<br>
+                                <strong>Client:</strong> ${invoice.clientName || invoice.client || 'Unknown'}
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += '<div class="warning">⚠️ No invoices found in localStorage</div>';
+                    console.log('No invoices found in localStorage');
+                }
+                
+                // Check other VAT-related data
+                const vatCalculations = localStorage.getItem('vatCalculations');
+                const cachedVAT = localStorage.getItem('cachedVAT');
+                const vatCache = localStorage.getItem('vatCache');
+                
+                html += `<h4>Other VAT Data:</h4>`;
+                html += `<p><strong>vatCalculations:</strong> ${vatCalculations ? 'Present' : 'None'}</p>`;
+                html += `<p><strong>cachedVAT:</strong> ${cachedVAT ? 'Present' : 'None'}</p>`;
+                html += `<p><strong>vatCache:</strong> ${vatCache ? 'Present' : 'None'}</p>`;
+                
+                console.log('vatCalculations:', vatCalculations);
+                console.log('cachedVAT:', cachedVAT);
+                console.log('vatCache:', vatCache);
+                
+            } catch (error) {
+                console.error('Error checking localStorage:', error);
+                html += `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+            
+            result.innerHTML = html;
+        }
+        
+        function testManualVATCalculation() {
+            console.log('🧮 === MANUAL VAT CALCULATION TEST ===');
+            
+            const result = document.getElementById('manualCalcResult');
+            let html = '';
+            
+            try {
+                // Get invoices
+                const invoicesStr = localStorage.getItem('invoices');
+                if (!invoicesStr) {
+                    html += '<div class="error">❌ No invoices found</div>';
+                    result.innerHTML = html;
+                    return;
+                }
+                
+                const allInvoices = JSON.parse(invoicesStr);
+                console.log('All invoices for calculation:', allInvoices);
+                
+                // Test period parsing
+                const testPeriod = 'Jul-Aug 2025';
+                const { startDate, endDate } = parsePeriod(testPeriod);
+                console.log(`Period: ${testPeriod} -> ${startDate} to ${endDate}`);
+                
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                console.log(`Date objects: ${start.toISOString()} to ${end.toISOString()}`);
+                
+                // Filter invoices
+                let validInvoices = [];
+                let totalVAT = 0;
+                
+                allInvoices.forEach((invoice, index) => {
+                    console.log(`\n--- Processing Invoice ${index + 1} ---`);
+                    console.log('Invoice data:', invoice);
+                    
+                    const rawDate = invoice.date || invoice.invoiceDate;
+                    console.log('Raw date:', rawDate);
+                    
+                    let invoiceDate;
+                    if (typeof rawDate === 'string') {
+                        invoiceDate = new Date(rawDate);
+                        console.log('Parsed date (first attempt):', invoiceDate);
+                        
+                        if (isNaN(invoiceDate.getTime())) {
+                            const dayMonthYearMatch = rawDate.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+                            if (dayMonthYearMatch) {
+                                const [, day, monthName, year] = dayMonthYearMatch;
+                                invoiceDate = new Date(`${monthName} ${day}, ${year}`);
+                                console.log('Parsed date (manual parsing):', invoiceDate);
+                            }
+                        }
+                    } else {
+                        invoiceDate = new Date(rawDate);
+                    }
+                    
+                    if (isNaN(invoiceDate.getTime())) {
+                        console.warn(`Invalid date for invoice ${invoice.id || invoice.number}: ${rawDate}`);
+                        return;
+                    }
+                    
+                    const isValidStatus = invoice.status !== 'draft' && invoice.status !== 'cancelled';
+                    const isInDateRange = invoiceDate >= start && invoiceDate <= end;
+                    
+                    console.log(`Status: ${invoice.status} (valid: ${isValidStatus})`);
+                    console.log(`Date range check: ${invoiceDate.toISOString()} >= ${start.toISOString()} && <= ${end.toISOString()}`);
+                    console.log(`In date range: ${isInDateRange}`);
+                    
+                    if (isValidStatus && isInDateRange) {
+                        const vatAmount = parseFloat(invoice.vatTotal) || 0;
+                        validInvoices.push({
+                            ...invoice,
+                            parsedDate: invoiceDate,
+                            vatAmount
+                        });
+                        totalVAT += vatAmount;
+                        console.log(`✅ Valid invoice: VAT R${vatAmount}, Running total: R${totalVAT}`);
+                    } else {
+                        console.log(`❌ Invalid invoice: status=${isValidStatus}, dateRange=${isInDateRange}`);
+                    }
+                });
+                
+                html += `
+                    <div class="success">✅ Manual Calculation Complete</div>
+                    <p><strong>Period:</strong> ${testPeriod} (${startDate} to ${endDate})</p>
+                    <p><strong>Total Invoices:</strong> ${allInvoices.length}</p>
+                    <p><strong>Valid Invoices:</strong> ${validInvoices.length}</p>
+                    <p><strong>Total VAT:</strong> R ${totalVAT.toFixed(2)}</p>
+                `;
+                
+                if (validInvoices.length > 0) {
+                    html += '<h4>Valid Invoices:</h4>';
+                    validInvoices.forEach(invoice => {
+                        html += `
+                            <div class="invoice-item">
+                                <strong>${invoice.number || invoice.id}</strong><br>
+                                <strong>Date:</strong> ${invoice.date || invoice.invoiceDate} (${invoice.parsedDate.toLocaleDateString()})<br>
+                                <strong>Status:</strong> ${invoice.status}<br>
+                                <strong>VAT:</strong> R ${invoice.vatAmount.toFixed(2)}
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += '<div class="warning">⚠️ No valid invoices found for this period</div>';
+                }
+                
+            } catch (error) {
+                console.error('Error in manual calculation:', error);
+                html += `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+            
+            result.innerHTML = html;
+        }
+        
+        // Period parsing function (simplified)
+        function parsePeriod(period) {
+            console.log(`Parsing period: "${period}"`);
+            
+            const monthRangeMatch = period.match(/^(\w{3})-(\w{3})\s+(\d{4})$/);
+            if (monthRangeMatch) {
+                const [, startMonthAbbr, endMonthAbbr, year] = monthRangeMatch;
+                
+                const monthMap = {
+                    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+                };
+                
+                const startMonthIndex = monthMap[startMonthAbbr];
+                const endMonthIndex = monthMap[endMonthAbbr];
+                
+                if (startMonthIndex !== undefined && endMonthIndex !== undefined) {
+                    const startDate = new Date(parseInt(year), startMonthIndex, 1);
+                    const endDate = new Date(parseInt(year), endMonthIndex + 1, 0);
+                    
+                    return {
+                        startDate: startDate.toISOString().split('T')[0],
+                        endDate: endDate.toISOString().split('T')[0]
+                    };
+                }
+            }
+            
+            console.log('No pattern matched, using current month');
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            
+            return {
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0]
+            };
+        }
+        
+        // Auto-run checks on page load
+        window.addEventListener('load', () => {
+            checkLocalStorage();
+            setTimeout(() => {
+                testManualVATCalculation();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

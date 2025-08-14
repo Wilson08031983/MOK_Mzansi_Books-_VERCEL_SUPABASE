@@ -38,7 +38,7 @@ class LocalizationService {
    */
   private loadSettings(): void {
     try {
-      const savedSettings = localStorage.getItem('localizationSettings');
+      const savedSettings = localStorage.getItem('app.settings.localization');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         this.settings = { ...this.settings, ...parsed };
@@ -54,13 +54,22 @@ class LocalizationService {
    */
   private saveSettings(): void {
     try {
-      localStorage.setItem('localizationSettings', JSON.stringify(this.settings));
+      localStorage.setItem('app.settings.localization', JSON.stringify(this.settings));
       // Dispatch storage event for cross-tab sync
       window.dispatchEvent(new StorageEvent('storage', {
-        key: 'localizationSettings',
+        key: 'app.settings.localization',
         newValue: JSON.stringify(this.settings),
         storageArea: localStorage
       }));
+      
+      // Log localization change as required
+      console.log({
+        event: "localization.change",
+        language: this.currentLanguage,
+        timezone: this.settings.timezone,
+        currency: this.settings.currency,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       console.error('Error saving localization settings:', error);
     }
@@ -71,7 +80,7 @@ class LocalizationService {
    */
   private setupStorageListener(): void {
     window.addEventListener('storage', (event) => {
-      if (event.key === 'localizationSettings' && event.newValue) {
+      if (event.key === 'app.settings.localization' && event.newValue) {
         try {
           const newSettings = JSON.parse(event.newValue);
           this.settings = { ...this.settings, ...newSettings };
@@ -123,31 +132,61 @@ class LocalizationService {
   /**
    * Get translated text for current language
    */
-  t(key: string, params?: Record<string, string | number>): string {
+  t(key: string, params?: Record<string, string | number>, context?: { page?: string, elementId?: string }): string {
     const keys = key.split('.');
     let translation: any = translations[this.currentLanguage];
+    let foundInCurrentLanguage = true;
 
     // Navigate through nested keys
     for (const k of keys) {
       if (translation && typeof translation === 'object' && k in translation) {
         translation = translation[k];
       } else {
-        // Fallback to English if translation not found
-        translation = translations.en;
-        for (const fallbackKey of keys) {
-          if (translation && typeof translation === 'object' && fallbackKey in translation) {
-            translation = translation[fallbackKey];
-          } else {
-            console.warn(`Translation not found for key: ${key} in language: ${this.currentLanguage}`);
-            return key; // Return key if no translation found
-          }
-        }
+        foundInCurrentLanguage = false;
         break;
       }
     }
 
+    // If translation not found in current language, fallback to English
+    if (!foundInCurrentLanguage || typeof translation !== 'string') {
+      translation = translations.en;
+      for (const fallbackKey of keys) {
+        if (translation && typeof translation === 'object' && fallbackKey in translation) {
+          translation = translation[fallbackKey];
+        } else {
+          // Log missing translation with context as required
+          console.warn('Missing translation key:', {
+            key,
+            page: context?.page || 'unknown',
+            elementId: context?.elementId || 'unknown',
+            language: this.currentLanguage,
+            fallbackUsed: 'none'
+          });
+          return key; // Return key if no translation found even in English
+        }
+      }
+      
+      // Log that fallback was used
+      if (foundInCurrentLanguage === false && typeof translation === 'string') {
+        console.warn('Missing translation key:', {
+          key,
+          page: context?.page || 'unknown', 
+          elementId: context?.elementId || 'unknown',
+          language: this.currentLanguage,
+          fallbackUsed: 'english'
+        });
+      }
+    }
+
     if (typeof translation !== 'string') {
-      console.warn(`Translation for key "${key}" is not a string`);
+      console.warn('Missing translation key:', {
+        key,
+        page: context?.page || 'unknown',
+        elementId: context?.elementId || 'unknown', 
+        language: this.currentLanguage,
+        fallbackUsed: 'none',
+        error: 'Translation is not a string'
+      });
       return key;
     }
 

@@ -15,7 +15,7 @@ export interface Employee {
   endDate?: string;
   paymentCycle: 'Daily' | 'Weekly' | 'Bi-Weekly' | 'Monthly';
   salary: number;
-  taxPercentage: number;
+  taxPercentage?: number;
   department: string;
   position: string;
   status: 'active' | 'on-leave' | 'terminated';
@@ -147,15 +147,131 @@ export const updateEmployee = (id: string, employeeData: Partial<Employee>): Emp
 };
 
 export const deleteEmployee = (id: string): boolean => {
-  const employees = getAllEmployees();
-  const filteredEmployees = employees.filter(employee => employee.id !== id);
+  console.log(`🗑️ [employeeService] Starting deleteEmployee for ID: ${id}`);
   
-  if (filteredEmployees.length === employees.length) {
+  let employeeToDelete: Employee | undefined;
+  
+  try {
+    const employees = getAllEmployees();
+    console.log(`📋 [employeeService] Current employees count: ${employees.length}`);
+    
+    employeeToDelete = employees.find(emp => emp.id === id);
+    
+    if (!employeeToDelete) {
+      console.error(`❌ [employeeService] Employee with ID ${id} not found in employees list`);
+      console.log(`📋 [employeeService] Available employee IDs:`, employees.map(e => ({ id: e.id, name: `${e.firstName} ${e.surname}` })));
+      return false;
+    }
+    
+    console.log(`👤 [employeeService] Found employee to delete:`, {
+      id: employeeToDelete.id,
+      name: `${employeeToDelete.firstName} ${employeeToDelete.surname}`,
+      email: employeeToDelete.email,
+      position: employeeToDelete.position,
+      isRegularUser: employeeToDelete.firstName === 'Regular' && employeeToDelete.surname === 'User'
+    });
+    
+    const filteredEmployees = employees.filter(employee => employee.id !== id);
+    
+    if (filteredEmployees.length === employees.length) {
+      console.error(`❌ [employeeService] No employee was filtered out - ID mismatch issue`);
+      return false;
+    }
+    
+    console.log(`📊 [employeeService] Employees after filtering: ${filteredEmployees.length} (removed 1)`);
+    
+    // Clear all related data for the deleted employee
+    // Remove from employees
+    localStorage.setItem('employees', JSON.stringify(filteredEmployees));
+    
+    // Clear payroll data for this employee
+    const payrollData = localStorage.getItem('payrollCalculations');
+    if (payrollData) {
+      const parsedPayroll = JSON.parse(payrollData);
+      const filteredPayroll = parsedPayroll.filter((p: any) => p.employeeId !== id);
+      localStorage.setItem('payrollCalculations', JSON.stringify(filteredPayroll));
+    }
+    
+    // Clear attendance data for this employee
+    const attendanceData = localStorage.getItem('attendanceSummaries');
+    if (attendanceData) {
+      const parsedAttendance = JSON.parse(attendanceData);
+      const filteredAttendance = parsedAttendance.filter((a: any) => a.employeeId !== id);
+      localStorage.setItem('attendanceSummaries', JSON.stringify(filteredAttendance));
+    }
+    
+    // Clear employee deductions
+    const deductionsData = localStorage.getItem('employeeDeductions');
+    if (deductionsData) {
+      const parsedDeductions = JSON.parse(deductionsData);
+      const filteredDeductions = parsedDeductions.filter((d: any) => d.employeeId !== id);
+      localStorage.setItem('employeeDeductions', JSON.stringify(filteredDeductions));
+    }
+    
+    // Clear salary advances
+    const advancesData = localStorage.getItem('salaryAdvances');
+    if (advancesData) {
+      const parsedAdvances = JSON.parse(advancesData);
+      const filteredAdvances = parsedAdvances.filter((a: any) => a.employeeId !== id);
+      localStorage.setItem('salaryAdvances', JSON.stringify(filteredAdvances));
+    }
+    
+    // Clear EMP201 cache for this employee
+    const emp201Cache = localStorage.getItem('emp201Cache');
+    if (emp201Cache) {
+      const parsedCache = JSON.parse(emp201Cache);
+      Object.keys(parsedCache).forEach(key => {
+        if (key.includes(id)) {
+          delete parsedCache[key];
+        }
+      });
+      localStorage.setItem('emp201Cache', JSON.stringify(parsedCache));
+    }
+    
+    // Clear HR-Accounting cache
+    const hrCache = localStorage.getItem('hrAccountingCache');
+    if (hrCache) {
+      const parsedHRCache = JSON.parse(hrCache);
+      if (parsedHRCache[id]) {
+        delete parsedHRCache[id];
+        localStorage.setItem('hrAccountingCache', JSON.stringify(parsedHRCache));
+      }
+    }
+    
+    // If this is the Regular User, also clear user credentials
+    if (employeeToDelete && (
+      (employeeToDelete.firstName === 'Regular' && employeeToDelete.surname === 'User') ||
+      id === '0f043fc8-b140-48ce-ba79-56d47e21725c'
+    )) {
+      const credentials = localStorage.getItem('userCredentials');
+      if (credentials) {
+        const parsedCredentials = JSON.parse(credentials);
+        // Remove Regular User credentials
+        Object.keys(parsedCredentials).forEach(key => {
+          const user = parsedCredentials[key];
+          if (user.fullName === 'Regular User' || user.email === 'user@mokmzansibooks.com') {
+            delete parsedCredentials[key];
+          }
+        });
+        localStorage.setItem('userCredentials', JSON.stringify(parsedCredentials));
+      }
+      
+      console.log('✅ Regular User completely removed from all systems');
+    }
+    
+    console.log(`✅ Employee ${employeeToDelete?.firstName} ${employeeToDelete?.surname} and all related data deleted successfully`);
+    return true;
+  } catch (error) {
+    console.error(`💥 [employeeService] Critical error during deleteEmployee operation:`, {
+      employeeId: id,
+      employeeName: employeeToDelete ? `${employeeToDelete.firstName} ${employeeToDelete.surname}` : 'Unknown',
+      isRegularUser: employeeToDelete ? (employeeToDelete.firstName === 'Regular' && employeeToDelete.surname === 'User') : false,
+      error: error,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return false;
   }
-  
-  localStorage.setItem('employees', JSON.stringify(filteredEmployees));
-  return true;
 };
 
 export const getEmployeeById = (id: string): Employee | null => {
@@ -273,18 +389,17 @@ export const initializeEmployees = (): void => {
   if (employees.length === 0) {
     const sampleEmployees: EmployeeFormData[] = [
       {
-        firstName: 'John',
-        surname: 'Smith',
+        firstName: 'Admin',
+        surname: 'User',
         contactNumber: '071 123 4567',
-        email: 'john.smith@mokmzansibooks.com',
+        email: 'admin.user@mokmzansibooks.com',
         idType: 'ID Number',
         idValue: '8501015800087',
         dateOfBirth: '1985-01-01',
         employmentType: 'Full Time',
         startDate: '2023-01-15',
         paymentCycle: 'Monthly',
-        salary: 25000,
-        taxPercentage: 18,
+        salary: 80000,
         department: 'IT',
         position: 'Software Developer',
         location: 'Pretoria Office',
@@ -303,134 +418,6 @@ export const initializeEmployees = (): void => {
         dayShift: true,
         nightShift: false,
         flexibleShift: false
-      },
-      {
-        firstName: 'Sarah',
-        surname: 'Johnson',
-        contactNumber: '082 456 7890',
-        email: 'sarah.johnson@mokmzansibooks.com',
-        idType: 'ID Number',
-        idValue: '9003125800088',
-        dateOfBirth: '1990-03-12',
-        employmentType: 'Full Time',
-        startDate: '2023-03-01',
-        paymentCycle: 'Monthly',
-        salary: 22000,
-        taxPercentage: 18,
-        department: 'Finance',
-        position: 'Accountant',
-        location: 'Pretoria Office',
-        addressLine1: '456 Oak Avenue',
-        addressLine2: 'Hatfield',
-        addressLine3: 'Pretoria',
-        addressLine4: '0028',
-        kinRelationship: 'Parent',
-        kinName: 'Michael',
-        kinSurname: 'Johnson',
-        kinContactNumber: '083 111 2222',
-        bankName: 'FNB',
-        accountHolderName: 'Sarah Johnson',
-        accountNumber: '987654321',
-        branchCode: '250655',
-        dayShift: true,
-        nightShift: false,
-        flexibleShift: false
-      },
-      {
-        firstName: 'David',
-        surname: 'Williams',
-        contactNumber: '073 789 0123',
-        email: 'david.williams@mokmzansibooks.com',
-        idType: 'ID Number',
-        idValue: '8807205800089',
-        dateOfBirth: '1988-07-20',
-        employmentType: 'Full Time',
-        startDate: '2022-11-01',
-        paymentCycle: 'Monthly',
-        salary: 28000,
-        taxPercentage: 20,
-        department: 'Sales',
-        position: 'Sales Manager',
-        location: 'Johannesburg Office',
-        addressLine1: '789 Pine Street',
-        addressLine2: 'Sandton',
-        addressLine3: 'Johannesburg',
-        addressLine4: '2196',
-        kinRelationship: 'Sibling',
-        kinName: 'Lisa',
-        kinSurname: 'Williams',
-        kinContactNumber: '074 333 4444',
-        bankName: 'ABSA',
-        accountHolderName: 'David Williams',
-        accountNumber: '456789123',
-        branchCode: '632005',
-        dayShift: true,
-        nightShift: false,
-        flexibleShift: true
-      },
-      {
-        firstName: 'Maria',
-        surname: 'Garcia',
-        contactNumber: '084 567 8901',
-        email: 'maria.garcia@mokmzansibooks.com',
-        idType: 'ID Number',
-        idValue: '9205155800090',
-        dateOfBirth: '1992-05-15',
-        employmentType: 'Part Time',
-        startDate: '2023-06-01',
-        paymentCycle: 'Monthly',
-        salary: 15000,
-        taxPercentage: 15,
-        department: 'HR',
-        position: 'HR Assistant',
-        location: 'Pretoria Office',
-        addressLine1: '321 Elm Road',
-        addressLine2: 'Brooklyn',
-        addressLine3: 'Pretoria',
-        addressLine4: '0181',
-        kinRelationship: 'Parent',
-        kinName: 'Carlos',
-        kinSurname: 'Garcia',
-        kinContactNumber: '085 555 6666',
-        bankName: 'Nedbank',
-        accountHolderName: 'Maria Garcia',
-        accountNumber: '789123456',
-        branchCode: '198765',
-        dayShift: false,
-        nightShift: false,
-        flexibleShift: true
-      },
-      {
-        firstName: 'Thabo',
-        surname: 'Mthembu',
-        contactNumber: '076 234 5678',
-        email: 'thabo.mthembu@mokmzansibooks.com',
-        idType: 'ID Number',
-        idValue: '8609105800091',
-        dateOfBirth: '1986-09-10',
-        employmentType: 'Full Time',
-        startDate: '2022-08-15',
-        paymentCycle: 'Monthly',
-        salary: 32000,
-        taxPercentage: 25,
-        department: 'Operations',
-        position: 'Operations Manager',
-        location: 'Cape Town Office',
-        addressLine1: '654 Beach Road',
-        addressLine2: 'Sea Point',
-        addressLine3: 'Cape Town',
-        addressLine4: '8005',
-        kinRelationship: 'Spouse',
-        kinName: 'Nomsa',
-        kinSurname: 'Mthembu',
-        kinContactNumber: '077 777 8888',
-        bankName: 'Capitec',
-        accountHolderName: 'Thabo Mthembu',
-        accountNumber: '147258369',
-        branchCode: '470010',
-        dayShift: true,
-        nightShift: true,
-        flexibleShift: true
       }
     ];
 

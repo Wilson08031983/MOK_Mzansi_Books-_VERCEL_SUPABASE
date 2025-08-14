@@ -7,6 +7,8 @@ import { Edit, Save, X, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/services/localAuthService';
 import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
+import { workingCompanySync } from '@/services/workingCompanySync';
+import { userLinkingService } from '@/services/userLinkingService';
 import AuthModal from './AuthModal';
 import CompanyInformationForm from './CompanyInformationForm';
 import ContactPersonForm from './ContactPersonForm';
@@ -253,6 +255,27 @@ const CompanyDetails = () => {
         toast.success('Company details saved successfully.');
         toast.warning('Note: Could not sync to HR Management. Please check employee records.');
       }
+
+      // Sync primary user across all tables (Company Details -> HR -> Settings)
+      try {
+        const userSyncResult = await userLinkingService.syncPrimaryUser();
+        if (userSyncResult) {
+          console.log('Primary user synced successfully across all tables');
+        } else {
+          console.warn('Primary user sync encountered issues');
+        }
+      } catch (userSyncError) {
+        console.error('Primary user sync error:', userSyncError);
+        toast.warning('Note: Could not sync primary user across all tables.');
+      }
+
+      // Sync to Settings page General tab
+      try {
+        workingCompanySync.syncCompanyToSettings();
+        console.log('Company data synced to Settings page');
+      } catch (settingsyncError) {
+        console.error('Settings sync error:', settingsyncError);
+      }
       
       setIsEditing(false);
     } catch (error) {
@@ -286,10 +309,17 @@ const CompanyDetails = () => {
           {!isEditing ? (
             <div className="flex space-x-2">
               <Button
-                onClick={() => {
+                onClick={async () => {
                   const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
                   if (syncResult.success) {
-                    toast.success('Manual sync completed successfully!');
+                    // Also sync primary user
+                    try {
+                      await userLinkingService.syncPrimaryUser();
+                      toast.success('Company details and primary user synced successfully.');
+                    } catch (error) {
+                      console.error('Primary user sync error:', error);
+                      toast.success('Company details synced. Primary user sync encountered issues.');
+                    }
                   } else {
                     toast.error(`Sync failed: ${syncResult.message}`);
                   }

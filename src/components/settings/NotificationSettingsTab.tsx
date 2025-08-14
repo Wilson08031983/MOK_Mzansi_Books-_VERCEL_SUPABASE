@@ -1,22 +1,288 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bell } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Bell, Mail, Calendar } from 'lucide-react';
+import { toast } from 'sonner';
 
 const NotificationSettingsTab = () => {
+  const [settings, setSettings] = useState({
+    email: {
+      enabled: true,
+      address: 'admin@mokmzansibooks.com',
+      invoiceReminders: true,
+      paymentReceived: true,
+      lowStock: true,
+      systemAlerts: true,
+      weeklyReports: false,
+      monthlyReports: true
+    },
+    inApp: {
+      enabled: true,
+      sound: true,
+      desktop: true,
+      newInvoices: true,
+      taskReminders: true,
+      clientMessages: true,
+      systemUpdates: true
+    },
+    frequency: {
+      invoiceReminders: '7', // days before due
+      reportSchedule: 'weekly',
+      digestFrequency: 'daily'
+    }
+  });
+
+  const handleSave = () => {
+    localStorage.setItem('notificationSettings', JSON.stringify(settings));
+    toast.success('Notification settings saved successfully!');
+  };
+
+  const updateEmailSetting = (key: string, value: boolean | string) => {
+    setSettings(prev => ({
+      ...prev,
+      email: { ...prev.email, [key]: value }
+    }));
+  };
+
+  const updateSmsSetting = (key: string, value: boolean | string) => {
+    setSettings(prev => ({
+      ...prev,
+      sms: { ...prev.sms, [key]: value }
+    }));
+  };
+
+  const updateInAppSetting = (key: string, value: boolean) => {
+    setSettings(prev => ({
+      ...prev,
+      inApp: { ...prev.inApp, [key]: value }
+    }));
+  };
+
   return (
     <div className="space-y-6">
+      {/* Email Notifications */}
+      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <CardHeader>
+          <CardTitle className="flex items-center font-sf-pro">
+            <Mail className="h-5 w-5 mr-2" />
+            Email Notifications
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base font-medium">Enable Email Notifications</Label>
+              <p className="text-sm text-gray-600">Receive notifications via email</p>
+            </div>
+            <Switch
+              checked={settings.email.enabled}
+              onCheckedChange={(checked) => updateEmailSetting('enabled', checked)}
+            />
+          </div>
+          
+          {settings.email.enabled && (
+            <>
+              <div>
+                <Label htmlFor="emailAddress">Email Address</Label>
+                <Input
+                  id="emailAddress"
+                  type="email"
+                  value={settings.email.address}
+                  onChange={(e) => updateEmailSetting('address', e.target.value)}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Invoice Reminders</Label>
+                    <p className="text-sm text-gray-600">Payment due reminders</p>
+                  </div>
+                  <Switch
+                    checked={settings.email.invoiceReminders}
+                    onCheckedChange={(checked) => updateEmailSetting('invoiceReminders', checked)}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Payment Received</Label>
+                    <p className="text-sm text-gray-600">Payment confirmations</p>
+                  </div>
+                  <Switch
+                    checked={settings.email.paymentReceived}
+                    onCheckedChange={(checked) => updateEmailSetting('paymentReceived', checked)}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Low Stock Alerts</Label>
+                    <p className="text-sm text-gray-600">Inventory warnings</p>
+                  </div>
+                  <Switch
+                    checked={settings.email.lowStock}
+                    onCheckedChange={(checked) => updateEmailSetting('lowStock', checked)}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>System Alerts</Label>
+                    <p className="text-sm text-gray-600">Important system messages</p>
+                  </div>
+                  <Switch
+                    checked={settings.email.systemAlerts}
+                    onCheckedChange={(checked) => updateEmailSetting('systemAlerts', checked)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* In-App Notifications */}
       <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Bell className="h-5 w-5 mr-2" />
-            Notification Settings
+            In-App Notifications
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-gray-600">Notification settings will be implemented here.</p>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Enable Sound</Label>
+                <p className="text-sm text-gray-600">Play notification sounds</p>
+              </div>
+              <Switch
+                checked={settings.inApp.sound}
+                onCheckedChange={(checked) => updateInAppSetting('sound', checked)}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Desktop Notifications</Label>
+                <p className="text-sm text-gray-600">Show browser notifications</p>
+              </div>
+              <Switch
+                checked={settings.inApp.desktop}
+                onCheckedChange={(checked) => updateInAppSetting('desktop', checked)}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>New Invoices</Label>
+                <p className="text-sm text-gray-600">Invoice creation alerts</p>
+              </div>
+              <Switch
+                checked={settings.inApp.newInvoices}
+                onCheckedChange={(checked) => updateInAppSetting('newInvoices', checked)}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Task Reminders</Label>
+                <p className="text-sm text-gray-600">Upcoming task notifications</p>
+              </div>
+              <Switch
+                checked={settings.inApp.taskReminders}
+                onCheckedChange={(checked) => updateInAppSetting('taskReminders', checked)}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Notification Frequency */}
+      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <CardHeader>
+          <CardTitle className="flex items-center font-sf-pro">
+            <Calendar className="h-5 w-5 mr-2" />
+            Notification Frequency
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="invoiceReminders">Invoice Reminder (days before due)</Label>
+              <Select 
+                value={settings.frequency.invoiceReminders} 
+                onValueChange={(value) => setSettings(prev => ({
+                  ...prev,
+                  frequency: { ...prev.frequency, invoiceReminders: value }
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 day</SelectItem>
+                  <SelectItem value="3">3 days</SelectItem>
+                  <SelectItem value="7">7 days</SelectItem>
+                  <SelectItem value="14">14 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="reportSchedule">Report Schedule</Label>
+              <Select 
+                value={settings.frequency.reportSchedule} 
+                onValueChange={(value) => setSettings(prev => ({
+                  ...prev,
+                  frequency: { ...prev.frequency, reportSchedule: value }
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="digestFrequency">Digest Frequency</Label>
+              <Select 
+                value={settings.frequency.digestFrequency} 
+                onValueChange={(value) => setSettings(prev => ({
+                  ...prev,
+                  frequency: { ...prev.frequency, digestFrequency: value }
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="realtime">Real-time</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white">
+          Save Notification Settings
+        </Button>
+      </div>
     </div>
   );
 };

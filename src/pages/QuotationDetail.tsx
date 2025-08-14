@@ -16,6 +16,7 @@ import { formatDate } from '@/utils/formatters';
 import { toast } from 'sonner';
 import { generateQuotationPdf, Quotation as PdfQuotation } from '@/utils/quotationPdfGenerator';
 import { updateQuotationStatus, Quotation as ServiceQuotation } from '@/services/quotationService';
+import { useLocalization } from '@/hooks/useLocalization';
 import QuotationDetailHeader from '@/components/quotations/QuotationDetailHeader';
 import QuotationDetailInfo from '@/components/quotations/QuotationDetailInfo';
 import QuotationDetailItems from '@/components/quotations/QuotationDetailItems';
@@ -26,6 +27,7 @@ import QuotationDetailModals from '@/components/quotations/QuotationDetailModals
 const QuotationDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useLocalization();
   
   // Define proper interface for quotation
   interface QuotationItem {
@@ -280,7 +282,7 @@ const QuotationDetail: React.FC = () => {
             className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Quotations
+            {t('common.back')} {t('quotations.title')}
           </Button>
         </div>
         <div className="text-center py-12">

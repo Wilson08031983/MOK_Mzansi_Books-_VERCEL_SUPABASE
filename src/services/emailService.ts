@@ -61,6 +61,15 @@ interface DeletionEmailOptions {
   companyName?: string;
 }
 
+// Add login notification options
+interface LoginNotificationOptions {
+  to: string;
+  deviceName: string;
+  browser: string;
+  location: string;
+  timestamp: string;
+}
+
 /**
  * Send an email confirmation to a newly registered user
  */
@@ -317,10 +326,54 @@ export const sendQuotationEmail = async (options: QuotationEmailOptions): Promis
   }
 };
 
+// Send a login notification email
+export const sendLoginNotificationEmail = async (options: LoginNotificationOptions): Promise<boolean> => {
+  try {
+    const { to, deviceName, browser, location, timestamp } = options;
+
+    const { data, error } = await resend.emails.send({
+      from: `MOK Mzansi Books <no-reply@${domain}>`,
+      to: [to],
+      subject: 'New Login to Your Account',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
+          </div>
+          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">New Login Detected</h1>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 16px;">A new login to your MOK Mzansi Books account was detected with the following details:</p>
+          <ul style="color: #374151; font-size: 16px; margin-bottom: 16px;">
+            <li><strong>Device:</strong> ${deviceName}</li>
+            <li><strong>Browser:</strong> ${browser}</li>
+            <li><strong>Location:</strong> ${location}</li>
+            <li><strong>Time:</strong> ${new Date(timestamp).toLocaleString()}</li>
+          </ul>
+          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">If this was you, you can safely ignore this email. If you didn't sign in, please secure your account immediately by changing your password.</p>
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('Failed to send login notification email:', error);
+      return false;
+    }
+
+    console.log('Login notification email sent successfully with ID:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('Error sending login notification email:', error);
+    return false;
+  }
+};
+
 export default {
   sendConfirmationEmail,
   sendPasswordResetEmail,
   sendInvitationEmail,
   sendQuotationEmail,
-  sendAccountDeletionEmail
+  sendAccountDeletionEmail,
+  // expose login notification in default export too
+  sendLoginNotificationEmail
 };

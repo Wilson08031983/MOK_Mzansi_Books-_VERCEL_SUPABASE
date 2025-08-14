@@ -115,6 +115,13 @@ class PayrollExpenseIntegrationService {
   }
 
   /**
+   * Trigger manual automation for a specific month/year
+   */
+  public async triggerManualAutomation(month: number, year: number): Promise<MonthlyAutomationLog> {
+    return this.runMonthlyAutomation(month, year);
+  }
+
+  /**
    * Run monthly automation for salary expense generation
    */
   public async runMonthlyAutomation(month: number, year: number): Promise<MonthlyAutomationLog> {
@@ -176,34 +183,44 @@ class PayrollExpenseIntegrationService {
   private getActiveProjectsForMonth(month: number, year: number): Project[] {
     try {
       const projects: Project[] = JSON.parse(localStorage.getItem('projects') || '[]');
+      console.log(`Found ${projects.length} total projects in storage`);
+      
       const targetDate = new Date(year, month - 1, 1); // First day of target month
       const nextMonth = new Date(year, month, 1); // First day of next month
       
-      return projects.filter(project => {
-        // Skip projects without assigned employees
-        if (!project.assignedEmployees || project.assignedEmployees.length === 0) {
+      const activeProjects = projects.filter(project => {
+        console.log(`Checking project: ${project.name} (${project.code})`);
+        
+        // Check if project has assigned employees (either new format or legacy team)
+        const hasEmployees = (project.assignedEmployees && project.assignedEmployees.length > 0) ||
+                           (project.team && project.team.length > 0);
+        
+        if (!hasEmployees) {
+          console.log(`  - Skipping: No assigned employees`);
           return false;
         }
         
-        // Skip completed or cancelled projects (unless they extended beyond end date)
+        // Skip cancelled projects only
         if (project.status === 'Cancelled') {
+          console.log(`  - Skipping: Project cancelled`);
           return false;
         }
         
         const startDate = new Date(project.startDate);
         const endDate = new Date(project.endDate);
         
-        // Project is active if:
-        // 1. It started before or during the target month AND
-        // 2. It ends after or during the target month OR it's still in progress
-        const isActive = startDate < nextMonth && 
-                        (endDate >= targetDate || 
-                         project.status === 'In Progress' || 
-                         project.status === 'Planning' ||
-                         project.status === 'On Hold');
+        // Project is active if it overlaps with the target month
+        const isActive = startDate < nextMonth && endDate >= targetDate;
+        
+        console.log(`  - Start: ${startDate.toISOString().split('T')[0]}, End: ${endDate.toISOString().split('T')[0]}`);
+        console.log(`  - Target month: ${targetDate.toISOString().split('T')[0]} to ${new Date(nextMonth.getTime() - 1).toISOString().split('T')[0]}`);
+        console.log(`  - Status: ${project.status}, Active: ${isActive}`);
         
         return isActive;
       });
+      
+      console.log(`Found ${activeProjects.length} active projects for ${month}/${year}:`, activeProjects.map(p => p.name));
+      return activeProjects;
     } catch (error) {
       console.error('Error getting active projects:', error);
       return [];
@@ -252,21 +269,50 @@ class PayrollExpenseIntegrationService {
 
       console.log(`Project ${project.name}: ${projectDaysInMonth}/${daysInMonth} days in ${period} (factor: ${proRationFactor.toFixed(3)})`);
 
-      // Process each assigned employee
-      for (const assignedEmployee of project.assignedEmployees) {
+      // Process assigned employees (handle both new and legacy formats)
+      const employeesToProcess = project.assignedEmployees || [];
+      
+      // If no assignedEmployees but has legacy team, convert them
+      if (employeesToProcess.length === 0 && project.team && project.team.length > 0) {
+        console.log(`Converting legacy team format for project ${project.name}`);
+        const allEmployees = getAllEmployees();
+        
+        for (const teamMemberName of project.team) {
+          const employee = allEmployees.find(emp => `${emp.firstName} ${emp.surname}` === teamMemberName);
+          if (employee) {
+            employeesToProcess.push({
+              employeeId: employee.id,
+              employeeName: `${employee.firstName} ${employee.surname}`,
+              employeeNumber: employee.employeeNumber || '',
+              position: employee.position,
+              department: employee.department,
+              monthlySalary: employee.salary,
+              assignedDate: project.startDate,
+              allocation: 100 // Default 100% allocation for legacy projects
+            });
+          }
+        }
+      }
+      
+      console.log(`Processing ${employeesToProcess.length} employees for project ${project.name}`);
+      
+      for (const assignedEmployee of employeesToProcess) {
         try {
           const employee = this.getEmployeeById(assignedEmployee.employeeId);
           if (!employee) {
-            console.warn(`Employee ${assignedEmployee.employeeId} not found`);
+            console.warn(`Employee ${assignedEmployee.employeeId} (${assignedEmployee.employeeName}) not found`);
             continue;
           }
 
           // Calculate employee's payroll for the period
           const payrollCalculation = this.payrollService.calculateEmployeePayroll(employee, period);
+          console.log(`Payroll for ${employee.firstName} ${employee.surname}: Net Salary R${payrollCalculation.netSalary.toFixed(2)}`);
           
           // Calculate allocated amount based on project allocation percentage
-          const allocationFactor = assignedEmployee.allocation / 100;
+          const allocationFactor = (assignedEmployee.allocation || 100) / 100;
           const allocatedSalary = payrollCalculation.netSalary * allocationFactor * proRationFactor;
+          
+          console.log(`Allocated salary: R${payrollCalculation.netSalary.toFixed(2)} × ${allocationFactor} × ${proRationFactor.toFixed(3)} = R${allocatedSalary.toFixed(2)}`);
 
           if (allocatedSalary > 0) {
             // Create expense entry for this employee's salary allocation
@@ -282,7 +328,7 @@ class PayrollExpenseIntegrationService {
               employeeId: assignedEmployee.employeeId,
               employeeName: assignedEmployee.employeeName,
               netSalary: payrollCalculation.netSalary,
-              allocation: assignedEmployee.allocation,
+              allocation: assignedEmployee.allocation || 100,
               allocatedAmount: allocatedSalary
             });
 
@@ -368,89 +414,7 @@ class PayrollExpenseIntegrationService {
     return expenseEntry;
   }
 
-  /**
-   * Get employee by ID
-   */
-  private getEmployeeById(employeeId: string): Employee | null {
-    const employees = getAllEmployees();
-    return employees.find(emp => emp.id === employeeId) || null;
-  }
 
-  /**
-   * Get number of days in a month
-   */
-  private getDaysInMonth(month: number, year: number): number {
-    return new Date(year, month, 0).getDate();
-  }
-
-  /**
-   * Get number of project days within a specific month
-   */
-  private getProjectDaysInMonth(project: Project, month: number, year: number): number {
-    const startDate = new Date(project.startDate);
-    const endDate = new Date(project.endDate);
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0); // Last day of month
-
-    // Determine the actual start and end dates within the month
-    const effectiveStart = startDate > monthStart ? startDate : monthStart;
-    const effectiveEnd = endDate < monthEnd ? endDate : monthEnd;
-
-    // If project doesn't overlap with this month, return 0
-    if (effectiveStart > effectiveEnd) {
-      return 0;
-    }
-
-    // Calculate days (inclusive)
-    const timeDiff = effectiveEnd.getTime() - effectiveStart.getTime();
-    return Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
-  }
-
-  /**
-   * Check if salary expense already generated for project/period
-   */
-  private isSalaryExpenseAlreadyGenerated(projectId: number, period: string): boolean {
-    try {
-      const projectSalaryExpenses = JSON.parse(localStorage.getItem('projectSalaryExpenses') || '[]');
-      return projectSalaryExpenses.some((expense: ProjectSalaryExpense) => 
-        expense.projectId === projectId && 
-        `${expense.year}-${expense.month}` === period
-      );
-    } catch (error) {
-      console.error('Error checking existing salary expenses:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Save project salary expense record
-   */
-  private saveProjectSalaryExpense(projectSalaryExpense: ProjectSalaryExpense): void {
-    try {
-      const projectSalaryExpenses = JSON.parse(localStorage.getItem('projectSalaryExpenses') || '[]');
-      projectSalaryExpenses.push(projectSalaryExpense);
-      localStorage.setItem('projectSalaryExpenses', JSON.stringify(projectSalaryExpenses));
-    } catch (error) {
-      console.error('Error saving project salary expense:', error);
-    }
-  }
-
-  /**
-   * Save automation log
-   */
-  private saveAutomationLog(log: MonthlyAutomationLog): void {
-    try {
-      const logs = JSON.parse(localStorage.getItem('payrollAutomationLogs') || '[]');
-      logs.push(log);
-      // Keep only last 12 months of logs
-      if (logs.length > 12) {
-        logs.splice(0, logs.length - 12);
-      }
-      localStorage.setItem('payrollAutomationLogs', JSON.stringify(logs));
-    } catch (error) {
-      console.error('Error saving automation log:', error);
-    }
-  }
 
   /**
    * Update project's salary expenses total
@@ -492,19 +456,6 @@ class PayrollExpenseIntegrationService {
   }
 
   /**
-   * Get project salary expenses for a specific project
-   */
-  public getProjectSalaryExpenses(projectId: number): ProjectSalaryExpense[] {
-    try {
-      const projectSalaryExpenses = JSON.parse(localStorage.getItem('projectSalaryExpenses') || '[]');
-      return projectSalaryExpenses.filter((expense: ProjectSalaryExpense) => expense.projectId === projectId);
-    } catch (error) {
-      console.error('Error getting project salary expenses:', error);
-      return [];
-    }
-  }
-
-  /**
    * Get automation logs
    */
   public getAutomationLogs(): MonthlyAutomationLog[] {
@@ -533,15 +484,16 @@ class PayrollExpenseIntegrationService {
   }
 
   /**
-   * Manually trigger automation for testing
+   * Get project salary expenses
    */
-  public async triggerManualAutomation(month?: number, year?: number): Promise<MonthlyAutomationLog> {
-    const now = new Date();
-    const targetMonth = month || now.getMonth() + 1;
-    const targetYear = year || now.getFullYear();
-    
-    console.log(`Manually triggering payroll automation for ${targetMonth}/${targetYear}`);
-    return this.runMonthlyAutomation(targetMonth, targetYear);
+  public getProjectSalaryExpenses(projectId: number): ProjectSalaryExpense[] {
+    try {
+      const projectSalaryExpenses = JSON.parse(localStorage.getItem('projectSalaryExpenses') || '[]');
+      return projectSalaryExpenses.filter((expense: ProjectSalaryExpense) => expense.projectId === projectId);
+    } catch (error) {
+      console.error('Error getting project salary expenses:', error);
+      return [];
+    }
   }
 
   /**
@@ -588,6 +540,97 @@ class PayrollExpenseIntegrationService {
       employeeBreakdown
     };
   }
+
+  /**
+   * Helper method to get employee by ID
+   */
+  private getEmployeeById(employeeId: string): Employee | null {
+    try {
+      const employees = getAllEmployees();
+      return employees.find(emp => emp.id === employeeId) || null;
+    } catch (error) {
+      console.error('Error getting employee by ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if salary expense already generated for project/period
+   */
+  private isSalaryExpenseAlreadyGenerated(projectId: number, period: string): boolean {
+    try {
+      const existingExpenses = JSON.parse(localStorage.getItem('projectSalaryExpenses') || '[]');
+      return existingExpenses.some((expense: ProjectSalaryExpense) => 
+        expense.projectId === projectId && 
+        `${expense.year}-${expense.month}` === period
+      );
+    } catch (error) {
+      console.error('Error checking existing salary expenses:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get days in month
+   */
+  private getDaysInMonth(month: number, year: number): number {
+    return new Date(year, month, 0).getDate();
+  }
+
+  /**
+   * Get project active days in month
+   */
+  private getProjectDaysInMonth(project: Project, month: number, year: number): number {
+    const startDate = new Date(project.startDate);
+    const endDate = new Date(project.endDate);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0);
+
+    const effectiveStart = startDate > monthStart ? startDate : monthStart;
+    const effectiveEnd = endDate < monthEnd ? endDate : monthEnd;
+
+    if (effectiveStart > effectiveEnd) return 0;
+
+    const timeDiff = effectiveEnd.getTime() - effectiveStart.getTime();
+    return Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+  }
+
+  /**
+   * Save project salary expense record
+   */
+  private saveProjectSalaryExpense(projectSalaryExpense: ProjectSalaryExpense): void {
+    try {
+      const existingExpenses = JSON.parse(localStorage.getItem('projectSalaryExpenses') || '[]');
+      existingExpenses.push(projectSalaryExpense);
+      localStorage.setItem('projectSalaryExpenses', JSON.stringify(existingExpenses));
+    } catch (error) {
+      console.error('Error saving project salary expense:', error);
+    }
+  }
+
+
+
+
+
+  /**
+   * Save automation log
+   */
+  private saveAutomationLog(log: MonthlyAutomationLog): void {
+    try {
+      const existingLogs = JSON.parse(localStorage.getItem('payrollAutomationLogs') || '[]');
+      existingLogs.push(log);
+      
+      // Keep only last 50 logs
+      if (existingLogs.length > 50) {
+        existingLogs.splice(0, existingLogs.length - 50);
+      }
+      
+      localStorage.setItem('payrollAutomationLogs', JSON.stringify(existingLogs));
+    } catch (error) {
+      console.error('Error saving automation log:', error);
+    }
+  }
+
 }
 
 export default PayrollExpenseIntegrationService;

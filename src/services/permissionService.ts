@@ -95,7 +95,7 @@ export const saveUserPermissions = (userId: string, permissions: UserPermissions
     
     // Get existing permissions from localStorage or initialize empty object
     const storedPermissions = safeLocalStorage.getItem('userPermissions', null);
-    const allPermissions = safeGet(storedPermissions, {}) as Record<string, UserPermissions>;
+    const allPermissions = (storedPermissions || {}) as Record<string, UserPermissions>;
     
     // Update permissions for this user
     allPermissions[safeUserId] = permissions;
@@ -118,7 +118,7 @@ export const getUserPermissions = (userId: string): UserPermissions => {
       return getDefaultPermissions();
     }
     
-    const allPermissions = safeGet(storedPermissions, {}) as Record<string, UserPermissions>;
+    const allPermissions = (storedPermissions || {}) as Record<string, UserPermissions>;
     return allPermissions[safeUserId] || getDefaultPermissions();
   } catch (error) {
     console.error('Error getting user permissions:', error);
@@ -151,6 +151,29 @@ export const hasWritePermission = (userId: string, pageName: string): boolean =>
 
 // Check if a given role is an admin role
 export const isAdminRole = (role: string): boolean => {
-  const ADMIN_ROLES = ['CEO', 'Manager', 'Bookkeeper', 'Director', 'Founder'];
+  const ADMIN_ROLES = [
+    'CEO',
+    'Managing Director', 
+    'Director',
+    'Founder',
+    'General Manager',
+    'Operations Manager',
+    'Finance Manager',
+    'Bookkeeper',
+    'Manager'
+  ];
   return ADMIN_ROLES.includes(role);
 };
+
+// Export ADMIN_ROLES for use in other components
+export const ADMIN_ROLES = [
+  'CEO',
+  'Managing Director', 
+  'Director',
+  'Founder',
+  'General Manager',
+  'Operations Manager',
+  'Finance Manager',
+  'Bookkeeper',
+  'Manager'
+];

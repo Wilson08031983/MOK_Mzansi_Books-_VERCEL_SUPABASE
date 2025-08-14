@@ -486,10 +486,10 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       }
       
       // Round all hour values to 2 decimal places for consistency
-      summary.currentMonthRegularHours = parseFloat(summary.currentMonthRegularHours.toFixed(2));
-      summary.currentMonthOvertimeHours = parseFloat(summary.currentMonthOvertimeHours.toFixed(2));
-      summary.currentMonthNightShiftHours = parseFloat(summary.currentMonthNightShiftHours.toFixed(2));
-      summary.leaveHoursTaken = parseFloat(summary.leaveHoursTaken.toFixed(2));
+      summary.currentMonthRegularHours = parseFloat((summary.currentMonthRegularHours || 0).toFixed(2));
+      summary.currentMonthOvertimeHours = parseFloat((summary.currentMonthOvertimeHours || 0).toFixed(2));
+      summary.currentMonthNightShiftHours = parseFloat((summary.currentMonthNightShiftHours || 0).toFixed(2));
+      summary.leaveHoursTaken = parseFloat((summary.leaveHoursTaken || 0).toFixed(2));
     });
     
     const summaries = Array.from(summaryMap.values());
@@ -922,9 +922,9 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
         format(entryDate, 'EEEE'),
         entry.clockIn,
         entry.clockOut,
-        entry.regularHours.toFixed(2),
-        entry.overtimeHours.toFixed(2),
-        entry.nightShiftHours.toFixed(2),
+        (entry.regularHours || 0).toFixed(2),
+        (entry.overtimeHours || 0).toFixed(2),
+        (entry.nightShiftHours || 0).toFixed(2),
         entry.status,
         entry.notes || ''
       ];
@@ -935,8 +935,8 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     });
     
     // Add summary row
-    csvContent += `\n"TOTAL","","","","${timesheet.totalRegularHours.toFixed(2)}","${timesheet.totalOvertimeHours.toFixed(2)}","${timesheet.totalNightShiftHours.toFixed(2)}","",""\n`;
-    csvContent += `"Total Hours: ${(timesheet.totalRegularHours + timesheet.totalOvertimeHours + timesheet.totalNightShiftHours).toFixed(2)}"\n`;
+    csvContent += `\n"TOTAL","","","","${(timesheet.totalRegularHours || 0).toFixed(2)}","${(timesheet.totalOvertimeHours || 0).toFixed(2)}","${(timesheet.totalNightShiftHours || 0).toFixed(2)}","",""\n`;
+    csvContent += `"Total Hours: ${((timesheet.totalRegularHours || 0) + (timesheet.totalOvertimeHours || 0) + (timesheet.totalNightShiftHours || 0)).toFixed(2)}"\n`;
     
     // Create download link
     const encodedUri = encodeURI(csvContent);
@@ -954,6 +954,8 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     toast.success('Timesheet exported successfully');
   };
   
+
+
   // Handle deleting a weekly timesheet
   const handleDeleteTimesheet = (timesheetId: string) => {
     console.log('Delete timesheet called with ID:', timesheetId);
@@ -1052,15 +1054,13 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
           <p className="text-slate-600 font-sf-pro">Track employee hours, manage timesheets, and monitor attendance patterns</p>
         </div>
         
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => setIsAddEntryModalOpen(true)}
-            className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Time Entry
-          </Button>
-        </div>
+        <Button
+          onClick={() => setIsAddEntryModalOpen(true)}
+          className="bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Time Entry
+        </Button>
       </div>
       
       {/* Filters */}
@@ -1239,15 +1239,15 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                               </div>
                             ) : (
                               <div className="flex flex-col">
-                                <span>{entry.totalHours.toFixed(2)} total</span>
+                                <span>{(entry.totalHours || 0).toFixed(2)} total</span>
                                 {entry.overtimeHours > 0 && (
                                   <span className="text-sm text-purple-600">
-                                    {entry.overtimeHours.toFixed(2)} overtime
+                                    {(entry.overtimeHours || 0).toFixed(2)} overtime
                                   </span>
                                 )}
                                 {entry.nightShiftHours > 0 && (
                                   <span className="text-sm text-indigo-600">
-                                    {entry.nightShiftHours.toFixed(2)} night hrs
+                                    {(entry.nightShiftHours || 0).toFixed(2)} night hrs
                                   </span>
                                 )}
                               </div>
@@ -1425,9 +1425,9 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                               {format(parseISO(timesheet.weekStartDate), 'MMM d')} - {format(parseISO(timesheet.weekEndDate), 'MMM d, yyyy')}
                             </div>
                           </TableCell>
-                          <TableCell>{timesheet.totalRegularHours.toFixed(2)}</TableCell>
-                          <TableCell>{timesheet.totalOvertimeHours.toFixed(2)}</TableCell>
-                          <TableCell>{timesheet.totalNightShiftHours.toFixed(2)}</TableCell>
+                          <TableCell>{(timesheet.totalRegularHours || 0).toFixed(2)}</TableCell>
+                          <TableCell>{(timesheet.totalOvertimeHours || 0).toFixed(2)}</TableCell>
+                          <TableCell>{(timesheet.totalNightShiftHours || 0).toFixed(2)}</TableCell>
                           <TableCell>
                             <Badge className={getStatusBadgeColor(timesheet.status)}>
                               {timesheet.status}
@@ -1607,10 +1607,10 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                             <div className="text-sm text-slate-500">{summary.position}</div>
                           </TableCell>
                           <TableCell>{summary.department}</TableCell>
-                          <TableCell>{summary.currentMonthRegularHours.toFixed(2)}</TableCell>
+                          <TableCell>{(summary.currentMonthRegularHours || 0).toFixed(2)}</TableCell>
                           <TableCell>
                             <div className="flex items-center">
-                              {summary.currentMonthOvertimeHours.toFixed(2)}
+                              {(summary.currentMonthOvertimeHours || 0).toFixed(2)}
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger>
@@ -1619,8 +1619,8 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                                     </div>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>Weekly: {summary.currentWeekOvertimeHours.toFixed(2)} / 10 hours</p>
-                                    <p>Daily: {summary.currentDayOvertimeHours.toFixed(2)} / 3 hours</p>
+                                    <p>Weekly: {(summary.currentWeekOvertimeHours || 0).toFixed(2)} / 10 hours</p>
+                                    <p>Daily: {(summary.currentDayOvertimeHours || 0).toFixed(2)} / 3 hours</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -1628,7 +1628,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center">
-                              {summary.currentMonthNightShiftHours.toFixed(2)}
+                              {(summary.currentMonthNightShiftHours || 0).toFixed(2)}
                               <Moon className="h-4 w-4 ml-1 text-indigo-500" />
                             </div>
                           </TableCell>
@@ -1637,7 +1637,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                               {summary.leaveHoursTaken > 0 ? (
                                 <>
                                   <Badge className="bg-yellow-100 text-yellow-800 rounded-full px-2 py-1 mr-1">
-                                    {summary.leaveHoursTaken.toFixed(2)}h
+                                    {(summary.leaveHoursTaken || 0).toFixed(2)}h
                                   </Badge>
                                   <Calendar className="h-4 w-4 text-yellow-600" />
                                 </>
@@ -2277,15 +2277,15 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <h4 className="text-sm font-medium text-slate-500">Total Hours</h4>
-                      <p className="text-base">{selectedEntry.totalHours.toFixed(2)}</p>
+                      <p className="text-base">{(selectedEntry.totalHours || 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-slate-500">Regular Hours</h4>
-                      <p className="text-base">{selectedEntry.regularHours.toFixed(2)}</p>
+                      <p className="text-base">{(selectedEntry.regularHours || 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-slate-500">Overtime Hours</h4>
-                      <p className="text-base">{selectedEntry.overtimeHours.toFixed(2)}</p>
+                      <p className="text-base">{(selectedEntry.overtimeHours || 0).toFixed(2)}</p>
                     </div>
                   </div>
                   
@@ -2310,7 +2310,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <h4 className="text-sm font-medium text-slate-500">Night Shift Hours</h4>
-                        <p className="text-base">{selectedEntry.nightShiftHours.toFixed(2)}</p>
+                        <p className="text-base">{(selectedEntry.nightShiftHours || 0).toFixed(2)}</p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-slate-500">Night Shift Allowance</h4>

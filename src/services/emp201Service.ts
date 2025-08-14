@@ -46,10 +46,9 @@ export interface EMP201Calculation {
   totalPAYE: number;
   totalTaxableIncome: number;
   
-  // UIF Summary
+  // UIF Summary (Employee portion only - 1% of taxable income)
   totalUIF: number;
   totalUIFEmployee: number;
-  totalUIFEmployer: number;
   totalUIFSalaries: number; // Capped salaries for UIF
   
   // SDL Summary
@@ -87,10 +86,9 @@ export interface EMP201EmployeeBreakdown {
   paye: number;
   payeBracket: string;
   
-  // UIF Calculation
+  // UIF Calculation (Employee portion only - 1% of taxable income)
   uifSalary: number; // Capped at R17,712
   uifEmployee: number;
-  uifEmployer: number;
   uifTotal: number;
   
   // SDL Calculation
@@ -139,19 +137,24 @@ class EMP201Service {
   }
   
   /**
-   * Calculate UIF for employee and employer
+   * Calculate UIF for employee only (1% of taxable income, capped at R17,712)
    */
-  calculateUIF(grossSalary: number): { employee: number; employer: number; total: number; cappedSalary: number } {
-    const cappedSalary = Math.min(grossSalary, SA_TAX_CONSTANTS.UIF_MAX_MONTHLY_SALARY);
-    const employee = Math.round(cappedSalary * SA_TAX_CONSTANTS.UIF_EMPLOYEE_RATE * 100) / 100;
-    const employer = Math.round(cappedSalary * SA_TAX_CONSTANTS.UIF_EMPLOYER_RATE * 100) / 100;
+  calculateUIF(taxableIncome: number): { employee: number; employer: number; total: number; cappedSalary: number } {
+    // Cap the taxable income at the UIF maximum monthly salary
+    const cappedSalary = Math.min(taxableIncome, SA_TAX_CONSTANTS.UIF_MAX_MONTHLY_SALARY);
     
-    console.log(`🧮 [EMP201] UIF calculation: Gross R${grossSalary.toFixed(2)} → Capped R${cappedSalary.toFixed(2)} → Employee R${employee.toFixed(2)}, Employer R${employer.toFixed(2)}`);
+    // Calculate employee UIF as 1% of capped taxable income
+    const employee = Math.round(cappedSalary * SA_TAX_CONSTANTS.UIF_EMPLOYEE_RATE * 100) / 100;
+    
+    // Employer UIF is no longer calculated or displayed per user request
+    const employer = 0;
+    
+    console.log(`🧮 [EMP201] UIF calculation: Taxable Income R${taxableIncome.toFixed(2)} → Capped R${cappedSalary.toFixed(2)} → Employee UIF R${employee.toFixed(2)} (1%)`);
     
     return {
       employee,
       employer,
-      total: employee + employer,
+      total: employee, // Only employee portion
       cappedSalary
     };
   }
@@ -273,7 +276,6 @@ class EMP201Service {
     let totalPAYE = 0;
     let totalTaxableIncome = 0;
     let totalUIFEmployee = 0;
-    let totalUIFEmployer = 0;
     let totalUIFSalaries = 0;
     let totalSDL = 0;
     let totalSDLSalaries = 0;
@@ -336,8 +338,8 @@ class EMP201Service {
       // Calculate PAYE on the adjusted taxable income
       const paye = this.calculatePAYE(taxableIncome);
       
-      // Calculate UIF on gross salary (as per SARS requirements)
-      const uif = this.calculateUIF(grossSalary);
+      // Calculate UIF on taxable income (1% employee portion only, capped at R17,712)
+      const uif = this.calculateUIF(taxableIncome);
       
       // Create employee breakdown with all calculated values
       const employeeData: EMP201EmployeeBreakdown = {
@@ -354,7 +356,6 @@ class EMP201Service {
         payeBracket: this.getPAYEBracket(taxableIncome),
         uifSalary: uif.cappedSalary,
         uifEmployee: uif.employee,
-        uifEmployer: uif.employer,
         uifTotal: uif.total,
         sdl: 0, // SDL disabled per user request
         totalDeductions: paye + uif.employee, // Employee portion only
@@ -367,18 +368,17 @@ class EMP201Service {
       totalPAYE += paye;
       totalTaxableIncome += taxableIncome;
       totalUIFEmployee += uif.employee;
-      totalUIFEmployer += uif.employer;
       totalUIFSalaries += uif.cappedSalary;
       totalGrossSalary += grossSalary;
       
       console.log(`✅ [EMP201] Employee ${payeMapping.employeeName} processed:`);
       console.log(`    PAYE: R${paye.toFixed(2)}`);
-      console.log(`    UIF Employee: R${uif.employee.toFixed(2)}`);
-      console.log(`    UIF Employer: R${uif.employer.toFixed(2)}`);
-      console.log(`    Running totals - PAYE: R${totalPAYE.toFixed(2)}, UIF: R${(totalUIFEmployee + totalUIFEmployer).toFixed(2)}`);
+      console.log(`    UIF Employee: R${uif.employee.toFixed(2)} (1% of taxable income, capped at R17,712)`);
+      console.log(`    UIF Calculation: R${taxableIncome.toFixed(2)} → R${Math.min(taxableIncome, 17712).toFixed(2)} × 1% = R${uif.employee.toFixed(2)}`);
+      console.log(`    Running totals - PAYE: R${totalPAYE.toFixed(2)}, UIF: R${totalUIFEmployee.toFixed(2)}`);
     }
     
-    const totalUIF = totalUIFEmployee + totalUIFEmployer;
+    const totalUIF = totalUIFEmployee; // Only employee UIF portion
     // SDL removed per user request - set to 0
     const totalEMP201Amount = totalPAYE + totalUIF; // SDL removed from total
     
@@ -390,7 +390,6 @@ class EMP201Service {
       totalTaxableIncome: Math.round(totalTaxableIncome * 100) / 100,
       totalUIF: Math.round(totalUIF * 100) / 100,
       totalUIFEmployee: Math.round(totalUIFEmployee * 100) / 100,
-      totalUIFEmployer: Math.round(totalUIFEmployer * 100) / 100,
       totalUIFSalaries: Math.round(totalUIFSalaries * 100) / 100,
       totalSDL: 0, // SDL disabled per user request
       totalSDLSalaries: 0, // SDL disabled per user request
@@ -434,7 +433,6 @@ class EMP201Service {
       totalTaxableIncome: 0,
       totalUIF: 0,
       totalUIFEmployee: 0,
-      totalUIFEmployer: 0,
       totalUIFSalaries: 0,
       totalSDL: 0,
       totalSDLSalaries: 0,

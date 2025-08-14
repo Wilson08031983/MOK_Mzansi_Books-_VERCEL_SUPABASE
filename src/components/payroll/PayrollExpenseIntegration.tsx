@@ -9,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar, Clock, DollarSign, Users, AlertCircle, CheckCircle, XCircle, Play, Settings, RefreshCw, Activity } from 'lucide-react';
 import PayrollExpenseIntegrationService, { MonthlyAutomationLog, ProjectSalaryExpense } from '@/services/payrollExpenseIntegrationService';
 import { Project } from '@/types/project';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface PayrollExpenseIntegrationProps {
   companyId: string;
 }
 
 const PayrollExpenseIntegration: React.FC<PayrollExpenseIntegrationProps> = ({ companyId }) => {
+  const { t } = useLocalization();
   const [integrationService] = useState(() => PayrollExpenseIntegrationService.getInstance());
   const [automationEnabled, setAutomationEnabled] = useState(true);
   const [automationLogs, setAutomationLogs] = useState<MonthlyAutomationLog[]>([]);
@@ -240,9 +242,9 @@ const PayrollExpenseIntegration: React.FC<PayrollExpenseIntegrationProps> = ({ c
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="projects">Project Breakdown</TabsTrigger>
-          <TabsTrigger value="automation">Automation Logs</TabsTrigger>
+          <TabsTrigger value="overview">{t('common.overview')}</TabsTrigger>
+          <TabsTrigger value="projects">{t('common.projectBreakdown')}</TabsTrigger>
+          <TabsTrigger value="automation">{t('common.automationLogs')}</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -252,7 +254,7 @@ const PayrollExpenseIntegration: React.FC<PayrollExpenseIntegrationProps> = ({ c
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-600 font-sf-pro">Total Salary Expenses</p>
+                    <p className="text-sm font-medium text-slate-600 font-sf-pro">{t('common.totalSalaryExpenses')}</p>
                     <p className="text-2xl font-bold text-green-600 font-sf-pro">
                       {formatCurrency(
                         projects.reduce((total, project) => total + (project.salaryExpenses || 0), 0)
@@ -295,16 +297,16 @@ const PayrollExpenseIntegration: React.FC<PayrollExpenseIntegrationProps> = ({ c
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-slate-600 font-sf-pro">Last Status</p>
-                    <p className="text-lg font-bold font-sf-pro">
+                    <div className="text-lg font-bold font-sf-pro">
                       {automationLogs.length > 0 ? (
                         <Badge className={`${getStatusIcon(automationLogs[automationLogs.length - 1].status) ? 'bg-green-500' : 'bg-red-500'} text-white border-0`}>
                           {getStatusIcon(automationLogs[automationLogs.length - 1].status)}
                           {automationLogs[automationLogs.length - 1].status}
                         </Badge>
                       ) : (
-                        <span className="text-gray-500">No runs</span>
+                        <span>Never</span>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <Activity className="h-8 w-8 text-gray-500" />
                 </div>
@@ -505,7 +507,7 @@ const PayrollExpenseIntegration: React.FC<PayrollExpenseIntegrationProps> = ({ c
                     ))
                 ) : (
                   <p className="text-gray-500 text-center py-8 font-sf-pro">
-                    No automation logs found. Run manual automation to see logs.
+                    {t('common.noAutomationLogs')}
                   </p>
                 )}
               </div>

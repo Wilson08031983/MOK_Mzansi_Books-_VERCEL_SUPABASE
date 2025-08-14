@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { LocalizationProvider } from "@/contexts/LocalizationContext";
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
@@ -54,7 +55,8 @@ import AuthReset from "./pages/AuthReset";
 import AuthDebug from "./pages/AuthDebug";
 import ServiceTestPanel from "./components/ServiceTestPanel";
 
-// Setup global error handlers
+
+// Initialize global error handlers
 safeExecute(() => {
   setupGlobalErrorHandlers();
 }, undefined, 'Global error handlers setup');
@@ -117,11 +119,12 @@ const App = () => {
   return (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <Router>
-          <AuthProviderSelector>
+      <LocalizationProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <Router>
+            <AuthProviderSelector>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
@@ -213,7 +216,8 @@ const App = () => {
             </Routes>
           </AuthProviderSelector>
         </Router>
-      </TooltipProvider>
+        </TooltipProvider>
+      </LocalizationProvider>
     </QueryClientProvider>
   </ErrorBoundary>
   );

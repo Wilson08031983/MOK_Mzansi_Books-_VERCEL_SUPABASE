@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple VAT Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #005a87;
+        }
+        .result {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple VAT Test</h1>
+    
+    <div>
+        <button class="button" onclick="createTestInvoices()">1. Create Test Invoices</button>
+        <button class="button" onclick="testVATCalculation()">2. Test VAT Calculation</button>
+        <button class="button" onclick="checkInvoices()">3. Check Invoices</button>
+        <button class="button" onclick="clearData()">4. Clear All Data</button>
+    </div>
+    
+    <div id="result" class="result"></div>
+
+    <script>
+        function log(message) {
+            const resultDiv = document.getElementById('result');
+            const timestamp = new Date().toLocaleTimeString();
+            resultDiv.textContent += `[${timestamp}] ${message}\n`;
+            console.log(message);
+        }
+
+        function createTestInvoices() {
+            log('=== CREATING TEST INVOICES ===');
+            
+            const testInvoices = [
+                {
+                    id: 'test-001',
+                    number: 'INV-2025-001',
+                    date: '2025-04-15',
+                    status: 'paid',
+                    subtotal: 10000,
+                    vatRate: 15,
+                    vatTotal: 1500,
+                    total: 11500
+                },
+                {
+                    id: 'test-002',
+                    number: 'INV-2025-002',
+                    date: '2025-05-20',
+                    status: 'paid',
+                    subtotal: 8000,
+                    vatRate: 15,
+                    vatTotal: 1200,
+                    total: 9200
+                },
+                {
+                    id: 'test-003',
+                    number: 'INV-2025-003',
+                    date: '2025-06-10',
+                    status: 'sent',
+                    subtotal: 5000,
+                    vatRate: 15,
+                    vatTotal: 750,
+                    total: 5750
+                }
+            ];
+            
+            localStorage.setItem('invoices', JSON.stringify(testInvoices));
+            log(`Created ${testInvoices.length} test invoices`);
+            log(`Expected total VAT: R${testInvoices.reduce((sum, inv) => sum + inv.vatTotal, 0)}`);
+        }
+
+        function checkInvoices() {
+            log('=== CHECKING INVOICES ===');
+            
+            const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+            log(`Found ${invoices.length} invoices in localStorage`);
+            
+            invoices.forEach((inv, index) => {
+                log(`${index + 1}. ${inv.number} - ${inv.date} - ${inv.status} - VAT: R${inv.vatTotal}`);
+            });
+            
+            if (invoices.length > 0) {
+                const totalVAT = invoices.reduce((sum, inv) => sum + inv.vatTotal, 0);
+                log(`Total VAT: R${totalVAT}`);
+            }
+        }
+
+        function testVATCalculation() {
+            log('=== TESTING VAT CALCULATION ===');
+            
+            // Test period parsing
+            const period = 'Q2 2025';
+            const { startDate, endDate } = parsePeriod(period);
+            log(`Period: ${period}`);
+            log(`Start Date: ${startDate}`);
+            log(`End Date: ${endDate}`);
+            
+            // Get invoices
+            const allInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+            log(`Total invoices: ${allInvoices.length}`);
+            
+            if (allInvoices.length === 0) {
+                log('❌ No invoices found! Create test invoices first.');
+                return;
+            }
+            
+            // Filter invoices for the period
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            log(`Start Date Object: ${start.toISOString()}`);
+            log(`End Date Object: ${end.toISOString()}`);
+            
+            const validInvoices = allInvoices.filter(invoice => {
+                const invoiceDate = new Date(invoice.date);
+                const isValidStatus = invoice.status !== 'draft' && invoice.status !== 'cancelled';
+                const isInDateRange = invoiceDate >= start && invoiceDate <= end;
+                
+                log(`Invoice ${invoice.number}: ${invoice.date} -> ${invoiceDate.toISOString()}`);
+                log(`  Status: ${invoice.status} (valid: ${isValidStatus})`);
+                log(`  In range: ${isInDateRange} (${invoiceDate >= start} && ${invoiceDate <= end})`);
+                
+                return isValidStatus && isInDateRange;
+            });
+            
+            log(`Valid invoices: ${validInvoices.length}`);
+            
+            // Calculate VAT
+            let outputVATTotal = 0;
+            validInvoices.forEach(invoice => {
+                const vatAmount = invoice.vatTotal || 0;
+                outputVATTotal += vatAmount;
+                log(`Added VAT R${vatAmount} from ${invoice.number}, total: R${outputVATTotal}`);
+            });
+            
+            log(`Final Output VAT Total: R${outputVATTotal}`);
+            log(`Expected: R3450`);
+            log(`Match: ${outputVATTotal === 3450 ? '✅ YES' : '❌ NO'}`);
+        }
+
+        function parsePeriod(period) {
+            // Handle "QX YYYY" format (e.g., "Q2 2025")
+            const quarterMatch = period.match(/^Q([1-4])\s+(\d{4})$/);
+            if (quarterMatch) {
+                const [, quarter, year] = quarterMatch;
+                const quarterNum = parseInt(quarter);
+                const startMonth = (quarterNum - 1) * 3;
+                const endMonth = startMonth + 2;
+                
+                const startDate = new Date(parseInt(year), startMonth, 1);
+                const endDate = new Date(parseInt(year), endMonth + 1, 0); // Last day of quarter
+                
+                return {
+                    startDate: startDate.toISOString().split('T')[0],
+                    endDate: endDate.toISOString().split('T')[0]
+                };
+            }
+            
+            return { startDate: '2025-04-01', endDate: '2025-06-30' };
+        }
+
+        function clearData() {
+            localStorage.removeItem('invoices');
+            localStorage.removeItem('vatCalculations');
+            localStorage.removeItem('cachedVAT');
+            localStorage.removeItem('vatCache');
+            localStorage.removeItem('calculationCache');
+            document.getElementById('result').textContent = '';
+            log('Cleared all data');
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            log('Simple VAT test page loaded');
+        });
+    </script>
+</body>
+</html>

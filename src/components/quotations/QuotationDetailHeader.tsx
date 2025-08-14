@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
 import StatusChangeDropdown from './StatusChangeDropdown';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface Quotation {
   id: string;
@@ -59,6 +60,7 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
   getStatusColor
 }) => {
   const navigate = useNavigate();
+  const { t } = useLocalization();
 
   return (
     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
@@ -70,7 +72,7 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
           className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Quotations
+          {t('common.back')} {t('quotations.title')}
         </Button>
         <div>
           <div className="flex items-center space-x-3">
@@ -82,7 +84,7 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
               size="sm"
             />
           </div>
-          <p className="text-slate-600 font-sf-pro">Created on {formatDate(quotation.date)}</p>
+          <p className="text-slate-600 font-sf-pro">{t('common.createdOn')} {new Date(quotation.date).toLocaleDateString()}</p>
         </div>
       </div>
 
@@ -94,7 +96,7 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
             className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl"
           >
             <Send className="h-4 w-4 mr-2" />
-            Send Quotation
+            {t('quotations.sendQuotation')}
           </Button>
         )}
 
@@ -106,7 +108,7 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
               className="bg-green-600 hover:bg-green-700 text-white font-sf-pro rounded-xl"
             >
               <CheckCircle className="h-4 w-4 mr-2" />
-              Mark as Accepted
+              {t('quotations.markAsAccepted')}
             </Button>
             
             <Button
@@ -116,10 +118,46 @@ const QuotationDetailHeader: React.FC<QuotationDetailHeaderProps> = ({
               className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 font-sf-pro rounded-xl"
             >
               <XCircle className="h-4 w-4 mr-2" />
-              Mark as Rejected
+              {t('quotations.markAsRejected')}
             </Button>
           </>
         )}
+
+        <div className="relative">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowActionsMenu(!showActionsMenu)}
+            className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+          {showActionsMenu && (
+            <div className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg p-1 z-10">
+              <button
+                onClick={handleDownloadPDF}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-md font-sf-pro"
+              >
+                <Download className="h-4 w-4 inline mr-2" />
+                {t('quotations.downloadPDF')}
+              </button>
+              <button
+                onClick={() => console.log('Create similar quotation')}
+                className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-md font-sf-pro"
+              >
+                <FilePlus className="h-4 w-4 inline mr-2" />
+                {t('quotations.duplicate')}
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 rounded-md font-sf-pro"
+              >
+                <Trash2 className="h-4 w-4 inline mr-2" />
+                {t('common.delete')}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

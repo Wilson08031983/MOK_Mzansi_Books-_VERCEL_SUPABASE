@@ -9,11 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Eye, EyeOff, ArrowLeft, UserPlus, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
 import { sendConfirmationEmail } from '@/services/emailService';
+import { useLocalization } from '@/hooks/useLocalization';
+import { userLinkingService } from '@/services/userLinkingService';
 
 const Signup = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { signUp } = useAuth();
+  const { t } = useLocalization();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -56,7 +59,7 @@ const Signup = () => {
     }
     
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match');
+      alert(t('auth.resetPassword.passwordMismatch'));
       return;
     }
 
@@ -78,7 +81,26 @@ const Signup = () => {
       console.log('User profile data saved:', userData);
       
       if (isInvitationSignup) {
-        alert('Account created successfully! Welcome to the team.');
+        // Handle invitation acceptance workflow
+        try {
+          const invitationAcceptanceData = {
+            email: formData.email,
+            fullName: `${formData.firstName} ${formData.lastName}`,
+            position: invitationData.role || 'Staff Member'
+          };
+          
+          const linkingSuccess = await userLinkingService.handleInvitationAcceptance(invitationAcceptanceData);
+          
+          if (linkingSuccess) {
+            console.log('User successfully linked across all tables during invitation acceptance');
+          } else {
+            console.warn('User linking encountered issues during invitation acceptance');
+          }
+        } catch (linkingError) {
+          console.error('Error during invitation acceptance linking:', linkingError);
+        }
+        
+        alert(t('auth.signup.accountCreatedSuccess'));
         navigate('/dashboard');
       } else {
         // Send confirmation email using Resend
@@ -90,15 +112,15 @@ const Signup = () => {
         });
         
         if (emailSent) {
-          alert('Account created successfully! Please check your email for verification instructions.');
+          alert(t('auth.signup.accountCreatedSuccess'));
         } else {
-          alert('Account created, but we encountered an issue sending your verification email. Please contact support if you don\'t receive it.');
+          alert(t('auth.signup.accountCreatedPartial'));
         }
         navigate('/login');
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
-      alert(error.message || 'Error creating account');
+      console.error(t('auth.signup.signupError'), error);
+      alert(error.message || t('auth.signup.signupError'));
     } finally {
       setLoading(false);
     }
@@ -116,7 +138,7 @@ const Signup = () => {
         <div className="mb-8">
           <Link to={isInvitationSignup ? "/accept-invitation" : "/"} className="inline-flex items-center text-gray-600 hover:text-purple-600 transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg bg-white/80 backdrop-blur-sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            {isInvitationSignup ? 'Back to Invitation' : 'Back to Home'}
+            {isInvitationSignup ? t('auth.signup.backToLogin') : t('common.backToHome')}
           </Link>
         </div>
 
@@ -127,12 +149,12 @@ const Signup = () => {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-gray-900">
-                {isInvitationSignup ? 'Complete Your Profile' : 'Start Your Free Trial'}
+                {isInvitationSignup ? t('auth.invitedSignup.title') : t('auth.signup.title')}
               </CardTitle>
               <p className="text-gray-600 mt-2">
                 {isInvitationSignup 
-                  ? 'Fill in your details to complete your account setup'
-                  : 'Create your MOKMzansiBooks account - no credit card required'
+                  ? t('auth.invitedSignup.invitationTitle')
+                  : t('auth.signup.subtitle')
                 }
               </p>
             </div>
@@ -142,48 +164,49 @@ const Signup = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName" className="text-gray-700 font-medium">First Name</Label>
+                  <Label htmlFor="firstName" className="text-gray-700 font-medium">{t('auth.invitedSignup.nameLabel')}</Label>
                   <Input
                     id="firstName"
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                     className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder={t('auth.invitedSignup.namePlaceholder')}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName" className="text-gray-700 font-medium">Last Name</Label>
+                  <Label htmlFor="lastName" className="text-gray-700 font-medium">{t('auth.invitedSignup.surnameLabel')}</Label>
                   <Input
                     id="lastName"
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                     className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder={t('auth.invitedSignup.surnamePlaceholder')}
                     required
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium">Email Address</Label>
+                <Label htmlFor="email" className="text-gray-700 font-medium">{t('auth.signup.emailLabel')}</Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                  placeholder={t('auth.signup.emailPlaceholder')}
                   required
                   disabled={isInvitationSignup}
                 />
               </div>
 
-
-
               {!isInvitationSignup && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
+                    <Label htmlFor="password" className="text-gray-700 font-medium">{t('common.password')}</Label>
                     <div className="relative">
                       <Input
                         id="password"
@@ -191,6 +214,7 @@ const Signup = () => {
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500 pr-12"
+                        placeholder={t('auth.signup.passwordPlaceholder')}
                         required
                       />
                       <button
@@ -203,13 +227,14 @@ const Signup = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">Confirm Password</Label>
+                    <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">{t('auth.signup.confirmPasswordLabel')}</Label>
                     <Input
                       id="confirmPassword"
                       type="password"
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                       className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                      placeholder={t('auth.signup.confirmPasswordPlaceholder')}
                       required
                     />
                   </div>
@@ -256,15 +281,15 @@ const Signup = () => {
                   }
                 }}
               >
-                {loading ? 'Creating Account...' : (isInvitationSignup ? 'Complete Registration' : 'Start Free Trial')}
+                {loading ? t('auth.signup.signingUpButton') : (isInvitationSignup ? t('auth.invitedSignup.completeButton') : t('auth.signup.signUpButton'))}
               </Button>
             </form>
 
             {!isInvitationSignup && (
               <div className="text-center">
-                <span className="text-gray-600">Already have an account? </span>
+                <span className="text-gray-600">{t('auth.signup.alreadyHaveAccount')} </span>
                 <Link to="/login" className="text-purple-600 hover:text-purple-700 font-semibold">
-                  Sign in
+                  {t('auth.signup.signIn')}
                 </Link>
               </div>
             )}

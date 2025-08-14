@@ -6,12 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useLocalization } from '@/hooks/useLocalization';
 import { validateInvitationToken, completeInvitation } from '@/services/invitationService';
+import { userLinkingService } from '@/services/userLinkingService';
 
 const InvitedSignup = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { t } = useLocalization();
   const [loading, setLoading] = useState(false);
   const [tokenVerified, setTokenVerified] = useState(false);
   const [invitedUserData, setInvitedUserData] = useState({
@@ -38,8 +41,8 @@ const InvitedSignup = () => {
     
     if (!token) {
       toast({
-        title: "Invalid Invitation",
-        description: "The invitation link is invalid or has expired."
+        title: t('auth.invitedSignup.invalidInvitation'),
+        description: t('auth.invitedSignup.invalidInvitationMessage')
       });
       navigate('/login');
       return;
@@ -57,12 +60,12 @@ const InvitedSignup = () => {
       });
     } else {
       toast({
-        title: "Invalid Invitation",
-        description: "The invitation link is invalid or has expired."
+        title: t('auth.invitedSignup.invalidInvitation'),
+        description: t('auth.invitedSignup.invalidInvitationMessage')
       });
       navigate('/login');
     }
-  }, [location.search, navigate, toast]);
+  }, [location.search, navigate, toast, t]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -79,18 +82,37 @@ const InvitedSignup = () => {
       const success = completeInvitation(invitedUserData.token, formData);
       
       if (success) {
+        // Handle invitation acceptance workflow
+        try {
+          const invitationAcceptanceData = {
+            email: invitedUserData.email,
+            fullName: `${formData.name} ${formData.surname}`,
+            position: invitedUserData.role || 'Staff Member'
+          };
+          
+          const linkingSuccess = await userLinkingService.handleInvitationAcceptance(invitationAcceptanceData);
+          
+          if (linkingSuccess) {
+            console.log('User successfully linked across all tables during invitation completion');
+          } else {
+            console.warn('User linking encountered issues during invitation completion');
+          }
+        } catch (linkingError) {
+          console.error('Error during invitation completion linking:', linkingError);
+        }
+        
         toast({
-          title: "Profile Completed",
-          description: "Your account has been set up successfully. You can now log in with your credentials."
+          title: t('auth.invitedSignup.profileCompleted'),
+          description: 'Your account has been set up successfully. You can now log in with your credentials.'
         });
         navigate('/login');
       } else {
-        throw new Error('Failed to complete profile');
+        throw new Error(t('auth.invitedSignup.failedToComplete'));
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "There was an error completing your profile."
+        title: t('auth.invitedSignup.error'),
+        description: error instanceof Error ? error.message : 'There was an error completing your profile.'
       });
     } finally {
       setLoading(false);
@@ -102,7 +124,7 @@ const InvitedSignup = () => {
       <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-mokm-purple-500 mx-auto mb-4"></div>
-          <p className="text-slate-600 font-sf-pro">Verifying your invitation...</p>
+          <p className="text-slate-600 font-sf-pro">{t('auth.invitedSignup.verifyingMessage')}</p>
         </div>
       </div>
     );
@@ -126,18 +148,18 @@ const InvitedSignup = () => {
               className="h-12 mb-4"
             />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 font-sf-pro tracking-tight mb-2">Complete Your Profile</h1>
-          <p className="text-slate-600 font-sf-pro">You've been invited to join MOK Mzansi Books</p>
+          <h1 className="text-2xl font-bold text-slate-900 font-sf-pro tracking-tight mb-2">{t('auth.invitedSignup.title')}</h1>
+          <p className="text-slate-600 font-sf-pro">{t('auth.invitedSignup.invitationTitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{t('auth.invitedSignup.nameLabel')}</Label>
               <Input
                 id="name"
                 name="name"
-                placeholder="Your first name"
+                placeholder={t('auth.invitedSignup.namePlaceholder')}
                 value={formData.name}
                 onChange={handleChange}
                 required
@@ -145,11 +167,11 @@ const InvitedSignup = () => {
               />
             </div>
             <div>
-              <Label htmlFor="surname">Surname</Label>
+              <Label htmlFor="surname">{t('auth.invitedSignup.surnameLabel')}</Label>
               <Input
                 id="surname"
                 name="surname"
-                placeholder="Your last name"
+                placeholder={t('auth.invitedSignup.surnamePlaceholder')}
                 value={formData.surname}
                 onChange={handleChange}
                 required
@@ -159,7 +181,7 @@ const InvitedSignup = () => {
           </div>
 
           <div>
-            <Label htmlFor="email">Email Address</Label>
+            <Label htmlFor="email">{t('auth.invitedSignup.emailLabel')}</Label>
             <Input
               id="email"
               type="email"
@@ -167,26 +189,26 @@ const InvitedSignup = () => {
               disabled
               className="bg-slate-100 text-slate-500 cursor-not-allowed"
             />
-            <p className="text-xs text-slate-500 mt-1">This email address was specified in your invitation</p>
+            <p className="text-xs text-slate-500 mt-1">{t('auth.invitedSignup.emailDescription')}</p>
           </div>
 
           <div>
-            <Label htmlFor="role">Position / Role</Label>
+            <Label htmlFor="role">{t('auth.invitedSignup.positionLabel')}</Label>
             <Input
               id="role"
               value={invitedUserData.role}
               disabled
               className="bg-slate-100 text-slate-500 cursor-not-allowed"
             />
-            <p className="text-xs text-slate-500 mt-1">Your assigned role in the organization</p>
+            <p className="text-xs text-slate-500 mt-1">{t('auth.invitedSignup.positionPlaceholder')}</p>
           </div>
 
           <div>
-            <Label htmlFor="phoneNumber">Phone Number</Label>
+            <Label htmlFor="phoneNumber">{t('auth.invitedSignup.phoneLabel')}</Label>
             <Input
               id="phoneNumber"
               name="phoneNumber"
-              placeholder="Your contact number"
+              placeholder={t('auth.invitedSignup.phonePlaceholder')}
               value={formData.phoneNumber}
               onChange={handleChange}
               required
@@ -195,11 +217,11 @@ const InvitedSignup = () => {
           </div>
 
           <div>
-            <Label htmlFor="addressLine1">Address Line 1</Label>
+            <Label htmlFor="addressLine1">{t('auth.invitedSignup.address1Label')}</Label>
             <Input
               id="addressLine1"
               name="addressLine1"
-              placeholder="Street address"
+              placeholder={t('auth.invitedSignup.address1Placeholder')}
               value={formData.addressLine1}
               onChange={handleChange}
               required
@@ -208,11 +230,11 @@ const InvitedSignup = () => {
           </div>
 
           <div>
-            <Label htmlFor="addressLine2">Address Line 2</Label>
+            <Label htmlFor="addressLine2">{t('auth.invitedSignup.address2Label')}</Label>
             <Input
               id="addressLine2"
               name="addressLine2"
-              placeholder="Apartment, suite, unit, etc."
+              placeholder={t('auth.invitedSignup.address2Placeholder')}
               value={formData.addressLine2}
               onChange={handleChange}
               className="border-slate-200 focus:border-mokm-purple-400 focus:ring-mokm-purple-400/20"
@@ -221,22 +243,22 @@ const InvitedSignup = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="addressLine3">City</Label>
+              <Label htmlFor="addressLine3">{t('auth.invitedSignup.cityLabel')}</Label>
               <Input
                 id="addressLine3"
                 name="addressLine3"
-                placeholder="City"
+                placeholder={t('auth.invitedSignup.cityLabel')}
                 value={formData.addressLine3}
                 onChange={handleChange}
                 className="border-slate-200 focus:border-mokm-purple-400 focus:ring-mokm-purple-400/20"
               />
             </div>
             <div>
-              <Label htmlFor="addressLine4">Postal Code</Label>
+              <Label htmlFor="addressLine4">{t('auth.invitedSignup.postalCodeLabel')}</Label>
               <Input
                 id="addressLine4"
                 name="addressLine4"
-                placeholder="Postal code"
+                placeholder={t('auth.invitedSignup.postalCodeLabel')}
                 value={formData.addressLine4}
                 onChange={handleChange}
                 className="border-slate-200 focus:border-mokm-purple-400 focus:ring-mokm-purple-400/20"
@@ -249,7 +271,7 @@ const InvitedSignup = () => {
             disabled={loading}
             className="w-full transition-all duration-200 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white font-semibold rounded-xl py-2"
           >
-            {loading ? 'Processing...' : 'Complete Profile & Continue'}
+            {loading ? t('auth.invitedSignup.processingButton') : t('auth.invitedSignup.completeButton')}
           </Button>
         </form>
 
@@ -260,7 +282,7 @@ const InvitedSignup = () => {
             className="text-slate-600 hover:text-mokm-purple-600 font-sf-pro text-sm"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Login
+            {t('auth.invitedSignup.backToLogin')}
           </Button>
         </div>
       </Card>

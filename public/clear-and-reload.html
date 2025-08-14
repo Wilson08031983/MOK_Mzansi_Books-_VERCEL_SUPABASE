@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear and Reload Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #c82333;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .info {
+            color: #007bff;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Clear and Reload Data</h1>
+        <p>This will clear all existing invoices and force the app to recreate sample invoices with the correct dates for VAT calculation testing.</p>
+        
+        <div class="info">
+            <strong>What this does:</strong><br>
+            • Clears all invoices from localStorage<br>
+            • Clears VAT calculation cache<br>
+            • Forces app to recreate sample invoices with July-August 2025 dates<br>
+            • Redirects to invoices page to trigger sample data creation
+        </div>
+        
+        <button onclick="clearAndReload()">Clear Data & Reload</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        function clearAndReload() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                // Clear all relevant localStorage items
+                localStorage.removeItem('invoices');
+                localStorage.removeItem('vatCalculations');
+                localStorage.removeItem('cachedVAT');
+                localStorage.removeItem('vatCache');
+                localStorage.removeItem('calculationCache');
+                
+                statusDiv.innerHTML = '<div class="success">✅ Data cleared successfully!</div>';
+                
+                // Trigger storage events to notify the app
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: 'invoices',
+                    newValue: null,
+                    oldValue: '[]',
+                    storageArea: localStorage
+                }));
+                
+                // Wait a moment then redirect
+                setTimeout(() => {
+                    statusDiv.innerHTML += '<div class="info">🔄 Redirecting to invoices page...</div>';
+                    window.location.href = '/invoices';
+                }, 1000);
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<div style="color: #dc3545;">❌ Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

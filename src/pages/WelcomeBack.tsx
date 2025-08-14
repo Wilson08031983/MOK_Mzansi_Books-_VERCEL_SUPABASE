@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
+import { useLocalization } from '@/hooks/useLocalization';
 
 const WelcomeBack = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [redirectCountdown, setRedirectCountdown] = useState(5);
+  const { t } = useLocalization();
   
   // Auto-redirect to dashboard after countdown
   useEffect(() => {
@@ -31,14 +33,6 @@ const WelcomeBack = () => {
     }
   }, [user, navigate]);
   
-  // Get time of day for greeting
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background elements */}
@@ -56,12 +50,12 @@ const WelcomeBack = () => {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-gray-900 drop-shadow-sm">
-                {getGreeting()}, {user?.user_metadata?.first_name || 'Welcome Back'}!
+                {user?.user_metadata?.first_name ? `${t('dashboard.welcome')}, ${user.user_metadata.first_name}!` : t('dashboard.welcome')}
               </CardTitle>
               <div className="mt-2 flex justify-center">
                 <div className="px-3 py-1 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full text-green-700 text-sm font-medium flex items-center">
                   <CheckCircle className="w-4 h-4 mr-1" />
-                  Successfully signed in
+                  {t('auth.login.loginSuccess')}
                 </div>
               </div>
             </div>
@@ -70,7 +64,7 @@ const WelcomeBack = () => {
           <CardContent className="space-y-6">
             <div className="text-center space-y-6">
               <p className="text-gray-600">
-                You'll be redirected to your dashboard in <span className="font-semibold text-purple-600">{redirectCountdown}</span> seconds
+                {t('dashboard.title')} {t('common.next')}: <span className="font-semibold text-purple-600">{redirectCountdown}</span> {t('common.seconds') || 'seconds'}
               </p>
               
               <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -85,7 +79,7 @@ const WelcomeBack = () => {
                   onClick={() => navigate('/dashboard')}
                   className="bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 hover:from-orange-500 hover:via-pink-600 hover:to-purple-700 text-white font-semibold h-12 shadow-business-lg hover:shadow-business-xl transition-all duration-300"
                 >
-                  Go to Dashboard Now
+                  {t('nav.dashboard')}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 
@@ -95,14 +89,14 @@ const WelcomeBack = () => {
                     onClick={() => navigate('/projects')}
                     className="bg-white text-gray-600 hover:text-purple-600 border-gray-200"
                   >
-                    My Projects
+                    {t('nav.projects')}
                   </Button>
                   <Button 
                     variant="outline"
                     onClick={() => navigate('/settings')}
                     className="bg-white text-gray-600 hover:text-purple-600 border-gray-200"
                   >
-                    Settings
+                    {t('nav.settings')}
                   </Button>
                 </div>
               </div>

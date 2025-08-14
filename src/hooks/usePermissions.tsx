@@ -4,15 +4,32 @@ import { hasReadPermission, hasWritePermission, isAdminRole } from '@/services/p
 export const usePermissions = () => {
   const { user } = useAuth();
   
+  // Helper function to get user role from either location
+  const getUserRole = () => {
+    if (!user) return null;
+    
+    // Check for role in user_metadata first (Supabase style)
+    if (user.user_metadata?.role) {
+      return user.user_metadata.role;
+    }
+    
+    // Check for role at root level (Mock auth style)
+    if ((user as any).role) {
+      return (user as any).role;
+    }
+    
+    return null;
+  };
+  
   const canAccessPage = (pageName: string): boolean => {
     // If no user is logged in, no access
     if (!user) return false;
-
-    // Special override for Wilson Moabelo - always has access
-    if (user.email === 'mokgethwamoabelo@gmail.com') return true;
+    
+    // Get user role from either location
+    const userRole = getUserRole();
     
     // Admin users always have access to all pages
-    if (user.user_metadata.role && isAdminRole(user.user_metadata.role)) {
+    if (userRole && isAdminRole(userRole)) {
       return true;
     }
     
@@ -23,12 +40,12 @@ export const usePermissions = () => {
   const canEditPage = (pageName: string): boolean => {
     // If no user is logged in, no access
     if (!user) return false;
-
-    // Special override for Wilson Moabelo - always has access
-    if (user.email === 'mokgethwamoabelo@gmail.com') return true;
+    
+    // Get user role from either location
+    const userRole = getUserRole();
     
     // Admin users always have full edit rights
-    if (user.user_metadata.role && isAdminRole(user.user_metadata.role)) {
+    if (userRole && isAdminRole(userRole)) {
       return true;
     }
     
@@ -37,11 +54,8 @@ export const usePermissions = () => {
   };
   
   const isAdmin = (): boolean => {
-    if (!user || !user.user_metadata || !user.user_metadata.role) {
-      return false;
-    }
-    
-    return isAdminRole(user.user_metadata.role);
+    const userRole = getUserRole();
+    return userRole ? isAdminRole(userRole) : false;
   };
   
   return {

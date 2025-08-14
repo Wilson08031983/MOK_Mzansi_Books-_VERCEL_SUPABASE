@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 const ResetPassword = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLocalization();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordResetSuccessful, setPasswordResetSuccessful] = useState(false);
@@ -39,29 +41,29 @@ const ResetPassword = () => {
           setTokenValid(true);
         } else {
           setTokenValid(false);
-          setError('This password reset link is invalid or has expired.');
+          setError(t('auth.resetPassword.invalidLink'));
         }
       } catch (error) {
         console.error('Error validating token:', error);
         setTokenValid(false);
-        setError('There was a problem validating your reset link.');
+        setError(t('auth.resetPassword.validationError'));
       }
     } else {
       setTokenValid(false);
-      setError('Invalid password reset link. Please request a new one.');
+      setError(t('auth.resetPassword.invalidLink'));
     }
-  }, [token, email]);
+  }, [token, email, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('auth.resetPassword.passwordMismatch'));
       return;
     }
 
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+      setError(t('auth.resetPassword.passwordTooShort'));
       return;
     }
 
@@ -88,11 +90,11 @@ const ResetPassword = () => {
         
         setPasswordResetSuccessful(true);
       } else {
-        setError('User not found. Please sign up first.');
+        setError(t('auth.resetPassword.userNotFound'));
       }
     } catch (error: unknown) {
       console.error('Password reset error:', error);
-      setError(error instanceof Error ? error.message : 'Error resetting password');
+      setError(error instanceof Error ? error.message : t('auth.resetPassword.resetError'));
     } finally {
       setLoading(false);
     }
@@ -120,7 +122,7 @@ const ResetPassword = () => {
             onClick={() => navigate('/forgot-password')}
             className="bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 hover:from-orange-500 hover:via-pink-600 hover:to-purple-700 text-white font-semibold w-full h-12"
           >
-            Request New Reset Link
+            {t('auth.resetPassword.requestNewLink')}
           </Button>
         </div>
       );
@@ -133,14 +135,14 @@ const ResetPassword = () => {
             <CheckCircle className="h-16 w-16 text-green-500" />
           </div>
           <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded text-left">
-            <p className="text-green-700 font-medium">Password reset successful!</p>
-            <p className="text-green-700 text-sm mt-1">Your password has been updated. You can now log in with your new password.</p>
+            <p className="text-green-700 font-medium">{t('auth.resetPassword.passwordResetSuccess')}</p>
+            <p className="text-green-700 text-sm mt-1">{t('auth.resetPassword.passwordResetSuccessMessage')}</p>
           </div>
           <Button
             onClick={() => navigate('/login')}
             className="bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 hover:from-orange-500 hover:via-pink-600 hover:to-purple-700 text-white font-semibold w-full h-12"
           >
-            Go to Login
+            {t('auth.resetPassword.goToLogin')}
           </Button>
         </div>
       );
@@ -149,7 +151,7 @@ const ResetPassword = () => {
     return (
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="password" className="text-gray-700 font-medium drop-shadow-sm">New Password</Label>
+          <Label htmlFor="password" className="text-gray-700 font-medium drop-shadow-sm">{t('auth.resetPassword.passwordLabel')}</Label>
           <div className="relative">
             <Input
               id="password"
@@ -157,6 +159,7 @@ const ResetPassword = () => {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500 pr-12 shadow-business hover:shadow-business-lg transition-all duration-300"
+              placeholder={t('auth.resetPassword.passwordPlaceholder')}
               required
               minLength={8}
             />
@@ -171,13 +174,14 @@ const ResetPassword = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="confirmPassword" className="text-gray-700 font-medium drop-shadow-sm">Confirm New Password</Label>
+          <Label htmlFor="confirmPassword" className="text-gray-700 font-medium drop-shadow-sm">{t('auth.resetPassword.confirmPasswordLabel')}</Label>
           <Input
             id="confirmPassword"
             type="password"
             value={formData.confirmPassword}
             onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
             className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500 shadow-business hover:shadow-business-lg transition-all duration-300"
+            placeholder={t('auth.resetPassword.confirmPasswordPlaceholder')}
             required
             minLength={8}
           />
@@ -194,7 +198,7 @@ const ResetPassword = () => {
           disabled={loading}
           className="w-full h-12 bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 hover:from-orange-500 hover:via-pink-600 hover:to-purple-700 text-white font-semibold shadow-business-lg hover:shadow-business-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
         >
-          {loading ? 'Resetting Password...' : 'Reset Password'}
+          {loading ? t('auth.resetPassword.resettingButton') : t('auth.resetPassword.resetButton')}
         </Button>
       </form>
     );
@@ -212,7 +216,7 @@ const ResetPassword = () => {
         <div className="mb-8">
           <Link to="/login" className="inline-flex items-center text-gray-600 hover:text-purple-600 transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg bg-white/80 backdrop-blur-sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Login
+            {t('auth.invitedSignup.backToLogin')}
           </Link>
         </div>
 
@@ -222,8 +226,8 @@ const ResetPassword = () => {
               <img src="/lovable-uploads/8021eb93-6e6a-421e-a8ff-bed101269a7c.png" alt="MOKMzansiBooks Logo" className="w-full h-full object-contain p-2" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900 drop-shadow-sm">Reset Password</CardTitle>
-              <p className="text-gray-600 mt-2">Create a new secure password for your account</p>
+              <CardTitle className="text-2xl font-bold text-gray-900 drop-shadow-sm">{t('auth.resetPassword.title')}</CardTitle>
+              <p className="text-gray-600 mt-2">{t('auth.resetPassword.subtitle')}</p>
             </div>
           </CardHeader>
 

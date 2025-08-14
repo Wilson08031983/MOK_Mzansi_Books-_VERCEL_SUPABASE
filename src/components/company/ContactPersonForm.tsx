@@ -51,11 +51,14 @@ const ContactPersonForm = ({ companyData, isEditing, onInputChange }: ContactPer
               <SelectValue placeholder="Select position" />
             </SelectTrigger>
             <SelectContent className="glass backdrop-blur-sm bg-white/95 border border-white/20 rounded-xl">
-              <SelectItem value="CEO">CEO</SelectItem>
-              <SelectItem value="Manager">Manager</SelectItem>
-              <SelectItem value="Bookkeeper">Bookkeeper</SelectItem>
+              <SelectItem value="CEO">CEO (Chief Executive Officer)</SelectItem>
+              <SelectItem value="Managing Director">Managing Director (MD)</SelectItem>
               <SelectItem value="Director">Director</SelectItem>
               <SelectItem value="Founder">Founder</SelectItem>
+              <SelectItem value="General Manager">General Manager (GM)</SelectItem>
+              <SelectItem value="Operations Manager">Operations Manager</SelectItem>
+              <SelectItem value="Finance Manager">Finance Manager / CFO</SelectItem>
+              <SelectItem value="Bookkeeper">Bookkeeper</SelectItem>
             </SelectContent>
           </Select>
         ) : (

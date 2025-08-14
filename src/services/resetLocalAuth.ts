@@ -19,11 +19,11 @@ export interface UserCredentials {
  */
 export const resetLocalAuth = () => {
   // Only remove other data but preserve Wilson's account if it exists
-  const existingCredentials = window.localStorage.getItem('userCredentials', null);
+  const existingCredentials = window.localStorage.getItem('userCredentials');
   let wilsonAccount = null;
   
   if (existingCredentials) {
-    const credentials = safeGet(existingCredentials, {}) as Record<string, UserCredentials>;
+    const credentials = JSON.parse(existingCredentials) as Record<string, UserCredentials>;
     // Find Wilson's account if it exists
     Object.entries(credentials).forEach(([id, cred]: [string, UserCredentials]) => {
       if (safeString(cred.email) === 'mokgethwamoabelo@gmail.com') {
@@ -76,13 +76,7 @@ export const resetLocalAuth = () => {
       permissions: wilsonPermissions,
       isDefaultAdmin: true  // Special flag to identify this as a permanent admin account
     },
-    [userId]: {
-      email: 'user@mokmzansibooks.com',
-      password: 'user123',
-      role: 'Staff',
-      fullName: 'Regular User',
-      permissions: userPermissions
-    }
+
   };
   
   window.localStorage.setItem('userCredentials', JSON.stringify(defaultCredentials));

@@ -274,29 +274,271 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     toast.success('Bank statement processed successfully! Transactions have been added to the table.');
   };
 
-  // Standardize date format
+  // Enhanced date parsing function for bank statements
   const standardizeDate = (dateStr: string): string => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    const currentYear = new Date().getFullYear();
+    const trimmedDate = dateStr.trim();
+
     try {
-      // Handle various date formats
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) {
-        // Try parsing DD-MM or DD/MM formats
-        const parts = dateStr.split(/[-\/]/);
-        if (parts.length >= 2) {
-          const day = parseInt(parts[0]);
-          const month = parseInt(parts[1]) - 1; // Month is 0-indexed
-          const year = parts[2] ? parseInt(parts[2]) : new Date().getFullYear();
+      // First, try standard Date parsing for complete dates
+      const standardDate = new Date(trimmedDate);
+      if (!isNaN(standardDate.getTime()) && trimmedDate.includes(currentYear.toString())) {
+        return standardDate.toISOString().split('T')[0];
+      }
+
+      // Handle various date formats with comprehensive parsing
+      
+      // Format: DD MMM YYYY (e.g., "05 Oct 2025")
+      const ddMmmYyyyMatch = trimmedDate.match(/^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i);
+      if (ddMmmYyyyMatch) {
+        const [, day, monthName, year] = ddMmmYyyyMatch;
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthIndex = monthNames.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+        if (monthIndex !== -1) {
+          const parsedDate = new Date(parseInt(year), monthIndex, parseInt(day));
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.toISOString().split('T')[0];
+          }
+        }
+      }
+
+      // Format: MMM DD, YYYY (e.g., "Oct 05, 2025")
+      const mmmDdYyyyMatch = trimmedDate.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})$/i);
+      if (mmmDdYyyyMatch) {
+        const [, monthName, day, year] = mmmDdYyyyMatch;
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthIndex = monthNames.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+        if (monthIndex !== -1) {
+          const parsedDate = new Date(parseInt(year), monthIndex, parseInt(day));
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.toISOString().split('T')[0];
+          }
+        }
+      }
+
+      // Split by common delimiters
+      const parts = trimmedDate.split(/[-\/\s]/).filter(part => part.length > 0);
+      
+      if (parts.length >= 2) {
+        let day: number, month: number, year: number;
+
+        // Handle 2-part dates (MM/DD or DD/MM) - DEFAULT TO CURRENT YEAR
+        if (parts.length === 2) {
+          const part1 = parseInt(parts[0]);
+          const part2 = parseInt(parts[1]);
+          
+          // Determine if it's MM/DD or DD/MM based on values
+          if (part1 > 12 && part2 <= 12) {
+            // DD/MM format
+            day = part1;
+            month = part2 - 1; // 0-indexed
+          } else if (part2 > 12 && part1 <= 12) {
+            // MM/DD format  
+            month = part1 - 1; // 0-indexed
+            day = part2;
+          } else {
+            // Ambiguous - default to MM/DD for consistency with bank statements
+            month = part1 - 1; // 0-indexed
+            day = part2;
+          }
+          year = currentYear; // ALWAYS use current year for 2-part dates
+          
+          console.log(`📅 [Date Parser] Parsed ${trimmedDate} as ${day}/${month + 1}/${year} (defaulted to current year)`);
+        }
+        // Handle 3-part dates
+        else if (parts.length === 3) {
+          const part1 = parseInt(parts[0]);
+          const part2 = parseInt(parts[1]);
+          const part3 = parseInt(parts[2]);
+
+          // Determine format based on which part looks like a year
+          if (part3 > 31) {
+            // Format: DD/MM/YYYY or MM/DD/YYYY
+            year = part3;
+            if (part1 > 12 && part2 <= 12) {
+              // DD/MM/YYYY
+              day = part1;
+              month = part2 - 1;
+            } else {
+              // MM/DD/YYYY
+              month = part1 - 1;
+              day = part2;
+            }
+          } else if (part1 > 31) {
+            // Format: YYYY/MM/DD
+            year = part1;
+            month = part2 - 1;
+            day = part3;
+          } else {
+            // Ambiguous 3-part date, default to MM/DD/YY and convert 2-digit year
+            month = part1 - 1;
+            day = part2;
+            year = part3;
+            
+            // Convert 2-digit year to 4-digit (assume 20xx for years 00-99)
+            if (year < 100) {
+              year = year < 50 ? 2000 + year : 1900 + year;
+            }
+          }
+        } else {
+          // Fallback for unexpected formats
+          return new Date().toISOString().split('T')[0];
+        }
+
+        // Validate and create the date
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && year >= 1900) {
           const parsedDate = new Date(year, month, day);
           if (!isNaN(parsedDate.getTime())) {
             return parsedDate.toISOString().split('T')[0];
           }
         }
-        return new Date().toISOString().split('T')[0]; // Fallback to today
       }
-      return date.toISOString().split('T')[0];
-    } catch {
+
+      // Final fallback: try native Date parsing
+      const fallbackDate = new Date(trimmedDate);
+      if (!isNaN(fallbackDate.getTime())) {
+        return fallbackDate.toISOString().split('T')[0];
+      }
+
+      // Ultimate fallback: current date
+      console.warn(`⚠️ [Date Parser] Could not parse date: ${trimmedDate}, using current date`);
+      return new Date().toISOString().split('T')[0];
+      
+    } catch (error) {
+      console.error(`❌ [Date Parser] Error parsing date: ${trimmedDate}`, error);
       return new Date().toISOString().split('T')[0];
     }
+  };
+
+  // Fix existing dates with wrong years (migration function)
+  const fixExistingDates = () => {
+    console.log(`🔍 [Date Migration] Button clicked! Function called.`);
+    const currentYear = new Date().getFullYear();
+    console.log(`🔧 [Date Migration] Starting date fix for year ${currentYear}`);
+    
+    // Get all expenses from localStorage (both manual and bank statement expenses)
+    const manualExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+    const bankExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+    const allExpenses = [...manualExpenses, ...bankExpenses];
+    
+    console.log(`📊 [Date Migration] Found ${manualExpenses.length} manual expenses, ${bankExpenses.length} bank expenses`);
+    console.log(`📊 [Date Migration] Total expenses to check: ${allExpenses.length}`);
+    
+    let fixedCount = 0;
+    
+    const updatedExpenses = allExpenses.map((expense: any) => {
+      if (expense.date && expense.source === 'bank_statement') {
+        const dateObj = new Date(expense.date);
+        const year = dateObj.getFullYear();
+        
+        // Fix dates with obviously wrong years (before 2020 or future years)
+        if (year < 2020 || year > currentYear + 1) {
+          const month = dateObj.getMonth();
+          const day = dateObj.getDate();
+          
+          // Create new date with current year
+          const fixedDate = new Date(currentYear, month, day);
+          const fixedDateStr = fixedDate.toISOString().split('T')[0];
+          
+          console.log(`🔧 [Date Migration] Fixed expense ${expense.id}: ${expense.date} → ${fixedDateStr}`);
+          fixedCount++;
+          
+          return {
+            ...expense,
+            date: fixedDateStr
+          };
+        }
+      }
+      return expense;
+    });
+    
+    if (fixedCount > 0) {
+      // Separate and save back to respective storage locations
+      const updatedManualExpenses = updatedExpenses.filter((exp: any) => !exp.source || exp.source !== 'bank_statement');
+      const updatedBankExpenses = updatedExpenses.filter((exp: any) => exp.source === 'bank_statement');
+      
+      localStorage.setItem('expenses', JSON.stringify(updatedManualExpenses));
+      localStorage.setItem('categorizedExpenses', JSON.stringify(updatedBankExpenses));
+      
+      console.log(`✅ [Date Migration] Fixed ${fixedCount} expense dates`);
+      
+      // Refresh the expenses data
+      loadManualExpenses();
+      toast.success(`Fixed ${fixedCount} expense dates to use current year (${currentYear})`);
+    } else {
+      console.log(`✅ [Date Migration] No dates needed fixing`);
+      toast.info('All expense dates are already correct');
+    }
+  };
+
+  // Debug function to analyze transaction extraction
+  const debugTransactionExtraction = () => {
+    console.log('🔬 [DEBUG] Starting transaction extraction analysis...');
+    
+    // Check localStorage data
+    const bankStatements = JSON.parse(localStorage.getItem('bankStatements') || '[]');
+    const categorizedExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+    
+    console.log('🔬 [DEBUG] Storage analysis:');
+    console.log('  - Bank statements in storage:', bankStatements.length);
+    console.log('  - Categorized expenses in storage:', categorizedExpenses.length);
+    
+    bankStatements.forEach((statement: any, index: number) => {
+      console.log(`🔬 [DEBUG] Statement ${index + 1}:`);
+      console.log('    - ID:', statement.id);
+      console.log('    - File:', statement.fileName);
+      console.log('    - Company ID:', statement.companyId);
+      console.log('    - Transactions count:', statement.transactions?.length || 0);
+      console.log('    - Processed transactions count:', statement.processedTransactions?.length || 0);
+      
+      if (statement.transactions?.length > 0) {
+        console.log('    - Sample transactions:');
+        statement.transactions.slice(0, 5).forEach((t: any, i: number) => {
+          console.log(`      ${i + 1}. ${t.date} | ${t.description} | ${t.amount} | ${t.type}`);
+        });
+        
+        // Look for the missing transactions
+        const missingTransactions = statement.transactions.filter((t: any) => 
+          t.description.includes('WIMPY QUAGGA') || 
+          t.description.includes('PEP HOME ATTER') || 
+          t.description.includes('SASOL QUAGGA')
+        );
+        
+        if (missingTransactions.length > 0) {
+          console.log('    - 🎯 Found missing transactions in raw data:');
+          missingTransactions.forEach((t: any) => {
+            console.log(`      ✅ ${t.description} | ${t.amount}`);
+          });
+        } else {
+          console.log('    - ❌ Missing transactions not found in raw data');
+        }
+      }
+    });
+    
+    // Check if the issue is in the processed transactions
+    const allProcessedTransactions = bankStatements.flatMap((s: any) => s.processedTransactions || []);
+    console.log('🔬 [DEBUG] Total processed transactions:', allProcessedTransactions.length);
+    
+    const missingInProcessed = allProcessedTransactions.filter((t: any) => 
+      t.description.includes('WIMPY QUAGGA') || 
+      t.description.includes('PEP HOME ATTER') || 
+      t.description.includes('SASOL QUAGGA')
+    );
+    
+    if (missingInProcessed.length > 0) {
+      console.log('🔬 [DEBUG] 🎯 Missing transactions found in processed data:');
+      missingInProcessed.forEach((t: any) => {
+        console.log(`      ✅ ${t.description} | ${t.amount}`);
+      });
+    } else {
+      console.log('🔬 [DEBUG] ❌ Missing transactions not found in processed data either');
+    }
+    
+    toast.info('Check browser console for detailed transaction analysis');
   };
 
   // Check for duplicate transactions
@@ -1007,6 +1249,12 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
   };
 
   // Combine all expense sources: legacy manual, new manual, and categorized bank expenses
+  console.log('📊 [EXPENSES DEBUG] Data sources:');
+  console.log('  - Legacy manual expenses:', expenses.length);
+  console.log('  - New manual expenses:', manualExpenses.length);
+  console.log('  - Categorized bank expenses:', categorizedExpenses.length);
+  console.log('  - Bank statements:', bankStatements.length);
+  
   const allExpenses: Expense[] = [
     // Legacy manual expenses
     ...expenses.map(expense => ({
@@ -1078,7 +1326,13 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
     })
   ];
   
-  console.log('ExpensesTab: Total expenses to display:', allExpenses.length, '(Sample:', expenses.length, '+ Bank extracted:', categorizedExpenses.length, ')');
+  console.log('📊 [EXPENSES DEBUG] Combined results:');
+  console.log('  - Total allExpenses:', allExpenses.length);
+  console.log('  - Legacy manual:', expenses.length);
+  console.log('  - New manual:', manualExpenses.length);
+  console.log('  - Bank extracted:', categorizedExpenses.length);
+  console.log('  - Sample bank expense descriptions:', categorizedExpenses.slice(0, 5).map(e => e.description));
+  console.log('  - Sample allExpenses descriptions:', allExpenses.slice(0, 10).map(e => `${e.source}: ${e.description}`));
 
   // Project assignment functions
   const handleProjectAssignment = async (expenseId: string, projectId: number | null) => {
@@ -1224,6 +1478,15 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
       
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+
+  console.log('🔍 [FILTERING DEBUG] Results:');
+  console.log('  - allExpenses count:', allExpenses.length);
+  console.log('  - filteredExpenses count:', filteredExpenses.length);
+  console.log('  - Current filters:', { searchQuery, categoryFilter, projectFilter, dateRangeFilter, sortBy, sortOrder });
+  console.log('  - Sample filtered descriptions:', filteredExpenses.slice(0, 10).map(e => e.description));
+  if (filteredExpenses.length !== allExpenses.length) {
+    console.log('  - ⚠️ Filtering is active! Some expenses are being filtered out.');
+  }
 
   // Get unique categories from all expenses
   const categories = Array.from(new Set(allExpenses.map(expense => expense.category)));
@@ -1733,7 +1996,8 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             Petty Cash
           </Button>
           
-          <Dialog open={showBankUpload} onOpenChange={setShowBankUpload}>
+          {/* Upload Bank Statement - Hidden as requested */}
+          {/* <Dialog open={showBankUpload} onOpenChange={setShowBankUpload}>
             <DialogTrigger asChild>
               <Button
                 variant="outline"
@@ -1752,11 +2016,9 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                 onUploadComplete={handleBankStatementUpload}
               />
             </DialogContent>
-          </Dialog>
+          </Dialog> */}
           
-
-          
-
+          {/* Fix Date Years and Debug Transactions buttons removed as requested */}
           
           {/* View Mode Toggle */}
           <div className="flex items-center space-x-2 bg-white/30 rounded-lg p-1">

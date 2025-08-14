@@ -23,26 +23,29 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useLocalization } from '@/hooks/useLocalization';
+import { useAuth } from '@/hooks/useAuthHook';
 
 interface SidebarItem {
   title: string;
+  labelKey: string;
   icon: React.ElementType;
   href: string;
   alwaysAccessible?: boolean;
 }
 
 const sidebarItems: SidebarItem[] = [
-  { title: 'Dashboard', icon: BarChart3, href: '/dashboard', alwaysAccessible: true },
-  { title: 'My Company', icon: Building2, href: '/company' },
-  { title: 'Clients', icon: Users, href: '/clients' },
-  { title: 'Quotations', icon: Receipt, href: '/quotations' },
-  { title: 'Invoices', icon: FileText, href: '/invoices' },
-  { title: 'Projects', icon: Briefcase, href: '/projects' },
-  { title: 'Inventory', icon: PackageOpen, href: '/inventory' },
-  { title: 'HR Management', icon: UserCheck, href: '/hr-management' },
-  { title: 'Accounting', icon: Calculator, href: '/accounting' },
-  { title: 'Reports', icon: PieChart, href: '/reports' },
-  { title: 'Settings', icon: Settings, href: '/settings' },
+  { title: 'Dashboard', labelKey: 'dashboard', icon: BarChart3, href: '/dashboard', alwaysAccessible: true },
+  { title: 'My Company', labelKey: 'company', icon: Building2, href: '/company' },
+  { title: 'Clients', labelKey: 'clients', icon: Users, href: '/clients' },
+  { title: 'Quotations', labelKey: 'quotations', icon: Receipt, href: '/quotations' },
+  { title: 'Invoices', labelKey: 'invoices', icon: FileText, href: '/invoices' },
+  { title: 'Projects', labelKey: 'projects', icon: Briefcase, href: '/projects' },
+  { title: 'Inventory', labelKey: 'inventory', icon: PackageOpen, href: '/inventory' },
+  { title: 'HR Management', labelKey: 'hr', icon: UserCheck, href: '/hr-management' },
+  { title: 'Accounting', labelKey: 'accounting', icon: Calculator, href: '/accounting' },
+  // { title: 'Reports', labelKey: 'reports', icon: PieChart, href: '/reports' },
+  { title: 'Settings', labelKey: 'settings', icon: Settings, href: '/settings' },
 ];
 
 interface DashboardSidebarProps {
@@ -55,6 +58,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
   const navigate = useNavigate();
   const { toast } = useToast();
   const { canAccessPage } = usePermissions();
+  const { t } = useLocalization();
+  const { signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
@@ -143,7 +148,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
             const itemClass = `group flex items-center ${collapsed ? 'justify-center p-3' : 'px-4 py-4'} text-sm font-medium rounded-xl transition-all duration-300 ${
               !hasAccess ? 'opacity-70 cursor-not-allowed' :
               isActive ? 'bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 text-white shadow-colored-lg' :
-              'text-slate-700 hover:bg-white/50 hover:shadow-business hover-lift'
+              'text-slate-700 hover:bg_WHITE/50 hover:shadow-business hover-lift'
             }`;
             
             const iconClass = `h-5 w-5 ${collapsed ? '' : 'mr-4'} ${
@@ -153,10 +158,10 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
             const contentElement = (
               <div
                 className={itemClass}
-                onClick={() => hasAccess && handleNavigation(item.href, hasAccess)}
+                onClick={() => handleNavigation(item.href, hasAccess)}
               >
                 <item.icon className={iconClass} />
-                {!collapsed && <span className="font-sf-pro">{item.title}</span>}
+                {!collapsed && <span className="font-sf-pro">{t(`nav.${item.labelKey}`)}</span>}
                 {!hasAccess && !collapsed && (
                   <LockIcon className="ml-auto h-4 w-4 text-slate-400" />
                 )}
@@ -172,7 +177,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
                         <div>{contentElement}</div>
                       </TooltipTrigger>
                       <TooltipContent side="right" className="font-sf-pro flex items-center gap-2">
-                        {item.title}
+                        {t(`nav.${item.labelKey}`)}
                         {!hasAccess && <LockIcon className="h-3 w-3 text-slate-400" />}
                       </TooltipContent>
                     </Tooltip>
@@ -191,19 +196,19 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="w-full justify-center text-slate-700 hover:bg-white/50 hover:text-mokm-orange-600 transition-all duration-300">
+                <Button variant="ghost" size="icon" className="w-full justify-center text-slate-700 hover:bg-white/50 hover:text-mokm-orange-600 transition-all duration-300" onClick={() => signOut()}>
                   <LogOut className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                Sign Out
+                {t('common.signOut')}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         ) : (
-          <Button variant="ghost" className="w-full justify-start text-slate-700 hover:bg-white/50 hover:text-mokm-orange-600 transition-all duration-300 font-sf-pro">
+          <Button variant="ghost" className="w-full justify-start text-slate-700 hover:bg-white/50 hover:text-mokm-orange-600 transition-all duration-300 font-sf-pro" onClick={() => signOut()}>
             <LogOut className="h-4 w-4 mr-3" />
-            Sign Out
+            {t('common.signOut')}
           </Button>
         )}
       </div>

@@ -38,7 +38,7 @@ import { createSampleEmployeesWithData } from '@/services/sampleDataGenerator';
 // Using shared types from LeaveManagementTypes
 
 const HRManagement: React.FC = () => {
-  const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings } = useLocalization();
+  const { t } = useLocalization();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'directory' | 'leave' | 'attendance' | 'training' | 'performance' | 'disciplinary' | 'allowance' | 'payroll'>('dashboard');
   const [viewingProfile, setViewingProfile] = useState<boolean>(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -285,7 +285,7 @@ const HRManagement: React.FC = () => {
       employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
       department: 'Development',
       // Standard leave types
-      annual: { total: 21, used: 5, remaining: 16, accrued: 21 },
+      annual: { total: 21, used: 21, remaining: 16, accrued: 21 },
       sick: { total: 30, used: 2, remaining: 28 },
       familyResponsibility: { total: 3, used: 1, remaining: 2 },
       maternity: { total: 120, used: 0, remaining: 120 },
@@ -396,7 +396,7 @@ const HRManagement: React.FC = () => {
               <span>Back to Dashboard</span>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">HR Management</h1>
+              <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">{t('hr.title')}</h1>
               <p className="text-slate-600 font-sf-pro">Manage employees, payroll, and human resources</p>
             </div>
           </div>

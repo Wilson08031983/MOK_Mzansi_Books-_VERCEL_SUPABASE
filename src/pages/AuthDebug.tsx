@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
+import { useLocalization } from '@/hooks/useLocalization';
 
 const AuthDebug = () => {
   interface AuthDebugState {
@@ -14,6 +15,7 @@ const AuthDebug = () => {
 
 const [authState, setAuthState] = useState<AuthDebugState>({});
   const navigate = useNavigate();
+  const { t } = useLocalization();
 
   useEffect(() => {
     // Check all auth-related local storage items
@@ -70,7 +72,7 @@ const [authState, setAuthState] = useState<AuthDebugState>({});
   };
   
   const handleResetAll = () => {
-    if (window.confirm('Are you sure you want to clear ALL localStorage data? This will log you out and remove all app data.')) {
+    if (window.confirm(t('common.confirm') + ': ' + t('common.clearAllLocalStorage') + '?')) {
       localStorage.clear();
       window.location.reload();
     }
@@ -82,7 +84,7 @@ const [authState, setAuthState] = useState<AuthDebugState>({});
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Auth Debug</h1>
           <Button variant="outline" onClick={() => navigate('/')}>
-            Back to Home
+            {t('common.backToHome')}
           </Button>
         </div>
         
@@ -133,7 +135,7 @@ const [authState, setAuthState] = useState<AuthDebugState>({});
               onClick={handleResetAuth}
               className="bg-red-600 hover:bg-red-700"
             >
-              Reset Auth State
+              {t('common.reset')} Auth State
             </Button>
             
             <Button 
@@ -141,7 +143,7 @@ const [authState, setAuthState] = useState<AuthDebugState>({});
               onClick={handleResetAll}
               className="border-red-600 text-red-600 hover:bg-red-50"
             >
-              Clear All LocalStorage
+              {t('common.delete')} All LocalStorage
             </Button>
             
             <Button 
@@ -149,7 +151,7 @@ const [authState, setAuthState] = useState<AuthDebugState>({});
               onClick={() => window.location.reload()}
               className="ml-auto"
             >
-              Refresh
+              {t('common.reset')}
             </Button>
           </div>
         </div>

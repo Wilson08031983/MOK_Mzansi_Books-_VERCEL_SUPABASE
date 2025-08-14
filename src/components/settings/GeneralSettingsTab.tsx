@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { workingCompanySync } from '@/services/workingCompanySync';
 import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/services/localAuthService';
 import { useLocalization } from '@/hooks/useLocalization';
+import { localizationService } from '@/services/localizationService';
 import AuthModal from '../company/AuthModal';
 
 const GeneralSettingsTab = () => {
@@ -29,6 +30,10 @@ const GeneralSettingsTab = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState({ isInProgress: false, lastSyncTime: 0 });
+
+  // Banner notification state for localization changes
+  const [banner, setBanner] = useState<{ message: string; language: string; timezone: string; currency: string } | null>(null);
+  const [previousSettings, setPreviousSettings] = useState<{ language: string; timezone: string; currency: string } | null>(null);
 
   // Initialize local auth system on component mount
   useEffect(() => {
@@ -258,8 +263,77 @@ const GeneralSettingsTab = () => {
     setSyncStatus(workingCompanySync.getSyncStatus());
   };
 
-  // Localization settings are now managed by the localization service
+  // Localization change handlers
+  const onLanguageChange = (language: string) => {
+    setPreviousSettings({ 
+      language: currentLanguage, 
+      timezone: settings.timezone, 
+      currency: settings.currency 
+    });
+    changeLanguage(language as any);
+    showBanner(language, settings.timezone, settings.currency);
+  };
 
+  const onTimezoneChange = (timezone: string) => {
+    setPreviousSettings({ 
+      language: currentLanguage, 
+      timezone: settings.timezone, 
+      currency: settings.currency 
+    });
+    updateSettings({ timezone });
+    showBanner(currentLanguage, timezone, settings.currency);
+  };
+
+  const onCurrencyChange = (currency: string) => {
+    setPreviousSettings({ 
+      language: currentLanguage, 
+      timezone: settings.timezone, 
+      currency: settings.currency 
+    });
+    updateSettings({ currency });
+    console.log("Localization: currency format changed — no FX conversion performed.");
+    showBanner(currentLanguage, settings.timezone, currency);
+  };
+
+  const showBanner = (language: string, timezone: string, currency: string) => {
+    const message = `Language: ${getLanguageDisplayName(language)} | Time zone: ${timezone} | Currency: ${currency} — applied`;
+    setBanner({ message, language, timezone, currency });
+    
+    // Auto-hide banner after 5 seconds
+    setTimeout(() => {
+      setBanner(null);
+    }, 5000);
+  };
+
+  const getLanguageDisplayName = (lang: string) => {
+    const names: Record<string, string> = {
+      'en': 'English',
+      'af': 'Afrikaans', 
+      'zu': 'Zulu',
+      'xh': 'Xhosa'
+    };
+    return names[lang] || lang;
+  };
+
+  const handleUndo = () => {
+    if (previousSettings) {
+      changeLanguage(previousSettings.language as any);
+      updateSettings({ 
+        timezone: previousSettings.timezone, 
+        currency: previousSettings.currency 
+      });
+      setBanner(null);
+      setPreviousSettings(null);
+      toast.success('Localization settings reverted');
+    }
+  };
+
+  const handleManualRefresh = () => {
+    // Force refresh the localization by re-initializing
+    window.location.reload();
+  };
+
+  // Localization settings are now managed by the localization service
   const [displaySettings, setDisplaySettings] = useState({
     theme: 'light',
     colorScheme: 'default',
@@ -440,6 +514,15 @@ const GeneralSettingsTab = () => {
             {t('settings.localization')}
           </CardTitle>
         </CardHeader>
+        {banner && (
+          <div className="mx-6 mt-2 mb-0 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 flex items-center justify-between">
+            <span>{banner.message}</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={handleUndo}>Undo</Button>
+              <Button size="sm" variant="outline" onClick={handleManualRefresh}>Refresh</Button>
+            </div>
+          </div>
+        )}
         <CardContent className="space-y-4">
           {/* Current Timezone Display */}
           <div className="bg-slate-50 rounded-lg p-4 border">
@@ -465,7 +548,7 @@ const GeneralSettingsTab = () => {
                 id="language"
                 className="w-full p-2 border rounded-lg"
                 value={currentLanguage}
-                onChange={(e) => changeLanguage(e.target.value as any)}
+                onChange={(e) => onLanguageChange(e.target.value)}
               >
                 <option value="en">English</option>
                 <option value="af">Afrikaans</option>
@@ -479,7 +562,7 @@ const GeneralSettingsTab = () => {
                 id="timezone"
                 className="w-full p-2 border rounded-lg"
                 value={settings.timezone}
-                onChange={(e) => updateSettings({timezone: e.target.value})}
+                onChange={(e) => onTimezoneChange(e.target.value)}
               >
                 <option value="Africa/Johannesburg">Africa/Johannesburg</option>
                 <option value="UTC">UTC</option>
@@ -493,7 +576,7 @@ const GeneralSettingsTab = () => {
                 id="currency"
                 className="w-full p-2 border rounded-lg"
                 value={settings.currency}
-                onChange={(e) => updateSettings({currency: e.target.value})}
+                onChange={(e) => onCurrencyChange(e.target.value)}
               >
                 <option value="ZAR">South African Rand (ZAR)</option>
                 <option value="USD">US Dollar (USD)</option>
@@ -547,6 +630,7 @@ const GeneralSettingsTab = () => {
           </div>
         </CardContent>
       </Card>
+      
       {/* Admin Authentication Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}

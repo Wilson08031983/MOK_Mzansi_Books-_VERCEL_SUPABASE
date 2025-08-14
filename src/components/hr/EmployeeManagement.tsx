@@ -5,6 +5,7 @@ import AddEmployeeModal from '@/components/hr/AddEmployeeModal';
 import EditEmployeeModal from '@/components/hr/EditEmployeeModal';
 import EmployeeDetailsModal from '@/components/hr/EmployeeDetailsModal';
 import { deleteEmployee, Employee } from '@/services/employeeService';
+import { userLinkingService } from '@/services/userLinkingService';
 import { toast } from 'sonner';
 import { 
   Search,
@@ -43,8 +44,24 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
   
   // Helper function to check if this is the synced admin user
   const isSyncedAdminUser = (emp: Employee): boolean => {
-    return emp.email === 'admin@mokmzansibooks.com' || 
-           (emp.position && ['CEO', 'Founder', 'Director', 'Manager'].includes(emp.position));
+    const isAdminEmail = emp.email === 'admin@mokmzansibooks.com';
+    const isAdminPosition = emp.position && ['CEO', 'Founder', 'Director', 'Manager'].includes(emp.position);
+    const result = isAdminEmail || isAdminPosition;
+    
+    // Debug logging for Regular User specifically
+    if (emp.firstName === 'Regular' && emp.surname === 'User') {
+      console.log(`🔍 [isSyncedAdminUser] Regular User check:`, {
+        employee: `${emp.firstName} ${emp.surname}`,
+        email: emp.email,
+        position: emp.position,
+        isAdminEmail,
+        isAdminPosition,
+        isSyncedAdmin: result,
+        deleteButtonVisible: !result
+      });
+    }
+    
+    return result;
   };
 
   // Get unique departments
@@ -69,6 +86,16 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
     
     return matchesSearch && matchesDepartment && matchesStatus;
   });
+
+  // Helper to identify the seeded Regular User account
+  const isDefaultRegularUser = (emp: Employee): boolean => {
+    const byEmail = (emp.email || '').toLowerCase() === 'user@mokmzansibooks.com';
+    const byName = (emp.firstName?.trim() === 'Regular' && emp.surname?.trim() === 'User');
+    return byEmail || byName;
+  };
+
+  // Employees to display (exclude the default Regular User card)
+  const displayEmployees = filteredEmployees.filter(emp => !isDefaultRegularUser(emp));
 
   // Function to get status badge color
   const getStatusBadgeColor = (status: string) => {
@@ -124,6 +151,13 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
 
   // Handle edit employee
   const handleEditEmployee = (employee: Employee) => {
+    // Check if user can be edited (presidency user protection)
+    const editCheck = userLinkingService.canEditUser(employee.id);
+    if (!editCheck.canEdit) {
+      toast.error(editCheck.reason || 'Cannot edit this user');
+      return;
+    }
+    
     setEditingEmployee(employee);
     setIsEditEmployeeModalOpen(true);
   };
@@ -134,15 +168,63 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
         `${employee.firstName} ${employee.surname}` : 
         employee.firstName || employee.surname || 'Unknown Employee');
     
+    console.log(`🗑️ [EmployeeManagement] Attempting to delete employee:`, {
+      id: employee.id,
+      name: displayName,
+      firstName: employee.firstName,
+      surname: employee.surname,
+      email: employee.email,
+      role: employee.position,
+      isRegularUser: employee.firstName === 'Regular' && employee.surname === 'User'
+    });
+    
+    // Check if user can be deleted (presidency user protection)
+    const deleteCheck = userLinkingService.canDeleteUser(employee.id);
+    if (!deleteCheck.canDelete) {
+      toast.error(deleteCheck.reason || 'Cannot delete this user');
+      return;
+    }
+    
     if (window.confirm(`Are you sure you want to delete ${displayName}? This action cannot be undone.`)) {
-      const success = deleteEmployee(employee.id);
-      if (success) {
-        // Update the employees list by removing the deleted employee
-        setEmployees(prevEmployees => prevEmployees.filter(emp => emp.id !== employee.id));
-        toast.success(`${displayName} has been deleted successfully.`);
-      } else {
-        toast.error('Failed to delete employee. Please try again.');
+      try {
+        console.log(`🔄 [EmployeeManagement] User confirmed deletion, calling deleteEmployee service...`);
+        
+        const success = deleteEmployee(employee.id);
+        
+        console.log(`📊 [EmployeeManagement] Delete service result:`, { success });
+        
+        if (success) {
+          console.log(`✅ [EmployeeManagement] Delete successful, updating UI state...`);
+          
+          // Update the employees list by removing the deleted employee
+          setEmployees(prevEmployees => {
+            const filteredEmployees = prevEmployees.filter(emp => emp.id !== employee.id);
+            console.log(`📋 [EmployeeManagement] Updated employees list:`, {
+              before: prevEmployees.length,
+              after: filteredEmployees.length,
+              removedEmployee: displayName
+            });
+            return filteredEmployees;
+          });
+          
+          toast.success(`${displayName} has been deleted successfully.`);
+          console.log(`🎉 [EmployeeManagement] Delete operation completed successfully for ${displayName}`);
+        } else {
+          console.error(`❌ [EmployeeManagement] Delete service returned false for ${displayName}`);
+          toast.error(`Failed to delete ${displayName}. The employee may have linked records that must be removed first.`);
+        }
+      } catch (error) {
+        console.error(`💥 [EmployeeManagement] Exception during delete operation:`, {
+          employee: displayName,
+          error: error,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        
+        toast.error(`Error deleting ${displayName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+    } else {
+      console.log(`❌ [EmployeeManagement] User cancelled deletion of ${displayName}`);
     }
   };
 
@@ -182,6 +264,8 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
     });
     toast.success(`Navigating to tax calculation for ${getFullName(employee)}`);
   };
+
+
 
   return (
     <div className="space-y-6">
@@ -254,8 +338,8 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
       
       {/* Employee Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredEmployees.length > 0 ? (
-          filteredEmployees.map(employee => (
+        {displayEmployees.length > 0 ? (
+          displayEmployees.map(employee => (
             <Card key={employee.id} className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 overflow-hidden">
               <CardContent className="p-0">
                 <div 

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Test Invoices</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #005a87;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Create Test Invoices for VAT Calculation</h1>
+    
+    <div>
+        <button class="button" onclick="createTestInvoices()">Create Test Invoices</button>
+        <button class="button" onclick="clearInvoices()">Clear All Invoices</button>
+        <button class="button" onclick="checkInvoices()">Check Current Invoices</button>
+        <button class="button" onclick="openMainApp()">Open Main App</button>
+    </div>
+    
+    <div>
+        <h2>Log</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function createTestInvoices() {
+            log('Creating test invoices for Q2 2025...');
+            
+            const testInvoices = [
+                {
+                    id: 'test-invoice-001',
+                    number: 'INV-2025-001',
+                    date: '2025-04-15',
+                    status: 'paid',
+                    subtotal: 10000,
+                    vatRate: 15,
+                    vatTotal: 1500,
+                    total: 11500,
+                    clientName: 'Test Client A',
+                    clientId: 'client-a',
+                    items: [
+                        {
+                            description: 'Consulting Services',
+                            quantity: 1,
+                            rate: 10000,
+                            amount: 10000,
+                            vatAmount: 1500
+                        }
+                    ],
+                    createdAt: '2025-04-15T10:00:00Z',
+                    updatedAt: '2025-04-15T10:00:00Z'
+                },
+                {
+                    id: 'test-invoice-002',
+                    number: 'INV-2025-002',
+                    date: '2025-05-20',
+                    status: 'paid',
+                    subtotal: 8000,
+                    vatRate: 15,
+                    vatTotal: 1200,
+                    total: 9200,
+                    clientName: 'Test Client B',
+                    clientId: 'client-b',
+                    items: [
+                        {
+                            description: 'Software Development',
+                            quantity: 1,
+                            rate: 8000,
+                            amount: 8000,
+                            vatAmount: 1200
+                        }
+                    ],
+                    createdAt: '2025-05-20T14:30:00Z',
+                    updatedAt: '2025-05-20T14:30:00Z'
+                },
+                {
+                    id: 'test-invoice-003',
+                    number: 'INV-2025-003',
+                    date: '2025-06-10',
+                    status: 'sent',
+                    subtotal: 5000,
+                    vatRate: 15,
+                    vatTotal: 750,
+                    total: 5750,
+                    clientName: 'Test Client C',
+                    clientId: 'client-c',
+                    items: [
+                        {
+                            description: 'Design Services',
+                            quantity: 1,
+                            rate: 5000,
+                            amount: 5000,
+                            vatAmount: 750
+                        }
+                    ],
+                    createdAt: '2025-06-10T09:15:00Z',
+                    updatedAt: '2025-06-10T09:15:00Z'
+                }
+            ];
+            
+            // Store in localStorage
+            localStorage.setItem('invoices', JSON.stringify(testInvoices));
+            
+            // Calculate expected VAT
+            const totalVAT = testInvoices.reduce((sum, inv) => sum + inv.vatTotal, 0);
+            
+            log(`Created ${testInvoices.length} test invoices`);
+            log(`Expected total VAT for Q2 2025: R${totalVAT.toFixed(2)}`);
+            
+            // Trigger storage events to notify the app
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'invoices',
+                newValue: JSON.stringify(testInvoices),
+                oldValue: null,
+                storageArea: localStorage
+            }));
+            
+            log('Test invoices created successfully!');
+        }
+
+        function clearInvoices() {
+            localStorage.removeItem('invoices');
+            localStorage.removeItem('vatCalculations');
+            localStorage.removeItem('cachedVAT');
+            localStorage.removeItem('vatCache');
+            localStorage.removeItem('calculationCache');
+            
+            // Trigger storage event
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'invoices',
+                newValue: null,
+                oldValue: '[]',
+                storageArea: localStorage
+            }));
+            
+            log('All invoices and VAT caches cleared');
+        }
+
+        function checkInvoices() {
+            const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+            log(`Current invoices in localStorage: ${invoices.length}`);
+            
+            if (invoices.length > 0) {
+                invoices.forEach((inv, index) => {
+                    log(`${index + 1}. ${inv.number} - ${inv.date} - Status: ${inv.status} - VAT: R${inv.vatTotal}`);
+                });
+                
+                const totalVAT = invoices.reduce((sum, inv) => sum + inv.vatTotal, 0);
+                log(`Total VAT: R${totalVAT.toFixed(2)}`);
+            } else {
+                log('No invoices found');
+            }
+        }
+
+        function openMainApp() {
+            window.open('/', '_blank');
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            log('Page loaded - checking current invoices...');
+            checkInvoices();
+        });
+    </script>
+</body>
+</html>

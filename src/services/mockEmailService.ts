@@ -40,6 +40,14 @@ interface QuotationEmailOptions {
   pdfFileName: string;
 }
 
+interface LoginNotificationOptions {
+  to: string;
+  deviceName: string;
+  browser: string;
+  location: string;
+  timestamp: string;
+}
+
 // Store for sent emails
 interface SentEmail {
   to: string;
@@ -47,7 +55,7 @@ interface SentEmail {
   content: string;
   timestamp: Date;
   status: 'sent' | 'failed' | 'pending';
-  type: 'confirmation' | 'reset' | 'invitation' | 'quotation' | 'invoice' | 'deletion';
+  type: 'confirmation' | 'reset' | 'invitation' | 'quotation' | 'invoice' | 'deletion' | 'login_notification';
 }
 
 // In-memory store for sent emails
@@ -133,6 +141,24 @@ const mockEmailService = {
     
     sentEmails.push(email);
     console.log('Mock quotation email sent:', email);
+    return true;
+  },
+  
+  // Send a login notification email
+  async sendLoginNotificationEmail(options: LoginNotificationOptions): Promise<boolean> {
+    await simulateNetworkDelay();
+    
+    const email: SentEmail = {
+      to: options.to,
+      subject: 'New Login to Your MOK Mzansi Books Account',
+      content: `New login detected - Device: ${options.deviceName}, Browser: ${options.browser}, Location: ${options.location}, Time: ${new Date(options.timestamp).toLocaleString()}`,
+      timestamp: new Date(),
+      status: 'sent',
+      type: 'login_notification'
+    };
+    
+    sentEmails.push(email);
+    console.log('Mock login notification email sent:', email);
     return true;
   },
   

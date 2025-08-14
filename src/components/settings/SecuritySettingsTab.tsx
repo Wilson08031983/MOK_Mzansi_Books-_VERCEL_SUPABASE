@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Shield, Save, Loader2 } from 'lucide-react';
@@ -8,6 +8,16 @@ import PasswordSecuritySection from './security/PasswordSecuritySection';
 import TwoFactorAuthSection from './security/TwoFactorAuthSection';
 import SessionSecuritySection from './security/SessionSecuritySection';
 import ActiveDevicesSection from './security/ActiveDevicesSection';
+import {
+  getSecuritySettings,
+  saveSecuritySettings,
+  getPasswordComplexity,
+  savePasswordComplexity,
+  getDeviceSessions,
+  removeDeviceSession,
+  getCurrentDeviceSession,
+  addDeviceSession
+} from '@/services/securityService';
 
 const SecuritySettingsTab = () => {
   const [saveLoading, setSaveLoading] = useState(false);
@@ -32,32 +42,44 @@ const SecuritySettingsTab = () => {
   });
   
   // Active devices
-  const [activeDevices] = useState([
-    { 
-      id: '1', 
-      name: 'MacBook Pro', 
-      lastActive: '2025-06-02T10:30:00', 
-      location: 'Johannesburg, South Africa', 
-      browser: 'Chrome',
-      current: true
-    },
-    { 
-      id: '2', 
-      name: 'iPhone 15', 
-      lastActive: '2025-06-01T18:45:00', 
-      location: 'Johannesburg, South Africa', 
-      browser: 'Safari',
-      current: false
-    },
-    { 
-      id: '3', 
-      name: 'iPad Pro', 
-      lastActive: '2025-05-28T14:20:00', 
-      location: 'Cape Town, South Africa', 
-      browser: 'Safari',
-      current: false
+  const [activeDevices, setActiveDevices] = useState<Array<{ 
+    id: string; 
+    name: string; 
+    lastActive: string; 
+    location: string; 
+    browser: string;
+    current: boolean;
+  }>>([]);
+
+  // Load settings and sessions on mount
+  useEffect(() => {
+    try {
+      const settings = getSecuritySettings();
+      setSecuritySettings(settings);
+      const complexity = getPasswordComplexity();
+      setPasswordComplexity(complexity);
+
+      let sessions = getDeviceSessions();
+      if (!sessions || sessions.length === 0) {
+        // Ensure at least current device is present
+        const current = getCurrentDeviceSession();
+        addDeviceSession(current);
+        sessions = getDeviceSessions();
+      }
+      setActiveDevices(
+        sessions.map(s => ({
+          id: s.id,
+          name: s.deviceName,
+          lastActive: s.lastActive,
+          location: s.location,
+          browser: s.browser,
+          current: !!s.current
+        }))
+      );
+    } catch (e) {
+      console.error('Failed to load security settings or sessions', e);
     }
-  ]);
+  }, []);
 
   // Handle form submission
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -66,19 +88,23 @@ const SecuritySettingsTab = () => {
     setSaveLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast({
-        title: "Security settings saved successfully",
-        description: "Your security preferences have been updated.",
-      });
+      const ok1 = saveSecuritySettings(securitySettings);
+      const ok2 = savePasswordComplexity(passwordComplexity);
+
+      if (ok1 && ok2) {
+        toast({
+          title: 'Security settings saved successfully',
+          description: 'Your security preferences have been updated.',
+        });
+      } else {
+        throw new Error('Failed to save one or more settings');
+      }
     } catch (error) {
       console.error('Error saving settings:', error);
       toast({
-        title: "Error",
-        description: "Failed to save settings. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to save settings. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setSaveLoading(false);
@@ -86,10 +112,35 @@ const SecuritySettingsTab = () => {
   };
 
   const handleDeviceLogout = (deviceId: string) => {
-    toast({
-      title: "Device logged out",
-      description: "The device has been successfully logged out.",
-    });
+    try {
+      const success = removeDeviceSession(deviceId);
+      if (success) {
+        const sessions = getDeviceSessions();
+        setActiveDevices(
+          sessions.map(s => ({
+            id: s.id,
+            name: s.deviceName,
+            lastActive: s.lastActive,
+            location: s.location,
+            browser: s.browser,
+            current: !!s.current
+          }))
+        );
+        toast({
+          title: 'Device logged out',
+          description: 'The device has been successfully logged out.',
+        });
+      } else {
+        throw new Error('removeDeviceSession returned false');
+      }
+    } catch (e) {
+      console.error('Failed to logout device', e);
+      toast({
+        title: 'Error',
+        description: 'Could not logout the selected device.',
+        variant: 'destructive'
+      });
+    }
   };
 
   return (
@@ -105,19 +156,19 @@ const SecuritySettingsTab = () => {
           <form onSubmit={handleSaveSettings} className="space-y-6">
             <PasswordSecuritySection
               securitySettings={securitySettings}
-              setSecuritySettings={setSecuritySettings}
+              setSecuritySettings={setSecuritySettings as any}
               passwordComplexity={passwordComplexity}
-              setPasswordComplexity={setPasswordComplexity}
+              setPasswordComplexity={setPasswordComplexity as any}
             />
 
             <TwoFactorAuthSection
               securitySettings={securitySettings}
-              setSecuritySettings={setSecuritySettings}
+              setSecuritySettings={setSecuritySettings as any}
             />
 
             <SessionSecuritySection
               securitySettings={securitySettings}
-              setSecuritySettings={setSecuritySettings}
+              setSecuritySettings={setSecuritySettings as any}
             />
 
             <ActiveDevicesSection

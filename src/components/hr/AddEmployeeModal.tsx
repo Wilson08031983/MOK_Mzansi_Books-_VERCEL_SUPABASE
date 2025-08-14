@@ -40,7 +40,6 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
     endDate: '',
     paymentCycle: 'Monthly',
     salary: 0,
-    taxPercentage: 15,
     department: 'General',
     position: '',
     location: 'Johannesburg',
@@ -393,18 +392,6 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
                     type="text"
                     inputMode="decimal"
                     value={formData.salary.toString()}
-                    onChange={handleChange}
-                    className="font-sf-pro"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="taxPercentage" className="font-sf-pro">Tax Percentage (%)</Label>
-                  <Input
-                    id="taxPercentage"
-                    name="taxPercentage"
-                    type="text"
-                    inputMode="decimal"
-                    value={formData.taxPercentage.toString()}
                     onChange={handleChange}
                     className="font-sf-pro"
                   />

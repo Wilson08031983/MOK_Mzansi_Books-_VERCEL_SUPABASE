@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Button } from '@/components/ui/button';
 import { 
   ArrowLeft,
@@ -23,6 +24,7 @@ const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
   setIsCreateQuotationModalOpen,
   onRefresh
 }) => {
+  const { t } = useLocalization();
   const navigate = useNavigate();
 
   return (
@@ -81,7 +83,7 @@ const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
           className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Create Quotation
+          {t('quotations.createQuotation')}
         </Button>
       </div>
     </div>

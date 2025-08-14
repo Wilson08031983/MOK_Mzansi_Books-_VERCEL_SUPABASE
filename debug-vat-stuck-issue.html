@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug VAT Stuck at R 1956.52</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        .button.danger {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+        }
+        .button.success {
+            background: linear-gradient(135deg, #51cf66, #40c057);
+        }
+        .button.warning {
+            background: linear-gradient(135deg, #ffd43b, #fab005);
+            color: #333;
+        }
+        .output {
+            padding: 30px;
+            background: #fff;
+        }
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        .log-info { color: #569cd6; }
+        .log-success { color: #4ec9b0; }
+        .log-warning { color: #dcdcaa; }
+        .log-error { color: #f44747; }
+        .log-debug { color: #9cdcfe; }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .status-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .status-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #495057;
+        }
+        .status-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 VAT Calculation Debug Tool</h1>
+            <p>Diagnose why VAT is stuck at R 1956.52</p>
+        </div>
+        
+        <div class="controls">
+            <div class="status-grid">
+                <div class="status-card">
+                    <div class="status-value" id="currentVAT">R 0.00</div>
+                    <div class="status-label">Current VAT Amount</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-value" id="invoiceCount">0</div>
+                    <div class="status-label">Total Invoices</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-value" id="validInvoices">0</div>
+                    <div class="status-label">Valid Invoices</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-value" id="lastUpdate">Never</div>
+                    <div class="status-label">Last Update</div>
+                </div>
+            </div>
+            
+            <div class="button-grid">
+                <button class="button" onclick="analyzeCurrentState()">🔍 Analyze Current State</button>
+                <button class="button" onclick="clearAllCaches()">🗑️ Clear All Caches</button>
+                <button class="button warning" onclick="addFreshTestData()">➕ Add Fresh Test Data</button>
+                <button class="button success" onclick="forceRecalculation()">🔄 Force Recalculation</button>
+                <button class="button danger" onclick="resetEverything()">💥 Nuclear Reset</button>
+                <button class="button" onclick="openMainApp()">🚀 Open Main App</button>
+                <button class="button" onclick="clearOutput()">🧹 Clear Log</button>
+            </div>
+        </div>
+        
+        <div class="output">
+            <div id="output" class="log-container">Ready to debug VAT calculation issue...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const logClass = `log-${type}`;
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${logClass}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            output.appendChild(entry);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function updateStatus() {
+            try {
+                const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+                const currentVAT = calculateCurrentVAT();
+                
+                document.getElementById('currentVAT').textContent = `R ${currentVAT.toFixed(2)}`;
+                document.getElementById('invoiceCount').textContent = invoices.length;
+                document.getElementById('validInvoices').textContent = getValidInvoices().length;
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                log(`Error updating status: ${error.message}`, 'error');
+            }
+        }
+
+        function calculateCurrentVAT() {
+            try {
+                const invoices = getValidInvoices();
+                let totalVAT = 0;
+                
+                invoices.forEach(invoice => {
+                    if (invoice.vatTotal !== undefined) {
+                        totalVAT += invoice.vatTotal;
+                    } else if (invoice.subtotal !== undefined && invoice.vatRate !== undefined) {
+                        totalVAT += invoice.subtotal * (invoice.vatRate / 100);
+                    } else if (invoice.items && Array.isArray(invoice.items) && invoice.vatRate) {
+                        const subtotal = invoice.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+                        totalVAT += subtotal * (invoice.vatRate / 100);
+                    }
+                });
+                
+                return totalVAT;
+            } catch (error) {
+                log(`Error calculating current VAT: ${error.message}`, 'error');
+                return 0;
+            }
+        }
+
+        function getValidInvoices() {
+            try {
+                const allInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+                const now = new Date();
+                const currentQuarter = getCurrentVATQuarter();
+                const start = new Date(currentQuarter.startDate);
+                const end = new Date(currentQuarter.endDate);
+                
+                return allInvoices.filter(invoice => {
+                    const invoiceDate = new Date(invoice.date || invoice.invoiceDate);
+                    const isValidStatus = invoice.status !== 'draft' && invoice.status !== 'cancelled';
+                    const isInDateRange = invoiceDate >= start && invoiceDate <= end;
+                    return isValidStatus && isInDateRange;
+                });
+            } catch (error) {
+                log(`Error getting valid invoices: ${error.message}`, 'error');
+                return [];
+            }
+        }
+
+        function getCurrentVATQuarter() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1; // JavaScript months are 0-indexed
+            
+            let quarter, startMonth, endMonth;
+            
+            if (month >= 3 && month <= 5) {
+                quarter = 1;
+                startMonth = 3;
+                endMonth = 5;
+            } else if (month >= 6 && month <= 8) {
+                quarter = 2;
+                startMonth = 6;
+                endMonth = 8;
+            } else if (month >= 9 && month <= 11) {
+                quarter = 3;
+                startMonth = 9;
+                endMonth = 11;
+            } else {
+                quarter = 4;
+                startMonth = 12;
+                endMonth = 2;
+                if (month <= 2) {
+                    // We're in Jan/Feb of the next year
+                    startMonth = 12;
+                    endMonth = 2;
+                } else {
+                    // We're in December
+                    endMonth = 2;
+                }
+            }
+            
+            const startDate = new Date(year, startMonth - 1, 1).toISOString().split('T')[0];
+            const endDate = new Date(year, endMonth, 0).toISOString().split('T')[0];
+            
+            return {
+                period: `Q${quarter} ${year}`,
+                startDate,
+                endDate,
+                dueDate: new Date(year, endMonth, 25).toISOString().split('T')[0]
+            };
+        }
+
+        function analyzeCurrentState() {
+            log('\n🔍 === ANALYZING CURRENT STATE ===', 'info');
+            
+            try {
+                // Check localStorage contents
+                const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+                const vat201Returns = JSON.parse(localStorage.getItem('vat201Returns') || '[]');
+                const expenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+                
+                log(`📊 Data Summary:`, 'info');
+                log(`  - Total invoices: ${invoices.length}`, 'info');
+                log(`  - VAT 201 returns: ${vat201Returns.length}`, 'info');
+                log(`  - Expenses: ${expenses.length}`, 'info');
+                
+                // Analyze current quarter
+                const quarter = getCurrentVATQuarter();
+                log(`\n📅 Current VAT Quarter:`, 'info');
+                log(`  - Period: ${quarter.period}`, 'info');
+                log(`  - Start: ${quarter.startDate}`, 'info');
+                log(`  - End: ${quarter.endDate}`, 'info');
+                log(`  - Due: ${quarter.dueDate}`, 'info');
+                
+                // Analyze invoices in current period
+                const validInvoices = getValidInvoices();
+                log(`\n📋 Invoice Analysis:`, 'info');
+                log(`  - Valid invoices in period: ${validInvoices.length}`, 'info');
+                
+                if (validInvoices.length > 0) {
+                    validInvoices.forEach((invoice, index) => {
+                        log(`  - Invoice ${index + 1}: ${invoice.id || invoice.number}`, 'debug');
+                        log(`    Date: ${invoice.date || invoice.invoiceDate}`, 'debug');
+                        log(`    Status: ${invoice.status}`, 'debug');
+                        log(`    VAT Total: R${invoice.vatTotal || 'N/A'}`, 'debug');
+                        log(`    Subtotal: R${invoice.subtotal || 'N/A'}`, 'debug');
+                        log(`    VAT Rate: ${invoice.vatRate || 'N/A'}%`, 'debug');
+                    });
+                }
+                
+                // Calculate expected VAT
+                const expectedVAT = calculateCurrentVAT();
+                log(`\n💰 VAT Calculation:`, 'success');
+                log(`  - Expected Output VAT: R${expectedVAT.toFixed(2)}`, 'success');
+                
+                // Check if stuck at 1956.52
+                if (Math.abs(expectedVAT - 1956.52) < 0.01) {
+                    log(`\n⚠️  ISSUE DETECTED: VAT is stuck at R1956.52!`, 'warning');
+                    log(`  - This suggests old cached data`, 'warning');
+                    log(`  - Try clearing caches and adding fresh data`, 'warning');
+                } else {
+                    log(`\n✅ VAT calculation appears to be working correctly`, 'success');
+                }
+                
+                updateStatus();
+                
+            } catch (error) {
+                log(`❌ Error analyzing current state: ${error.message}`, 'error');
+            }
+        }
+
+        function clearAllCaches() {
+            log('\n🗑️ === CLEARING ALL CACHES ===', 'warning');
+            
+            const keysToCheck = [
+                'vat201Returns',
+                'vatCalculations', 
+                'cachedVAT',
+                'vatCache',
+                'calculationCache',
+                'invoiceCache',
+                'expenseCache'
+            ];
+            
+            let clearedCount = 0;
+            keysToCheck.forEach(key => {
+                if (localStorage.getItem(key)) {
+                    localStorage.removeItem(key);
+                    log(`🗑️ Cleared ${key}`, 'warning');
+                    clearedCount++;
+                }
+            });
+            
+            if (clearedCount === 0) {
+                log('ℹ️ No cache data found to clear', 'info');
+            } else {
+                log(`✅ Cleared ${clearedCount} cache entries`, 'success');
+            }
+            
+            updateStatus();
+        }
+
+        function addFreshTestData() {
+            log('\n➕ === ADDING FRESH TEST DATA ===', 'warning');
+            
+            try {
+                const quarter = getCurrentVATQuarter();
+                
+                // Clear existing invoices
+                localStorage.removeItem('invoices');
+                log('🗑️ Cleared existing invoices', 'warning');
+                
+                // Create fresh test invoices with current dates
+                const testInvoices = [
+                    {
+                        id: `FRESH-${Date.now()}-1`,
+                        number: `INV-FRESH-${Date.now()}-001`,
+                        clientId: 'test-client-1',
+                        clientName: 'Fresh Test Client 1',
+                        clientEmail: 'fresh1@example.com',
+                        date: quarter.startDate,
+                        invoiceDate: quarter.startDate,
+                        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        status: 'sent',
+                        currency: 'ZAR',
+                        subtotal: 2000,
+                        vatRate: 15,
+                        vatTotal: 300,
+                        total: 2300,
+                        amount: 2300,
+                        paidAmount: 0,
+                        balance: 2300,
+                        items: [{
+                            id: '1',
+                            description: 'Fresh Test Service 1',
+                            quantity: 1,
+                            rate: 2000,
+                            amount: 2000
+                        }],
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    },
+                    {
+                        id: `FRESH-${Date.now()}-2`,
+                        number: `INV-FRESH-${Date.now()}-002`,
+                        clientId: 'test-client-2',
+                        clientName: 'Fresh Test Client 2',
+                        clientEmail: 'fresh2@example.com',
+                        date: quarter.startDate,
+                        invoiceDate: quarter.startDate,
+                        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        status: 'sent',
+                        currency: 'ZAR',
+                        subtotal: 1500,
+                        vatRate: 15,
+                        vatTotal: 225,
+                        total: 1725,
+                        amount: 1725,
+                        paidAmount: 0,
+                        balance: 1725,
+                        items: [{
+                            id: '1',
+                            description: 'Fresh Test Service 2',
+                            quantity: 1,
+                            rate: 1500,
+                            amount: 1500
+                        }],
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    }
+                ];
+                
+                localStorage.setItem('invoices', JSON.stringify(testInvoices));
+                
+                const totalVAT = testInvoices.reduce((sum, inv) => sum + inv.vatTotal, 0);
+                log(`✅ Added ${testInvoices.length} fresh test invoices`, 'success');
+                log(`💰 Expected total VAT: R${totalVAT}`, 'success');
+                
+                // Trigger storage event
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: 'invoices',
+                    newValue: JSON.stringify(testInvoices),
+                    oldValue: null,
+                    storageArea: localStorage
+                }));
+                
+                updateStatus();
+                
+            } catch (error) {
+                log(`❌ Error adding fresh test data: ${error.message}`, 'error');
+            }
+        }
+
+        function forceRecalculation() {
+            log('\n🔄 === FORCING RECALCULATION ===', 'info');
+            
+            try {
+                // Clear any calculation caches first
+                clearAllCaches();
+                
+                // Trigger multiple storage events to force recalculation
+                const invoices = localStorage.getItem('invoices');
+                
+                // Trigger storage event multiple times
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        window.dispatchEvent(new StorageEvent('storage', {
+                            key: 'invoices',
+                            newValue: invoices,
+                            oldValue: null,
+                            storageArea: localStorage
+                        }));
+                        log(`🔄 Triggered storage event ${i + 1}`, 'info');
+                    }, i * 500);
+                }
+                
+                // Also trigger a custom event
+                setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('forceVATRecalculation'));
+                    log('🔄 Triggered custom VAT recalculation event', 'info');
+                }, 2000);
+                
+                updateStatus();
+                
+            } catch (error) {
+                log(`❌ Error forcing recalculation: ${error.message}`, 'error');
+            }
+        }
+
+        function resetEverything() {
+            log('\n💥 === NUCLEAR RESET ===', 'error');
+            
+            if (!confirm('This will clear ALL data including invoices, expenses, and VAT returns. Are you sure?')) {
+                log('❌ Reset cancelled by user', 'warning');
+                return;
+            }
+            
+            try {
+                // Clear all localStorage
+                const keysToRemove = [
+                    'invoices',
+                    'expenses',
+                    'vat201Returns',
+                    'vatCalculations',
+                    'cachedVAT',
+                    'vatCache',
+                    'calculationCache',
+                    'invoiceCache',
+                    'expenseCache',
+                    'categorizedExpenses',
+                    'receiptData'
+                ];
+                
+                keysToRemove.forEach(key => {
+                    if (localStorage.getItem(key)) {
+                        localStorage.removeItem(key);
+                        log(`💥 Removed ${key}`, 'error');
+                    }
+                });
+                
+                log('✅ Nuclear reset complete - all data cleared', 'success');
+                log('💡 You can now add fresh test data to start clean', 'info');
+                
+                updateStatus();
+                
+            } catch (error) {
+                log(`❌ Error during nuclear reset: ${error.message}`, 'error');
+            }
+        }
+
+        function openMainApp() {
+            log('🚀 Opening main application...', 'info');
+            const mainWindow = window.open('http://localhost:8080', '_blank');
+            
+            setTimeout(() => {
+                log('💡 Instructions for testing:', 'info');
+                log('1. Go to Accounting > Business Tax', 'info');
+                log('2. Click "Add New Tax Return"', 'info');
+                log('3. Select "VAT 201"', 'info');
+                log('4. Check if Output VAT has updated', 'info');
+                log('5. Compare with the values shown in this debug tool', 'info');
+            }, 1000);
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = 'Log cleared...\n';
+        }
+
+        // Auto-update status every 5 seconds
+        setInterval(updateStatus, 5000);
+        
+        // Initial status update
+        window.onload = function() {
+            updateStatus();
+            log('🔧 VAT Debug Tool loaded successfully', 'success');
+            log('💡 Click "Analyze Current State" to start debugging', 'info');
+        };
+    </script>
+</body>
+</html>

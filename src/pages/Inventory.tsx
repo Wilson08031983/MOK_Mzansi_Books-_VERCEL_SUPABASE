@@ -421,7 +421,7 @@ const Inventory = () => {
             <div className="flex items-center gap-3 mb-4">
               <Link to="/dashboard">
                 <Button variant="outline" className="flex items-center gap-2 hover:bg-slate-100 shadow-business hover:shadow-business-lg transition-all duration-300">
-                  <ArrowLeft className="h-4 w-4" /> Back to Dashboard
+                  <ArrowLeft className="h-4 w-4" /> {t('common.backToDashboard')}
                 </Button>
               </Link>
             </div>
@@ -429,7 +429,7 @@ const Inventory = () => {
               {t('inventory.title')}
             </h1>
             <p className="text-xl text-slate-600 mt-2 font-sf-pro">
-              Track, manage, and optimize your inventory
+              {t('inventory.trackManageOptimize')}
             </p>
           </div>
           
@@ -438,14 +438,14 @@ const Inventory = () => {
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('new')}
             >
-              <Plus className="h-4 w-4" /> New Stock
+              <Plus className="h-4 w-4" /> {t('inventory.newStock')}
             </Button>
             
             <Button 
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-pink-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('update')}
             >
-              <RefreshCw className="h-4 w-4" /> Update Stock
+              <RefreshCw className="h-4 w-4" /> {t('inventory.updateStock')}
             </Button>
             
             <Button 
@@ -453,7 +453,7 @@ const Inventory = () => {
               className="flex items-center gap-2 shadow-business hover:shadow-business-lg hover-lift"
               onClick={() => handleActionClick('scan')}
             >
-              <Scan className="h-4 w-4" /> Scan Barcode
+              <Scan className="h-4 w-4" /> {t('inventory.scanBarcode')}
             </Button>
             
             {/* Damage/Expired button hidden as requested */}
@@ -463,7 +463,7 @@ const Inventory = () => {
               className="flex items-center gap-2 text-green-600 border-green-200 shadow-business hover:shadow-business-lg hover-lift"
               onClick={() => handleActionClick('supplier')}
             >
-              <Truck className="h-4 w-4" /> Add Supplier
+              <Truck className="h-4 w-4" /> {t('inventory.addSupplier')}
             </Button>
             
             <Button 
@@ -471,14 +471,14 @@ const Inventory = () => {
               className="flex items-center gap-2 text-blue-600 border-blue-200 shadow-business hover:shadow-business-lg hover-lift"
               onClick={() => handleActionClick('storage')}
             >
-              <Store className="h-4 w-4" /> Add Storage
+              <Store className="h-4 w-4" /> {t('inventory.addStorage')}
             </Button>
             
             <Button 
               className="flex items-center gap-2 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored hover:shadow-colored-lg hover-lift"
               onClick={() => handleActionClick('sales')}
             >
-              <Package className="h-4 w-4" /> Sales
+              <Package className="h-4 w-4" /> {t('inventory.sales')}
             </Button>
           </div>
         </div>
@@ -527,8 +527,8 @@ const Inventory = () => {
             <Link to="/reports/inventory" className="flex-1">
               <Button variant="outline" className="w-full flex items-center gap-2 shadow-business hover:shadow-business-lg">
                 <FileBarChart className="h-4 w-4" />
-                <span className="hidden sm:inline">Generate Reports</span>
-                <span className="sm:hidden">Reports</span>
+                <span className="hidden sm:inline">{t('inventory.generateReports')}</span>
+                <span className="sm:hidden">{t('inventory.reports')}</span>
               </Button>
             </Link>
             {/* Download and Print buttons removed as requested */}
@@ -538,17 +538,17 @@ const Inventory = () => {
         {/* Main Content Section */}
         <Card className="shadow-business animate-fade-in delay-200">
           <CardHeader className="pb-3">
-            <CardTitle>Inventory Items</CardTitle>
+            <CardTitle>{t('inventory.inventoryItems')}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <div className="px-6 flex justify-between items-center">
                 <TabsList className="grid grid-cols-5 mb-4">
-                  <TabsTrigger value="all-stock">All Stock</TabsTrigger>
-                  <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
-                  <TabsTrigger value="expiring-soon">Expiring Soon</TabsTrigger>
-                  <TabsTrigger value="damaged">Damaged</TabsTrigger>
-                  <TabsTrigger value="history">History</TabsTrigger>
+                  <TabsTrigger value="all-stock">{t('inventory.allStock')}</TabsTrigger>
+                  <TabsTrigger value="low-stock">{t('inventory.lowStock')}</TabsTrigger>
+                  <TabsTrigger value="expiring-soon">{t('inventory.expiringSoon')}</TabsTrigger>
+                  <TabsTrigger value="damaged">{t('inventory.damaged')}</TabsTrigger>
+                  <TabsTrigger value="history">{t('inventory.history')}</TabsTrigger>
                 </TabsList>
                 
                 <Button
@@ -563,14 +563,14 @@ const Inventory = () => {
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                    )}
-                   <span className="hidden md:inline">Refresh</span>
+                   <span className="hidden md:inline">{t('inventory.refresh')}</span>
                 </Button>
               </div>
               
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin mb-2 text-mokm-purple-500" />
-                  <p className="text-slate-500">Loading inventory data...</p>
+                  <p className="text-slate-500">{t('inventory.loadingInventoryData')}</p>
                 </div>
               ) : (
                 <>
@@ -606,19 +606,19 @@ const Inventory = () => {
                     <div className="p-6">
                       {stockHistory.length === 0 ? (
                         <div className="text-center py-10">
-                          <p className="text-slate-500">No stock history available</p>
+                          <p className="text-slate-500">{t('inventory.noStockHistoryAvailable')}</p>
                         </div>
                       ) : (
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Item ID</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Quantity</TableHead>
-                                <TableHead>Notes</TableHead>
-                                <TableHead>Performed By</TableHead>
+                                <TableHead>{t('inventory.date')}</TableHead>
+                                <TableHead>{t('inventory.itemId')}</TableHead>
+                                <TableHead>{t('inventory.type')}</TableHead>
+                                <TableHead>{t('inventory.quantity')}</TableHead>
+                                <TableHead>{t('inventory.notes')}</TableHead>
+                                <TableHead>{t('inventory.performedBy')}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
