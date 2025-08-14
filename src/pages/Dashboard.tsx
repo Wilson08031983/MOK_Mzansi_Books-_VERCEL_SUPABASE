@@ -15,6 +15,7 @@ import DashboardContent from '@/components/dashboard/DashboardContent';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useLocalization } from '@/hooks/useLocalization';
 import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters';
+import { getNotifications } from '@/services/notificationService';
 
 // Define TypeScript types
 type StatItem = {
@@ -67,6 +68,19 @@ const Dashboard = () => {
   const [revenueData, setRevenueData] = useState<{ label: string; value: number }[]>([]);
   const [expensesByCategory, setExpensesByCategory] = useState<{ label: string; value: number }[]>([]);
   const [notifications, setNotifications] = useState<{id: string; title: string; message: string; date: string; read: boolean}[]>([]);
+
+  // Load notifications from service on mount and keep in sync with storage changes
+  useEffect(() => {
+    setNotifications(getNotifications());
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'notifications') {
+        setNotifications(getNotifications());
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   // Process data when dependencies change
   useEffect(() => {
@@ -175,23 +189,7 @@ const Dashboard = () => {
       ];
       setExpensesByCategory(categories);
 
-      // Generate notifications
-      setNotifications([
-        {
-          id: '1',
-          title: 'New invoice payment',
-          message: 'Payment received for INV-001',
-          date: formatDate(new Date().toISOString()),
-          read: false
-        },
-        {
-          id: '2',
-          title: 'Quotation viewed',
-          message: 'ABC Corp viewed your quotation',
-          date: formatDate(new Date(Date.now() - 86400000).toISOString()),
-          read: true
-        }
-      ]);
+      // Removed mock notifications generation; notifications now come from service
     }
   }, [loading, invoices, expenses, clients, quotations, period]);
 

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,51 +8,46 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Bell, Mail, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { 
+  getNotificationSettings, 
+  saveNotificationSettings, 
+  requestNotificationPermission, 
+  canShowDesktopNotifications,
+  type NotificationSettings 
+} from '@/services/notificationService';
 
 const NotificationSettingsTab = () => {
-  const [settings, setSettings] = useState({
-    email: {
-      enabled: true,
-      address: 'admin@mokmzansibooks.com',
-      invoiceReminders: true,
-      paymentReceived: true,
-      lowStock: true,
-      systemAlerts: true,
-      weeklyReports: false,
-      monthlyReports: true
-    },
-    inApp: {
-      enabled: true,
-      sound: true,
-      desktop: true,
-      newInvoices: true,
-      taskReminders: true,
-      clientMessages: true,
-      systemUpdates: true
-    },
-    frequency: {
-      invoiceReminders: '7', // days before due
-      reportSchedule: 'weekly',
-      digestFrequency: 'daily'
-    }
-  });
+  const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings());
 
-  const handleSave = () => {
-    localStorage.setItem('notificationSettings', JSON.stringify(settings));
-    toast.success('Notification settings saved successfully!');
+  useEffect(() => {
+    // Load current settings on mount
+    setSettings(getNotificationSettings());
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      saveNotificationSettings(settings);
+      toast.success('Notification settings saved successfully!');
+      
+      // Request notification permission if desktop notifications are enabled
+      if (settings.inApp.desktop && !canShowDesktopNotifications()) {
+        const permission = await requestNotificationPermission();
+        if (permission === 'granted') {
+          toast.success('Desktop notification permission granted!');
+        } else if (permission === 'denied') {
+          toast.error('Desktop notification permission denied. You can enable it in your browser settings.');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      toast.error('Failed to save notification settings');
+    }
   };
 
   const updateEmailSetting = (key: string, value: boolean | string) => {
     setSettings(prev => ({
       ...prev,
       email: { ...prev.email, [key]: value }
-    }));
-  };
-
-  const updateSmsSetting = (key: string, value: boolean | string) => {
-    setSettings(prev => ({
-      ...prev,
-      sms: { ...prev.sms, [key]: value }
     }));
   };
 

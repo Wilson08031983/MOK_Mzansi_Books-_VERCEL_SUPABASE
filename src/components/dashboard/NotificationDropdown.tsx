@@ -2,6 +2,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Bell } from 'lucide-react';
+import { markAllNotificationsAsRead, getNotifications } from '@/services/notificationService';
 
 interface NotificationDropdownProps {
   notificationsOpen: boolean;
@@ -45,13 +46,17 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 <p className="text-xs text-slate-500 mt-1 font-sf-pro">{notification.date}</p>
               </div>
             ))}
+            {notifications.length === 0 && (
+              <div className="p-6 text-center text-slate-500 text-sm font-sf-pro">No notifications</div>
+            )}
           </div>
           <div className="p-4 text-center border-t border-white/10">
             <Button 
               variant="ghost" 
               size="sm"
               onClick={() => {
-                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                markAllNotificationsAsRead();
+                setNotifications(getNotifications());
                 setNotificationsOpen(false);
               }}
               className="text-mokm-purple-600 hover:bg-mokm-purple-50 font-sf-pro"
