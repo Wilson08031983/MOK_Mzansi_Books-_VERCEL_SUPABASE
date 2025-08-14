@@ -173,6 +173,19 @@ const NotificationSettingsTab = () => {
                 onCheckedChange={(checked) => updateInAppSetting('desktop', checked)}
               />
             </div>
+            {settings.inApp.desktop && !canShowDesktopNotifications() && (
+              <div className="mt-2 text-sm text-slate-600 flex items-center justify-between">
+                <span>Permission not granted yet.</span>
+                <Button size="sm" variant="secondary" onClick={async () => {
+                  const perm = await requestNotificationPermission();
+                  if (perm === 'granted') {
+                    toast.success('Desktop notifications enabled');
+                  } else if (perm === 'denied') {
+                    toast.error('Permission denied in browser settings');
+                  }
+                }}>Grant permission</Button>
+              </div>
+            )}
             
             <div className="flex items-center justify-between">
               <div>
