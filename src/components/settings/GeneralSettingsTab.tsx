@@ -12,9 +12,11 @@ import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/se
 import { useLocalization } from '@/hooks/useLocalization';
 import { localizationService } from '@/services/localizationService';
 import AuthModal from '../company/AuthModal';
+import { useTheme } from 'next-themes';
 
 const GeneralSettingsTab = () => {
   const { t, currentLanguage, settings, changeLanguage, updateSettings, getCurrencySymbol, getCurrencyDisplayName } = useLocalization();
+  const { theme, setTheme } = useTheme();
   
   const [companyInfo, setCompanyInfo] = useState({
     name: 'MOKMzansiBooks',
@@ -344,6 +346,34 @@ const GeneralSettingsTab = () => {
     navigationStyle: 'sidebar'
   });
 
+  useEffect(() => {
+    // keep local state in sync with global theme
+    if (theme && (theme === 'light' || theme === 'dark' || theme === 'system')) {
+      setDisplaySettings((prev) => ({ ...prev, theme: theme === 'system' ? 'auto' : theme }));
+    }
+  }, [theme]);
+
+  const handleThemeChange = (value: string) => {
+    setDisplaySettings({ ...displaySettings, theme: value });
+    const mapped = value === 'auto' ? 'system' : value; // next-themes expects 'system'
+    setTheme(mapped as 'light' | 'dark' | 'system');
+    try {
+      const saved = localStorage.getItem('generalSettings');
+      const existing = saved ? JSON.parse(saved) : {};
+      const updated = {
+        ...existing,
+        displaySettings: {
+          ...(existing.displaySettings || {}),
+          theme: value,
+        },
+      };
+      localStorage.setItem('generalSettings', JSON.stringify(updated));
+      localStorage.setItem('generalSettings_timestamp', Date.now().toString());
+    } catch (e) {
+      console.error('Failed to persist theme setting', e);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Company Information */}
@@ -607,7 +637,7 @@ const GeneralSettingsTab = () => {
                 id="theme"
                 className="w-full p-2 border rounded-lg"
                 value={displaySettings.theme}
-                onChange={(e) => setDisplaySettings({...displaySettings, theme: e.target.value})}
+                onChange={(e) => handleThemeChange(e.target.value)}
               >
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>

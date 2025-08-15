@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 import { initializeLocalAuth } from '@/services/localAuthService'
+import { ThemeProvider } from '@/components/theme-provider'
 
 // Basic error handlers with null checks
 window.addEventListener('error', (event) => {
@@ -35,6 +36,8 @@ if (!rootElement) {
 } else {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
-    <App />
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <App />
+    </ThemeProvider>
   )
 }
