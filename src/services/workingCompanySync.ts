@@ -332,23 +332,6 @@ class WorkingCompanySync {
   }
 
   /**
-   * Sync company assets (logo, signature, stamp)
-   */
-  syncAssets() {
-    try {
-      const assets = this.getCompanyAssets();
-      if (assets.logo) {
-        // Trigger logo update event
-        window.dispatchEvent(new CustomEvent('companyLogoUpdated', { 
-          detail: { logo: assets.logo } 
-        }));
-      }
-    } catch (error) {
-      console.error('Error syncing assets:', error);
-    }
-  }
-
-  /**
    * Get current sync status
    */
   getSyncStatus() {

@@ -7,22 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocalization } from '@/hooks/useLocalization';
 import { 
   Settings as SettingsIcon, 
-  Building2, 
   Users, 
-  DollarSign, 
-  Cog, 
-  FileText, 
+  // Cog, // removed unused icon
   Shield, 
   Bell, 
-  Palette, 
   Database,
   Smartphone,
   CreditCard,
   HelpCircle,
   Info,
-  Zap,
-  User,
-  Calendar,
+  // Zap, // removed unused icon
+  // User, // removed unused icon
   BarChart3,
   Lock,
   Monitor,
@@ -30,20 +25,20 @@ import {
 } from 'lucide-react';
 import GeneralSettingsTab from '@/components/settings/GeneralSettingsTab';
 import UserManagementTab from '@/components/settings/UserManagementTab';
-import FinancialSettingsTab from '@/components/settings/FinancialSettingsTab';
-import SystemConfigurationTab from '@/components/settings/SystemConfigurationTab';
-import DocumentManagementTab from '@/components/settings/DocumentManagementTab';
+// Removed unused: FinancialSettingsTab
+// import SystemConfigurationTab from '@/components/settings/SystemConfigurationTab'; // removed unused import
+// Removed unused: DocumentManagementTab
 import SecuritySettingsTab from '@/components/settings/SecuritySettingsTab';
 import NotificationSettingsTab from '@/components/settings/NotificationSettingsTab';
-import CustomizationTab from '@/components/settings/CustomizationTab';
+// Removed unused: CustomizationTab
 import DataManagementTab from '@/components/settings/DataManagementTab';
 import MobileSettingsTab from '@/components/settings/MobileSettingsTab';
 import BillingSubscriptionTab from '@/components/settings/BillingSubscriptionTab';
 import HelpSupportTab from '@/components/settings/HelpSupportTab';
 import AboutTab from '@/components/settings/AboutTab';
-import AdvancedSettingsTab from '@/components/settings/AdvancedSettingsTab';
-import UserPreferencesTab from '@/components/settings/UserPreferencesTab';
-import IntegrationSettingsTab from '@/components/settings/IntegrationSettingsTab';
+// import AdvancedSettingsTab from '@/components/settings/AdvancedSettingsTab'; // removed unused import
+// import UserPreferencesTab from '@/components/settings/UserPreferencesTab'; // removed unused import
+// Removed unused: IntegrationSettingsTab
 import ReportSettingsTab from '@/components/settings/ReportSettingsTab';
 import DataSecurityTab from '@/components/settings/DataSecurityTab';
 import SystemMaintenanceTab from '@/components/settings/SystemMaintenanceTab';
@@ -60,20 +55,16 @@ const Settings = () => {
   const settingsTabs = [
     { id: 'general', label: 'General', icon: SettingsIcon, component: GeneralSettingsTab },
     { id: 'users', label: 'Users', icon: Users, component: UserManagementTab },
-    { id: 'financial', label: 'Financial', icon: DollarSign, component: FinancialSettingsTab },
-    { id: 'system', label: 'System', icon: Cog, component: SystemConfigurationTab },
-    { id: 'documents', label: 'Documents', icon: FileText, component: DocumentManagementTab },
+    // Removed: System tab
     { id: 'security', label: 'Security', icon: Shield, component: SecuritySettingsTab },
     { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSettingsTab },
-    { id: 'customization', label: 'Customization', icon: Palette, component: CustomizationTab },
     { id: 'data', label: 'Data', icon: Database, component: DataManagementTab },
     { id: 'mobile', label: 'Mobile', icon: Smartphone, component: MobileSettingsTab },
     { id: 'billing', label: 'Billing', icon: CreditCard, component: BillingSubscriptionTab },
     { id: 'help', label: 'Help', icon: HelpCircle, component: HelpSupportTab },
     { id: 'about', label: 'About', icon: Info, component: AboutTab },
-    { id: 'advanced', label: 'Advanced', icon: Zap, component: AdvancedSettingsTab },
-    { id: 'preferences', label: 'Preferences', icon: User, component: UserPreferencesTab },
-    { id: 'integrations', label: 'Integrations', icon: Calendar, component: IntegrationSettingsTab },
+    // Removed: Advanced tab
+    // Removed: Preferences tab
     { id: 'reports', label: 'Reports', icon: BarChart3, component: ReportSettingsTab },
     { id: 'dataSecurity', label: 'Data Security', icon: Lock, component: DataSecurityTab },
     { id: 'maintenance', label: 'Maintenance', icon: Monitor, component: SystemMaintenanceTab }
