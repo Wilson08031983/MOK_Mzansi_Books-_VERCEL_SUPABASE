@@ -91,6 +91,17 @@ const TeamManagement = () => {
     loadTeamMembers();
   }, []);
 
+  // Listen to team member updates triggered elsewhere (e.g., CompanyDetails save)
+  useEffect(() => {
+    const onTeamMembersUpdated = (_e: Event) => {
+      loadTeamMembers();
+    };
+    window.addEventListener('teamMembersUpdated', onTeamMembersUpdated);
+    return () => {
+      window.removeEventListener('teamMembersUpdated', onTeamMembersUpdated);
+    };
+  }, []);
+
   // Handle successful invitation
   const handleInviteSuccess = () => {
     loadTeamMembers();

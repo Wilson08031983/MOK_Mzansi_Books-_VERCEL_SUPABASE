@@ -523,6 +523,7 @@ export const deleteUser = (userId: string): { success: boolean; error?: string }
     // Save updated credentials
     safeSet<StoredCredentials>('userCredentials', credentials);
     
+    console.log('User deleted:', safeUserId);
     return { success: true };
   } catch (error) {
     console.error('Error deleting user:', error);
@@ -550,3 +551,58 @@ export const localAuthService = {
 
 // Re-export as default for backward compatibility
 export default localAuthService;
+
+// Update primary user information in team members table
+export const updatePrimaryUserInTeamMembers = (companyDetails: {
+  ownerName: string;
+  ownerSurname: string;
+  ownerPosition?: string;
+  email: string;
+  phone?: string;
+}): { success: boolean; error?: string } => {
+  try {
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const PRIMARY_USER_EMAIL = 'admin@mokmzansibooks.com';
+    
+    // Find the primary user in team members
+    let primaryUserFound = false;
+    let primaryUserId = '';
+    
+    Object.entries(credentials).forEach(([id, cred]) => {
+      if (cred.email.toLowerCase() === PRIMARY_USER_EMAIL.toLowerCase()) {
+        primaryUserFound = true;
+        primaryUserId = id;
+        
+        // Update the primary user's information with company details
+        credentials[id] = {
+          ...cred,
+          fullName: `${companyDetails.ownerName} ${companyDetails.ownerSurname}`.trim(),
+          role: (companyDetails.ownerPosition as UserRole) || cred.role || 'CEO',
+          // Keep existing password and permissions
+          password: cred.password,
+          permissions: cred.permissions
+        };
+      }
+    });
+    
+    if (!primaryUserFound) {
+      return { success: false, error: 'Primary user not found in team members' };
+    }
+    
+    // Save updated credentials
+    safeSet<StoredCredentials>('userCredentials', credentials);
+    
+    // Notify listeners that team members have been updated
+    try {
+      window.dispatchEvent(new CustomEvent('teamMembersUpdated', { detail: { reason: 'primaryUserUpdated' } }));
+    } catch (evtErr) {
+      console.warn('Could not dispatch teamMembersUpdated event:', evtErr);
+    }
+    
+    console.log('Primary user updated in team members:', primaryUserId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating primary user in team members:', error);
+    return { success: false, error: 'Failed to update primary user information' };
+  }
+};

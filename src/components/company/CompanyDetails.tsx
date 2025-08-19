@@ -9,6 +9,7 @@ import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/se
 import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
 import { workingCompanySync } from '@/services/workingCompanySync';
 import { userLinkingService } from '@/services/userLinkingService';
+import { updatePrimaryUserInTeamMembers } from '@/services/localAuthService';
 import AuthModal from './AuthModal';
 import CompanyInformationForm from './CompanyInformationForm';
 import ContactPersonForm from './ContactPersonForm';
@@ -241,6 +242,22 @@ const CompanyDetails = () => {
       
       localStorage.setItem('companyDetails', JSON.stringify(companyDetailsToSave));
       
+      // NEW: Update primary user shown in Team Management (first user) to reflect new company details
+      try {
+        const updateResult = updatePrimaryUserInTeamMembers({
+          ownerName: companyDetailsToSave.ownerName,
+          ownerSurname: companyDetailsToSave.ownerSurname,
+          ownerPosition: companyDetailsToSave.ownerPosition,
+          email: companyDetailsToSave.email,
+          phone: companyDetailsToSave.phone
+        });
+        if (!updateResult.success) {
+          console.warn('Team primary user update warning:', updateResult.error);
+        }
+      } catch (e) {
+        console.error('Error updating team primary user from company details:', e);
+      }
+      
       // Automatically sync company details to HR Management employee record
       try {
         const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
@@ -262,8 +279,6 @@ const CompanyDetails = () => {
         toast.success('Company details saved successfully.');
         toast.warning('Note: Could not auto-sync to HR Management. Please check employee records.');
       }
-
-      // Primary user sync is now handled automatically in the HR sync block above
 
       // Sync to Settings page General tab
       try {
