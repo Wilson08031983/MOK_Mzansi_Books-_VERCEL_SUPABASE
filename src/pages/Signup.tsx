@@ -136,22 +136,22 @@ const Signup = () => {
       
       <div className="relative w-full max-w-2xl">
         <div className="mb-8">
-          <Link to={isInvitationSignup ? "/accept-invitation" : "/"} className="inline-flex items-center text-gray-600 hover:text-purple-600 transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg bg-white/80 backdrop-blur-sm">
+          <Link to={isInvitationSignup ? "/accept-invitation" : "/"} className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg glass backdrop-blur-sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            {isInvitationSignup ? t('auth.signup.backToLogin') : t('common.backToHome')}
+            {isInvitationSignup ? t('auth.invitedSignup.backToInvitation') : t('auth.login.backToHome')}
           </Link>
         </div>
 
-        <Card className="shadow-business-xl border-0 bg-white/90 backdrop-blur-md hover-lift animate-fade-in">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-white">
-              <img src="/lovable-uploads/8021eb93-6e6a-421e-a8ff-bed101269a7c.png" alt="MOKMzansiBooks Logo" className="w-full h-full object-contain p-2" />
+        <Card className="shadow-business-xl border-0 glass backdrop-blur-md hover-lift animate-fade-in">
+          <CardHeader className="text-center animate-fade-in" style={{ animationDelay: '0.1s' }}>
+            <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-card">
+              <LogoColor className="w-16 h-16" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900">
+              <CardTitle className="text-2xl font-bold text-foreground">
                 {isInvitationSignup ? t('auth.invitedSignup.title') : t('auth.signup.title')}
               </CardTitle>
-              <p className="text-gray-600 mt-2">
+              <p className="text-muted-foreground mt-2">
                 {isInvitationSignup 
                   ? t('auth.invitedSignup.invitationTitle')
                   : t('auth.signup.subtitle')
@@ -164,25 +164,25 @@ const Signup = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName" className="text-gray-700 font-medium">{t('auth.invitedSignup.nameLabel')}</Label>
+                  <Label htmlFor="firstName" className="text-foreground font-medium">{t('auth.invitedSignup.nameLabel')}</Label>
                   <Input
                     id="firstName"
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                    className="h-12 bg-background border-border focus:border-primary focus:ring-primary"
                     placeholder={t('auth.invitedSignup.namePlaceholder')}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName" className="text-gray-700 font-medium">{t('auth.invitedSignup.surnameLabel')}</Label>
+                  <Label htmlFor="lastName" className="text-foreground font-medium">{t('auth.invitedSignup.surnameLabel')}</Label>
                   <Input
                     id="lastName"
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                    className="h-12 bg-background border-border focus:border-primary focus:ring-primary"
                     placeholder={t('auth.invitedSignup.surnamePlaceholder')}
                     required
                   />
@@ -190,13 +190,13 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium">{t('auth.signup.emailLabel')}</Label>
+                <Label htmlFor="email" className="text-foreground font-medium">{t('auth.signup.emailLabel')}</Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                  className="h-12 bg-background border-border focus:border-primary focus:ring-primary"
                   placeholder={t('auth.signup.emailPlaceholder')}
                   required
                   disabled={isInvitationSignup}
@@ -206,34 +206,34 @@ const Signup = () => {
               {!isInvitationSignup && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-gray-700 font-medium">{t('common.password')}</Label>
+                    <Label htmlFor="password" className="text-foreground font-medium">{t('common.password')}</Label>
                     <div className="relative">
                       <Input
                         id="password"
                         type={showPassword ? 'text' : 'password'}
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500 pr-12"
+                        className="h-12 bg-background border-border focus:border-primary focus:ring-primary pr-12"
                         placeholder={t('auth.signup.passwordPlaceholder')}
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">{t('auth.signup.confirmPasswordLabel')}</Label>
+                    <Label htmlFor="confirmPassword" className="text-foreground font-medium">{t('auth.signup.confirmPasswordLabel')}</Label>
                     <Input
                       id="confirmPassword"
                       type="password"
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                      className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                      className="h-12 bg-background border-border focus:border-primary focus:ring-primary"
                       placeholder={t('auth.signup.confirmPasswordPlaceholder')}
                       required
                     />
@@ -247,7 +247,7 @@ const Signup = () => {
                     <input 
                       type="checkbox" 
                       id="terms-checkbox"
-                      className="mt-1 rounded border-gray-300" 
+                      className="mt-1 rounded border-border" 
                       checked={agreeToTerms}
                       onChange={() => {
                         setAgreeToTerms(!agreeToTerms);
@@ -256,8 +256,8 @@ const Signup = () => {
                         }
                       }}
                     />
-                    <label htmlFor="terms-checkbox" className="text-sm text-gray-600">
-                      I agree to the <Link to="/terms" className="text-purple-600 hover:text-purple-700">Terms of Service</Link> and <Link to="/privacy" className="text-purple-600 hover:text-purple-700">Privacy Policy</Link>
+                    <label htmlFor="terms-checkbox" className="text-sm text-muted-foreground">
+                      I agree to the <Link to="/terms" className="text-primary hover:text-primary/80">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:text-primary/80">Privacy Policy</Link>
                     </label>
                   </div>
                   
@@ -287,8 +287,8 @@ const Signup = () => {
 
             {!isInvitationSignup && (
               <div className="text-center">
-                <span className="text-gray-600">{t('auth.signup.alreadyHaveAccount')} </span>
-                <Link to="/login" className="text-purple-600 hover:text-purple-700 font-semibold">
+                <span className="text-muted-foreground">{t('auth.signup.alreadyHaveAccount')} </span>
+                <Link to="/login" className="text-primary hover:text-primary/80 font-semibold">
                   {t('auth.signup.signIn')}
                 </Link>
               </div>

@@ -21,10 +21,23 @@ import QuotationsBulkActions from '@/components/quotations/QuotationsBulkActions
 import QuotationsPagination from '@/components/quotations/QuotationsPagination';
 import { getQuotations, deleteQuotation, Quotation } from '@/services/quotationService';
 import { toast } from 'sonner';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { activityService } from '@/services/activityService';
 
 const Quotations = () => {
   const { t, formatCurrency, settings } = useLocalization();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Open create modal when navigated with state from Quick Actions
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.openCreateQuotationModal) {
+      setIsCreateQuotationModalOpen(true);
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate]);
 
   // Update document title when language changes
   useEffect(() => {
@@ -135,65 +148,83 @@ const Quotations = () => {
   };
 
   const handleDeleteQuotation = (quotationId: string): void => {
+    // Find quotation before deletion for logging metadata
+    const quot = quotations.find(q => q.id === quotationId);
+
     const updatedQuotations = deleteQuotation(quotationId);
     setQuotations(updatedQuotations);
+
+    // Log activity for quotation deletion
+    try {
+      const number = quot?.number || 'Unknown';
+      activityService.logFinancialAction(
+        'Quotation deleted',
+        `Quotation ${number} was deleted`,
+        'quotation',
+        quotationId,
+        {
+          number,
+          amount: quot?.totalAmount ?? quot?.amount,
+          status: quot?.status,
+          clientId: quot?.clientId,
+          client: quot?.client
+        }
+      );
+    } catch (logErr) {
+      console.warn('Activity logging failed (quotation delete):', logErr);
+    }
+
     toast.success('Quotation deleted successfully');
   };
 
   // Get status icon with proper typing
   const getStatusIcon = (status: string) => {
-    if (!status) return <FileText className="h-4 w-4 text-gray-500" />;
+    if (!status) return <FileText className="h-4 w-4 text-muted-foreground" />;
     
     switch (status.toLowerCase()) {
       case 'draft':
       case 'saved':
-        return <FileText className="h-4 w-4 text-gray-500" />;
+        return <FileText className="h-4 w-4 text-muted-foreground" />;
       case 'sent':
-        return <Send className="h-4 w-4 text-blue-500" />;
+        return <Send className="h-4 w-4 text-primary" />;
       case 'viewed':
-        return <Eye className="h-4 w-4 text-blue-400" />;
+        return <Eye className="h-4 w-4 text-primary/80" />;
       case 'accepted':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-success" />;
       case 'pending':
         return <Clock className="h-4 w-4 text-amber-500" />;
       case 'overdue':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case 'expired':
-        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
-      case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'cancelled':
-        return <X className="h-4 w-4 text-gray-400" />;
+        return <AlertCircle className="h-4 w-4 text-destructive" />;
       default:
-        return <FileText className="h-4 w-4 text-gray-400" />;
+        return <FileText className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
   const getStatusColor = (status: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800 border-gray-200';
+    if (!status) return 'bg-muted text-muted-foreground border-border';
     
     switch (status.toLowerCase()) {
       case 'draft':
       case 'saved':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-muted text-muted-foreground border-border';
       case 'sent':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-primary/10 text-primary border-primary/20';
       case 'viewed':
-        return 'bg-blue-50 text-blue-700 border-blue-100';
+        return 'bg-primary/5 text-primary/80 border-primary/10';
       case 'accepted':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-success/10 text-success border-success/20';
       case 'pending':
         return 'bg-amber-100 text-amber-800 border-amber-200';
       case 'overdue':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'expired':
         return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'rejected':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-500 border-gray-200';
+        return 'bg-muted text-muted-foreground border-border';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
   

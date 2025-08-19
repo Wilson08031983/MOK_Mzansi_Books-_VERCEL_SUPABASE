@@ -12,6 +12,7 @@ import { X, Save, User, Building, MapPin, CreditCard, Check, AlertCircle } from 
 import { addClient, getClientById, ClientFormData } from '@/services/clientService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import { activityService } from '@/services/activityService';
 
 interface AddClientModalProps {
   isOpen: boolean;
@@ -175,12 +176,31 @@ const AddClientModal = ({ isOpen, onClose, onClientAdded, clientId, viewMode = f
       // Add client to localStorage
       const newClient = addClient(formData);
       console.log('Client added:', newClient);
+
+      // Log activity for client creation
+      try {
+        const clientName = newClient.companyName || newClient.contactPerson || 'Unnamed Client';
+        activityService.logDocumentAction(
+          'Client created',
+          `Client ${clientName} was added`,
+          'client',
+          newClient.id,
+          {
+            clientType: newClient.clientType,
+            email: newClient.email,
+            phone: newClient.phone,
+            createdAt: new Date().toISOString()
+          }
+        );
+      } catch (logErr) {
+        console.warn('Activity logging failed (client creation):', logErr);
+      }
       
       setSubmitSuccess(true);
       
       // Notify parent component if callback provided
       if (onClientAdded) {
-        onClientAdded();
+        onClientAdded(newClient);
       }
       
       // Close modal after a short delay to show success message

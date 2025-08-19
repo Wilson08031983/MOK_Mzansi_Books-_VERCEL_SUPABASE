@@ -71,7 +71,7 @@ const Settings = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto p-8">
         <div className="mb-8 animate-fade-in">
           <div className="flex items-center space-x-4 mb-6">
@@ -79,7 +79,7 @@ const Settings = () => {
               <Button 
                 variant="ghost" 
                 size="sm"
-                className="text-slate-600 hover:text-mokm-purple-600 hover:bg-white/50 rounded-xl transition-all duration-300 font-sf-pro"
+                className="text-muted-foreground hover:text-mokm-purple-600 hover:bg-muted/50 rounded-xl transition-all duration-300 font-sf-pro"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 {t('common.back')}
@@ -89,14 +89,14 @@ const Settings = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent mb-4 font-sf-pro">
             {t('settings.title')}
           </h1>
-          <p className="text-xl text-slate-600 font-sf-pro">
+          <p className="text-xl text-muted-foreground font-sf-pro">
             {t('settings.description')}
           </p>
         </div>
 
         <div className="animate-fade-in delay-200">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <div className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business rounded-lg p-4">
+            <div className="glass glass-soft border-border/20 shadow-business rounded-lg p-4">
               <TabsList className="grid grid-cols-5 lg:grid-cols-10 xl:grid-cols-19 gap-2 h-auto bg-transparent p-0">
                 {settingsTabs.map((tab) => {
                   const IconComponent = tab.icon;

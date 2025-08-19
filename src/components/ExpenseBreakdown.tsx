@@ -1,5 +1,6 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
@@ -25,7 +26,47 @@ const chartConfig = {
 };
 
 const ExpenseBreakdown: React.FC<ExpenseBreakdownProps> = ({ data }) => {
+  const navigate = useNavigate();
   const total = data.reduce((sum, item) => sum + item.value, 0);
+
+  // Map dashboard labels to category values used by ExpensesTab filters (normalized to lowercase keys)
+  const labelToCategoryId = useMemo(() => {
+    const mapping: Record<string, string> = {
+      // Dashboard labels
+      'office': 'Office Supplies',
+      'travel': 'Transportation',
+      'meals': 'Business Meals',
+      'software': 'Software & Subscriptions',
+      'other': 'Other',
+
+      // Manual expense categories (pass-through by normalized key)
+      'office supplies': 'Office Supplies',
+      'transportation': 'Transportation',
+      'business meals': 'Business Meals',
+      'marketing & advertising': 'Marketing & Advertising',
+      'professional services': 'Professional Services',
+      'software & subscriptions': 'Software & Subscriptions',
+      'equipment & hardware': 'Equipment & Hardware',
+      'travel & accommodation': 'Travel & Accommodation',
+      'utilities': 'Utilities',
+      'insurance': 'Insurance',
+      'training & development': 'Training & Development',
+      'maintenance & repairs': 'Maintenance & Repairs',
+    };
+
+    return mapping;
+  }, []);
+
+  const handleNavigateToCategory = (label: string) => {
+    const normalized = (label || '').toString().trim().toLowerCase();
+    const categoryId = labelToCategoryId[normalized] ?? 'all';
+    navigate('/accounting', {
+      state: {
+        activeTab: 'expenses',
+        expenseCategoryFilter: categoryId
+      }
+    });
+  };
 
   return (
     <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in h-full flex flex-col">
@@ -53,41 +94,32 @@ const ExpenseBreakdown: React.FC<ExpenseBreakdownProps> = ({ data }) => {
                   innerRadius={30}
                   dataKey="value"
                   className="focus:outline-none"
+                  onClick={(data, index) => {
+                    if (Array.isArray((data as any)?.payload)) return;
+                    const label = (data && (data as any).name) || (data as any)?.payload?.label || (data as any)?.payload?.name || (data as any)?.label;
+                    if (label) handleNavigateToCategory(label);
+                  }}
                 >
                   {data.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
-                      fill={`url(#gradient${index})`}
-                      className="hover:opacity-80 transition-opacity duration-300 cursor-pointer"
-                      stroke="rgba(255,255,255,0.2)"
-                      strokeWidth={2}
+                      fill={`url(#gradient${index % MOKM_COLORS.length})`}
+                      className="cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => handleNavigateToCategory(entry.label)}
                     />
                   ))}
                 </Pie>
-                <ChartTooltip 
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0];
-                      const value = Number(data.value) || 0;
-                      const percentage = ((value / total) * 100).toFixed(1);
-                      return (
-                        <div className="glass backdrop-blur-xl bg-white/90 border border-white/20 rounded-xl shadow-business p-3">
-                          <p className="font-medium text-slate-900 font-sf-pro">{data.payload.label}</p>
-                          <p className="text-sm text-slate-600 font-sf-pro">
-                            R {value.toLocaleString()} ({percentage}%)
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
+                <ChartTooltip content={<ChartTooltipContent />} />
               </PieChart>
             </ResponsiveContainer>
           </ChartContainer>
-          <div className="mt-6 space-y-3">
+          <div className="grid grid-cols-1 gap-2 mt-6">
             {data.map((item, index) => (
-              <div key={item.label} className="flex items-center justify-between text-sm glass backdrop-blur-sm bg-white/30 rounded-xl p-3 hover:bg-white/40 transition-all duration-300">
+              <div 
+                key={item.label} 
+                className="flex items-center justify-between text-sm glass backdrop-blur-sm bg-white/30 rounded-xl p-3 hover:bg-white/40 transition-all duration-300 cursor-pointer"
+                onClick={() => handleNavigateToCategory(item.label)}
+              >
                 <div className="flex items-center">
                   <div 
                     className="w-4 h-4 rounded-full mr-3 shadow-sm" 

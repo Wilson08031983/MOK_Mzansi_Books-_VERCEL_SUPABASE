@@ -17,6 +17,7 @@ import {
 import QuotationPreviewModal, { Quotation as QuotationPreviewType } from '@/components/quotation/QuotationPreviewModal';
 import { generateNextQuotationNumber, generateQuotationPdf, QuotationPdfData } from '@/utils/quotationUtils';
 import { saveQuotation, getQuotations, Quotation as QuotationType } from '@/services/quotationService';
+import { activityService } from '@/services/activityService';
 
 
 // Email functionality removed as per requirements
@@ -336,6 +337,26 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
       // Update the parent component's state if the callback is provided
       if (onQuotationSaved) {
         onQuotationSaved(quotationData, updatedQuotations);
+      }
+
+      // Log activity for quotation save
+      try {
+        activityService.logFinancialAction(
+          isDraft ? 'Quotation draft saved' : 'Quotation saved',
+          `Quotation ${quotationData.number} for ${quotationData.client} was ${isDraft ? 'saved as draft' : 'saved'}`,
+          'quotation',
+          quotationData.id,
+          {
+            number: quotationData.number,
+            clientId: quotationData.clientId,
+            amount: quotationData.totalAmount,
+            currency: quotationData.currency,
+            itemsCount: quotationData.items?.length || 0,
+            status: quotationData.status
+          }
+        );
+      } catch (logErr) {
+        console.warn('Activity logging failed (quotation save):', logErr);
       }
       
       toast.success(`Quotation ${isDraft ? 'saved as draft' : 'saved'} successfully!`);

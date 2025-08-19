@@ -241,33 +241,29 @@ const CompanyDetails = () => {
       
       localStorage.setItem('companyDetails', JSON.stringify(companyDetailsToSave));
       
-      // Sync company details to HR Management employee record
+      // Automatically sync company details to HR Management employee record
       try {
         const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
         if (syncResult.success) {
-          toast.success('Company details saved and synced to HR Management successfully.');
+          // Also sync primary user to maintain cross-table consistency
+          try {
+            await userLinkingService.syncPrimaryUser();
+          } catch (error) {
+            console.error('Primary user sync error:', error);
+            toast.info('Auto-sync completed. Primary user sync encountered issues.');
+          }
+          toast.success('Company details saved and automatically synced to HR Management.');
         } else {
           toast.success('Company details saved successfully.');
-          toast.info(`Sync note: ${syncResult.message}`);
+          toast.info(`Auto-sync note: ${syncResult.message}`);
         }
       } catch (syncError) {
-        console.error('Sync error:', syncError);
+        console.error('Auto-sync error:', syncError);
         toast.success('Company details saved successfully.');
-        toast.warning('Note: Could not sync to HR Management. Please check employee records.');
+        toast.warning('Note: Could not auto-sync to HR Management. Please check employee records.');
       }
 
-      // Sync primary user across all tables (Company Details -> HR -> Settings)
-      try {
-        const userSyncResult = await userLinkingService.syncPrimaryUser();
-        if (userSyncResult) {
-          console.log('Primary user synced successfully across all tables');
-        } else {
-          console.warn('Primary user sync encountered issues');
-        }
-      } catch (userSyncError) {
-        console.error('Primary user sync error:', userSyncError);
-        toast.warning('Note: Could not sync primary user across all tables.');
-      }
+      // Primary user sync is now handled automatically in the HR sync block above
 
       // Sync to Settings page General tab
       try {
@@ -308,28 +304,7 @@ const CompanyDetails = () => {
           <CardTitle className="text-slate-900 font-sf-pro text-xl">Company Information</CardTitle>
           {!isEditing ? (
             <div className="flex space-x-2">
-              <Button
-                onClick={async () => {
-                  const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
-                  if (syncResult.success) {
-                    // Also sync primary user
-                    try {
-                      await userLinkingService.syncPrimaryUser();
-                      toast.success('Company details and primary user synced successfully.');
-                    } catch (error) {
-                      console.error('Primary user sync error:', error);
-                      toast.success('Company details synced. Primary user sync encountered issues.');
-                    }
-                  } else {
-                    toast.error(`Sync failed: ${syncResult.message}`);
-                  }
-                }}
-                variant="outline"
-                className="border-blue-300 hover:bg-blue-50 text-blue-600 font-sf-pro rounded-xl transition-all duration-300"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Sync to HR
-              </Button>
+              {/* Sync to HR button hidden as auto-sync is triggered on Save */}
               <Button
                 onClick={handleStartEdit}
                 className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"

@@ -23,7 +23,7 @@ import {
   Trash2,
   ArrowLeft
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ClientsTable from '@/components/clients/ClientsTable';
 import ClientsGrid from '@/components/clients/ClientsGrid';
 import AddClientModal from '@/components/clients/AddClientModal';
@@ -66,13 +66,23 @@ interface ClientDisplay {
 const Clients = () => {
   const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings } = useLocalization();
   const navigate = useNavigate();
+  const location = useLocation();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
+
+  // Open add client modal when navigated with state from Quick Actions
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.openAddClientModal) {
+      setIsAddClientModalOpen(true);
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate]);
 
   // Update document title when language changes
   useEffect(() => {
     document.title = `${t('clients.title')} - MOK Mzansi Books`;
   }, [t]);
-  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [clients, setClients] = useState<ClientDisplay[]>([]);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);

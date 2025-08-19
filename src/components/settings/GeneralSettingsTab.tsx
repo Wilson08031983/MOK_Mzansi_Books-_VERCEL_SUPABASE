@@ -13,6 +13,7 @@ import { useLocalization } from '@/hooks/useLocalization';
 import { localizationService } from '@/services/localizationService';
 import AuthModal from '../company/AuthModal';
 import { useTheme } from 'next-themes';
+import { applyFontSize } from '@/services/fontSizeService'
 
 const GeneralSettingsTab = () => {
   const { t, currentLanguage, settings, changeLanguage, updateSettings, getCurrencySymbol, getCurrencyDisplayName } = useLocalization();
@@ -346,17 +347,36 @@ const GeneralSettingsTab = () => {
     navigationStyle: 'sidebar'
   });
 
+  // Initialize from localStorage (theme + fontSize)
   useEffect(() => {
-    // keep local state in sync with global theme
+    try {
+      const saved = localStorage.getItem('generalSettings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const ds = parsed.displaySettings || {};
+        const initialTheme = ds.theme ?? displaySettings.theme;
+        const initialFont = ds.fontSize ?? displaySettings.fontSize;
+        setDisplaySettings((prev) => ({ ...prev, theme: initialTheme, fontSize: initialFont }));
+        // apply font size class on mount
+        applyFontSize(initialFont as any);
+      } else {
+        // apply default
+        applyFontSize(displaySettings.fontSize as any);
+      }
+    } catch (e) {
+      console.error('Failed to load display settings', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // keep local state in sync with global theme
+  useEffect(() => {
     if (theme && (theme === 'light' || theme === 'dark' || theme === 'system')) {
       setDisplaySettings((prev) => ({ ...prev, theme: theme === 'system' ? 'auto' : theme }));
     }
   }, [theme]);
 
-  const handleThemeChange = (value: string) => {
-    setDisplaySettings({ ...displaySettings, theme: value });
-    const mapped = value === 'auto' ? 'system' : value; // next-themes expects 'system'
-    setTheme(mapped as 'light' | 'dark' | 'system');
+  const persistDisplaySettings = (patch: Partial<typeof displaySettings>) => {
     try {
       const saved = localStorage.getItem('generalSettings');
       const existing = saved ? JSON.parse(saved) : {};
@@ -364,20 +384,35 @@ const GeneralSettingsTab = () => {
         ...existing,
         displaySettings: {
           ...(existing.displaySettings || {}),
-          theme: value,
+          ...patch,
         },
       };
       localStorage.setItem('generalSettings', JSON.stringify(updated));
       localStorage.setItem('generalSettings_timestamp', Date.now().toString());
     } catch (e) {
-      console.error('Failed to persist theme setting', e);
+      console.error('Failed to persist display settings', e);
     }
+  };
+
+
+
+  const handleThemeChange = (value: string) => {
+    setDisplaySettings({ ...displaySettings, theme: value });
+    const mapped = value === 'auto' ? 'system' : value; // next-themes expects 'system'
+    setTheme(mapped as 'light' | 'dark' | 'system');
+    persistDisplaySettings({ theme: value });
+  };
+
+  const handleFontSizeChange = (value: string) => {
+    setDisplaySettings({ ...displaySettings, fontSize: value });
+    applyFontSize(value as any);
+    persistDisplaySettings({ fontSize: value });
   };
 
   return (
     <div className="space-y-6">
       {/* Company Information */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass glass-soft border-border/20 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center justify-between font-sf-pro">
             <div className="flex items-center">
@@ -387,7 +422,7 @@ const GeneralSettingsTab = () => {
             <div className="flex items-center space-x-2">
               {isEditing ? (
                 <>
-                  <Button onClick={handleSave} size="sm" className="bg-green-600 hover:bg-green-700">
+                  <Button onClick={handleSave} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
                     <Save className="h-4 w-4 mr-1" />
                     Save
                   </Button>
@@ -419,7 +454,7 @@ const GeneralSettingsTab = () => {
             </div>
           </CardTitle>
           {syncStatus.lastSyncTime > 0 && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Last synced: {new Date(syncStatus.lastSyncTime).toLocaleString()}
             </p>
           )}
@@ -478,7 +513,7 @@ const GeneralSettingsTab = () => {
           <div className="mt-6">
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('settings.companyLogo')}</label>
             <div className="mt-2 flex items-center space-x-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-mokm-orange-200 to-mokm-purple-200 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-20 h-20 rounded-lg flex items-center justify-center overflow-hidden glass glass-soft">
                 {companyLogo ? (
                   <img 
                     src={companyLogo} 
@@ -537,7 +572,7 @@ const GeneralSettingsTab = () => {
       </Card>
 
       {/* Localization */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass glass-soft border-border/20 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Globe className="h-5 w-5 mr-2" />
@@ -545,7 +580,7 @@ const GeneralSettingsTab = () => {
           </CardTitle>
         </CardHeader>
         {banner && (
-          <div className="mx-6 mt-2 mb-0 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 flex items-center justify-between">
+          <div className="mx-6 mt-2 mb-0 rounded-md border border-emerald-200/40 bg-emerald-50/60 dark:bg-emerald-500/10 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
             <span>{banner.message}</span>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={handleUndo}>Undo</Button>
@@ -555,16 +590,16 @@ const GeneralSettingsTab = () => {
         )}
         <CardContent className="space-y-4">
           {/* Current Timezone Display */}
-          <div className="bg-slate-50 rounded-lg p-4 border">
+          <div className="rounded-lg p-4 border bg-muted/30">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-medium text-slate-700">Current Time</h4>
-                <p className="text-sm text-slate-500">Live time in your selected timezone</p>
-                <p className="text-xs text-slate-400 mt-1">Changes to timezone will update all date/time displays instantly</p>
+                <h4 className="font-medium text-foreground">Current Time</h4>
+                <p className="text-sm text-muted-foreground">Live time in your selected timezone</p>
+                <p className="text-xs text-muted-foreground mt-1">Changes to timezone will update all date/time displays instantly</p>
               </div>
               <div className="text-right">
                 <TimezoneDisplay format="full" className="mb-1" />
-                <div className="text-xs text-slate-500 bg-white px-2 py-1 rounded border">
+                <div className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border">
                   🌍 Timezone: {settings.timezone || 'UTC'}
                 </div>
               </div>
@@ -576,7 +611,7 @@ const GeneralSettingsTab = () => {
               <Label htmlFor="language">{t('settings.defaultLanguage')}</Label>
               <select
                 id="language"
-                className="w-full p-2 border rounded-lg"
+                className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={currentLanguage}
                 onChange={(e) => onLanguageChange(e.target.value)}
               >
@@ -590,7 +625,7 @@ const GeneralSettingsTab = () => {
               <Label htmlFor="timezone">{t('settings.timezone')}</Label>
               <select
                 id="timezone"
-                className="w-full p-2 border rounded-lg"
+                className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={settings.timezone}
                 onChange={(e) => onTimezoneChange(e.target.value)}
               >
@@ -604,7 +639,7 @@ const GeneralSettingsTab = () => {
               <Label htmlFor="currency">{t('settings.currency')}</Label>
               <select
                 id="currency"
-                className="w-full p-2 border rounded-lg"
+                className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={settings.currency}
                 onChange={(e) => onCurrencyChange(e.target.value)}
               >
@@ -613,7 +648,7 @@ const GeneralSettingsTab = () => {
                 <option value="EUR">Euro (EUR)</option>
                 <option value="GBP">British Pound (GBP)</option>
               </select>
-              <div className="mt-2 text-xs text-slate-500 bg-white px-2 py-1 rounded border">
+              <div className="mt-2 text-xs text-muted-foreground bg-background px-2 py-1 rounded border">
                 💰 Current: {getCurrencySymbol()} {getCurrencyDisplayName()}
               </div>
             </div>
@@ -622,7 +657,7 @@ const GeneralSettingsTab = () => {
       </Card>
 
       {/* Display Settings */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass glass-soft border-border/20 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Monitor className="h-5 w-5 mr-2" />
@@ -635,7 +670,7 @@ const GeneralSettingsTab = () => {
               <Label htmlFor="theme">Theme</Label>
               <select
                 id="theme"
-                className="w-full p-2 border rounded-lg"
+                className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={displaySettings.theme}
                 onChange={(e) => handleThemeChange(e.target.value)}
               >
@@ -648,9 +683,9 @@ const GeneralSettingsTab = () => {
               <Label htmlFor="fontSize">Font Size</Label>
               <select
                 id="fontSize"
-                className="w-full p-2 border rounded-lg"
+                className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={displaySettings.fontSize}
-                onChange={(e) => setDisplaySettings({...displaySettings, fontSize: e.target.value})}
+                onChange={(e) => handleFontSizeChange(e.target.value)}
               >
                 <option value="small">Small</option>
                 <option value="medium">Medium</option>

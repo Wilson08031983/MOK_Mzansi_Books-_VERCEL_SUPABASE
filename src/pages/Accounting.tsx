@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocalization } from '@/hooks/useLocalization';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calculator, Receipt, FileText, TrendingUp, DollarSign, CreditCard, ChevronLeft } from 'lucide-react';
@@ -16,6 +16,7 @@ import { financialSummaryService, FinancialSummary } from '../services/financial
 const Accounting = () => {
   const { t, formatCurrency, getCurrencySymbol } = useLocalization();
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [taxSubTab, setTaxSubTab] = useState('business');
@@ -24,6 +25,7 @@ const Accounting = () => {
   const [showEditIncomeModal, setShowEditIncomeModal] = useState(false);
   const [editingIncome, setEditingIncome] = useState(null);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
+  const [initialExpenseCategoryFilter, setInitialExpenseCategoryFilter] = useState<string | null>(null);
   
   // Get or generate company ID
   const getCompanyId = () => {
@@ -56,10 +58,16 @@ const Accounting = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle navigation from HR Management
+  // Handle navigation state (from other pages like HR or Dashboard Quick Actions)
   useEffect(() => {
     if (location.state) {
-      const { activeTab: navActiveTab, selectedEmployee: navEmployee, taxSubTab: navTaxSubTab } = location.state;
+      const { 
+        activeTab: navActiveTab, 
+        selectedEmployee: navEmployee, 
+        taxSubTab: navTaxSubTab, 
+        openAddExpenseModal,
+        expenseCategoryFilter: navExpenseCategoryFilter
+      } = location.state as any;
       if (navActiveTab) {
         setActiveTab(navActiveTab);
       }
@@ -69,8 +77,20 @@ const Accounting = () => {
       if (navTaxSubTab) {
         setTaxSubTab(navTaxSubTab);
       }
+      if (openAddExpenseModal) {
+        setShowAddExpenseModal(true);
+      }
+      if (navExpenseCategoryFilter) {
+        // Ensure we switch to expenses tab and set initial filter
+        setActiveTab('expenses');
+        setInitialExpenseCategoryFilter(navExpenseCategoryFilter);
+      }
+      // Clear state after consuming to avoid repeated actions on refresh/back
+      if (navActiveTab || navEmployee || navTaxSubTab || openAddExpenseModal || navExpenseCategoryFilter) {
+        navigate(location.pathname, { replace: true });
+      }
     }
-  }, [location.state]);
+  }, [location.state, navigate]);
 
   const handleAddExpense = () => {
     setShowAddExpenseModal(true);
@@ -86,7 +106,7 @@ const Accounting = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto p-8">
         {/* Back to Dashboard Button */}
         <Link 
@@ -239,7 +259,7 @@ const Accounting = () => {
                     <div className="space-y-3">
                       {financialSummary && financialSummary.recentTransactions.length > 0 ? (
                         financialSummary.recentTransactions.slice(0, 5).map((transaction, index) => (
-                          <div key={transaction.id || index} className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                          <div key={transaction.id || index} className="flex items-center justify-between p-3 glass glass-soft rounded-lg">
                             <div>
                               <p className="font-medium text-slate-900">{transaction.description}</p>
                               <p className="text-sm text-slate-600">
@@ -300,7 +320,7 @@ const Accounting = () => {
             </TabsContent>
 
             <TabsContent value="expenses">
-              <ExpensesTab onAddExpense={handleAddExpense} companyId={companyId} />
+              <ExpensesTab onAddExpense={handleAddExpense} companyId={companyId} initialCategoryFilter={initialExpenseCategoryFilter ?? undefined} />
             </TabsContent>
 
             <TabsContent value="income">

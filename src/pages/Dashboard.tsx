@@ -16,6 +16,15 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { useLocalization } from '@/hooks/useLocalization';
 import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters';
 import { getNotifications } from '@/services/notificationService';
+import bankStatementService from '@/services/bankStatementService';
+import ExpenseCategorizationService from '@/services/expenseCategorizationService';
+import { startOfWeek, endOfWeek, subMonths, format } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 // Define TypeScript types
 type StatItem = {
@@ -24,8 +33,9 @@ type StatItem = {
   change?: string;
   trend?: 'up' | 'down';
   icon: React.ElementType;
-  color: string;
-  bgGradient: string;
+  color?: string;
+  bgColor?: string;
+  route?: string;
 };
 
 type ActivityItem = {
@@ -44,6 +54,20 @@ type TaskItem = {
   priority: 'high' | 'medium' | 'low';
 };
 
+// General dashboard task (not tied to Projects)
+type GeneralTask = {
+  id: string;
+  title: string;
+  description?: string;
+  assignee?: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'not_started' | 'in_progress' | 'completed' | 'on_hold';
+  dueDate?: string; // ISO string (yyyy-MM-dd)
+  subtasks?: string[];
+  attachments?: string[]; // URLs for now
+  category?: string; // e.g., Accounting, HR, Inventory, Sales, General
+};
+
 const Dashboard = () => {
   const { 
     t, 
@@ -58,6 +82,59 @@ const Dashboard = () => {
   const [period, setPeriod] = useState('month');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
+  // State for Add Task modal and saved tasks
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [savedTasks, setSavedTasks] = useState<GeneralTask[]>([]);
+  const [newTask, setNewTask] = useState<{
+    title: string;
+    description: string;
+    assignee: string;
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    status: 'not_started' | 'in_progress' | 'completed' | 'on_hold';
+    dueDate: string; // yyyy-MM-dd
+    category: string;
+    subtasksText: string; // textarea input, one per line
+    attachmentsText: string; // comma or newline separated URLs
+  }>({
+    title: '',
+    description: '',
+    assignee: '',
+    priority: 'medium',
+    status: 'not_started',
+    dueDate: '',
+    category: 'General',
+    subtasksText: '',
+    attachmentsText: ''
+  });
+
+  // Derive companyId similar to Accounting page
+  const getCompanyId = () => {
+    try {
+      const companyDetails = localStorage.getItem('companyDetails');
+      if (companyDetails) {
+        const parsed = JSON.parse(companyDetails);
+        return `company_${parsed.companyName?.replace(/\s+/g, '_').toLowerCase() || 'default'}`;
+      }
+    } catch (error) {
+      console.error('Error getting company details:', error);
+    }
+    return 'current-company-id';
+  };
+  const [companyId] = useState<string>(getCompanyId());
+
+  // Load saved dashboard tasks from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('dashboardTasks');
+      if (stored) {
+        const parsed: GeneralTask[] = JSON.parse(stored);
+        if (Array.isArray(parsed)) setSavedTasks(parsed);
+      }
+    } catch (e) {
+      console.error('Failed to parse saved dashboard tasks:', e);
+    }
+  }, []);
+
   // Get data from our custom hook
   const { invoices, expenses, clients, quotations, loading } = useDashboardData();
 
@@ -66,6 +143,7 @@ const Dashboard = () => {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [revenueData, setRevenueData] = useState<{ label: string; value: number }[]>([]);
+  const [expensesSeriesData, setExpensesSeriesData] = useState<{ label: string; value: number }[]>([]);
   const [expensesByCategory, setExpensesByCategory] = useState<{ label: string; value: number }[]>([]);
   const [notifications, setNotifications] = useState<{id: string; title: string; message: string; date: string; read: boolean}[]>([]);
 
@@ -103,8 +181,9 @@ const Dashboard = () => {
           change: '+12%',
           trend: 'up' as const,
           icon: DollarSign,
-          color: 'text-green-600',
-          bgGradient: 'from-green-500 to-emerald-600'
+          color: 'text-success',
+          bgColor: 'bg-success/10',
+          route: '/accounting'
         },
         {
           name: t('dashboard.stats.activeProjects'),
@@ -112,8 +191,9 @@ const Dashboard = () => {
           change: '+3',
           trend: 'up' as const,
           icon: FileText,
-          color: 'text-blue-600',
-          bgGradient: 'from-blue-500 to-cyan-600'
+          color: 'text-primary',
+          bgColor: 'bg-primary/10',
+          route: '/quotations'
         },
         {
           name: t('dashboard.stats.pendingInvoices'),
@@ -121,8 +201,9 @@ const Dashboard = () => {
           change: '-2',
           trend: 'down' as const,
           icon: FileText,
-          color: 'text-orange-600',
-          bgGradient: 'from-orange-500 to-red-600'
+          color: 'text-warning',
+          bgColor: 'bg-warning/10',
+          route: '/invoices'
         },
         {
           name: t('dashboard.stats.totalClients'),
@@ -130,8 +211,9 @@ const Dashboard = () => {
           change: '+5',
           trend: 'up' as const,
           icon: Users,
-          color: 'text-mokm-pink-600',
-          bgGradient: 'from-mokm-pink-500 to-mokm-orange-500'
+          color: 'text-primary',
+          bgColor: 'bg-primary/10',
+          route: '/clients'
         }
       ];
 
@@ -159,7 +241,7 @@ const Dashboard = () => {
       
       setActivities([...recentInvoices, ...recentClients]);
 
-      // Generate tasks from overdue invoices
+      // Generate tasks: combine saved dashboard tasks with overdue invoice follow-ups
       const overdueTasks = invoices
         .filter(invoice => invoice.status === 'sent')
         .map(invoice => ({
@@ -168,37 +250,232 @@ const Dashboard = () => {
           dueDate: formatDate(invoice.dueDate),
           priority: 'high' as const
         }));
-        
-      setTasks(overdueTasks);
 
-      // Generate revenue chart data
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      const revenueByMonth = months.map(month => ({
-        label: month,
-        value: Math.floor(Math.random() * 50000) + 10000
+      const mappedSavedTasks: TaskItem[] = savedTasks.map(t => ({
+        id: `saved-${t.id}`,
+        title: t.title,
+        dueDate: t.dueDate ? formatDate(t.dueDate) : '—',
+        priority: (t.priority === 'critical' ? 'high' : t.priority) as 'high' | 'medium' | 'low'
       }));
-      setRevenueData(revenueByMonth);
+        
+      setTasks([...mappedSavedTasks, ...overdueTasks]);
 
-      // Generate expense breakdown
-      const categories = [
-        { label: 'Office', value: 12000 },
-        { label: 'Travel', value: 8500 },
-        { label: 'Meals', value: 4200 },
-        { label: 'Software', value: 6800 },
-        { label: 'Other', value: 3500 }
-      ];
-      setExpensesByCategory(categories);
+      // Generate monthly series for last 6 months (Revenue and Expenses)
+      const now = new Date();
+      const months = Array.from({ length: 6 }, (_, idx) => subMonths(now, 5 - idx));
+      const monthKeys = months.map(d => format(d, 'yyyy-MM'));
+      const monthLabels = months.map(d => format(d, 'MMM'));
+
+      // Initialize maps
+      const revenueMap: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]));
+      const expensesMap: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]));
+
+      // Aggregate revenue by invoice month (use invoiceDate if available, else date/createdAt)
+      invoices
+        .filter(inv => inv.status === 'paid')
+        .forEach(inv => {
+          const dateStr = inv.invoiceDate || inv.date || inv.createdAt;
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+            const key = format(d, 'yyyy-MM');
+            if (revenueMap[key] !== undefined) {
+              revenueMap[key] += inv.total || 0;
+            }
+          }
+        });
+
+      // Aggregate manual expenses by month
+      expenses.forEach(exp => {
+        const d = new Date(exp.date);
+        if (!isNaN(d.getTime())) {
+          const key = format(d, 'yyyy-MM');
+          if (expensesMap[key] !== undefined) {
+            expensesMap[key] += exp.amount || 0;
+          }
+        }
+      });
+
+      // Aggregate bank statement categorized expenses by month for this company
+      try {
+        const bsExpenses = bankStatementService.getExpenses(companyId);
+        bsExpenses.forEach(exp => {
+          const d = new Date(exp.date);
+          if (!isNaN(d.getTime())) {
+            const key = format(d, 'yyyy-MM');
+            if (expensesMap[key] !== undefined) {
+              expensesMap[key] += exp.amount || 0;
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Failed to aggregate bank statement expenses for series:', e);
+      }
+
+      // Build datasets in display order
+      const seriesRevenue = monthKeys.map((k, i) => ({ label: monthLabels[i], value: revenueMap[k] }));
+      const seriesExpenses = monthKeys.map((k, i) => ({ label: monthLabels[i], value: expensesMap[k] }));
+
+      setRevenueData(seriesRevenue);
+      setExpensesSeriesData(seriesExpenses);
+
+      // Helper: get date range for current period selection
+      const getPeriodRange = (p: string): { start: Date; end: Date } => {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      
+        if (p === 'today') {
+          return { start: todayStart, end: todayEnd };
+        }
+        if (p === 'week') {
+          // Week starts on Monday
+          const start = startOfWeek(now, { weekStartsOn: 1 });
+          const end = endOfWeek(now, { weekStartsOn: 1 });
+          // Normalize to full-day boundaries
+          const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+          const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+          return { start: startDay, end: endDay };
+        }
+        if (p === 'month') {
+          const startDay = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+          const endDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          return { start: startDay, end: endDay };
+        }
+        if (p === 'year') {
+          const startDay = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+          const endDay = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+          return { start: startDay, end: endDay };
+        }
+        return { start: todayStart, end: todayEnd };
+      };
+      // Generate expense breakdown from real data (manual + bank statement expenses)
+      try {
+        // Compute selected period range and predicate
+        const { start, end } = getPeriodRange(period);
+        const inRange = (dateStr: string): boolean => {
+          const d = new Date(dateStr);
+          if (isNaN(d.getTime())) return false;
+          return d >= start && d <= end;
+        };
+      
+        // 1) Aggregate manual expenses by display label (filtered by period)
+        const manualAgg: Record<string, number> = {};
+        const filteredManual = expenses.filter(exp => inRange(exp.date));
+        filteredManual.forEach(exp => {
+          const label = (() => {
+            const normalized = (exp.category || '').toLowerCase();
+            if (normalized.includes('office')) return 'Office';
+            if (normalized.includes('travel') || normalized.includes('transport')) return 'Travel';
+            if (normalized.includes('meal') || normalized.includes('entertain')) return 'Meals';
+            if (normalized.includes('software') || normalized.includes('subscription') || normalized.includes('it')) return 'Software';
+            return 'Other';
+          })();
+          manualAgg[label] = (manualAgg[label] || 0) + (exp.amount || 0);
+        });
+      
+        // 2) Aggregate bank statement categorized expenses for this company (filtered by period)
+        const bsExpenses = bankStatementService.getExpenses(companyId);
+        const bsAgg: Record<string, number> = {};
+        const filteredBs = bsExpenses.filter(exp => inRange(exp.date));
+        filteredBs.forEach(exp => {
+          const displayName = ExpenseCategorizationService.getCategoryDisplayName(exp.category);
+          const label = (() => {
+            const name = displayName.toLowerCase();
+            if (name.includes('operating') || name.includes('office')) return 'Office';
+            if (name.includes('travel') || name.includes('transport')) return 'Travel';
+            if (name.includes('training') || name.includes('meals') || name.includes('entertainment')) return 'Meals';
+            if (name.includes('it') || name.includes('software') || name.includes('subscriptions')) return 'Software';
+            return 'Other';
+          })();
+          bsAgg[label] = (bsAgg[label] || 0) + (exp.amount || 0);
+        });
+      
+        // 3) Merge aggregations into final five buckets expected by chart
+        const labels = ['Office', 'Travel', 'Meals', 'Software', 'Other'];
+        const merged = labels.map(label => ({
+          label,
+          value: (manualAgg[label] || 0) + (bsAgg[label] || 0)
+        }));
+      
+        // 4) Filter out empty categories but keep structure (show at least one if all zero)
+        const nonZero = merged.filter(item => item.value > 0);
+        setExpensesByCategory(nonZero.length > 0 ? nonZero : merged);
+      } catch (e) {
+        console.error('Failed to aggregate expense breakdown:', e);
+      }
 
       // Removed mock notifications generation; notifications now come from service
     }
-  }, [loading, invoices, expenses, clients, quotations, period]);
+  }, [loading, invoices, expenses, clients, quotations, period, savedTasks]);
 
   if (loading) {
     return <DashboardLoadingScreen />;
   }
 
+  // Handlers for Add Task modal
+  const handleNewTaskChange = (field: string, value: string) => {
+    setNewTask(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmitNewTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.title.trim()) return;
+    const toArray = (text: string) => text
+      .split(/\r?\n|,/)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const task: GeneralTask = {
+      id: `${Date.now()}`,
+      title: newTask.title.trim(),
+      description: newTask.description.trim() || undefined,
+      assignee: newTask.assignee.trim() || undefined,
+      priority: newTask.priority,
+      status: newTask.status,
+      dueDate: newTask.dueDate || undefined,
+      category: newTask.category || 'General',
+      subtasks: toArray(newTask.subtasksText),
+      attachments: toArray(newTask.attachmentsText)
+    };
+
+    const updated = [task, ...savedTasks];
+    setSavedTasks(updated);
+    try {
+      localStorage.setItem('dashboardTasks', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to persist dashboardTasks:', e);
+    }
+
+    // Log activity
+    activityService.logTaskAction(
+      'Task created',
+      `Created task "${task.title}" in ${task.category} with priority ${task.priority}${task.assignee ? ` assigned to ${task.assignee}` : ''}`,
+      task.id,
+      {
+        taskTitle: task.title,
+        category: task.category,
+        priority: task.priority,
+        assignee: task.assignee,
+        dueDate: task.dueDate
+      }
+    );
+
+    setShowAddTaskModal(false);
+    setNewTask({
+      title: '',
+      description: '',
+      assignee: '',
+      priority: 'medium',
+      status: 'not_started',
+      dueDate: '',
+      category: 'General',
+      subtasksText: '',
+      attachmentsText: ''
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex relative overflow-hidden">
+    <div className="min-h-screen bg-background flex relative overflow-hidden">
       {/* Animated Pulsating Balls Background */}
       <DashboardBackground />
 
@@ -224,7 +501,9 @@ const Dashboard = () => {
           activities={activities}
           tasks={tasks}
           revenueData={revenueData}
+          expensesSeriesData={expensesSeriesData}
           expensesByCategory={expensesByCategory}
+          onAddTaskClick={() => setShowAddTaskModal(true)}
         />
       </div>
 
@@ -233,6 +512,87 @@ const Dashboard = () => {
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
       />
+
+      {/* Add Task Modal */}
+      <Dialog open={showAddTaskModal} onOpenChange={setShowAddTaskModal}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-sf-pro">Add New Task</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmitNewTask} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="taskTitle" className="font-sf-pro">Title *</Label>
+                <Input id="taskTitle" value={newTask.title} onChange={(e) => handleNewTaskChange('title', e.target.value)} placeholder="e.g., Prepare Client Invoice" required />
+              </div>
+              <div>
+                <Label htmlFor="taskAssignee" className="font-sf-pro">Assignee</Label>
+                <Input id="taskAssignee" value={newTask.assignee} onChange={(e) => handleNewTaskChange('assignee', e.target.value)} placeholder="e.g., Jane Doe" />
+              </div>
+              <div>
+                <Label className="font-sf-pro">Priority</Label>
+                <Select value={newTask.priority} onValueChange={(v) => handleNewTaskChange('priority', v)}>
+                  <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="font-sf-pro">Status</Label>
+                <Select value={newTask.status} onValueChange={(v) => handleNewTaskChange('status', v)}>
+                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_started">Not Started</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="on_hold">On Hold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="taskDueDate" className="font-sf-pro">Due Date</Label>
+                <Input id="taskDueDate" type="date" value={newTask.dueDate} onChange={(e) => handleNewTaskChange('dueDate', e.target.value)} />
+              </div>
+              <div>
+                <Label className="font-sf-pro">Category/Department</Label>
+                <Select value={newTask.category} onValueChange={(v) => handleNewTaskChange('category', v)}>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="General">General</SelectItem>
+                    <SelectItem value="Accounting">Accounting</SelectItem>
+                    <SelectItem value="HR">HR</SelectItem>
+                    <SelectItem value="Inventory">Inventory</SelectItem>
+                    <SelectItem value="Sales">Sales</SelectItem>
+                    <SelectItem value="Projects">Projects</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="taskDescription" className="font-sf-pro">Description</Label>
+              <Textarea id="taskDescription" value={newTask.description} onChange={(e) => handleNewTaskChange('description', e.target.value)} placeholder="Detailed instructions or notes about the task" rows={3} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="taskSubtasks" className="font-sf-pro">Subtasks</Label>
+                <Textarea id="taskSubtasks" value={newTask.subtasksText} onChange={(e) => handleNewTaskChange('subtasksText', e.target.value)} placeholder="One per line" rows={3} />
+              </div>
+              <div>
+                <Label htmlFor="taskAttachments" className="font-sf-pro">Attachments (URLs)</Label>
+                <Textarea id="taskAttachments" value={newTask.attachmentsText} onChange={(e) => handleNewTaskChange('attachmentsText', e.target.value)} placeholder="Paste links, separated by commas or new lines" rows={3} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowAddTaskModal(false)}>Cancel</Button>
+              <Button type="submit">Save Task</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

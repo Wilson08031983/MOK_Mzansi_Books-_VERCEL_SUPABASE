@@ -124,7 +124,7 @@ const InvitedSignup = () => {
       <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-mokm-purple-500 mx-auto mb-4"></div>
-          <p className="text-slate-600 font-sf-pro">{t('auth.invitedSignup.verifyingMessage')}</p>
+          <p className="text-muted-foreground font-sf-pro">{t('auth.invitedSignup.verifyingMessage')}</p>
         </div>
       </div>
     );
@@ -148,8 +148,8 @@ const InvitedSignup = () => {
               className="h-12 mb-4"
             />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 font-sf-pro tracking-tight mb-2">{t('auth.invitedSignup.title')}</h1>
-          <p className="text-slate-600 font-sf-pro">{t('auth.invitedSignup.invitationTitle')}</p>
+          <h1 className="text-2xl font-bold text-foreground font-sf-pro tracking-tight mb-2">{t('auth.invitedSignup.title')}</h1>
+      <p className="text-muted-foreground font-sf-pro">{t('auth.invitedSignup.invitationTitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -187,9 +187,9 @@ const InvitedSignup = () => {
               type="email"
               value={invitedUserData.email}
               disabled
-              className="bg-slate-100 text-slate-500 cursor-not-allowed"
+              className="bg-muted text-muted-foreground cursor-not-allowed"
             />
-            <p className="text-xs text-slate-500 mt-1">{t('auth.invitedSignup.emailDescription')}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('auth.invitedSignup.emailDescription')}</p>
           </div>
 
           <div>
@@ -198,9 +198,9 @@ const InvitedSignup = () => {
               id="role"
               value={invitedUserData.role}
               disabled
-              className="bg-slate-100 text-slate-500 cursor-not-allowed"
+              className="bg-muted text-muted-foreground cursor-not-allowed"
             />
-            <p className="text-xs text-slate-500 mt-1">{t('auth.invitedSignup.positionPlaceholder')}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('auth.invitedSignup.positionPlaceholder')}</p>
           </div>
 
           <div>
@@ -279,7 +279,7 @@ const InvitedSignup = () => {
           <Button
             onClick={() => navigate('/login')}
             variant="ghost"
-            className="text-slate-600 hover:text-mokm-purple-600 font-sf-pro text-sm"
+            className="text-muted-foreground hover:text-primary font-sf-pro text-sm"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             {t('auth.invitedSignup.backToLogin')}

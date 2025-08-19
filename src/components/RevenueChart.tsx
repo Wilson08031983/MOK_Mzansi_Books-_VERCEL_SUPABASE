@@ -1,31 +1,42 @@
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 
 interface RevenueChartProps {
-  data: { label: string; value: number }[];
+  revenueData: { label: string; value: number }[];
+  expensesData: { label: string; value: number }[];
 }
 
-const chartConfig = {
-  value: {
-    label: "Revenue",
-    color: "#a855f7",
-  },
-};
+const RevenueChart: React.FC<RevenueChartProps> = ({ revenueData, expensesData }) => {
+  const [view, setView] = useState<'revenue' | 'expenses'>('revenue');
 
-const RevenueChart: React.FC<RevenueChartProps> = ({ data }) => {
+  const activeData = view === 'revenue' ? revenueData : expensesData;
+
+  const chartConfig = useMemo(() => ({
+    value: {
+      label: view === 'revenue' ? 'Revenue' : 'Expenses',
+      color: view === 'revenue' ? '#a855f7' : '#ef4444',
+    },
+  }), [view]);
+
   return (
     <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in h-full flex flex-col">
       <CardHeader className="pb-6">
         <CardTitle className="flex items-center justify-between">
           <span className="text-slate-900 font-sf-pro text-xl">Revenue Overview</span>
           <div className="flex space-x-2">
-            <button className="px-4 py-2 text-xs font-medium rounded-full bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg transition-all duration-300 hover:scale-105 font-sf-pro">
+            <button
+              onClick={() => setView('revenue')}
+              className={`px-4 py-2 text-xs font-medium rounded-full transition-all duration-300 hover:scale-105 font-sf-pro ${view === 'revenue' ? 'bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg' : 'glass backdrop-blur-sm bg-white/50 text-slate-600 hover:bg-white/70 border border-white/20'}`}
+            >
               Revenue
             </button>
-            <button className="px-4 py-2 text-xs font-medium rounded-full glass backdrop-blur-sm bg-white/50 text-slate-600 hover:bg-white/70 border border-white/20 transition-all duration-300 hover:scale-105 font-sf-pro">
+            <button
+              onClick={() => setView('expenses')}
+              className={`px-4 py-2 text-xs font-medium rounded-full transition-all duration-300 hover:scale-105 font-sf-pro ${view === 'expenses' ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-colored hover:shadow-colored-lg' : 'glass backdrop-blur-sm bg-white/50 text-slate-600 hover:bg-white/70 border border-white/20'}`}
+            >
               Expenses
             </button>
           </div>
@@ -34,11 +45,11 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ data }) => {
       <CardContent className="flex-1 flex flex-col">
         <ChartContainer config={chartConfig} className="flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={activeData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <defs>
                 <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a855f7" />
-                  <stop offset="100%" stopColor="#e879f9" />
+                  <stop offset="0%" stopColor={view === 'revenue' ? '#a855f7' : '#ef4444'} />
+                  <stop offset="100%" stopColor={view === 'revenue' ? '#e879f9' : '#f97316'} />
                 </linearGradient>
               </defs>
               <XAxis 

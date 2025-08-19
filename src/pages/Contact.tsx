@@ -96,29 +96,29 @@ const Contact = () => {
     <div className="min-h-screen">
       <Header />
       <div className="pt-16">
-        <section className="py-20 bg-gradient-to-br from-white via-slate-50 to-gray-50">
+        <section className="py-20 bg-gradient-to-br from-background via-background to-background">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center space-y-4 mb-16">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-800">
+              <h1 className="text-4xl md:text-5xl font-bold text-foreground">
                 Contact Us
               </h1>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
                 We'd love to hear from you! Send us your compliments, complaints, or suggestions.
               </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
               <div className="space-y-8">
-                <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+                <Card className="shadow-lg border border-border bg-card backdrop-blur-sm">
                   <CardHeader>
-                    <CardTitle className="text-2xl font-bold text-gray-800">Send us a Message</CardTitle>
+                    <CardTitle className="text-2xl font-bold text-foreground">Send us a Message</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
                       <div className="space-y-2">
-                        <Label htmlFor="type" className="text-gray-700 font-medium">Message Type *</Label>
+                        <Label htmlFor="type" className="text-foreground font-medium">Message Type *</Label>
                         <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                          <SelectTrigger className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500">
+                          <SelectTrigger className="h-12 bg-background border-border focus:border-ring focus:ring-ring transition-colors">
                             <SelectValue placeholder="Select message type" />
                           </SelectTrigger>
                           <SelectContent>
@@ -130,47 +130,47 @@ const Contact = () => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="name" className="text-gray-700 font-medium">Name Surname *</Label>
+                        <Label htmlFor="name" className="text-foreground font-medium">Name Surname *</Label>
                         <Input
                           id="name"
                           type="text"
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                          className="h-12 bg-background border-border focus:border-ring focus:ring-ring transition-colors"
                           placeholder="Enter your full name"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email" className="text-gray-700 font-medium">Email *</Label>
+                        <Label htmlFor="email" className="text-foreground font-medium">Email *</Label>
                         <Input
                           id="email"
                           type="email"
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                          className="h-12 bg-background border-border focus:border-ring focus:ring-ring transition-colors"
                           placeholder="Enter your email address"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="contactNumber" className="text-gray-700 font-medium">Contact Number</Label>
+                        <Label htmlFor="contactNumber" className="text-foreground font-medium">Contact Number</Label>
                         <Input
                           id="contactNumber"
                           type="tel"
                           value={formData.contactNumber}
                           onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                          className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                          className="h-12 bg-background border-border focus:border-ring focus:ring-ring transition-colors"
                           placeholder="Enter your contact number"
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="message" className="text-gray-700 font-medium">
+                        <Label htmlFor="message" className="text-foreground font-medium">
                           Message * 
-                          <span className="text-sm text-gray-500 ml-2">
+                          <span className="text-sm text-muted-foreground ml-2">
                             ({formData.message.length}/500 characters)
                           </span>
                         </Label>
@@ -182,7 +182,7 @@ const Contact = () => {
                               setFormData({ ...formData, message: e.target.value });
                             }
                           }}
-                          className="min-h-32 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+                          className="min-h-32 bg-background border-border focus:border-ring focus:ring-ring transition-colors"
                           placeholder="Enter your message (maximum 500 characters)"
                           required
                         />
@@ -192,17 +192,17 @@ const Contact = () => {
                         <Button
                           type="submit"
                           disabled={isSubmitting}
-                          className="flex-1 h-12 bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 hover:from-orange-500 hover:via-pink-600 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                          className="flex-1 h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
                         >
                           {isSubmitting ? 'Sending...' : 'Send Message'}
                         </Button>
                         <Button
-                          type="button"
                           variant="outline"
+                          type="button"
                           onClick={handleCancel}
-                          className="flex-1 h-12 border-gray-300 text-gray-700 hover:bg-gray-50"
+                          className="flex-1 h-12 border-border text-foreground hover:bg-accent/10 transition-colors"
                         >
-                          Cancel
+                          Clear
                         </Button>
                       </div>
                     </form>
@@ -212,45 +212,45 @@ const Contact = () => {
 
               <div className="space-y-8">
                 <div className="space-y-6">
-                  <h3 className="text-2xl font-bold text-gray-800">Contact Information</h3>
+                  <h3 className="text-2xl font-bold text-foreground">Contact Information</h3>
                   
                   <div className="space-y-4">
                     <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-purple-100 rounded-lg flex items-center justify-center">
-                        <Mail className="h-6 w-6 text-purple-600" />
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <Mail className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-800">Email</p>
-                        <p className="text-gray-600">mokgethwamoabelo@gmail.com</p>
+                        <p className="font-semibold text-foreground">Email</p>
+                        <p className="text-muted-foreground">mokgethwamoabelo@gmail.com</p>
                       </div>
                     </div>
 
                     <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-purple-100 rounded-lg flex items-center justify-center">
-                        <Phone className="h-6 w-6 text-purple-600" />
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <Phone className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-800">WhatsApp</p>
-                        <p className="text-gray-600">064 550 4029</p>
+                        <p className="font-semibold text-foreground">WhatsApp</p>
+                        <p className="text-muted-foreground">064 550 4029</p>
                       </div>
                     </div>
 
                     <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-purple-100 rounded-lg flex items-center justify-center">
-                        <MapPin className="h-6 w-6 text-purple-600" />
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <MapPin className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-800">Location</p>
-                        <p className="text-gray-600">Pretoria, Atteridgeville, South Africa</p>
+                        <p className="font-semibold text-foreground">Location</p>
+                        <p className="text-muted-foreground">Pretoria, Atteridgeville, South Africa</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <Card className="shadow-lg border-0 bg-gradient-to-br from-purple-50 to-blue-50">
+                <Card className="shadow-lg border border-border bg-muted">
                   <CardContent className="p-6">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-2">Business Hours</h4>
-                    <div className="space-y-1 text-gray-600">
+                    <h4 className="text-lg font-semibold text-foreground mb-2">Business Hours</h4>
+                    <div className="space-y-1 text-muted-foreground">
                       <p>Monday - Friday: 8:00 AM - 5:00 PM</p>
                       <p>Saturday: 9:00 AM - 1:00 PM</p>
                       <p>Sunday: Closed</p>
@@ -258,10 +258,10 @@ const Contact = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="shadow-lg border-0 bg-gradient-to-br from-green-50 to-blue-50">
+                <Card className="shadow-lg border border-border bg-muted">
                   <CardContent className="p-6">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-2">Response Time</h4>
-                    <div className="space-y-1 text-gray-600">
+                    <h4 className="text-lg font-semibold text-foreground mb-2">Response Time</h4>
+                    <div className="space-y-1 text-muted-foreground">
                       <p>We typically respond within 24 hours during business days.</p>
                       <p>For urgent matters, please contact us via WhatsApp.</p>
                     </div>

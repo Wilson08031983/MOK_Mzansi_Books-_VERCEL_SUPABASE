@@ -27,7 +27,7 @@ const Company = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-background">
       <div className="p-8">
         {/* Header with Back Navigation */}
         <div className="mb-10 animate-fade-in">
@@ -61,7 +61,7 @@ const Company = () => {
           onValueChange={handleTabChange} 
           className="w-full animate-fade-in delay-200"
         >
-          <TabsList className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business mb-8 p-2 rounded-2xl">
+          <TabsList className="glass glass-soft shadow-business mb-8 p-2 rounded-2xl">
             <TabsTrigger 
               value="company-details"
               className="font-sf-pro data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:to-mokm-pink-500 data-[state=active]:text-white data-[state=active]:shadow-colored rounded-xl transition-all duration-300"

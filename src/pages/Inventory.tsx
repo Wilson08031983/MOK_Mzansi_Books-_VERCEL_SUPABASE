@@ -413,7 +413,7 @@ const Inventory = () => {
   const damagedItems = filteredInventory.filter(item => item.status === STOCK_STATUS.DAMAGED);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto p-6 sm:p-8">
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-8 animate-fade-in">

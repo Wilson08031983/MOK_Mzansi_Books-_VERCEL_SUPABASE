@@ -15,8 +15,8 @@ type StatItem = {
   change?: string;
   trend?: 'up' | 'down';
   icon: React.ElementType;
-  color: string;
-  bgGradient: string;
+  color?: string;
+  bgColor?: string;
 };
 
 type ActivityItem = {
@@ -42,7 +42,9 @@ interface DashboardContentProps {
   activities: ActivityItem[];
   tasks: TaskItem[];
   revenueData: { label: string; value: number }[];
+  expensesSeriesData: { label: string; value: number }[];
   expensesByCategory: { label: string; value: number }[];
+  onAddTaskClick?: () => void;
 }
 
 const DashboardContent: React.FC<DashboardContentProps> = ({
@@ -52,7 +54,9 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   activities,
   tasks,
   revenueData,
-  expensesByCategory
+  expensesSeriesData,
+  expensesByCategory,
+  onAddTaskClick
 }) => {
   return (
     <main className="p-8">
@@ -67,22 +71,14 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
 
       {/* Quick Actions */}
       <div className="mb-10 animate-fade-in delay-400">
-        <h3 className="text-2xl font-bold text-slate-900 mb-6 font-sf-pro">Quick Actions</h3>
-        <QuickActions 
-          employees={window.localStorage.getItem('employees') ? JSON.parse(window.localStorage.getItem('employees') || '[]') : []} 
-          leaveBalances={window.localStorage.getItem('leaveBalances') ? JSON.parse(window.localStorage.getItem('leaveBalances') || '[]') : []}
-          setLeaveRequests={(newLeaveRequests) => {
-            if (window.localStorage.getItem('leaveRequests')) {
-              window.localStorage.setItem('leaveRequests', JSON.stringify(newLeaveRequests));
-            }
-          }}
-        />
+        <h3 className="text-2xl font-bold text-foreground mb-6 font-sf-pro">Quick Actions</h3>
+        <QuickActions />
       </div>
 
       {/* Charts and Activity Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10 animate-fade-in delay-500">
         <div className="lg:col-span-2">
-          <RevenueChart data={revenueData} />
+          <RevenueChart revenueData={revenueData} expensesData={expensesSeriesData} />
         </div>
         <div>
           <ExpenseBreakdown data={expensesByCategory} />
@@ -92,7 +88,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
       {/* Recent Activity and Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in delay-600">
         <ActivityFeed activities={activities} />
-        <TaskList tasks={tasks} />
+        <TaskList tasks={tasks} onAddTaskClick={onAddTaskClick} />
       </div>
     </main>
   );

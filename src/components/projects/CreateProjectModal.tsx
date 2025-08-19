@@ -9,6 +9,7 @@ import { getAllEmployees, Employee } from '@/services/employeeService';
 import { getAllTeamMembers } from '@/services/localAuthService';
 import { Project } from '@/types/project';
 import { updateProjectWithAttendanceExpenses } from '@/services/projectAttendanceExpenseService';
+import { activityService } from '@/services/activityService';
 
 // Using a specialized version of Project for creating new projects
 interface ProjectData extends Omit<Project, 'budget' | 'expenses' | 'status' | 'priority'> {
@@ -253,6 +254,26 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
       createdAt: new Date().toISOString(),
       customFields: formState.customFields
     };
+    
+    // Log project creation activity
+    try {
+      activityService.logProjectAction(
+        'Project created',
+        `New project '${newProject.name}' created for ${newProject.client || 'Unknown Client'}`,
+        newProject.id.toString(),
+        {
+          projectCode: newProject.code,
+          client: newProject.client,
+          budget: newProject.budget,
+          status: newProject.status,
+          priority: newProject.priority,
+          tags: newProject.tags,
+          team: newProject.team
+        }
+      );
+    } catch (err) {
+      console.warn('Activity logging failed (project create):', err);
+    }
     
     onSubmit(newProject);
     onClose();

@@ -27,20 +27,20 @@ export const getDisplayStatus = (status: string) => {
 export const getStatusColor = (status: string) => {
   switch (status) {
     case 'accepted':
-      return 'bg-green-100 text-green-800 border-green-200';
+      return 'bg-success/10 text-success border-success/20';
     case 'sent':
     case 'viewed':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
+      return 'bg-primary/10 text-primary border-primary/20';
     case 'expired':
-      return 'bg-orange-100 text-orange-800 border-orange-200';
+      return 'bg-destructive/20 text-destructive border-destructive/30';
     case 'rejected':
-      return 'bg-red-100 text-red-800 border-red-200';
+      return 'bg-destructive/10 text-destructive border-destructive/20';
     case 'cancelled':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
+      return 'bg-muted text-muted-foreground border-border';
     case 'draft':
     case 'saved':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
+      return 'bg-muted text-muted-foreground border-border';
     default:
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      return 'bg-muted/50 text-muted-foreground border-border';
   }
 };

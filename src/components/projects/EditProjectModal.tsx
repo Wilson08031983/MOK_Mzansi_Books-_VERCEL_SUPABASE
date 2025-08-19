@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getAllTeamMembers } from '@/services/localAuthService';
+import { activityService } from '@/services/activityService';
 
 // Using shared types from types/project.ts
 
@@ -163,6 +164,27 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
       ...project,
       team: selectedTeam
     };
+    
+    // Log project update activity
+    try {
+      activityService.logProjectAction(
+        'Project updated',
+        `Project '${updatedProject.name}' was updated`,
+        String(updatedProject.id),
+        {
+          status: updatedProject.status,
+          progress: updatedProject.progress,
+          budget: updatedProject.budget,
+          expenses: updatedProject.expenses,
+          startDate: updatedProject.startDate,
+          endDate: updatedProject.endDate,
+          team: updatedProject.team,
+          tags: updatedProject.tags
+        }
+      );
+    } catch (err) {
+      console.warn('Activity logging failed (project update):', err);
+    }
     
     onSave(updatedProject);
     onClose();

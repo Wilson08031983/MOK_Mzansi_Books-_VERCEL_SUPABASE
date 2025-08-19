@@ -62,20 +62,20 @@ const ForgotPassword = () => {
 
       <div className="relative w-full max-w-md">
         <div className="mb-8">
-          <Link to="/login" className="inline-flex items-center text-gray-600 hover:text-purple-600 transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg bg-white/80 backdrop-blur-sm">
+          <Link to="/login" className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg glass backdrop-blur-sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             {t('auth.invitedSignup.backToLogin')}
           </Link>
         </div>
 
-        <Card className="shadow-business-xl border-0 bg-white/90 backdrop-blur-md hover-lift animate-fade-in">
+        <Card className="shadow-business-xl border-0 glass backdrop-blur-md hover-lift animate-fade-in">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-white">
+            <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-card">
               <img src="/lovable-uploads/8021eb93-6e6a-421e-a8ff-bed101269a7c.png" alt="MOKMzansiBooks Logo" className="w-full h-full object-contain p-2" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900 drop-shadow-sm">{t('auth.forgotPassword.title')}</CardTitle>
-              <p className="text-gray-600 mt-2">
+              <CardTitle className="text-2xl font-bold text-foreground drop-shadow-sm">{t('auth.forgotPassword.title')}</CardTitle>
+              <p className="text-muted-foreground mt-2">
                 {!submitted ? t('auth.forgotPassword.description') : t('auth.forgotPassword.successMessage')}
               </p>
             </div>
@@ -85,13 +85,13 @@ const ForgotPassword = () => {
             {!submitted ? (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-gray-700 font-medium drop-shadow-sm">{t('auth.forgotPassword.emailLabel')}</Label>
+                  <Label htmlFor="email" className="text-foreground font-medium drop-shadow-sm">{t('auth.forgotPassword.emailLabel')}</Label>
                   <Input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500 shadow-business hover:shadow-business-lg transition-all duration-300"
+                    className="h-12 bg-background border-border focus:border-primary focus:ring-primary shadow-business hover:shadow-business-lg transition-all duration-300"
                     required
                     placeholder={t('auth.forgotPassword.emailPlaceholder')}
                   />
@@ -124,7 +124,7 @@ const ForgotPassword = () => {
                 
                 <Button
                   onClick={() => setSubmitted(false)}
-                  className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-purple-600 shadow-business transition-all duration-300"
+                  className="bg-background border border-border text-foreground hover:bg-muted hover:text-primary shadow-business transition-all duration-300"
                 >
                   {t('common.reset')}
                 </Button>
@@ -132,8 +132,8 @@ const ForgotPassword = () => {
             )}
 
             <div className="text-center">
-              <span className="text-gray-600">{t('auth.forgotPassword.backToLogin')} </span>
-              <Link to="/login" className="text-purple-600 hover:text-purple-700 font-semibold transition-colors hover:underline">
+              <span className="text-muted-foreground">{t('auth.forgotPassword.backToLogin')} </span>
+              <Link to="/login" className="text-primary hover:text-primary/80 font-semibold transition-colors hover:underline">
                 {t('auth.forgotPassword.signIn')}
               </Link>
             </div>

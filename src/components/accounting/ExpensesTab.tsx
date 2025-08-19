@@ -83,13 +83,14 @@ interface Expense {
 interface ExpensesTabProps {
   onAddExpense: () => void;
   companyId?: string;
+  initialCategoryFilter?: string;
 }
 
-const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'current-company-id' }) => {
+const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'current-company-id', initialCategoryFilter }) => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>(initialCategoryFilter ?? 'all');
   const [dateRangeFilter, setDateRangeFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');

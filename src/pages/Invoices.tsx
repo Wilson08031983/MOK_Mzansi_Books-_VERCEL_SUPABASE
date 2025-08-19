@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalization } from '@/hooks/useLocalization';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import InvoicesHeader from '@/components/invoices/InvoicesHeader';
 import { generateInvoiceNumber } from '@/services/invoiceService';
 import InvoicesSummaryCards from '@/components/invoices/InvoicesSummaryCards';
@@ -13,6 +13,7 @@ import CreateInvoiceModal from '@/components/invoices/CreateInvoiceModal';
 import RecordPaymentModal from '@/components/invoices/RecordPaymentModal';
 import InvoiceViewModal from '@/components/invoices/InvoiceViewModal';
 import { Invoice, InvoiceItem, InvoiceStatus } from '@/types/invoice';
+import { activityService } from '@/services/activityService';
 
 // Define types for the invoice modal data
 interface ModalLineItem {
@@ -44,6 +45,17 @@ const Invoices: React.FC = () => {
   const { user } = useAuth();
   const { t, formatCurrency: localizeCurrency, formatDate: localizeDate, settings, getCurrencySymbol } = useLocalization();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.openCreateInvoiceModal) {
+      setShowCreateModal(true);
+      // Clear state to prevent reopening on refresh/navigation
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate]);
 
   // Update document title when language changes
   useEffect(() => {
@@ -333,6 +345,21 @@ const Invoices: React.FC = () => {
       
       // Update state
       setInvoices(prev => [...prev, newInvoice]);
+
+      // Log activity: invoice created
+      activityService.logFinancialAction(
+        'Invoice created',
+        `Invoice ${newInvoice.number} created for ${newInvoice.clientName}`,
+        'invoice',
+        newInvoice.id,
+        {
+          amount: newInvoice.total,
+          status: newInvoice.status,
+          clientId: newInvoice.clientId,
+          clientEmail: newInvoice.clientEmail,
+        }
+      );
+
       return Promise.resolve();
     } catch (error) {
       console.error('Error saving invoice:', error);
@@ -375,6 +402,9 @@ const Invoices: React.FC = () => {
       storedInvoices = [];
     }
     
+    // Find invoice being deleted for logging metadata
+    const invoiceToDelete = (storedInvoices as any[]).find(inv => inv?.id === invoiceId);
+
     // Filter out the invoice to delete
     const filteredInvoices = storedInvoices.filter(invoice => invoice?.id !== invoiceId);
     
@@ -392,6 +422,19 @@ const Invoices: React.FC = () => {
       const safeArray = Array.isArray(prev) ? prev : [];
       return safeArray.filter(id => id !== invoiceId);
     });
+
+    // Log activity: invoice deleted
+    activityService.logFinancialAction(
+      'Invoice deleted',
+      `Invoice ${invoiceToDelete?.number || invoiceId} deleted`,
+      'invoice',
+      invoiceId,
+      {
+        clientName: invoiceToDelete?.clientName,
+        amount: invoiceToDelete?.total,
+      }
+    );
+
     toast.success('Invoice deleted successfully');
   };
 
@@ -412,13 +455,24 @@ const Invoices: React.FC = () => {
     localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
     
     // Update state
+    let updatedInvoiceForLog: any = null;
     setInvoices(prev => prev.map(invoice => {
       if (invoice.id === invoiceId) {
-        return { ...invoice, status: newStatus };
+        updatedInvoiceForLog = { ...invoice, status: newStatus };
+        return updatedInvoiceForLog;
       }
       return invoice;
     }));
     
+    // Log activity: status updated
+    activityService.logFinancialAction(
+      'Invoice status updated',
+      `Invoice ${updatedInvoiceForLog?.number || invoiceId} status changed to ${newStatus}`,
+      'invoice',
+      invoiceId,
+      { previousStatus: updatedInvoiceForLog?.status, newStatus }
+    );
+
     toast.success(`Invoice status updated to ${newStatus}`);
   };
 
@@ -427,12 +481,28 @@ const Invoices: React.FC = () => {
     if (invoice) {
       setSelectedInvoiceForEdit(invoice);
       setShowCreateModal(true);
+
+      // Log activity: invoice opened for edit
+      activityService.logFinancialAction(
+        'Invoice opened for edit',
+        `Invoice ${invoice.number} opened for editing`,
+        'invoice',
+        invoiceId
+      );
     }
   };
   
   const handleViewInvoice = (invoice: Invoice) => {
     setSelectedInvoiceForPreview(invoice);
     setShowPreviewModal(true);
+
+    // Log activity: invoice viewed
+    activityService.logFinancialAction(
+      'Invoice viewed',
+      `Viewed invoice ${invoice.number}`,
+      'invoice',
+      invoice.id
+    );
   };
   
   // Function to get company details for PDFs and emails
@@ -443,6 +513,15 @@ const Invoices: React.FC = () => {
   // Handle duplicate invoice for UI update
   const handleDuplicateInvoice = (newInvoice: Invoice) => {
     setInvoices(prevInvoices => [...prevInvoices, newInvoice]);
+
+    // Log activity: invoice duplicated
+    activityService.logFinancialAction(
+      'Invoice duplicated',
+      `Duplicated invoice to ${newInvoice.number}`,
+      'invoice',
+      newInvoice.id,
+      { amount: newInvoice.total, clientName: newInvoice.clientName }
+    );
   };
 
   // Ensure invoices is always an array before filtering

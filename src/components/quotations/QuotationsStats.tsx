@@ -15,26 +15,7 @@ import {
   Send
 } from 'lucide-react';
 
-interface Quotation {
-  id: string;
-  number: string;
-  status: string;
-  clientId: string;
-  issueDate: string;
-  dueDate?: string;
-  expiryDate?: string;
-  amount: number;
-  items: QuotationItem[];
-  subtotal?: number;
-  vatTotal?: number;
-  grandTotal?: number;
-  currency?: string;
-  vatPercentage?: number;
-  notes?: string;
-  terms?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Quotation } from '@/services/quotationService';
 
 interface QuotationItem {
   id: string;
@@ -54,12 +35,11 @@ interface PreviousStats {
   totalCount: number;
   totalValue: number;
   acceptedCount: number;
-  pendingCount: number;
+  sentCount: number; // Fix: Change from pendingCount to sentCount
   viewedCount: number;
   draftCount: number;
   expiredCount: number;
   rejectedCount: number;
-  sentCount: number;
   conversionRate: number;
   avgValue: number;
 }
@@ -76,12 +56,11 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
         totalCount: quotations.length,
         totalValue: quotations.reduce((sum, quotation) => sum + (quotation.amount || 0), 0),
         acceptedCount: quotations.filter(q => q.status === 'accepted').length,
-        pendingCount: quotations.filter(q => q.status === 'pending').length,
+        sentCount: quotations.filter(q => q.status === 'sent').length, // Fix: Use sent instead of pending
         viewedCount: quotations.filter(q => q.status === 'viewed').length,
         draftCount: quotations.filter(q => q.status === 'draft').length,
         expiredCount: quotations.filter(q => q.status === 'expired').length,
         rejectedCount: quotations.filter(q => q.status === 'rejected').length,
-        sentCount: quotations.filter(q => q.status === 'sent').length,
         conversionRate: quotations.length > 0 ? 
           quotations.filter(q => q.status === 'accepted').length / quotations.length : 0,
         avgValue: quotations.length > 0 ?
@@ -104,7 +83,7 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
         artificialPrevStats.totalCount = Math.max(quotations.length - 1, 0);
         artificialPrevStats.totalValue *= 0.92; // 8% lower than current
         artificialPrevStats.acceptedCount = Math.max(artificialPrevStats.acceptedCount - 1, 0);
-        artificialPrevStats.pendingCount = Math.max(artificialPrevStats.pendingCount + 1, 0);
+        artificialPrevStats.sentCount = Math.max(artificialPrevStats.sentCount + 1, 0); // Fix: Use sentCount
         artificialPrevStats.viewedCount = Math.max(artificialPrevStats.viewedCount - 1, 0);
         artificialPrevStats.conversionRate *= 0.95; // 5% lower conversion rate
         artificialPrevStats.avgValue *= 0.95; // 5% lower average value
@@ -142,7 +121,7 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
   const totalQuotations = quotations.length;
   const totalValue = quotations.reduce((sum, quotation) => sum + (quotation.amount || 0), 0);
   const acceptedQuotations = quotations.filter(q => q.status === 'accepted').length;
-  const pendingQuotations = quotations.filter(q => q.status === 'pending').length;
+  // Fix: Use 'sent' status instead of 'pending' which doesn't exist in the interface
   const sentQuotations = quotations.filter(q => q.status === 'sent').length;
   const expiredQuotations = quotations.filter(q => q.status === 'expired').length;
   const draftQuotations = quotations.filter(q => q.status === 'draft').length;
@@ -161,20 +140,20 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
   const conversionChange = previousStats ? calculateChange(conversionRate, previousStats.conversionRate * 100) : { value: '+0%', type: 'neutral' };
   const avgValueChange = previousStats ? calculateChange(averageValue, previousStats.avgValue) : { value: '+0%', type: 'neutral' };
   const acceptedChange = previousStats ? calculateChange(acceptedQuotations, previousStats.acceptedCount) : { value: '+0%', type: 'neutral' };
-  const pendingChange = previousStats ? calculateChange(pendingQuotations, previousStats.pendingCount) : { value: '+0%', type: 'neutral' };
+  // Fix: Update to use sentChange instead of pendingChange
+  const sentChange = previousStats ? calculateChange(sentQuotations, previousStats.sentCount) : { value: '+0%', type: 'neutral' };
   const viewedChange = previousStats ? calculateChange(viewedQuotations, previousStats.viewedCount) : { value: '+0%', type: 'neutral' };
   const draftChange = previousStats ? calculateChange(draftQuotations, previousStats.draftCount) : { value: '+0%', type: 'neutral' };
   const expiredChange = previousStats ? calculateChange(expiredQuotations, previousStats.expiredCount) : { value: '+0%', type: 'neutral' };
   const rejectedChange = previousStats ? calculateChange(rejectedQuotations, previousStats.rejectedCount) : { value: '+0%', type: 'neutral' };
-  const sentChange = previousStats ? calculateChange(sentQuotations, previousStats.sentCount) : { value: '+0%', type: 'neutral' };
 
   const stats = [
     {
       title: 'Total Quotations',
       value: totalQuotations,
       icon: FileText,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       change: totalChange.value,
       changeType: totalChange.type,
       description: 'All quotations created'
@@ -183,8 +162,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Total Value',
       value: `R ${totalValue.toLocaleString()}`,
       icon: DollarSign,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      color: 'text-success',
+      bgColor: 'bg-success/10',
       change: valueChange.value,
       changeType: valueChange.type,
       description: 'Combined quotation value'
@@ -193,8 +172,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Conversion Rate',
       value: `${conversionRate}%`,
       icon: Target,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       change: conversionChange.value,
       changeType: conversionChange.type,
       description: 'Quotations to sales ratio'
@@ -203,8 +182,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Average Value',
       value: `R ${averageValue.toLocaleString()}`,
       icon: BarChart3,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-100',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       change: avgValueChange.value,
       changeType: avgValueChange.type,
       description: 'Average quotation amount'
@@ -213,28 +192,18 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Accepted',
       value: acceptedQuotations,
       icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      color: 'text-success',
+      bgColor: 'bg-success/10',
       change: acceptedChange.value,
       changeType: acceptedChange.type,
       description: `R ${acceptedValue.toLocaleString()} total`
     },
     {
-      title: 'Pending',
-      value: pendingQuotations,
-      icon: Clock,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100',
-      change: pendingChange.value,
-      changeType: pendingChange.type,
-      description: 'Awaiting client response'
-    },
-    {
       title: 'Sent',
       value: sentQuotations,
       icon: Send,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       change: sentChange.value,
       changeType: sentChange.type,
       description: 'Sent to clients'
@@ -243,8 +212,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Viewed',
       value: viewedQuotations,
       icon: Eye,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       change: viewedChange.value,
       changeType: viewedChange.type,
       description: 'Seen by clients'
@@ -253,8 +222,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Draft',
       value: draftQuotations,
       icon: FileText,
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-100',
+      color: 'text-muted-foreground',
+      bgColor: 'bg-muted',
       change: draftChange.value,
       changeType: draftChange.type,
       description: 'Not yet sent'
@@ -263,8 +232,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Expired',
       value: expiredQuotations,
       icon: AlertTriangle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
+      color: 'text-destructive',
+      bgColor: 'bg-destructive/10',
       change: expiredChange.value,
       changeType: expiredChange.type === 'positive' ? 'negative' : 'positive', // Invert for expired (fewer expirations is good)
       description: 'Past expiry date'
@@ -273,8 +242,8 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       title: 'Rejected',
       value: rejectedQuotations,
       icon: XCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
+      color: 'text-destructive',
+      bgColor: 'bg-destructive/10',
       change: rejectedChange.value,
       changeType: rejectedChange.type === 'positive' ? 'negative' : 'positive', // Invert for rejected (fewer rejections is good)
       description: 'Declined by clients'
@@ -286,7 +255,7 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
       {stats.map((stat, index) => (
         <Card 
           key={index} 
-          className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift group cursor-pointer"
+          className="glass backdrop-blur-sm bg-background/50 border border-border shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift group cursor-pointer"
         >
           <CardContent className="p-4">
             <div className="flex flex-col items-center text-center space-y-3">
@@ -297,10 +266,10 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
               
               {/* Title and Value */}
               <div className="space-y-1">
-                <p className="text-slate-600 text-xs font-medium font-sf-pro leading-tight">
+                <p className="text-muted-foreground text-xs font-medium font-sf-pro leading-tight">
                   {stat.title}
                 </p>
-                <p className="text-xl font-bold text-slate-900 font-sf-pro">
+                <p className="text-xl font-bold text-foreground font-sf-pro">
                   {stat.value}
                 </p>
               </div>
@@ -308,11 +277,11 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
               {/* Change Indicator */}
               <div className="flex flex-col items-center space-y-1">
                 <span className={`text-xs font-medium ${
-                  stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
+                  stat.changeType === 'positive' ? 'text-success' : 'text-destructive'
                 }`}>
                   {stat.change}
                 </span>
-                <span className="text-xs text-slate-500 font-sf-pro leading-tight">
+                <span className="text-xs text-muted-foreground font-sf-pro leading-tight">
                   {stat.description}
                 </span>
               </div>

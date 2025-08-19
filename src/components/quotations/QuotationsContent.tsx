@@ -70,25 +70,25 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
   onRefresh
 }) => {
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+    <Card className="glass backdrop-blur-sm bg-background/50 border border-border shadow-business hover:shadow-business-lg transition-all duration-300">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-slate-900 font-sf-pro text-xl">
+          <CardTitle className="text-foreground font-sf-pro text-xl">
             {sortedQuotations.length} Quotation{sortedQuotations.length !== 1 ? 's' : ''}
             {selectedQuotations.length > 0 && (
-              <span className="text-sm font-normal text-slate-600 ml-2">
+              <span className="text-sm font-normal text-muted-foreground ml-2">
                 ({selectedQuotations.length} selected)
               </span>
             )}
           </CardTitle>
           
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 text-sm text-slate-600">
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <span>Sort by:</span>
               <button
                 onClick={() => handleSort('date')}
-                className={`flex items-center space-x-1 px-2 py-1 rounded hover:bg-slate-100 ${
-                  sortColumn === 'date' ? 'text-mokm-purple-600' : ''
+                className={`flex items-center space-x-1 px-2 py-1 rounded hover:bg-muted ${
+                  sortColumn === 'date' ? 'text-primary' : ''
                 }`}
               >
                 <span>Date</span>
@@ -98,8 +98,8 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
               </button>
               <button
                 onClick={() => handleSort('amount')}
-                className={`flex items-center space-x-1 px-2 py-1 rounded hover:bg-slate-100 ${
-                  sortColumn === 'amount' ? 'text-mokm-purple-600' : ''
+                className={`flex items-center space-x-1 px-2 py-1 rounded hover:bg-muted ${
+                  sortColumn === 'amount' ? 'text-primary' : ''
                 }`}
               >
                 <span>Amount</span>
@@ -109,8 +109,8 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
               </button>
               <button
                 onClick={() => handleSort('client')}
-                className={`flex items-center space-x-1 px-2 py-1 rounded hover:bg-slate-100 ${
-                  sortColumn === 'client' ? 'text-mokm-purple-600' : ''
+                className={`flex items-center space-x-1 px-2 py-1 rounded hover:bg-muted ${
+                  sortColumn === 'client' ? 'text-primary' : ''
                 }`}
               >
                 <span>Client</span>
@@ -152,11 +152,11 @@ const QuotationsContent: React.FC<QuotationsContentProps> = ({
         
         {sortedQuotations.length === 0 && (
           <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-8 w-8 text-slate-400" />
+            <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">No quotations found</h3>
-            <p className="text-slate-600 font-sf-pro text-sm mb-4">
+            <h3 className="text-foreground font-semibold font-sf-pro mb-2">No quotations found</h3>
+            <p className="text-muted-foreground font-sf-pro text-sm mb-4">
               {searchTerm || Object.values(filters).some(f => f !== 'all' && f !== '' && (Array.isArray(f) ? f.length > 0 : true))
                 ? 'Try adjusting your search terms or filters'
                 : 'Get started by creating your first quotation'

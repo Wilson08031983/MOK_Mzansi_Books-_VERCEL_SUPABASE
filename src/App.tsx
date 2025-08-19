@@ -5,12 +5,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@/contexts/LocalizationContext";
 import { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess, initializeDefaultUsers } from "@/services/localAuthService";
 import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";
 import { companyEmployeeSyncService } from "@/services/companyEmployeeSyncService";
 import { useProjectAttendanceSync } from "@/hooks/useProjectAttendanceSync";
+import { activityService } from "@/services/activityService";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -55,6 +56,73 @@ import AuthReset from "./pages/AuthReset";
 import AuthDebug from "./pages/AuthDebug";
 import ServiceTestPanel from "./components/ServiceTestPanel";
 
+// Route tracking component to log navigation activities
+const RouteTracker = () => {
+  const location = useLocation();
+  
+  useEffect(() => {
+    try {
+      const pageName = getPageNameFromPath(location.pathname);
+      activityService.logUserAction(
+        'Page Navigation',
+        `Navigated to ${pageName}`,
+        { 
+          path: location.pathname,
+          pageName,
+          timestamp: new Date().toISOString()
+        }
+      );
+    } catch (error) {
+      console.error('Error logging route change:', error);
+    }
+  }, [location.pathname]);
+  
+  return null;
+};
+
+// Helper function to convert path to readable page name
+const getPageNameFromPath = (pathname: string): string => {
+  const pathMap: Record<string, string> = {
+    '/': 'Home',
+    '/login': 'Login',
+    '/signup': 'Sign Up',
+    '/dashboard': 'Dashboard',
+    '/quotations': 'Quotations',
+    '/invoices': 'Invoices',
+    '/clients': 'Clients',
+    '/company': 'Company',
+    '/projects': 'Projects',
+    '/inventory': 'Inventory',
+    '/hr-management': 'HR Management',
+    '/accounting': 'Accounting',
+    '/reports': 'Reports',
+    '/settings': 'Settings',
+    '/features': 'Features',
+    '/pricing': 'Pricing',
+    '/contact': 'Contact',
+    '/demo': 'Demo',
+    '/integrations': 'Integrations',
+    '/terms': 'Terms of Service',
+    '/privacy': 'Privacy Policy',
+    '/payment': 'Payment',
+    '/forgot-password': 'Forgot Password',
+    '/reset-password': 'Reset Password',
+    '/welcome-back': 'Welcome Back'
+  };
+  
+  // Handle dynamic routes like /quotations/123
+  if (pathname.startsWith('/quotations/') && pathname !== '/quotations') {
+    return 'Quotation Detail';
+  }
+  if (pathname.startsWith('/invoices/') && pathname !== '/invoices') {
+    return 'Invoice Detail';
+  }
+  if (pathname.startsWith('/projects/') && pathname !== '/projects') {
+    return 'Project Detail';
+  }
+  
+  return pathMap[pathname] || 'Unknown Page';
+};
 
 // Initialize global error handlers
 safeExecute(() => {
@@ -117,109 +185,112 @@ const App = () => {
   }, []); // Empty dependency array ensures this only runs once
 
   return (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <LocalizationProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <Router>
-            <AuthProviderSelector>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/invited-signup" element={<InvitedSignup />} />
-            <Route path="/accept-invitation" element={<AcceptInvitation />} />
-            <Route path="/features" element={<Features />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/contact-sales" element={<ContactSales />} />
-            <Route path="/demo" element={<Demo />} />
-            <Route path="/integrations" element={<Integrations />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/payment" element={<Payment />} />
-            <Route path="/thank-you" element={<ThankYou />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/auth-reset" element={<AuthReset />} />
-            <Route path="/auth-debug" element={<AuthDebug />} />
-            <Route path="/service-test" element={<ServiceTestPanel />} />
-            <Route path="/disciplinary-test" element={<DisciplinaryTest />} />
-            <Route 
-              path="/welcome-back" 
-              element={
-                <AccessGuard>
-                  <WelcomeBack />
-                </AccessGuard>
-              } 
-            />
-            {/* Protected Dashboard Route - Always accessible to logged-in users */}
-            <Route element={<ProtectedRoute pageName="Dashboard" />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-            </Route>
+    <div className="app-root bg-background text-foreground min-h-screen">
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <LocalizationProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <Router>
+                <RouteTracker />
+                <AuthProviderSelector>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/invited-signup" element={<InvitedSignup />} />
+                    <Route path="/accept-invitation" element={<AcceptInvitation />} />
+                    <Route path="/features" element={<Features />} />
+                    <Route path="/pricing" element={<Pricing />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route path="/contact-sales" element={<ContactSales />} />
+                    <Route path="/demo" element={<Demo />} />
+                    <Route path="/integrations" element={<Integrations />} />
+                    <Route path="/terms" element={<Terms />} />
+                    <Route path="/privacy" element={<Privacy />} />
+                    <Route path="/payment" element={<Payment />} />
+                    <Route path="/thank-you" element={<ThankYou />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/auth-reset" element={<AuthReset />} />
+                    <Route path="/auth-debug" element={<AuthDebug />} />
+                    <Route path="/service-test" element={<ServiceTestPanel />} />
+                    <Route path="/disciplinary-test" element={<DisciplinaryTest />} />
+                    <Route 
+                      path="/welcome-back" 
+                      element={
+                        <AccessGuard>
+                          <WelcomeBack />
+                        </AccessGuard>
+                      } 
+                    />
+                    {/* Protected Dashboard Route - Always accessible to logged-in users */}
+                    <Route element={<ProtectedRoute pageName="Dashboard" />}>
+                      <Route path="/dashboard" element={<Dashboard />} />
+                    </Route>
 
-            {/* Protected Company Route */}
-            <Route element={<ProtectedRoute pageName="My Company" />}>
-              <Route path="/company" element={<Company />} />
-            </Route>
+                    {/* Protected Company Route */}
+                    <Route element={<ProtectedRoute pageName="My Company" />}>
+                      <Route path="/company" element={<Company />} />
+                    </Route>
 
-            {/* Protected Clients Route */}
-            <Route element={<ProtectedRoute pageName="Clients" />}>
-              <Route path="/clients" element={<Clients />} />
-            </Route>
+                    {/* Protected Clients Route */}
+                    <Route element={<ProtectedRoute pageName="Clients" />}>
+                      <Route path="/clients" element={<Clients />} />
+                    </Route>
 
-            {/* Protected Quotations Route */}
-            <Route element={<ProtectedRoute pageName="Quotations" />}>
-              <Route path="/quotations" element={<Quotations />} />
-              <Route path="/quotations/:id" element={<QuotationDetail />} />
-            </Route>
+                    {/* Protected Quotations Route */}
+                    <Route element={<ProtectedRoute pageName="Quotations" />}>
+                      <Route path="/quotations" element={<Quotations />} />
+                      <Route path="/quotations/:id" element={<QuotationDetail />} />
+                    </Route>
 
-            {/* Protected Invoices Route */}
-            <Route element={<ProtectedRoute pageName="Invoices" />}>
-              <Route path="/invoices" element={<Invoices />} />
-              <Route path="/invoices/:id" element={<InvoiceDetail />} />
-            </Route>
+                    {/* Protected Invoices Route */}
+                    <Route element={<ProtectedRoute pageName="Invoices" />}>
+                      <Route path="/invoices" element={<Invoices />} />
+                      <Route path="/invoices/:id" element={<InvoiceDetail />} />
+                    </Route>
 
-            {/* Protected Projects Route */}
-            <Route element={<ProtectedRoute pageName="Projects" />}>
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/:id" element={<ProjectDetail />} />
-            </Route>
+                    {/* Protected Projects Route */}
+                    <Route element={<ProtectedRoute pageName="Projects" />}>
+                      <Route path="/projects" element={<Projects />} />
+                      <Route path="/projects/:id" element={<ProjectDetail />} />
+                    </Route>
 
-            {/* Protected Inventory Route */}
-            <Route element={<ProtectedRoute pageName="Inventory" />}>
-              <Route path="/inventory" element={<Inventory />} />
-            </Route>
+                    {/* Protected Inventory Route */}
+                    <Route element={<ProtectedRoute pageName="Inventory" />}>
+                      <Route path="/inventory" element={<Inventory />} />
+                    </Route>
 
-            {/* Protected HR Management Route */}
-            <Route element={<ProtectedRoute pageName="HR Management" />}>
-              <Route path="/hr-management" element={<HRManagement />} />
-            </Route>
+                    {/* Protected HR Management Route */}
+                    <Route element={<ProtectedRoute pageName="HR Management" />}>
+                      <Route path="/hr-management" element={<HRManagement />} />
+                    </Route>
 
-            {/* Protected Accounting Route */}
-            <Route element={<ProtectedRoute pageName="Accounting" />}>
-              <Route path="/accounting" element={<Accounting />} />
-            </Route>
+                    {/* Protected Accounting Route */}
+                    <Route element={<ProtectedRoute pageName="Accounting" />}>
+                      <Route path="/accounting" element={<Accounting />} />
+                    </Route>
 
-            {/* Protected Reports Route */}
-            <Route element={<ProtectedRoute pageName="Reports" />}>
-              <Route path="/reports" element={<Reports />} />
-            </Route>
+                    {/* Protected Reports Route */}
+                    <Route element={<ProtectedRoute pageName="Reports" />}>
+                      <Route path="/reports" element={<Reports />} />
+                    </Route>
 
-            {/* Protected Settings Route - Admin only */}
-            <Route element={<ProtectedRoute pageName="Settings" />}>
-              <Route path="/settings" element={<Settings />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProviderSelector>
-        </Router>
-        </TooltipProvider>
-      </LocalizationProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
+                    {/* Protected Settings Route - Admin only */}
+                    <Route element={<ProtectedRoute pageName="Settings" />}>
+                      <Route path="/settings" element={<Settings />} />
+                    </Route>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </AuthProviderSelector>
+              </Router>
+            </TooltipProvider>
+          </LocalizationProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </div>
   );
 }
 

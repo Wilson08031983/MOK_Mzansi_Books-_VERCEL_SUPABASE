@@ -5,6 +5,7 @@ import App from './App'
 import './index.css'
 import { initializeLocalAuth } from '@/services/localAuthService'
 import { ThemeProvider } from '@/components/theme-provider'
+import { initFontSize } from '@/services/fontSizeService'
 
 // Basic error handlers with null checks
 window.addEventListener('error', (event) => {
@@ -18,6 +19,10 @@ window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled rejection:', event.reason)
   }
 })
+
+// Initialize font size settings on app startup
+// Initialize font size
+initFontSize()
 
 // Initialize authentication
 try {

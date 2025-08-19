@@ -318,7 +318,7 @@ const Reports = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto p-8">
         {/* Header */}
         <div className="mb-8 animate-fade-in">
@@ -485,9 +485,9 @@ const Reports = () => {
                       />
                     )
                   ) : (
-                    <div className="text-center p-10 bg-white rounded-lg shadow-business">
+                    <div className="text-center p-10 bg-card rounded-lg shadow-business">
                       <Calendar className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-                      <h3 className="text-xl font-semibold text-gray-800 mb-2">No Scheduled Reports</h3>
+                      <h3 className="text-xl font-semibold text-foreground mb-2">No Scheduled Reports</h3>
                       <p className="text-gray-600 mb-6">
                         You haven't scheduled any reports yet. Schedule a report to receive it automatically on a regular basis.
                       </p>
