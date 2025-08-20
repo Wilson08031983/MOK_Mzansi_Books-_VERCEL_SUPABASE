@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -45,17 +45,14 @@ import SystemMaintenanceTab from '@/components/settings/SystemMaintenanceTab';
 
 const Settings = () => {
   const { t } = useLocalization();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('general');
 
-  // Update document title when language changes
-  useEffect(() => {
-    document.title = `${t('settings.title')} - MOK Mzansi Books`;
-  }, [t]);
-
+  // Define tabs configuration used by TabsList and TabsContent
   const settingsTabs = [
     { id: 'general', label: 'General', icon: SettingsIcon, component: GeneralSettingsTab },
     { id: 'users', label: 'Users', icon: Users, component: UserManagementTab },
-    // Removed: System tab
     { id: 'security', label: 'Security', icon: Shield, component: SecuritySettingsTab },
     { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSettingsTab },
     { id: 'data', label: 'Data', icon: Database, component: DataManagementTab },
@@ -63,12 +60,50 @@ const Settings = () => {
     { id: 'billing', label: 'Billing', icon: CreditCard, component: BillingSubscriptionTab },
     { id: 'help', label: 'Help', icon: HelpCircle, component: HelpSupportTab },
     { id: 'about', label: 'About', icon: Info, component: AboutTab },
-    // Removed: Advanced tab
-    // Removed: Preferences tab
     { id: 'reports', label: 'Reports', icon: BarChart3, component: ReportSettingsTab },
     { id: 'dataSecurity', label: 'Data Security', icon: Lock, component: DataSecurityTab },
     { id: 'maintenance', label: 'Maintenance', icon: Monitor, component: SystemMaintenanceTab }
-  ];
+  ] as const;
+
+  // Initialize/Sync active tab from URL (query ?tab=...)
+  useEffect(() => {
+    // Read query param `tab`
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && settingsTabs.some(t => t.id === tab)) {
+      setActiveTab(tab as any);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  useEffect(() => {
+    // If on users tab and there's a hash, scroll to anchor
+    if (activeTab === 'users' && location.hash === '#admin-users') {
+      const el = document.getElementById('admin-users');
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      }
+    }
+
+    // Also, if a specific user is selected via query, dispatch an event for the Users tab to highlight it
+    if (activeTab === 'users') {
+      const params = new URLSearchParams(location.search);
+      const selectedUser = params.get('selectedUser');
+      if (selectedUser) {
+        // Defer to ensure the Users tab content has mounted
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('settings:selectedUser', { detail: { userId: selectedUser } }));
+        }, 100);
+      }
+    }
+  }, [activeTab, location.hash, location.search]);
+
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(location.search);
+    params.set('tab', tab);
+    navigate({ pathname: location.pathname, search: params.toString(), hash: tab === 'users' ? location.hash : '' }, { replace: false });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,11 +130,11 @@ const Settings = () => {
         </div>
 
         <div className="animate-fade-in delay-200">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <div className="glass glass-soft border-border/20 shadow-business rounded-lg p-4">
               <TabsList className="grid grid-cols-5 lg:grid-cols-10 xl:grid-cols-19 gap-2 h-auto bg-transparent p-0">
                 {settingsTabs.map((tab) => {
-                  const IconComponent = tab.icon;
+                  const IconComponent = tab.icon as any;
                   return (
                     <TabsTrigger
                       key={tab.id}
@@ -115,7 +150,7 @@ const Settings = () => {
             </div>
 
             {settingsTabs.map((tab) => {
-              const ComponentToRender = tab.component;
+              const ComponentToRender = tab.component as any;
               return (
                 <TabsContent key={tab.id} value={tab.id} className="space-y-6">
                   <ComponentToRender />

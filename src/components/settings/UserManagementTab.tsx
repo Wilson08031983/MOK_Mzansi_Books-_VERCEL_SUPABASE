@@ -25,11 +25,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getAllTeamMembers, isAdminRole } from '@/services/localAuthService';
+import { getAllTeamMembers, isAdminRole, updateUserRole } from '@/services/localAuthService';
 import { getAllEmployees, Employee } from '@/services/employeeService';
 import { userLinkingService } from '@/services/userLinkingService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { updateEmployeeFromTeamMember } from '@/services/teamEmployeeSyncService';
 
 // Define admin roles locally
 const ADMIN_ROLES = ['CEO', 'Manager', 'Bookkeeper', 'Director', 'Founder'];
@@ -41,6 +42,51 @@ const UserManagementTab = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const [highlightUserId, setHighlightUserId] = useState<string | null>(null);
+
+  // Listen for selected user highlight events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { userId?: string };
+      if (detail?.userId) {
+        const idStr = String(detail.userId);
+        // Scroll into view if exists
+        setTimeout(() => {
+          const el = document.querySelector(`[data-user-id="${idStr}"]`) as HTMLElement | null;
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 0);
+        setHighlightUserId(idStr);
+        // Auto-clear highlight after a delay
+        setTimeout(() => setHighlightUserId(null), 2000);
+      }
+    };
+    window.addEventListener('settings:selectedUser', handler as EventListener);
+    return () => window.removeEventListener('settings:selectedUser', handler as EventListener);
+  }, []);
+
+  // Listen for team members updates to refresh admin users list
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      console.log('🔄 UserManagementTab: Received teamMembersUpdated event:', detail);
+      
+      // Reload admin users when team members are updated
+      loadAdminUsers();
+      
+      if (detail?.reason === 'primaryUserUpdated') {
+        toast({
+          title: "Admin User Updated",
+          description: `Primary user information has been updated from company details`,
+          variant: "default"
+        });
+      }
+    };
+    
+    window.addEventListener('teamMembersUpdated', handler as EventListener);
+    return () => window.removeEventListener('teamMembersUpdated', handler as EventListener);
+  }, [toast]);
 
   // Load admin users and employees
   const loadAdminUsers = () => {
@@ -50,9 +96,13 @@ const UserManagementTab = () => {
       // Get all team members from authentication system
       const teamMembers = getAllTeamMembers();
       
-      // Filter only admin users
+      // Determine primary company user by email
+      const primaryUser = userLinkingService.getPrimaryUser();
+      const primaryEmail = primaryUser?.email?.toLowerCase();
+      
+      // Filter only admin users or the primary user explicitly
       const adminMembers = teamMembers.filter(member => 
-        isAdminRole(member.role) || member.isAdmin
+        isAdminRole(member.role) || member.isAdmin || (primaryEmail ? member.email.toLowerCase() === primaryEmail : false)
       );
       
       // Get all employees from HR system
@@ -98,7 +148,82 @@ const UserManagementTab = () => {
 
   // Load data on component mount
   useEffect(() => {
-    loadAdminUsers();
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        console.log('🔄 UserManagementTab: Loading admin users...');
+        
+        // Get all team members from authentication system
+        const teamMembers = getAllTeamMembers();
+        console.log('🔄 UserManagementTab: Raw team members:', teamMembers.map(m => ({ 
+          id: m.id, 
+          email: m.email, 
+          fullName: m.fullName, 
+          role: m.role 
+        })));
+        
+        // Determine primary company user by email
+        const primaryUser = userLinkingService.getPrimaryUser();
+        const primaryEmail = primaryUser?.email?.toLowerCase();
+        
+        // Filter only admin users or the primary user explicitly
+        const adminMembers = teamMembers.filter(member => 
+          isAdminRole(member.role) || member.isAdmin || (primaryEmail ? member.email.toLowerCase() === primaryEmail : false)
+        );
+        console.log('🔄 UserManagementTab: Filtered admin users (including primary if applicable):', adminMembers);
+        
+        // Get all employees from HR system
+        const employees = getAllEmployees();
+        console.log('🔄 UserManagementTab: HR employees:', employees.length, 'found');
+        
+        // Combine admin users with employee data if available
+        const enrichedAdminUsers = adminMembers.map(admin => {
+          const employeeData = employees.find(emp => 
+            emp.email?.toLowerCase() === admin.email?.toLowerCase()
+          );
+          
+          const enriched = {
+            id: admin.id,
+            name: admin.fullName || admin.email.split('@')[0],
+            email: admin.email,
+            role: admin.role,
+            isAdmin: admin.isAdmin,
+            status: 'Active', // In a real system, this would be dynamic
+            lastLogin: 'Recently', // In a real system, this would track actual login times
+            department: employeeData?.department || 'Administration',
+            position: employeeData?.position || admin.role,
+            phone: employeeData?.contactNumber || 'Not provided',
+            joinDate: employeeData?.startDate || 'N/A',
+            avatar: admin.email.charAt(0).toUpperCase(),
+            source: employeeData ? 'HR System' : 'Team Invitation'
+          };
+          
+          console.log('🔄 UserManagementTab: Enriched admin user:', {
+            original: { fullName: admin.fullName, role: admin.role },
+            enriched: { name: enriched.name, position: enriched.position },
+            employeeData: employeeData ? { name: `${employeeData.firstName} ${employeeData.surname}`.trim(), position: employeeData.position } : null
+          });
+          
+          return enriched;
+        });
+        
+        console.log('🔄 UserManagementTab: Final enriched admin users:', enrichedAdminUsers);
+        setAdminUsers(enrichedAdminUsers);
+        setAllEmployees(employees);
+        
+      } catch (error) {
+        console.error('Error loading admin users:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load admin users",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
   }, []);
 
   // Filter admin users based on search query
@@ -158,7 +283,24 @@ const UserManagementTab = () => {
     }
     
     if (window.confirm(`Are you sure you want to remove ${user.name} from admin users? This action cannot be undone.`)) {
-      // TODO: Implement actual user deletion
+      // Demote the user to a non-admin role instead of deleting
+      const result = updateUserRole(user.id, 'Staff');
+      if (!result.success) {
+        toast({
+          title: 'Failed to Remove Admin Access',
+          description: result.error || 'Could not update user role',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      try {
+        // Sync any linked employee record to reflect the new role
+        updateEmployeeFromTeamMember(user.email);
+      } catch (e) {
+        console.warn('Failed to sync employee after role change:', e);
+      }
+
       toast({
         title: "User Removed",
         description: `${user.name} has been removed from admin users`
@@ -238,6 +380,9 @@ const UserManagementTab = () => {
         </Card>
       </div>
 
+      {/* Anchor for deep-linking to Administrative Users section */}
+      <div id="admin-users" className="-mt-24 pt-24" />
+
       {/* Admin Users Table */}
       <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
         <CardHeader>
@@ -277,101 +422,56 @@ const UserManagementTab = () => {
           
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-mokm-purple-500" />
+              <Zap className="h-4 w-4 animate-pulse mr-2" />
               <span className="ml-2 text-gray-600">Loading admin users...</span>
             </div>
           ) : filteredAdminUsers.length === 0 ? (
-            <div className="text-center py-8">
-              <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No admin users found</p>
-              <p className="text-sm text-gray-500">Try adjusting your search criteria</p>
+            <div className="text-center py-8 text-gray-600">
+              <Mail className="h-12 w-12 mx-auto mb-4 text-mokm-purple-300" />
+              <p className="mb-2 font-medium">No admin users found</p>
+              <p className="text-sm">Add admin users from HR Management or by inviting team members with admin roles.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4">User</th>
-                    <th className="text-left py-3 px-4">Role</th>
-                    <th className="text-left py-3 px-4">Department</th>
-                    <th className="text-left py-3 px-4">Source</th>
-                    <th className="text-left py-3 px-4">Status</th>
-                    <th className="text-left py-3 px-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAdminUsers.map((user) => (
-                    <tr key={user.id} className="border-b hover:bg-gray-50/50">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                            {user.avatar}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{user.name}</p>
-                            <p className="text-sm text-gray-500">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge className={`${getRoleBadgeColor(user.role)} border`}>
-                          {user.role === 'CEO' && <Crown className="h-3 w-3 mr-1" />}
-                          {user.role}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-gray-700">{user.department}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge variant="outline" className="text-xs">
-                          {user.source}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge className="bg-green-100 text-green-800 border-green-200">
-                          <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
-                          {user.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onClick={() => handleEditUser(user)}
-                              disabled={!userLinkingService.canEditUser(user.id).canEdit}
-                            >
-                              <Edit2 className="h-4 w-4 mr-2" />
-                              Edit Permissions
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Mail className="h-4 w-4 mr-2" />
-                              Send Message
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-red-600"
-                              onClick={() => handleDeleteUser(user)}
-                              disabled={!userLinkingService.canDeleteUser(user.id).canDelete}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Remove Admin
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-2">
+              {filteredAdminUsers.map((user) => (
+                <div key={user.id} data-user-id={user.id} className={`flex items-center justify-between p-4 rounded-xl bg-white/60 border border-white/30 transition-colors ${highlightUserId === String(user.id) ? 'ring-2 ring-mokm-purple-400 bg-white' : ''}`}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-semibold">
+                      {user.avatar}
+                    </div>
+                    <div>
+                      <div className="font-medium">{user.name}</div>
+                      <div className="text-sm text-gray-600">{user.email}</div>
+                    </div>
+                    <Badge className={`ml-2 border ${getRoleBadgeColor(user.role)}`}>{user.role}</Badge>
+                    <Badge className="ml-2 bg-green-100 text-green-800 border-green-200">{user.status}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleEditUser(user)}>
+                      <Edit2 className="h-4 w-4 mr-1" /> Edit
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditUser(user)} className="gap-2">
+                          <Settings className="h-4 w-4" /> Manage
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDeleteUser(user)} className="gap-2 text-red-600 focus:text-red-600">
+                          <Trash2 className="h-4 w-4" /> Remove
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+))}
             </div>
           )}
         </CardContent>
       </Card>
-
     </div>
   );
 };

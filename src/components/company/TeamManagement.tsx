@@ -36,6 +36,7 @@ import { useAuth } from '@/hooks/useAuthHook';
 import { getUserPermissions, isAdminRole } from '@/services/permissionService';
 import { syncTeamMembersToEmployees, getSyncStatus } from '@/services/teamEmployeeSyncService';
 import { userLinkingService } from '@/services/userLinkingService';
+import { useNavigate } from 'react-router-dom';
 
 const TeamManagement = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -68,37 +69,61 @@ const TeamManagement = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // Function to load team members and sync status
   const loadTeamMembers = () => {
-    const members = getAllTeamMembers();
-    setTeamMembers(members);
-    
-    // Calculate stats
-    setStats({
-      total: members.length,
-      active: members.length, // In a real app, this would filter by status
-      pending: 0 // In a real app with actual pending invites
-    });
-    
-    // Update sync status
-    const status = getSyncStatus();
-    setSyncStatus(status);
+    try {
+      console.log('🔄 TeamManagement: Loading team members...');
+      const members = getAllTeamMembers();
+      console.log('🔄 TeamManagement: Loaded team members:', members.map(m => ({ 
+        id: m.id, 
+        email: m.email, 
+        fullName: m.fullName, 
+        role: m.role 
+      })));
+      setTeamMembers(members);
+      
+      // Calculate stats
+      setStats({
+        total: members.length,
+        active: members.length, // In a real app, this would filter by status
+        pending: 0 // In a real app with actual pending invites
+      });
+      
+      // Update sync status
+      const status = getSyncStatus();
+      console.log('🔄 TeamManagement: Sync status:', status);
+      setSyncStatus(status);
+    } catch (error) {
+      console.error('Error loading team members:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load team members",
+        variant: "destructive"
+      });
+    }
   };
   
   // Load team members on component mount
   useEffect(() => {
+    console.log('🔄 TeamManagement: Component mounted, loading team members');
     loadTeamMembers();
   }, []);
-
-  // Listen to team member updates triggered elsewhere (e.g., CompanyDetails save)
+  
+  // Also reload when component becomes visible (navigation)
   useEffect(() => {
-    const onTeamMembersUpdated = (_e: Event) => {
-      loadTeamMembers();
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 TeamManagement: Page became visible, reloading team members');
+        loadTeamMembers();
+      }
     };
-    window.addEventListener('teamMembersUpdated', onTeamMembersUpdated);
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
-      window.removeEventListener('teamMembersUpdated', onTeamMembersUpdated);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -234,34 +259,61 @@ const TeamManagement = () => {
     setIsInviteModalOpen(true);
   };
 
+  // Get primary linked user details from Company Details
+  const [primaryLinkedUser, setPrimaryLinkedUser] = useState(() => userLinkingService.getPrimaryUser());
+
+  // Listen for company details updates in localStorage
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'companyDetails') {
+        setPrimaryLinkedUser(userLinkingService.getPrimaryUser());
+        loadTeamMembers();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    const handleDirectUpdate = () => {
+      setPrimaryLinkedUser(userLinkingService.getPrimaryUser());
+      loadTeamMembers();
+    };
+    window.addEventListener('companyDetailsUpdated', handleDirectUpdate);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('companyDetailsUpdated', handleDirectUpdate);
+    };
+  }, []);
+
   // Convert team members from the local auth service format to display format
   const displayMembers = teamMembers.map(member => {
-    // Get number of permissions enabled (for pages with read access)
     const permissions = member.permissions || {};
     const permissionCount = Object.values(permissions)
-      .filter((p): p is { read: boolean; write: boolean } => 
-        p !== null && typeof p === 'object' && 'read' in p)
+      .filter((p): p is { read: boolean; write: boolean } => p !== null && typeof p === 'object' && 'read' in p)
       .filter(p => p.read)
       .length;
-    
-    // Get number of write permissions
+  
     const writePermissionCount = Object.values(permissions)
-      .filter((p): p is { read: boolean; write: boolean } => 
-        p !== null && typeof p === 'object' && 'write' in p)
+      .filter((p): p is { read: boolean; write: boolean } => p !== null && typeof p === 'object' && 'write' in p)
       .filter(p => p.write)
       .length;
-    
+  
+    const isPrimary = !!primaryLinkedUser && member.email.toLowerCase() === primaryLinkedUser.email.toLowerCase();
+    const displayName = isPrimary ? primaryLinkedUser.fullName : (member.fullName || member.email.split('@')[0]);
+    const displayPosition = isPrimary ? primaryLinkedUser.position : undefined;
+  
     return {
       id: member.id,
-      name: member.fullName || member.email.split('@')[0],
+      name: displayName,
       email: member.email,
       role: member.role?.toLowerCase() || 'staff',
-      isAdmin: isAdminRole(member.role || ''),
+      isAdmin: isAdminRole(member.role || '') || isPrimary,
+      isPrimary,
+      position: displayPosition,
       permissionCount,
       writePermissionCount,
       permissions: permissions,
-      status: 'active',  // In a real app, this would be based on actual status
-      lastActive: 'Recently',  // In a real app, this would track actual activity
+      status: 'active',
+      lastActive: 'Recently',
       avatar: member.email.charAt(0).toUpperCase()
     };
   });
@@ -321,6 +373,8 @@ const TeamManagement = () => {
           <p className="text-slate-600 font-sf-pro">Manage your company's team members and permissions.</p>
         </div>
         <div className="flex items-center space-x-3">
+          {/* Sync to HR button hidden as sync is now automatic when opening Team Management tab */}
+          {/*
           <Button
             onClick={handleSyncToEmployees}
             disabled={isSyncing || syncStatus.unsyncedMembers.length === 0}
@@ -333,6 +387,7 @@ const TeamManagement = () => {
             )}
             {isSyncing ? 'Syncing...' : 'Sync to HR'}
           </Button>
+          */}
           <Button
             onClick={handleAddNewUser}
             className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white rounded-xl px-4"
@@ -389,17 +444,19 @@ const TeamManagement = () => {
         <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
-              <div className="p-3 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 rounded-2xl shadow-colored">
-                <Users className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900 font-sf-pro">{syncStatus.syncedMembers}</p>
-                <p className="text-slate-600 font-sf-pro text-sm">Synced to HR</p>
-                {syncStatus.unsyncedMembers.length > 0 && (
-                  <p className="text-xs text-mokm-orange-600 font-sf-pro">
-                    {syncStatus.unsyncedMembers.length} pending sync
-                  </p>
-                )}
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 rounded-2xl shadow-colored">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-slate-900 font-sf-pro">{syncStatus.syncedMembers}</p>
+                  <p className="text-slate-600 font-sf-pro text-sm">Synced to HR</p>
+                  {syncStatus.unsyncedMembers.length > 0 && (
+                    <p className="text-xs text-mokm-orange-600 font-sf-pro">
+                      {syncStatus.unsyncedMembers.length} pending sync
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -408,8 +465,16 @@ const TeamManagement = () => {
 
       {/* Team Members List */}
       <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
-        <CardHeader>
+        <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-slate-900 font-sf-pro text-xl">Team Members</CardTitle>
+          <Button
+            variant="link"
+            className="text-mokm-purple-700 hover:text-mokm-purple-900 font-sf-pro"
+            onClick={() => navigate('/settings?tab=users#admin-users')}
+            title="View Administrative Users in Settings"
+          >
+            <Shield className="h-4 w-4 mr-1" /> Admin Employees Only
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -426,12 +491,39 @@ const TeamManagement = () => {
                   className="glass backdrop-blur-sm bg-white/30 rounded-2xl p-6 hover:bg-white/40 transition-all duration-300 hover-lift"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                    <div className={`flex items-center space-x-4 ${((member.isPrimary) || isAdminRole(((member.isPrimary && member.position) ? member.position : member.role) as string) || member.isAdmin) ? 'cursor-pointer' : 'cursor-default'}`}
+                      onClick={() => {
+                        const isAdminOrPrimary = (member.isPrimary) || isAdminRole(((member.isPrimary && member.position) ? member.position : member.role) as string) || member.isAdmin;
+                        if (!isAdminOrPrimary) return; // Linkage exclusive to admin/primary
+                        navigate(`/settings?tab=users&selectedUser=${member.id}#admin-users`);
+                      }}
+                      onKeyDown={(e) => {
+                        const isAdminOrPrimary = (member.isPrimary) || isAdminRole(((member.isPrimary && member.position) ? member.position : member.role) as string) || member.isAdmin;
+                        if (!isAdminOrPrimary) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/settings?tab=users&selectedUser=${member.id}#admin-users`);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      title={((member.isPrimary) || isAdminRole(((member.isPrimary && member.position) ? member.position : member.role) as string) || member.isAdmin)
+                        ? 'Go to Administrative Users in Settings to manage this member'
+                        : 'Only Admin or Primary users are linked to Administrative Users'}
+                    >
                       <div className="w-12 h-12 bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 rounded-2xl flex items-center justify-center shadow-colored">
                         <span className="text-white font-semibold font-sf-pro text-lg">{member.avatar}</span>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-slate-900 font-sf-pro">{member.name}</h3>
+                        <h3 className="font-semibold text-slate-900 font-sf-pro flex items-center gap-2">
+                          {member.name}
+                          {member.isPrimary && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Primary</span>
+                          )}
+                        </h3>
+                        {member.isPrimary && member.position && (
+                          <p className="text-slate-700 font-sf-pro text-sm">{member.position}</p>
+                        )}
                         <p className="text-slate-600 font-sf-pro text-sm">{member.email}</p>
                         <p className="text-slate-500 font-sf-pro text-xs">Last active: {member.lastActive}</p>
                       </div>
@@ -439,9 +531,9 @@ const TeamManagement = () => {
                     
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
-                        {getRoleIcon(member.role)}
-                        <span className={`px-3 py-1 rounded-full text-white text-xs font-medium font-sf-pro ${getRoleBadgeColor(member.role)}`}>
-                          {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                        {getRoleIcon((member.isPrimary && member.position) ? member.position : member.role)}
+                        <span className={`px-3 py-1 rounded-full text-white text-xs font-medium font-sf-pro ${getRoleBadgeColor((member.isPrimary && member.position) ? member.position : member.role)}`}>
+                          {(((member.isPrimary && member.position) ? member.position : member.role) as string).charAt(0).toUpperCase() + (((member.isPrimary && member.position) ? member.position : member.role) as string).slice(1)}
                         </span>
                       </div>
                       
@@ -491,6 +583,7 @@ const TeamManagement = () => {
                             )}
                             <DropdownMenuItem
                               className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                              disabled={!userLinkingService.canDeleteUser(member.id).canDelete}
                               onClick={() => openDeleteConfirmation({
                                 id: member.id,
                                 email: member.email,

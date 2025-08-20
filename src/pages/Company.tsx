@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useLocalization } from '@/hooks/useLocalization';
+
 import CompanyDetails from '@/components/company/CompanyDetails';
 import TeamManagement from '@/components/company/TeamManagement';
 import ActivityLog from '@/components/company/ActivityLog';

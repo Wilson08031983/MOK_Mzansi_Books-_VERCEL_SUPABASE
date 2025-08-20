@@ -290,6 +290,9 @@ export const initializeCompanyDetails = (): void => {
     };
     
     saveCompanyDetails(defaultCompanyDetails);
+    console.log('DEBUG: Initialized default company details');
+  } else {
+    console.log('DEBUG: Company details already exist, not overwriting:', existingDetails);
   }
 };
 

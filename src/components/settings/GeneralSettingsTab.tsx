@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Globe, Building2, Upload, Save, X, ShieldAlert, RefreshCw, Monitor } from 'lucide-react';
+import { Globe, Building2, Upload, Save, X, ShieldAlert, Monitor } from 'lucide-react';
 import TimezoneDisplay from '@/components/common/TimezoneDisplay';
 import { toast } from 'sonner';
 import { workingCompanySync } from '@/services/workingCompanySync';
-import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/services/localAuthService';
+import { verifyAdminPermission } from '@/services/localAuthService';
 import { useLocalization } from '@/hooks/useLocalization';
 import { localizationService } from '@/services/localizationService';
 import AuthModal from '../company/AuthModal';
@@ -37,12 +37,6 @@ const GeneralSettingsTab = () => {
   // Banner notification state for localization changes
   const [banner, setBanner] = useState<{ message: string; language: string; timezone: string; currency: string } | null>(null);
   const [previousSettings, setPreviousSettings] = useState<{ language: string; timezone: string; currency: string } | null>(null);
-
-  // Initialize local auth system on component mount
-  useEffect(() => {
-    resetAuthState();
-    initializeLocalAuth();
-  }, []);
 
   // Load settings from localStorage on component mount
   useEffect(() => {
@@ -220,7 +214,7 @@ const GeneralSettingsTab = () => {
       toast.success('Company settings saved and synchronized successfully!');
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to save settings');
+      toast.error('Failed to save company settings.');
     }
   };
 
@@ -259,11 +253,6 @@ const GeneralSettingsTab = () => {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const handleManualSync = () => {
-    workingCompanySync.manualSync();
-    setSyncStatus(workingCompanySync.getSyncStatus());
   };
 
   // Localization change handlers
@@ -437,20 +426,6 @@ const GeneralSettingsTab = () => {
                   Edit (Admin)
                 </Button>
               )}
-              <Button
-                onClick={handleManualSync}
-                disabled={syncStatus.isInProgress}
-                size="sm"
-                variant="outline"
-                className="flex items-center space-x-1"
-              >
-                {syncStatus.isInProgress ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                <span>Sync</span>
-              </Button>
             </div>
           </CardTitle>
           {syncStatus.lastSyncTime > 0 && (

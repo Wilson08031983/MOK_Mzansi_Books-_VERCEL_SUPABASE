@@ -7,7 +7,7 @@ import { LocalizationProvider } from "@/contexts/LocalizationContext";
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
-import { ensureWilsonHasCEOAccess, initializeDefaultUsers } from "@/services/localAuthService";
+import { ensureWilsonHasCEOAccess, initializeDefaultUsers, updatePrimaryUserInTeamMembers } from "@/services/localAuthService";
 import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";
 import { companyEmployeeSyncService } from "@/services/companyEmployeeSyncService";
 import { useProjectAttendanceSync } from "@/hooks/useProjectAttendanceSync";
@@ -167,6 +167,23 @@ const App = () => {
         
         // Ensure Wilson has CEO access
         ensureWilsonHasCEOAccess();
+        
+        // If company details exist, sync them to the primary admin user so Admin list reflects the owner
+        try {
+          const savedCompanyDetailsRaw = localStorage.getItem('companyDetails');
+          if (savedCompanyDetailsRaw) {
+            const savedCompanyDetails = JSON.parse(savedCompanyDetailsRaw);
+            updatePrimaryUserInTeamMembers({
+              ownerName: savedCompanyDetails.ownerName || '',
+              ownerSurname: savedCompanyDetails.ownerSurname || '',
+              ownerPosition: savedCompanyDetails.ownerPosition || 'CEO',
+              email: savedCompanyDetails.email || '',
+              phone: savedCompanyDetails.phone || ''
+            });
+          }
+        } catch (e) {
+          console.warn('Could not sync saved company details to primary admin user:', e);
+        }
         
         // Sync default users to HR Management
         const syncResult = teamEmployeeSyncService.syncDefaultUsers();

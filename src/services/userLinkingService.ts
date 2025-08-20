@@ -265,33 +265,40 @@ class UserLinkingService {
         return false;
       }
 
+      console.log('🔄 syncPrimaryUser: Starting sync with company details:', {
+        ownerName: companyDetails.ownerName,
+        ownerSurname: companyDetails.ownerSurname,
+        ownerPosition: companyDetails.ownerPosition
+      });
+
       // Ensure primary user exists in team members
       const teamMembers = getAllTeamMembers();
+      console.log('🔄 syncPrimaryUser: Current team members:', teamMembers.map(m => ({ id: m.id, email: m.email, fullName: m.fullName, role: m.role })));
+      
       let primaryTeamMember = teamMembers.find(member => 
         member.email.toLowerCase() === this.PRIMARY_USER_EMAIL.toLowerCase()
       );
+      
+      console.log('🔄 syncPrimaryUser: Found primary team member:', primaryTeamMember);
 
       if (!primaryTeamMember) {
-        // Create primary user in team members
-        const newPrimaryUser: AuthUser = {
-          id: `primary-${Date.now()}`,
-          email: this.PRIMARY_USER_EMAIL,
-          fullName: `${companyDetails.ownerName} ${companyDetails.ownerSurname}`,
-          role: (companyDetails.ownerPosition as any) || 'CEO'
-        };
+        console.log('🔄 syncPrimaryUser: Primary user not found, but this should not happen as updatePrimaryUserInTeamMembers should handle this');
+        console.log('🔄 syncPrimaryUser: Skipping user creation to avoid conflicts');
+        return false;
+      } else {
+        console.log('🔄 syncPrimaryUser: Primary user already exists, proceeding with sync');
         
-        const result = addNewUser(newPrimaryUser.email, 'admin123', newPrimaryUser.role);
-        const success = result.success;
-        if (!success) {
-          console.error('Failed to create primary user in team members');
-          return false;
+        // Verify the user data is up to date with company details
+        const expectedFullName = `${companyDetails.ownerName} ${companyDetails.ownerSurname}`.trim();
+        const expectedRole = companyDetails.ownerPosition || 'CEO';
+        
+        if (primaryTeamMember.fullName !== expectedFullName || primaryTeamMember.role !== expectedRole) {
+          console.log('🔄 syncPrimaryUser: User data mismatch detected:', {
+            current: { fullName: primaryTeamMember.fullName, role: primaryTeamMember.role },
+            expected: { fullName: expectedFullName, role: expectedRole }
+          });
+          console.log('🔄 syncPrimaryUser: This suggests updatePrimaryUserInTeamMembers was not called or failed');
         }
-        
-        // Get the created user from team members
-        const teamMembers = getAllTeamMembers();
-        primaryTeamMember = teamMembers.find(member => 
-          member.email.toLowerCase() === this.PRIMARY_USER_EMAIL.toLowerCase()
-        );
       }
 
       // Link to employees table

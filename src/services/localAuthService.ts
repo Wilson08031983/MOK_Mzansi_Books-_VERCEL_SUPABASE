@@ -104,9 +104,52 @@ const isUserRole = (role: string): role is UserRole => {
   return [...ADMIN_ROLES, 'Staff'].includes(role as UserRole);
 };
 
+// Add or update a user's role and adjust permissions accordingly
+export const updateUserRole = (userId: string, newRole: UserRole): { success: boolean; error?: string } => {
+  try {
+    if (!isUserRole(newRole)) {
+      return { success: false, error: 'Invalid user role' };
+    }
+
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const safeUserId = safeString(userId);
+    const user = credentials[safeUserId];
+
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Prevent demotion of the primary company user via this path
+    if (user.email && user.email.toLowerCase() === 'admin@mokmzansibooks.com' && newRole === 'Staff') {
+      return { success: false, error: 'Cannot demote the primary company user' };
+    }
+
+    // Update role
+    credentials[safeUserId] = {
+      ...user,
+      role: newRole,
+      // Update permissions to match role
+      permissions: ADMIN_ROLES.includes(newRole) ? getAdminPermissions() : getDefaultPermissions()
+    };
+
+    // Persist changes
+    safeSet<StoredCredentials>('userCredentials', credentials);
+
+    // Also persist permissions in dedicated storage for compatibility
+    saveUserPermissions(safeUserId, ADMIN_ROLES.includes(newRole) ? getAdminPermissions() : getDefaultPermissions());
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    return { success: false, error: 'Failed to update user role' };
+  }
+};
+
 // Initialize with default admin and regular users if no users exist
 export const initializeDefaultUsers = (): void => {
   const credentials = safeGet<StoredCredentials>('userCredentials', {});
+  
+  console.log('🔧 initializeDefaultUsers: Starting with credentials:', Object.keys(credentials));
   
   if (Object.keys(credentials).length === 0) {
     // Create default admin user
@@ -118,18 +161,25 @@ export const initializeDefaultUsers = (): void => {
       permissions: getAdminPermissions()
     };
     
+    console.log('🔧 initializeDefaultUsers: Creating initial admin user:', adminUser);
     credentials['default-admin'] = adminUser;
     safeSet<StoredCredentials>('userCredentials', credentials);
   } else {
     // Check for and add admin user if it doesn't exist
     let adminExists = false;
+    let existingAdminId: string | null = null;
     
     // Check if admin exists
-    Object.values(credentials).forEach(user => {
-      if (user.email === 'admin@mokmzansibooks.com') adminExists = true;
+    Object.entries(credentials).forEach(([id, user]) => {
+      if (user.email === 'admin@mokmzansibooks.com') {
+        adminExists = true;
+        existingAdminId = id;
+      }
     });
     
-    // Add admin if not exists
+    console.log('🔧 initializeDefaultUsers: Admin exists:', adminExists, 'ID:', existingAdminId);
+    
+    // Add admin if not exists (preserve existing fullName if admin already exists)
     if (!adminExists) {
       const adminUser: StoredUserCredential = {
         email: 'admin@mokmzansibooks.com',
@@ -138,9 +188,42 @@ export const initializeDefaultUsers = (): void => {
         role: 'Manager',
         permissions: getAdminPermissions()
       };
+      console.log('🔧 initializeDefaultUsers: Creating missing admin user:', adminUser);
       credentials['default-admin'] = adminUser;
       safeSet<StoredCredentials>('userCredentials', credentials);
+      existingAdminId = 'default-admin';
     }
+  }
+  
+  // After ensuring admin exists, try to sync their profile from saved company details
+  try {
+    const savedCompanyDetailsRaw = safeLocalStorage.getItem('companyDetails');
+    if (savedCompanyDetailsRaw) {
+      const savedCompanyDetails = JSON.parse(savedCompanyDetailsRaw);
+      const ownerName = (savedCompanyDetails.ownerName || '').trim();
+      const ownerSurname = (savedCompanyDetails.ownerSurname || '').trim();
+      const ownerPosition = (savedCompanyDetails.ownerPosition || '').trim();
+      
+      const adminId = Object.keys(credentials).find(id => credentials[id].email === 'admin@mokmzansibooks.com');
+      if (adminId) {
+        const current = credentials[adminId];
+        const newFullName = `${ownerName} ${ownerSurname}`.trim();
+        const newRole = ownerPosition || 'CEO';
+        
+        // Only update if we have at least a name or a position to apply
+        if (newFullName || ownerPosition) {
+          credentials[adminId] = {
+            ...current,
+            fullName: newFullName || current.fullName || (current.email ? current.email.split('@')[0] : ''),
+            role: newRole
+          };
+          safeSet<StoredCredentials>('userCredentials', credentials);
+          console.log('🔧 initializeDefaultUsers: Synced primary admin from companyDetails', { fullName: credentials[adminId].fullName, role: credentials[adminId].role });
+        }
+      }
+    }
+  } catch (syncErr) {
+    console.warn('initializeDefaultUsers: Could not sync primary admin from company details', syncErr);
   }
 };
 
@@ -287,12 +370,19 @@ export const verifyAdminPermission = async (email: string, password: string): Pr
   return ADMIN_ROLES.includes(result.user.role);
 };
 
-// Initialize with some default users for testing if none exist
+// Initialize with default admin user only if none exist
 export const initializeLocalAuth = (): void => {
   const credentials = safeGet<StoredCredentials>('userCredentials', {});
   
+  // Remove Regular User if it exists (cleanup)
+  if (credentials['regular-user']) {
+    delete credentials['regular-user'];
+    safeSet<StoredCredentials>('userCredentials', credentials);
+    console.log('Removed Regular User from credentials');
+  }
+  
   if (Object.keys(credentials).length === 0) {
-    // Create default admin user
+    // Create default admin user only
     const adminUser: StoredUserCredential = {
       email: 'admin@mokmzansibooks.com',
       password: 'admin123',
@@ -301,21 +391,11 @@ export const initializeLocalAuth = (): void => {
       permissions: getAdminPermissions()
     };
     
-    // Create default regular user
-    const regularUser: StoredUserCredential = {
-      email: 'user@mokmzansibooks.com',
-      password: 'user123',
-      fullName: 'Regular User',
-      role: 'Staff',
-      permissions: getDefaultPermissions()
-    };
-    
     credentials['admin-user'] = adminUser;
-    credentials['regular-user'] = regularUser;
     
     safeSet<StoredCredentials>('userCredentials', credentials);
     
-    console.log('Initialized local auth with default users');
+    console.log('Initialized local auth with admin user only');
   }
 };
 
@@ -379,16 +459,23 @@ export const getAllTeamMembers = () => {
     const credentials = safeGet<StoredCredentials>('userCredentials', {});
     
     // Transform credentials into team members array without passwords
-    return Object.entries(credentials).map(([id, user]) => {
-      const role: UserRole = isUserRole(user.role) ? user.role : 'Staff';
-      return {
-        id,
-        email: user.email,
-        fullName: user.fullName || user.email.split('@')[0],
-        role,
-        isAdmin: isAdminRole(role)
-      };
-    });
+    return Object.entries(credentials)
+      // Exclude the seeded Regular User from Team Management display
+      .filter(([id, user]) => {
+        const email = (user.email || '').toLowerCase();
+        const name = (user.fullName || '').toLowerCase();
+        return email !== 'user@mokmzansibooks.com' && name !== 'regular user' && id !== 'regular-user';
+      })
+      .map(([id, user]) => {
+        const role: UserRole = isUserRole(user.role) ? user.role : 'Staff';
+        return {
+          id,
+          email: user.email,
+          fullName: user.fullName || user.email.split('@')[0],
+          role,
+          isAdmin: isAdminRole(role)
+        };
+      });
   } catch (error) {
     console.error('Error fetching team members:', error);
     return [];
@@ -546,7 +633,8 @@ export const localAuthService = {
   getAllTeamMembers,
   ensureWilsonHasCEOAccess,
   getUserCredentialsByEmail,
-  deleteUser
+  deleteUser,
+  updateUserRole
 };
 
 // Re-export as default for backward compatibility
@@ -561,8 +649,17 @@ export const updatePrimaryUserInTeamMembers = (companyDetails: {
   phone?: string;
 }): { success: boolean; error?: string } => {
   try {
+    console.log('🔄 updatePrimaryUserInTeamMembers: Starting update with:', companyDetails);
+    
     const credentials = safeGet<StoredCredentials>('userCredentials', {});
     const PRIMARY_USER_EMAIL = 'admin@mokmzansibooks.com';
+    
+    console.log('🔄 updatePrimaryUserInTeamMembers: Current credentials:', Object.keys(credentials).map(id => ({
+      id,
+      email: credentials[id].email,
+      fullName: credentials[id].fullName,
+      role: credentials[id].role
+    })));
     
     // Find the primary user in team members
     let primaryUserFound = false;
@@ -573,33 +670,71 @@ export const updatePrimaryUserInTeamMembers = (companyDetails: {
         primaryUserFound = true;
         primaryUserId = id;
         
+        const oldUser = { ...cred };
+        
         // Update the primary user's information with company details
         credentials[id] = {
           ...cred,
-          fullName: `${companyDetails.ownerName} ${companyDetails.ownerSurname}`.trim(),
-          role: (companyDetails.ownerPosition as UserRole) || cred.role || 'CEO',
+          fullName: `${companyDetails.ownerName} ${companyDetails.ownerSurname}`.trim() || cred.fullName || (cred.email ? cred.email.split('@')[0] : ''),
+          role: (companyDetails.ownerPosition as UserRole) || 'CEO',
           // Keep existing password and permissions
           password: cred.password,
           permissions: cred.permissions
         };
+        
+        console.log('🔄 updatePrimaryUserInTeamMembers: Updated user from:', {
+          fullName: oldUser.fullName,
+          role: oldUser.role
+        }, 'to:', {
+          fullName: credentials[id].fullName,
+          role: credentials[id].role
+        });
       }
     });
     
     if (!primaryUserFound) {
+      console.error('🔄 updatePrimaryUserInTeamMembers: Primary user not found');
       return { success: false, error: 'Primary user not found in team members' };
     }
     
-    // Save updated credentials
-    safeSet<StoredCredentials>('userCredentials', credentials);
+    // Save updated credentials with explicit error handling
+    try {
+      safeSet<StoredCredentials>('userCredentials', credentials);
+      console.log('🔄 updatePrimaryUserInTeamMembers: Credentials saved to localStorage');
+      
+      // Verify the save worked
+      const verifyCredentials = safeGet<StoredCredentials>('userCredentials', {});
+      const verifyUser = Object.values(verifyCredentials).find(user => 
+        user.email.toLowerCase() === PRIMARY_USER_EMAIL.toLowerCase()
+      );
+      console.log('🔄 updatePrimaryUserInTeamMembers: Verification - saved user:', {
+        fullName: verifyUser?.fullName,
+        role: verifyUser?.role
+      });
+    } catch (saveError) {
+      console.error('🔄 updatePrimaryUserInTeamMembers: Error saving credentials:', saveError);
+      return { success: false, error: 'Failed to save updated user information' };
+    }
     
     // Notify listeners that team members have been updated
     try {
-      window.dispatchEvent(new CustomEvent('teamMembersUpdated', { detail: { reason: 'primaryUserUpdated' } }));
+      console.log('🔄 updatePrimaryUserInTeamMembers: Dispatching teamMembersUpdated event');
+      window.dispatchEvent(new CustomEvent('teamMembersUpdated', { 
+        detail: { 
+          reason: 'primaryUserUpdated',
+          source: 'updatePrimaryUserInTeamMembers',
+          updatedUser: {
+            email: PRIMARY_USER_EMAIL,
+            fullName: credentials[primaryUserId].fullName,
+            role: credentials[primaryUserId].role
+          }
+        } 
+      }));
     } catch (evtErr) {
       console.warn('Could not dispatch teamMembersUpdated event:', evtErr);
     }
     
-    console.log('Primary user updated in team members:', primaryUserId);
+    console.log('🔄 updatePrimaryUserInTeamMembers: Primary user updated successfully:', primaryUserId);
     return { success: true };
   } catch (error) {
     console.error('Error updating primary user in team members:', error);

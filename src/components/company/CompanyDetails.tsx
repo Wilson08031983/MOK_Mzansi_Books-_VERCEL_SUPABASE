@@ -5,11 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Edit, Save, X, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { verifyAdminPermission, initializeLocalAuth, resetAuthState } from '@/services/localAuthService';
+import { verifyAdminPermission, updatePrimaryUserInTeamMembers } from '@/services/localAuthService';
 import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
 import { workingCompanySync } from '@/services/workingCompanySync';
-import { userLinkingService } from '@/services/userLinkingService';
-import { updatePrimaryUserInTeamMembers } from '@/services/localAuthService';
+
 import AuthModal from './AuthModal';
 import CompanyInformationForm from './CompanyInformationForm';
 import ContactPersonForm from './ContactPersonForm';
@@ -27,15 +26,15 @@ const CompanyDetails = () => {
   // Initialize local auth system on component mount
   useEffect(() => {
     // Reset the auth state first, then initialize with new credentials
-    resetAuthState();
-    initializeLocalAuth();
     
     // Initialize company details for sync
     companyEmployeeSyncService.initializeCompanyDetails();
     
     // Load the initialized company details immediately
     const initializedDetails = companyEmployeeSyncService.getCompanyDetails();
+    console.log('DEBUG: Loading company details on mount:', initializedDetails);
     if (initializedDetails) {
+      console.log('DEBUG: Setting company data from loaded details');
       setCompanyData(prev => ({
         ...prev,
         name: initializedDetails.companyName || prev.name,
@@ -100,47 +99,69 @@ const CompanyDetails = () => {
       try {
         setLoading(true);
         
-        // First try to load complete company details if available
-        const savedCompanyDetails = localStorage.getItem('companyDetails');
-        if (savedCompanyDetails) {
-          try {
-            const parsedDetails = JSON.parse(savedCompanyDetails);
-            setCompanyData(prevData => ({ ...prevData, ...parsedDetails }));
-          } catch (parseError) {
-            console.error('Error parsing company details:', parseError);
+        // Prepare stored data
+        let parsedDetails: any = null;
+        let parsedBankDetails: any = null;
+        let userMeta: any = null;
+        
+        // Load complete company details if available
+        try {
+          const savedCompanyDetails = localStorage.getItem('companyDetails');
+          if (savedCompanyDetails) {
+            parsedDetails = JSON.parse(savedCompanyDetails);
           }
+        } catch (parseError) {
+          console.error('Error parsing company details:', parseError);
         }
         
-        // Try to load bank details if available
+        // Load bank details if available
         try {
           const savedBankDetails = localStorage.getItem('companyBankDetails');
           if (savedBankDetails) {
-            const parsedBankDetails = JSON.parse(savedBankDetails);
-            setCompanyData(prevData => ({ ...prevData, ...parsedBankDetails }));
+            parsedBankDetails = JSON.parse(savedBankDetails);
           }
         } catch (bankError) {
           console.error('Error loading bank details:', bankError);
         }
         
-        // Fallback to user metadata from mokUser
-        const storedUser = localStorage.getItem('mokUser');
-        if (storedUser) {
-          try {
+        // Load mokUser metadata for cautious fallback only if needed
+        try {
+          const storedUser = localStorage.getItem('mokUser');
+          if (storedUser) {
             const userData = JSON.parse(storedUser);
-            const userMeta = userData.user_metadata || {};
-            
-            setCompanyData(prev => ({
-              ...prev,
-              name: userMeta.company_name || prev.name,
-              contactName: userMeta.first_name || prev.contactName,
-              contactSurname: userMeta.last_name || prev.contactSurname,
-              email: userMeta.email || user.email || prev.email,
-              phone: userMeta.phone || prev.phone
-            }));
-          } catch (userError) {
-            console.error('Error parsing user data:', userError);
+            userMeta = userData.user_metadata || {};
           }
+        } catch (userError) {
+          console.error('Error parsing user data:', userError);
         }
+        
+        // Merge everything in ONE state update to avoid race conditions
+        setCompanyData(prev => {
+          let next = { ...prev };
+          
+          if (parsedDetails) {
+            next = { ...next, ...parsedDetails };
+          }
+          
+          if (parsedBankDetails) {
+            next = { ...next, ...parsedBankDetails };
+          }
+          
+          // Only apply mokUser fallback if owner details are still missing after loading saved data
+          const missingOwner = (!next.contactName || next.contactName.trim() === '') && (!next.contactSurname || next.contactSurname.trim() === '');
+          if (missingOwner && userMeta) {
+            next = {
+              ...next,
+              name: next.name || userMeta.company_name || next.name,
+              contactName: next.contactName || userMeta.first_name || next.contactName,
+              contactSurname: next.contactSurname || userMeta.last_name || next.contactSurname,
+              email: next.email || userMeta.email || user.email || next.email,
+              phone: next.phone || userMeta.phone || next.phone
+            };
+          }
+          
+          return next;
+        });
         
         // Trigger sync after data is loaded
         setTimeout(() => {
@@ -241,34 +262,15 @@ const CompanyDetails = () => {
       };
       
       localStorage.setItem('companyDetails', JSON.stringify(companyDetailsToSave));
+      // Notify other parts of the app in the same tab
+      window.dispatchEvent(new Event('companyDetailsUpdated'));
+
       
-      // NEW: Update primary user shown in Team Management (first user) to reflect new company details
-      try {
-        const updateResult = updatePrimaryUserInTeamMembers({
-          ownerName: companyDetailsToSave.ownerName,
-          ownerSurname: companyDetailsToSave.ownerSurname,
-          ownerPosition: companyDetailsToSave.ownerPosition,
-          email: companyDetailsToSave.email,
-          phone: companyDetailsToSave.phone
-        });
-        if (!updateResult.success) {
-          console.warn('Team primary user update warning:', updateResult.error);
-        }
-      } catch (e) {
-        console.error('Error updating team primary user from company details:', e);
-      }
       
       // Automatically sync company details to HR Management employee record
       try {
         const syncResult = companyEmployeeSyncService.syncCompanyDetailsToEmployee();
         if (syncResult.success) {
-          // Also sync primary user to maintain cross-table consistency
-          try {
-            await userLinkingService.syncPrimaryUser();
-          } catch (error) {
-            console.error('Primary user sync error:', error);
-            toast.info('Auto-sync completed. Primary user sync encountered issues.');
-          }
           toast.success('Company details saved and automatically synced to HR Management.');
         } else {
           toast.success('Company details saved successfully.');
@@ -288,12 +290,34 @@ const CompanyDetails = () => {
         console.error('Settings sync error:', settingsyncError);
       }
       
+      // Update the primary admin user (admin@mokmzansibooks.com) to reflect company owner details
+      try {
+        const updateResult = updatePrimaryUserInTeamMembers({
+          ownerName: companyData.contactName,
+          ownerSurname: companyData.contactSurname,
+          ownerPosition: companyData.position,
+          email: companyData.email,
+          phone: companyData.phone
+        });
+        if (updateResult.success) {
+          console.log('Primary admin user updated with company owner details');
+          // Let Settings > Users and Team Management know to refresh their views
+          window.dispatchEvent(new CustomEvent('teamMembersUpdated', { detail: { reason: 'companyDetailsSaved' } }));
+        } else if (updateResult.error) {
+          console.warn('Could not update primary admin user:', updateResult.error);
+        }
+      } catch (updateErr) {
+        console.error('Error updating primary admin user:', updateErr);
+      }
+      
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving company data:', error);
       toast.error('Error saving company details.');
     }
   };
+  
+
 
   const handleCancel = () => {
     setIsEditing(false);
@@ -327,6 +351,7 @@ const CompanyDetails = () => {
                 <ShieldAlert className="h-4 w-4 mr-2" />
                 Edit
               </Button>
+
             </div>
           ) : (
             <div className="flex space-x-2">
