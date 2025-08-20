@@ -49,6 +49,25 @@ interface PaymentData {
   paymentMethod: string;
 }
 
+// Interface for incomes saved by Sales Slip
+interface IncomeData {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  category?: string;
+  status?: string;
+  paymentMethod?: string;
+  client?: string;
+  clientId?: string;
+  source?: string;
+  // When a sales slip is later converted to an invoice, we set this to true
+  hasInvoice?: boolean;
+  // Optional reference fields for linkage
+  linkedInvoiceId?: string;
+  saleSessionId?: string;
+}
+
 // Interface for displaying clients in the UI
 interface ClientDisplay {
   id: string;
@@ -105,8 +124,66 @@ const Clients = () => {
         console.error('Failed to load clients:', error);
       }
     };
+
+  // Determine status and last activity based on invoices, payments and incomes
+  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string } => {
+    try {
+      const invoices: any[] = JSON.parse(localStorage.getItem('invoices') || '[]');
+      const payments: any[] = JSON.parse(localStorage.getItem('payments') || '[]');
+      const incomes: any[] = JSON.parse(localStorage.getItem('incomes') || '[]');
+
+      const clientInvoices = invoices.filter(inv => inv.clientId === clientId || inv.client === clientId);
+      const clientPayments = payments.filter(pay => pay && pay.invoiceId && clientInvoices.some(inv => inv.id === pay.invoiceId));
+      const clientIncomes = incomes.filter(inc => inc && inc.clientId === clientId);
+
+      // Last activity = latest among invoiceDate/date, paymentDate, income date, fallback to now
+      const dateCandidates: number[] = [];
+      clientInvoices.forEach(inv => {
+        const d = new Date(inv.updatedAt || inv.invoiceDate || inv.date).getTime();
+        if (!isNaN(d)) dateCandidates.push(d);
+      });
+      clientPayments.forEach(pay => {
+        const d = new Date(pay.paymentDate).getTime();
+        if (!isNaN(d)) dateCandidates.push(d);
+      });
+      clientIncomes.forEach(inc => {
+        const d = new Date(inc.date).getTime();
+        if (!isNaN(d)) dateCandidates.push(d);
+      });
+
+      const latestTs = dateCandidates.length > 0 ? Math.max(...dateCandidates) : Date.now();
+      const lastActivity = new Date(latestTs).toISOString();
+
+      // Overdue logic: any invoice with balance > 0 and past dueDate
+      const nowTs = Date.now();
+      const hasOverdue = clientInvoices.some(inv => {
+        const dueTs = new Date(inv.dueDate || inv.date).getTime();
+        const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
+        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs;
+      });
+
+      // Active logic: recent activity (<= 30 days) or outstanding not overdue
+      const days30 = 30 * 24 * 60 * 60 * 1000;
+      const hasRecentActivity = nowTs - latestTs <= days30;
+
+      const outstandingNotOverdue = clientInvoices.some(inv => {
+        const dueTs = new Date(inv.dueDate || inv.date).getTime();
+        const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
+        return balance > 0 && (!dueTs || isNaN(dueTs) || dueTs >= nowTs);
+      });
+
+      let status = 'inactive';
+      if (hasOverdue) status = 'overdue';
+      else if (hasRecentActivity || outstandingNotOverdue) status = 'active';
+
+      return { status, lastActivity };
+    } catch (e) {
+      console.error('Error determining client status:', e);
+      return { status: 'inactive', lastActivity: new Date().toISOString() };
+    }
+  };
     
-    // Define the custom event handler for invoice and payment updates
+    // Define the custom event handler for invoice, payment and income updates
     const handleDataUpdate = () => {
       loadClientsFromStorage();
     };
@@ -114,14 +191,16 @@ const Clients = () => {
     // Execute initial load
     loadClients();
     
-    // Add event listeners for custom events that will be dispatched when invoices or payments change
+    // Add event listeners for custom events that will be dispatched when invoices, payments or incomes change
     window.addEventListener('invoices-updated', handleDataUpdate);
     window.addEventListener('payments-updated', handleDataUpdate);
+    window.addEventListener('income-updated', handleDataUpdate);
     
     // Cleanup event listeners on component unmount
     return () => {
       window.removeEventListener('invoices-updated', handleDataUpdate);
       window.removeEventListener('payments-updated', handleDataUpdate);
+      window.removeEventListener('income-updated', handleDataUpdate);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -144,7 +223,7 @@ const Clients = () => {
     }
   };
   
-  // Function to calculate total value for each client based on invoices and payments
+  // Function to calculate total value for each client based on invoices, payments, and sales slip incomes
   const calculateClientTotalValues = (clientId: string): number => {
     try {
       // Get all invoices from localStorage
@@ -154,6 +233,10 @@ const Clients = () => {
       // Get all payments from localStorage
       const paymentsData = localStorage.getItem('payments');
       const payments: PaymentData[] = paymentsData ? JSON.parse(paymentsData) : [];
+      
+      // Get incomes (for sales slips) from localStorage
+      const incomesData = localStorage.getItem('incomes');
+      const incomes: IncomeData[] = incomesData ? JSON.parse(incomesData) : [];
       
       // Filter invoices for this client
       const clientInvoices = invoices.filter((invoice) => invoice.clientId === clientId);
@@ -176,8 +259,18 @@ const Clients = () => {
         });
       });
       
-      // Calculate remaining value (invoiced - paid)
-      return Math.max(0, totalInvoiced - totalPaid);
+      // Sum confirmed sales slip incomes for this client
+      const salesSlipIncomeTotal = incomes
+        .filter((inc) =>
+          inc.clientId === clientId &&
+          // Only count raw sales slip incomes that have NOT been converted to invoice
+          inc.hasInvoice !== true &&
+          (inc.source === 'sales_slip' || inc.description?.includes('Sales Transaction - Print Slip'))
+        )
+        .reduce((sum, inc) => sum + Number(inc.amount || 0), 0);
+
+      // Combined: outstanding invoices plus sales slip totals
+      return Math.max(0, totalInvoiced - totalPaid) + salesSlipIncomeTotal;
     } catch (error) {
       console.error('Error calculating client total value:', error);
       return 0;
@@ -208,6 +301,7 @@ const Clients = () => {
         .map((client: Client) => {
           // Calculate the true total value based on invoices and payments
           const calculatedTotalValue = calculateClientTotalValues(client.id || '');
+          const { status, lastActivity } = calculateClientStatusAndActivity(client.id || '');
           
           return {
             id: client.id || '',
@@ -216,8 +310,8 @@ const Clients = () => {
             email: client.email || '',
             phone: client.phone || '',
             totalValue: calculatedTotalValue, // Use the calculated value
-            lastActivity: client.lastActivity || new Date().toISOString(),
-            status: client.status || 'inactive',
+            lastActivity: lastActivity || client.lastActivity || new Date().toISOString(),
+            status: status || client.status || 'inactive',
             type: client.clientType || 'individual',
             avatar: client.avatar || ''
           };

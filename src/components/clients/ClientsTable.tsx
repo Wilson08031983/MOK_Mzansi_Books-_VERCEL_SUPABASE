@@ -8,7 +8,6 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Eye } from 'lucide-react';
 import AddClientModal from './AddClientModal';
 
 interface Client {
@@ -113,15 +112,7 @@ const ClientsTable = ({
         </TableBody>
       </Table>
       
-      {clients.length === 0 && (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Eye className="h-8 w-8 text-slate-400" />
-          </div>
-          <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">No clients found</h3>
-          <p className="text-slate-600 font-sf-pro text-sm">Try adjusting your search terms or filters</p>
-        </div>
-      )}
+      {/* Empty state handled at page-level in `src/pages/Clients.tsx` */}
       
       {/* View Client Modal */}
       {viewClientData && (
