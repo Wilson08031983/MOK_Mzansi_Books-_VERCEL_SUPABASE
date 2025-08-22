@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { resetAuthState } from '@/services/localAuthService';
+import { resetLocalAuth } from '@/services/resetLocalAuth';
 import { useNavigate } from 'react-router-dom';
 import { useLocalization } from '@/hooks/useLocalization';
 
@@ -21,8 +21,8 @@ const AuthReset = () => {
       setIsResetting(true);
       setMessage(t('auth.authReset.resetting'));
       
-      // Use the existing resetAuthState function
-      resetAuthState();
+      // Reset and seed local auth with Admin and Wilson accounts
+      resetLocalAuth();
       
       // Check if users were created
       const storedCredentials = window.localStorage.getItem('userCredentials');

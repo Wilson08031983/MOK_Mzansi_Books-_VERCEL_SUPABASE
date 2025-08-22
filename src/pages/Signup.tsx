@@ -145,7 +145,11 @@ const Signup = () => {
         <Card className="shadow-business-xl border-0 glass backdrop-blur-md hover-lift animate-fade-in">
           <CardHeader className="text-center animate-fade-in" style={{ animationDelay: '0.1s' }}>
             <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-card">
-              <LogoColor className="w-16 h-16" />
+              <img
+                src="/lovable-uploads/8021eb93-6e6a-421e-a8ff-bed101269a7c.png"
+                alt="MOKMzansiBooks Logo"
+                className="w-16 h-16 object-contain"
+              />
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-foreground">

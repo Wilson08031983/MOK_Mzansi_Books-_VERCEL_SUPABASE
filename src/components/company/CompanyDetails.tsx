@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { verifyAdminPermission, updatePrimaryUserInTeamMembers } from '@/services/localAuthService';
 import { companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
 import { workingCompanySync } from '@/services/workingCompanySync';
+import useAuditLogger from '@/hooks/useAuditLogger';
 
 import AuthModal from './AuthModal';
 import CompanyInformationForm from './CompanyInformationForm';
@@ -19,6 +20,7 @@ import CompanyAssetsUpload from './CompanyAssetsUpload';
 
 const CompanyDetails = () => {
   const { user } = useAuth();
+  const { logSettings, logAuth, logSystem, logUpdate } = useAuditLogger();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -186,6 +188,10 @@ const CompanyDetails = () => {
         setIsEditing(true);
         setIsAuthModalOpen(false);
         toast.success('Authentication successful. You can now edit company details.');
+        // Audit: admin authenticated to edit company details
+        try {
+          logAuth('Admin Edit Authorized', 'Company details edit authorized');
+        } catch (_) {}
         return true;
       } else {
         toast.error('Authentication failed. You do not have admin privileges.');
@@ -201,6 +207,10 @@ const CompanyDetails = () => {
   // Start edit mode only after authentication
   const handleStartEdit = () => {
     setIsAuthModalOpen(true);
+    // Audit: user initiated edit flow
+    try {
+      logSystem('Start Edit', 'Entered company details edit mode');
+    } catch (_) {}
   };
   
   const handleSave = async () => {
@@ -242,6 +252,18 @@ const CompanyDetails = () => {
         branchCode: companyData.branchCode || ''
       };
       
+      // Prepare old values for audit before saving
+      let prevDetails: any = null;
+      let prevBankDetails: any = null;
+      try {
+        const savedCompanyDetails = localStorage.getItem('companyDetails');
+        if (savedCompanyDetails) prevDetails = JSON.parse(savedCompanyDetails);
+      } catch (_) {}
+      try {
+        const savedBankDetails = localStorage.getItem('companyBankDetails');
+        if (savedBankDetails) prevBankDetails = JSON.parse(savedBankDetails);
+      } catch (_) {}
+
       // Save bank details separately
       localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
       
@@ -265,6 +287,14 @@ const CompanyDetails = () => {
       // Notify other parts of the app in the same tab
       window.dispatchEvent(new Event('companyDetailsUpdated'));
 
+      // Audit: log settings update with diffs
+      try {
+        const oldValues = { ...(prevDetails || {}), ...(prevBankDetails || {}) };
+        const newValues = { ...companyDetailsToSave, ...bankDetails };
+        logSettings('Company Details Updated', 'Company', oldValues, newValues);
+        logUpdate('Company', companyData.name || 'Company', 'company', oldValues, newValues);
+      } catch (_) {}
+      
       
       
       // Automatically sync company details to HR Management employee record
@@ -322,6 +352,10 @@ const CompanyDetails = () => {
   const handleCancel = () => {
     setIsEditing(false);
     toast.info('Edit cancelled. No changes were saved.');
+    // Audit: user cancelled edit
+    try {
+      logSystem('Cancel Edit', 'Cancelled editing company details');
+    } catch (_) {}
   };
   
   const closeAuthModal = () => {
@@ -338,9 +372,9 @@ const CompanyDetails = () => {
       />
       
       {/* Company Information */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+      <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-slate-900 font-sf-pro text-xl">Company Information</CardTitle>
+          <CardTitle className="text-foreground font-sf-pro text-xl">Company Information</CardTitle>
           {!isEditing ? (
             <div className="flex space-x-2">
               {/* Sync to HR button hidden as auto-sync is triggered on Save */}

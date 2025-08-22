@@ -207,7 +207,7 @@ const ResetPassword = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background elements */}
+      {/* Background elements */}  
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-orange-200/20 to-pink-300/20 rounded-full mix-blend-multiply filter blur-xl opacity-60 animate-blob shadow-4xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-purple-200/20 to-blue-300/20 rounded-full mix-blend-multiply filter blur-xl opacity-60 animate-blob animation-delay-2000 shadow-4xl"></div>
@@ -224,20 +224,24 @@ const ResetPassword = () => {
       <Card className="shadow-business-xl border-0 glass backdrop-blur-md hover-lift animate-fade-in">
         <CardHeader className="text-center animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <div className="mx-auto w-24 h-24 flex items-center justify-center shadow-business-lg animate-float rounded-2xl overflow-hidden bg-card">
-            <LogoColor className="w-16 h-16" />
+            <img
+              src="/lovable-uploads/8021eb93-6e6a-421e-a8ff-bed101269a7c.png"
+              alt="MOKMzansiBooks Logo"
+              className="w-16 h-16 object-contain"
+            />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold text-foreground drop-shadow-sm">{t('auth.resetPassword.title')}</CardTitle>
             <p className="text-muted-foreground mt-2">{t('auth.resetPassword.subtitle')}</p>
           </div>
-          </CardHeader>
+        </CardHeader>
 
-          <CardContent className="space-y-6">
-            {renderContent()}
-          </CardContent>
-        </Card>
-      </div>
+        <CardContent className="space-y-6">
+          {renderContent()}
+        </CardContent>
+      </Card>
     </div>
+  </div>
   );
 };
 
