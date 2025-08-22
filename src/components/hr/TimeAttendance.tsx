@@ -1050,8 +1050,8 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Time & Attendance</h2>
-          <p className="text-slate-600 font-sf-pro">Track employee hours, manage timesheets, and monitor attendance patterns</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">Time & Attendance</h2>
+          <p className="text-slate-600 dark:text-slate-400 font-sf-pro">Track employee hours, manage timesheets, and monitor attendance patterns</p>
         </div>
         
         <Button
@@ -1064,7 +1064,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       </div>
       
       {/* Filters */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
         <CardContent className="p-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -1072,14 +1072,14 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
               <Input
                 type="text"
                 placeholder="Search employees..."
-                className="pl-8 bg-white/80"
+                className="pl-8 bg-slate-800/60 text-slate-100 placeholder:text-slate-400 border border-white/10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             
             <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="w-[180px] bg-white/80">
+              <SelectTrigger className="w-[180px] bg-slate-800/60 text-slate-100 border border-white/10">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
@@ -1091,7 +1091,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
             </Select>
             
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px] bg-white/80">
+              <SelectTrigger className="w-[180px] bg-slate-800/60 text-slate-100 border border-white/10">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -1108,7 +1108,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                 <Input
                   id="date-filter"
                   type="date"
-                  className="bg-white/80"
+                  className="bg-slate-800/60 text-slate-100 placeholder:text-slate-400 border border-white/10"
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
                 />
@@ -1117,7 +1117,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                   <Input
                     id="date-filter-start"
                     type="date"
-                    className="bg-white/80"
+                    className="bg-slate-800/60 text-slate-100 placeholder:text-slate-400 border border-white/10"
                     value={format(dateFilter.startDate, 'yyyy-MM-dd')}
                     onChange={(e) => setDateFilter({
                       startDate: new Date(e.target.value),
@@ -1128,7 +1128,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
                   <Input
                     id="date-filter-end"
                     type="date"
-                    className="bg-white/80"
+                    className="bg-slate-800/60 text-slate-100 placeholder:text-slate-400 border border-white/10"
                     value={format(dateFilter.endDate, 'yyyy-MM-dd')}
                     onChange={(e) => setDateFilter({
                       startDate: dateFilter.startDate,
@@ -1159,7 +1159,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
         
         {/* Daily Entries Tab */}
         <TabsContent value="daily" className="space-y-4">
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader className="pb-2">
               <CardTitle>Daily Time Entries</CardTitle>
               <CardDescription>
@@ -1390,7 +1390,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
         
         {/* Weekly Timesheets Tab */}
         <TabsContent value="weekly" className="space-y-4">
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader className="pb-2">
               <CardTitle>Weekly Timesheets</CardTitle>
               <CardDescription>
@@ -1555,7 +1555,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
         
         {/* Attendance Summary Tab */}
         <TabsContent value="summary" className="space-y-4">
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Attendance Summary</CardTitle>
@@ -1669,7 +1669,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
           </Card>
           
           {/* South African Labor Law Information */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center">
                 <Info className="h-5 w-5 mr-2 text-mokm-blue-500" />

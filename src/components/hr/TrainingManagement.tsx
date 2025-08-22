@@ -310,7 +310,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     <div>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <h2 className="text-2xl font-bold text-slate-900">Employee Training & Qualifications</h2>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Employee Training & Qualifications</h2>
         
         <div className="relative w-full md:w-64">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
