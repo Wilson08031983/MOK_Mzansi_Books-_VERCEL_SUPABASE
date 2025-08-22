@@ -4,6 +4,7 @@ import { useLocalization } from '@/hooks/useLocalization';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft,
+  ChevronLeft,
   Users,
   Calendar,
   Clock,
@@ -30,7 +31,8 @@ import PerformanceManagement from '@/components/hr/PerformanceManagement';
 import DisciplinaryManagement from '@/components/hr/DisciplinaryManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
 
-import { Employee, getAllEmployees, initializeEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
+import { Employee, getAllEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
+import { syncTeamMembersToEmployees } from '@/services/teamEmployeeSyncService';
 import { cleanupAllSampleData } from '@/services/cleanupSampleData';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
 import { createSampleEmployeesWithData } from '@/services/sampleDataGenerator';
@@ -172,8 +174,26 @@ const HRManagement: React.FC = () => {
     const cleanupResult = cleanupAllSampleData();
     console.log('🧹 [HR] Cleanup result:', cleanupResult);
     
-    // Ensure at least Admin exists after cleanup
-    initializeEmployees();
+    // Sync Team Members into Employees so HR reflects Company > Team as source of truth
+    const syncResult = syncTeamMembersToEmployees();
+    console.log('🔗 [HR] Team-to-Employee sync result:', syncResult);
+    
+    // Remove any legacy statically-seeded Admin User if present (pre-linkage artifact)
+    try {
+      const stored = getAllEmployees();
+      const before = stored.length;
+      const filtered = stored.filter(e => !(
+        e.firstName === 'Admin' &&
+        e.surname === 'User' &&
+        (e.position === 'Software Developer' || e.email?.toLowerCase() === 'admin.user@mokmzansibooks.com')
+      ));
+      if (filtered.length !== before) {
+        localStorage.setItem('employees', JSON.stringify(filtered));
+        console.log('🗑️ [HR] Removed legacy seeded Admin User from employees');
+      }
+    } catch (err) {
+      console.warn('⚠️ [HR] Failed legacy Admin cleanup (safe to ignore):', err);
+    }
     
     // Load employees from localStorage
     const storedEmployees = getAllEmployees();
@@ -383,21 +403,20 @@ const HRManagement: React.FC = () => {
   ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-mokm-blue-50 via-mokm-purple-50 to-mokm-pink-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-4">
             <Link 
-              to="/dashboard" 
-              className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-white/50 rounded-lg transition-colors font-sf-pro"
+              to="/dashboard"
+              className="inline-flex items-center px-4 py-2 glass backdrop-blur-md bg-white/10 dark:bg-white/5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-white/15 dark:hover:bg-white/10 rounded-xl border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in"
             >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to Dashboard</span>
+              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Dashboard
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">{t('hr.title')}</h1>
-              <p className="text-slate-600 font-sf-pro">Manage employees, payroll, and human resources</p>
+              <h1 className="text-3xl font-bold text-slate-100 font-sf-pro">{t('hr.title')}</h1>
+              <p className="text-slate-300 font-sf-pro">Manage employees, payroll, and human resources</p>
             </div>
           </div>
         </div>
@@ -423,7 +442,7 @@ const HRManagement: React.FC = () => {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-sf-pro ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored'
-                  : 'glass backdrop-blur-sm bg-white/50 border border-white/20 text-slate-700 hover:bg-white/70'
+                  : 'glass backdrop-blur-sm bg-white/10 dark:bg-black/30 border border-white/10 text-slate-300 hover:bg-white/15'
               }`}
             >
               {tab.icon}
