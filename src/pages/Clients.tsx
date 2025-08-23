@@ -21,15 +21,19 @@ import {
   FileText,
   Receipt,
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  ChevronLeft,
+  HelpCircle
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import ClientsTable from '@/components/clients/ClientsTable';
 import ClientsGrid from '@/components/clients/ClientsGrid';
 import AddClientModal from '@/components/clients/AddClientModal';
 import BulkActionsBar from '@/components/clients/BulkActionsBar';
 import ClientsStats from '@/components/clients/ClientsStats';
+import HelpCentre from '@/components/HelpCentre';
 import { Client, getClients, initializeClients } from '@/services/clientService';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 // Define interfaces for invoice and payment data from localStorage
 interface InvoiceData {
@@ -223,6 +227,64 @@ const Clients = () => {
     }
   };
   
+  // Determine status and last activity based on invoices, payments and incomes
+  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string } => {
+    try {
+      const invoices: any[] = JSON.parse(localStorage.getItem('invoices') || '[]');
+      const payments: any[] = JSON.parse(localStorage.getItem('payments') || '[]');
+      const incomes: any[] = JSON.parse(localStorage.getItem('incomes') || '[]');
+
+      const clientInvoices = invoices.filter(inv => inv.clientId === clientId || inv.client === clientId);
+      const clientPayments = payments.filter(pay => pay && pay.invoiceId && clientInvoices.some(inv => inv.id === pay.invoiceId));
+      const clientIncomes = incomes.filter(inc => inc && inc.clientId === clientId);
+
+      // Last activity = latest among invoiceDate/date, paymentDate, income date, fallback to now
+      const dateCandidates: number[] = [];
+      clientInvoices.forEach(inv => {
+        const d = new Date(inv.updatedAt || inv.invoiceDate || inv.date).getTime();
+        if (!isNaN(d)) dateCandidates.push(d);
+      });
+      clientPayments.forEach(pay => {
+        const d = new Date(pay.paymentDate).getTime();
+        if (!isNaN(d)) dateCandidates.push(d);
+      });
+      clientIncomes.forEach(inc => {
+        const d = new Date(inc.date).getTime();
+        if (!isNaN(d)) dateCandidates.push(d);
+      });
+
+      const latestTs = dateCandidates.length > 0 ? Math.max(...dateCandidates) : Date.now();
+      const lastActivity = new Date(latestTs).toISOString();
+
+      // Overdue logic: any invoice with balance > 0 and past dueDate
+      const nowTs = Date.now();
+      const hasOverdue = clientInvoices.some(inv => {
+        const dueTs = new Date(inv.dueDate || inv.date).getTime();
+        const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
+        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs;
+      });
+
+      // Active logic: recent activity (<= 30 days) or outstanding not overdue
+      const days30 = 30 * 24 * 60 * 60 * 1000;
+      const hasRecentActivity = nowTs - latestTs <= days30;
+
+      const outstandingNotOverdue = clientInvoices.some(inv => {
+        const dueTs = new Date(inv.dueDate || inv.date).getTime();
+        const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
+        return balance > 0 && (!dueTs || isNaN(dueTs) || dueTs >= nowTs);
+      });
+
+      let status = 'inactive';
+      if (hasOverdue) status = 'overdue';
+      else if (hasRecentActivity || outstandingNotOverdue) status = 'active';
+
+      return { status, lastActivity };
+    } catch (e) {
+      console.error('Error determining client status:', e);
+      return { status: 'inactive', lastActivity: new Date().toISOString() };
+    }
+  };
+
   // Function to calculate total value for each client based on invoices, payments, and sales slip incomes
   const calculateClientTotalValues = (clientId: string): number => {
     try {
@@ -402,22 +464,21 @@ const Clients = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="min-h-screen bg-background relative">
+      <DashboardBackground />
+      <div className="p-8 space-y-8 relative z-10">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div className="flex items-center space-x-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/dashboard')}
-            className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center px-4 py-2 glass backdrop-blur-md bg-white/10 dark:bg-white/5 text-sm font-medium text-slate-800 dark:text-slate-100 hover:bg-white/15 dark:hover:bg-white/10 rounded-xl border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            {t('common.backToDashboard')}
-          </Button>
+            <ChevronLeft className="mr-2 h-4 w-4" /> {t('common.backToDashboard')}
+          </Link>
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">{t('clients.title')}</h1>
-            <p className="text-slate-600 font-sf-pro">{t('clients.manageClients')}</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">{t('clients.title')}</h1>
+            <p className="text-slate-600 dark:text-slate-400 font-sf-pro">{t('clients.manageClients')}</p>
           </div>
         </div>
         
@@ -430,6 +491,15 @@ const Clients = () => {
             <RefreshCw className="h-4 w-4 mr-2" />
             {t('common.refresh')}
           </Button>
+          {/* Deep link to Settings Help tab with context (hidden) */}
+          <Link
+            to={{ pathname: '/settings', search: '?tab=help&context=clients' }}
+            className="hidden"
+            title="Open Help tab in Settings"
+          >
+            <HelpCircle className="h-4 w-4 mr-2" />
+            {t('common.help') ?? 'Help'}
+          </Link>
           
           <div className="flex items-center border border-slate-300 rounded-xl p-1">
             <Button
@@ -449,6 +519,10 @@ const Clients = () => {
               <Grid3X3 className="h-4 w-4" />
             </Button>
           </div>
+          {/* Inline HelpCentre trigger (hidden) */}
+          <div className="hidden">
+            <HelpCentre />
+          </div>
           
           <Button
             onClick={() => setIsAddClientModalOpen(true)}
@@ -464,7 +538,7 @@ const Clients = () => {
       <ClientsStats clients={clients} />
 
       {/* Search and Filters */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-center space-y-4 lg:space-y-0 lg:space-x-4">
             {/* Search Bar */}
@@ -475,7 +549,7 @@ const Clients = () => {
                 placeholder={t('clients.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+                className="w-full pl-10 pr-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 font-sf-pro"
               />
               {searchTerm && (
                 <button
@@ -494,7 +568,7 @@ const Clients = () => {
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                  className="px-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+                  className="px-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 font-sf-pro"
                 >
                   <option value="all">{t('clients.allStatus')}</option>
                   <option value="active">{t('clients.active')}</option>
@@ -507,7 +581,7 @@ const Clients = () => {
               <select
                 value={filters.clientType}
                 onChange={(e) => setFilters(prev => ({ ...prev, clientType: e.target.value }))}
-                className="px-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+                className="px-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 font-sf-pro"
               >
                 <option value="all">{t('clients.allTypes')}</option>
                 <option value="individual">{t('clients.individual')}</option>
@@ -518,7 +592,7 @@ const Clients = () => {
               <Button
                 variant="outline"
                 onClick={handleClearFilters}
-                className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
+                className="glass backdrop-blur-md bg-white/10 dark:bg-white/5 hover:bg-white/15 dark:hover:bg-white/10 border border-white/10 shadow-business font-sf-pro rounded-xl transition-all duration-300"
               >
                 {t('clients.clearFilters')}
               </Button>
@@ -529,7 +603,7 @@ const Clients = () => {
 
       {/* Bulk Actions Bar */}
       {selectedClients.length > 0 && (
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -577,9 +651,9 @@ const Clients = () => {
       )}
 
       {/* Clients List */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+      <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader>
-          <CardTitle className="text-slate-900 font-sf-pro text-xl">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-sf-pro text-xl">
             {filteredClients.length} {filteredClients.length !== 1 ? t('clients.clients') : t('clients.client')}
           </CardTitle>
         </CardHeader>
@@ -587,7 +661,7 @@ const Clients = () => {
           {viewMode === 'table' ? (
             <div 
               ref={contentContainerRef}
-              className="rounded-lg border" 
+              className="rounded-xl border border-white/10 glass-soft supports-backdrop:backdrop-blur-sm" 
               style={{ flex: 1, overflow: 'auto' }}
             >
               <ClientsTable 
@@ -614,7 +688,7 @@ const Clients = () => {
           ) : (
             <div 
               ref={contentContainerRef}
-              className="rounded-lg border" 
+              className="rounded-xl border border-white/10 glass-soft supports-backdrop:backdrop-blur-sm" 
               style={{ flex: 1, overflow: 'auto' }}
             >
               <ClientsGrid 
@@ -638,8 +712,8 @@ const Clients = () => {
               <div className="w-16 h-16 bg-gradient-to-r from-slate-200 to-slate-300 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Search className="h-8 w-8 text-slate-400" />
               </div>
-              <h3 className="text-slate-900 font-semibold font-sf-pro mb-2">{t('clients.noClientsFound')}</h3>
-              <p className="text-slate-600 font-sf-pro text-sm mb-4">{t('clients.adjustSearchFilters')}</p>
+              <h3 className="text-slate-900 dark:text-slate-100 font-semibold font-sf-pro mb-2">{t('clients.noClientsFound')}</h3>
+              <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm mb-4">{t('clients.adjustSearchFilters')}</p>
               <Button
                 onClick={() => setIsAddClientModalOpen(true)}
                 className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl"
@@ -654,6 +728,7 @@ const Clients = () => {
 
       {/* Add Client Modal */}
       {isAddClientModalOpen && <AddClientModal isOpen={isAddClientModalOpen} onClose={() => setIsAddClientModalOpen(false)} onClientAdded={handleClientAdded} />}
+      </div>
     </div>
   );
 };

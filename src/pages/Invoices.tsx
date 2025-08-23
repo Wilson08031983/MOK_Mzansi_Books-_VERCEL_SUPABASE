@@ -14,6 +14,7 @@ import RecordPaymentModal from '@/components/invoices/RecordPaymentModal';
 import InvoiceViewModal from '@/components/invoices/InvoiceViewModal';
 import { Invoice, InvoiceItem, InvoiceStatus } from '@/types/invoice';
 import { activityService } from '@/services/activityService';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 // Define types for the invoice modal data
 interface ModalLineItem {
@@ -435,7 +436,7 @@ const Invoices: React.FC = () => {
       }
     );
 
-    toast.success('Invoice deleted successfully');
+    toast.success(t('invoices.toasts.deleted'));
   };
 
   // Function to update invoice status
@@ -473,7 +474,7 @@ const Invoices: React.FC = () => {
       { previousStatus: updatedInvoiceForLog?.status, newStatus }
     );
 
-    toast.success(`Invoice status updated to ${newStatus}`);
+    toast.success(t('invoices.toasts.statusUpdated'));
   };
 
   const handleEditInvoice = (invoiceId: string) => {
@@ -600,11 +601,12 @@ const Invoices: React.FC = () => {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
-
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
 
-  return (
-    <>
+return (
+  <div className="min-h-screen bg-background relative">
+    <DashboardBackground />
+    <div className="p-8 space-y-6 relative z-10">
       <InvoicesHeader
         onCreateInvoice={() => {
           setSelectedInvoiceForEdit(null); // Clear any previous edit data
@@ -617,9 +619,9 @@ const Invoices: React.FC = () => {
               handleRecordPayment(invoice);
             }
           } else if (selectedInvoices.length === 0) {
-            toast.error('Please select an invoice to record payment');
+            toast.error(t('invoices.toasts.selectOneToRecord'));
           } else {
-            toast.error('Please select only one invoice to record payment');
+            toast.error(t('invoices.toasts.selectOnlyOneToRecord'));
           }
         }}
         viewMode={viewMode}
@@ -709,7 +711,7 @@ const Invoices: React.FC = () => {
           setSelectedInvoiceForPayment(null);
           
           // Show success message
-          toast.success(`Payment of ${paymentData.amount.toLocaleString()} recorded successfully`);
+          toast.success(t('invoices.toasts.paymentRecorded'));
         }}
       />
       
@@ -720,7 +722,8 @@ const Invoices: React.FC = () => {
         onClose={() => setShowPreviewModal(false)}
         getCompanyDetails={getCompanyDetails}
       />
-    </>
+      </div>
+    </div>
   );
 };
 

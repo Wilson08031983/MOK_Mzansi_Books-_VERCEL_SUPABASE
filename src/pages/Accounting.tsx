@@ -12,6 +12,7 @@ import ReportsTab from '@/components/accounting/ReportsTab';
 import AddIncomeModal from '@/components/accounting/AddIncomeModal';
 import EditIncomeModal from '@/components/accounting/EditIncomeModal';
 import { financialSummaryService, FinancialSummary } from '../services/financialSummaryService';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 const Accounting = () => {
   const { t, formatCurrency, getCurrencySymbol } = useLocalization();
@@ -106,14 +107,15 @@ const Accounting = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-8">
+    <div className="min-h-screen bg-background relative">
+      <DashboardBackground />
+      <div className="container mx-auto p-8 relative z-10">
         {/* Back to Dashboard Button */}
         <Link 
           to="/dashboard"
-          className="inline-flex items-center mb-6 px-4 py-2 text-sm font-medium text-slate-700 bg-white rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition-colors hover:text-mokm-purple-600 animate-fade-in">
+          className="inline-flex items-center mb-6 px-4 py-2 text-sm font-medium rounded-lg animate-fade-in glass backdrop-blur-xl bg-slate-900/40 border border-white/10 text-slate-200 hover:bg-slate-900/60 hover:text-white transition-colors">
           <ChevronLeft className="mr-1 h-4 w-4" />
-          Back to Dashboard
+          {t('common.backToDashboard')}
         </Link>
         
         {/* Header */}
@@ -121,24 +123,24 @@ const Accounting = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent mb-4 font-sf-pro">
             {t('accounting.title')}
           </h1>
-          <p className="text-xl text-slate-600 font-sf-pro">
-            Manage your business finances, expenses, and financial documents
+          <p className="text-xl text-slate-300 font-sf-pro">
+            {t('accounting.subtitle')}
           </p>
         </div>
 
         {/* Overview Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 animate-fade-in delay-200">
-          <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
+          <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-slate-900">
+                  <p className="text-sm font-medium text-slate-300">{t('accounting.totalRevenue')}</p>
+                  <p className="text-2xl font-bold text-slate-100">
                     {financialSummary ? formatCurrency(financialSummary.totalRevenue) : formatCurrency(0)}
                   </p>
                   <p className="text-xs text-green-600 flex items-center mt-1">
                     <TrendingUp className="h-3 w-3 mr-1" />
-                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.revenueChange) : '+0.0%'} vs last month
+                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.revenueChange) : '+0.0%'} {t('accounting.vsLastMonth')}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center">
@@ -148,17 +150,17 @@ const Accounting = () => {
             </CardContent>
           </Card>
 
-          <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
+          <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Total Expenses</p>
-                  <p className="text-2xl font-bold text-slate-900">
+                  <p className="text-sm font-medium text-slate-300">{t('accounting.totalExpenses')}</p>
+                  <p className="text-2xl font-bold text-slate-100">
                     {financialSummary ? formatCurrency(financialSummary.totalExpenses) : formatCurrency(0)}
                   </p>
                   <p className="text-xs text-red-600 flex items-center mt-1">
                     <TrendingUp className="h-3 w-3 mr-1 rotate-180" />
-                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.expensesChange) : '+0.0%'} vs last month
+                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.expensesChange) : '+0.0%'} {t('accounting.vsLastMonth')}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
@@ -168,13 +170,13 @@ const Accounting = () => {
             </CardContent>
           </Card>
 
-          <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
+          <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Net Profit</p>
+                  <p className="text-sm font-medium text-slate-300">{t('accounting.netProfit')}</p>
                   <p className={`text-2xl font-bold ${
-                    financialSummary && financialSummary.netProfit >= 0 ? 'text-slate-900' : 'text-red-600'
+                    financialSummary && financialSummary.netProfit >= 0 ? 'text-slate-100' : 'text-red-600'
                   }`}>
                     {financialSummary ? formatCurrency(financialSummary.netProfit) : formatCurrency(0)}
                   </p>
@@ -184,7 +186,7 @@ const Accounting = () => {
                     <TrendingUp className={`h-3 w-3 mr-1 ${
                       financialSummary && financialSummary.monthlyComparison.profitChange < 0 ? 'rotate-180' : ''
                     }`} />
-                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.profitChange) : '+0.0%'} vs last month
+                    {financialSummary ? financialSummaryService.formatPercentageChange(financialSummary.monthlyComparison.profitChange) : '+0.0%'} {t('accounting.vsLastMonth')}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 rounded-xl flex items-center justify-center">
@@ -194,17 +196,17 @@ const Accounting = () => {
             </CardContent>
           </Card>
 
-          <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
+          <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Outstanding</p>
-                  <p className="text-2xl font-bold text-slate-900">
+                  <p className="text-sm font-medium text-slate-300">{t('accounting.outstanding')}</p>
+                  <p className="text-2xl font-bold text-slate-100">
                     {financialSummary ? formatCurrency(financialSummary.outstanding) : formatCurrency(0)}
                   </p>
                   <p className="text-xs text-orange-600 flex items-center mt-1">
                     <CreditCard className="h-3 w-3 mr-1" />
-                    {financialSummary ? financialSummary.pendingPayments : 0} pending payments
+                    {financialSummary ? financialSummary.pendingPayments : 0} {t('accounting.pendingPayments')}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
@@ -218,51 +220,51 @@ const Accounting = () => {
         {/* Main Content Tabs */}
         <div className="animate-fade-in delay-400">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business p-1 h-auto">
+            <TabsList className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business p-1 h-auto">
               <TabsTrigger 
                 value="overview" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
-                Overview
+                {t('accounting.overview')}
               </TabsTrigger>
               <TabsTrigger 
                 value="expenses" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
-                Expenses
+                {t('accounting.expenses')}
               </TabsTrigger>
               <TabsTrigger 
                 value="income" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
-                Income
+                {t('accounting.income')}
               </TabsTrigger>
               <TabsTrigger 
                 value="tax" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
-                Tax
+                {t('accounting.tax')}
               </TabsTrigger>
               <TabsTrigger 
                 value="reports" 
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white px-6 py-3 font-sf-pro"
               >
-                Reports
+                {t('accounting.reports')}
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+                <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
                   <CardContent className="p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4 font-sf-pro">Recent Transactions</h3>
+                    <h3 className="text-lg font-semibold text-slate-100 mb-4 font-sf-pro">{t('accounting.recentTransactions')}</h3>
                     <div className="space-y-3">
                       {financialSummary && financialSummary.recentTransactions.length > 0 ? (
                         financialSummary.recentTransactions.slice(0, 5).map((transaction, index) => (
                           <div key={transaction.id || index} className="flex items-center justify-between p-3 glass glass-soft rounded-lg">
                             <div>
-                              <p className="font-medium text-slate-900">{transaction.description}</p>
-                              <p className="text-sm text-slate-600">
+                              <p className="font-medium text-slate-100">{transaction.description}</p>
+                              <p className="text-sm text-slate-400">
                                 {financialSummaryService.getRelativeTime(transaction.date)}
                               </p>
                             </div>
@@ -272,40 +274,40 @@ const Accounting = () => {
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-8 text-slate-500">
-                          <p className="text-sm">No recent transactions found</p>
-                          <p className="text-xs mt-1">Add some expenses or income to see them here</p>
+                        <div className="text-center py-8 text-slate-400">
+                          <p className="text-sm">{t('accounting.noRecentTransactions')}</p>
+                          <p className="text-xs mt-1">{t('accounting.addSomeExpensesOrIncome')}</p>
                         </div>
                       )}
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+                <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
                   <CardContent className="p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4 font-sf-pro">Financial Summary</h3>
+                    <h3 className="text-lg font-semibold text-slate-100 mb-4 font-sf-pro">{t('accounting.financialSummary')}</h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-600">Monthly Revenue</span>
-                        <span className="font-semibold text-slate-900">
+                        <span className="text-slate-300">{t('accounting.monthlyRevenue')}</span>
+                        <span className="font-semibold text-slate-100">
                           {financialSummary ? formatCurrency(financialSummary.totalRevenue) : formatCurrency(0)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-600">Monthly Expenses</span>
-                        <span className="font-semibold text-slate-900">
+                        <span className="text-slate-300">{t('accounting.monthlyExpenses')}</span>
+                        <span className="font-semibold text-slate-100">
                           {financialSummary ? formatCurrency(financialSummary.totalExpenses) : formatCurrency(0)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-600">Tax Liability</span>
-                        <span className="font-semibold text-slate-900">
+                        <span className="text-slate-300">{t('accounting.taxLiability')}</span>
+                        <span className="font-semibold text-slate-100">
                           {financialSummary ? formatCurrency(financialSummary.taxLiability) : formatCurrency(0)}
                         </span>
                       </div>
-                      <div className="border-t pt-4">
+                      <div className="border-t border-white/10 pt-4">
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-600 font-medium">Net Income</span>
+                          <span className="text-slate-300 font-medium">{t('accounting.netIncome')}</span>
                           <span className={`font-bold text-lg ${
                             financialSummary && financialSummary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
@@ -346,17 +348,17 @@ const Accounting = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-lg">
               <div className="p-4 border-b">
-                <h3 className="text-lg font-medium">Record New Expense</h3>
+                <h3 className="text-lg font-medium">{t('common.recordExpense')}</h3>
               </div>
               <div className="p-6">
-                <p className="text-gray-600">Expense recording form would go here...</p>
+                <p className="text-gray-600">{/* form content localized within modal components elsewhere */}</p>
               </div>
               <div className="p-4 border-t bg-gray-50 flex justify-end">
                 <button 
                   onClick={() => setShowAddExpenseModal(false)}
                   className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors mr-2"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button 
                   onClick={() => {
@@ -366,7 +368,7 @@ const Accounting = () => {
                   }}
                   className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 text-white px-4 py-2 rounded-lg hover:shadow-colored-lg transition-all duration-300"
                 >
-                  Record Expense
+                  {t('common.recordExpense')}
                 </button>
               </div>
             </div>

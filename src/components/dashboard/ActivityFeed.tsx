@@ -2,6 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, Users, Receipt } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 type ActivityItem = {
   id: number | string;
@@ -17,22 +18,23 @@ interface ActivityFeedProps {
 }
 
 const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
+  const { t } = useLocalization();
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+    <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 dark:border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
       <CardHeader>
-        <CardTitle className="text-slate-900 font-sf-pro">Recent Activity</CardTitle>
+        <CardTitle className="text-slate-900 dark:text-slate-100 font-sf-pro">{t('dashboard.recentActivity')}</CardTitle>
       </CardHeader>
       <CardContent>
         {activities.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-sf-pro text-lg">No recent activity</p>
-            <p className="text-sm text-slate-400 mt-2 font-sf-pro">Your business activity will appear here</p>
+            <p className="text-slate-500 dark:text-slate-300 font-sf-pro text-lg">{t('common.noData')}</p>
+            <p className="text-sm text-slate-400 dark:text-slate-400 mt-2 font-sf-pro">{t('common.trackActivities')}</p>
           </div>
         ) : (
           <div className="space-y-4">
             {activities.map((activity, index) => (
-              <div key={activity.id} className={`flex items-start space-x-4 p-4 rounded-xl hover:bg-white/30 transition-all duration-300 animate-fade-in delay-${index * 100}`}>
+              <div key={activity.id} className={`flex items-start space-x-4 p-4 rounded-xl hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 animate-fade-in delay-${index * 100}`}>
                 <div className={`w-10 h-10 rounded-full bg-gradient-to-r ${
                   activity.type === 'client' ? 'from-mokm-blue-500 to-mokm-purple-500' :
                   activity.type === 'invoice' ? 'from-mokm-orange-500 to-mokm-pink-500' :
@@ -43,10 +45,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
                   {activity.type === 'quotation' && <Receipt className="h-5 w-5 text-white" />}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-slate-900 font-sf-pro">
+                  <p className="text-sm text-slate-900 dark:text-slate-100 font-sf-pro">
                     <span className="font-medium">{activity.user}</span> {activity.action} {activity.subject}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1 font-sf-pro">{activity.date}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-sf-pro">{activity.date}</p>
                 </div>
               </div>
             ))}
@@ -58,3 +60,4 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
 };
 
 export default ActivityFeed;
+

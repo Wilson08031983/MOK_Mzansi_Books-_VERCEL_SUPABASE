@@ -8,6 +8,7 @@ import StatsGrid from '@/components/dashboard/StatsGrid';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import TaskList from '@/components/dashboard/TaskList';
 import InfoBanner from '@/components/dashboard/InfoBanner';
+import { useLocalization } from '@/hooks/useLocalization';
 
 type StatItem = {
   name: string;
@@ -58,6 +59,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
   expensesByCategory,
   onAddTaskClick
 }) => {
+  const { t } = useLocalization();
   return (
     <main className="p-8">
       {/* Welcome Message and Controls */}
@@ -71,7 +73,7 @@ const DashboardContent: React.FC<DashboardContentProps> = ({
 
       {/* Quick Actions */}
       <div className="mb-10 animate-fade-in delay-400">
-        <h3 className="text-2xl font-bold text-foreground mb-6 font-sf-pro">Quick Actions</h3>
+        <h3 className="text-2xl font-bold text-foreground dark:text-slate-100 mb-6 font-sf-pro">{t('dashboard.quickActions')}</h3>
         <QuickActions />
       </div>
 

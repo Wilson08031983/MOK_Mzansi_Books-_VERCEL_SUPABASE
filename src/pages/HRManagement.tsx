@@ -30,6 +30,7 @@ import AllowanceManagement from '@/components/hr/AllowanceManagement';
 import PerformanceManagement from '@/components/hr/PerformanceManagement';
 import DisciplinaryManagement from '@/components/hr/DisciplinaryManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 import { Employee, getAllEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
 import { syncTeamMembersToEmployees } from '@/services/teamEmployeeSyncService';
@@ -403,20 +404,22 @@ const HRManagement: React.FC = () => {
   ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-black p-6 relative">
+      <DashboardBackground />
+      <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex flex-col gap-4">
             <Link 
               to="/dashboard"
-              className="inline-flex items-center px-4 py-2 glass backdrop-blur-md bg-white/10 dark:bg-white/5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-white/15 dark:hover:bg-white/10 rounded-xl border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in"
+              className="inline-flex items-center mb-6 px-4 py-2 text-sm font-medium glass backdrop-blur-md bg-slate-100/80 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/10 shadow-business hover:bg-slate-200/80 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors animate-fade-in"
             >
-              <ChevronLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              {t('common.backToDashboard')}
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-slate-100 font-sf-pro">{t('hr.title')}</h1>
-              <p className="text-slate-300 font-sf-pro">Manage employees, payroll, and human resources</p>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent font-sf-pro">{t('hr.title')}</h1>
+              <p className="text-slate-600 dark:text-slate-300 font-sf-pro">{t('hr.subtitle')}</p>
             </div>
           </div>
         </div>
@@ -424,16 +427,16 @@ const HRManagement: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="flex flex-wrap gap-2 mb-8">
           {[
-            { id: 'dashboard', label: 'HRM Dashboard', icon: <Users className="h-4 w-4" /> },
-            { id: 'employees', label: 'Employees', icon: <Users className="h-4 w-4" /> },
-            { id: 'directory', label: 'Employee Directory', icon: <Users className="h-4 w-4" /> },
-            { id: 'leave', label: 'Leave Management', icon: <Calendar className="h-4 w-4" /> },
-            { id: 'attendance', label: 'Time & Attendance', icon: <Clock className="h-4 w-4" /> },
-            { id: 'training', label: 'Training', icon: <GraduationCap className="h-4 w-4" /> },
-            { id: 'performance', label: 'Performance', icon: <Target className="h-4 w-4" /> },
-            { id: 'disciplinary', label: 'Disciplinary', icon: <AlertTriangle className="h-4 w-4" /> },
-            { id: 'allowance', label: 'Allowance', icon: <PiggyBank className="h-4 w-4" /> },
-            { id: 'payroll', label: 'Payroll', icon: <DollarSign className="h-4 w-4" /> },
+            { id: 'dashboard', label: t('hr.hrmDashboard'), icon: <Users className="h-4 w-4" /> },
+            { id: 'employees', label: t('hr.employees'), icon: <Users className="h-4 w-4" /> },
+            { id: 'directory', label: t('hr.employeeDirectory'), icon: <Users className="h-4 w-4" /> },
+            { id: 'leave', label: t('hr.leaveManagement'), icon: <Calendar className="h-4 w-4" /> },
+            { id: 'attendance', label: t('hr.timeAndAttendance'), icon: <Clock className="h-4 w-4" /> },
+            { id: 'training', label: t('hr.training'), icon: <GraduationCap className="h-4 w-4" /> },
+            { id: 'performance', label: t('hr.performance'), icon: <Target className="h-4 w-4" /> },
+            { id: 'disciplinary', label: t('hr.disciplinary'), icon: <AlertTriangle className="h-4 w-4" /> },
+            { id: 'allowance', label: t('hr.allowance'), icon: <PiggyBank className="h-4 w-4" /> },
+            { id: 'payroll', label: t('hr.payroll'), icon: <DollarSign className="h-4 w-4" /> },
 
           ].map((tab) => (
             <button
@@ -442,7 +445,7 @@ const HRManagement: React.FC = () => {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 font-sf-pro ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white shadow-colored'
-                  : 'glass backdrop-blur-sm bg-white/10 dark:bg-black/30 border border-white/10 text-slate-300 hover:bg-white/15'
+                  : 'glass backdrop-blur-sm bg-slate-200/50 dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-white/15'
               }`}
             >
               {tab.icon}

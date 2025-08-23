@@ -21,7 +21,7 @@ import {
   BarChart3,
   Lock,
   Monitor,
-  ArrowLeft
+  ChevronLeft
 } from 'lucide-react';
 import GeneralSettingsTab from '@/components/settings/GeneralSettingsTab';
 import UserManagementTab from '@/components/settings/UserManagementTab';
@@ -42,6 +42,7 @@ import AboutTab from '@/components/settings/AboutTab';
 import ReportSettingsTab from '@/components/settings/ReportSettingsTab';
 import DataSecurityTab from '@/components/settings/DataSecurityTab';
 import SystemMaintenanceTab from '@/components/settings/SystemMaintenanceTab';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 const Settings = () => {
   const { t } = useLocalization();
@@ -51,18 +52,18 @@ const Settings = () => {
 
   // Define tabs configuration used by TabsList and TabsContent
   const settingsTabs = [
-    { id: 'general', label: 'General', icon: SettingsIcon, component: GeneralSettingsTab },
-    { id: 'users', label: 'Users', icon: Users, component: UserManagementTab },
-    { id: 'security', label: 'Security', icon: Shield, component: SecuritySettingsTab },
-    { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSettingsTab },
-    { id: 'data', label: 'Data', icon: Database, component: DataManagementTab },
-    { id: 'mobile', label: 'Mobile', icon: Smartphone, component: MobileSettingsTab },
-    { id: 'billing', label: 'Billing', icon: CreditCard, component: BillingSubscriptionTab },
-    { id: 'help', label: 'Help', icon: HelpCircle, component: HelpSupportTab },
-    { id: 'about', label: 'About', icon: Info, component: AboutTab },
-    { id: 'reports', label: 'Reports', icon: BarChart3, component: ReportSettingsTab },
-    { id: 'dataSecurity', label: 'Data Security', icon: Lock, component: DataSecurityTab },
-    { id: 'maintenance', label: 'Maintenance', icon: Monitor, component: SystemMaintenanceTab }
+    { id: 'general', label: t('settings.tabs.general'), icon: SettingsIcon, component: GeneralSettingsTab },
+    { id: 'users', label: t('settings.tabs.users'), icon: Users, component: UserManagementTab },
+    { id: 'security', label: t('settings.tabs.security'), icon: Shield, component: SecuritySettingsTab },
+    { id: 'notifications', label: t('settings.tabs.notifications'), icon: Bell, component: NotificationSettingsTab },
+    { id: 'data', label: t('settings.tabs.data'), icon: Database, component: DataManagementTab },
+    { id: 'mobile', label: t('settings.tabs.mobile'), icon: Smartphone, component: MobileSettingsTab },
+    { id: 'billing', label: t('settings.tabs.billing'), icon: CreditCard, component: BillingSubscriptionTab },
+    { id: 'help', label: t('settings.tabs.help'), icon: HelpCircle, component: HelpSupportTab },
+    { id: 'about', label: t('settings.tabs.about'), icon: Info, component: AboutTab },
+    { id: 'reports', label: t('settings.tabs.reports'), icon: BarChart3, component: ReportSettingsTab },
+    { id: 'dataSecurity', label: t('settings.tabs.dataSecurity'), icon: Lock, component: DataSecurityTab },
+    { id: 'maintenance', label: t('settings.tabs.maintenance'), icon: Monitor, component: SystemMaintenanceTab }
   ] as const;
 
   // Initialize/Sync active tab from URL (query ?tab=...)
@@ -106,19 +107,16 @@ const Settings = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-8">
+    <div className="min-h-screen bg-background relative">
+      <DashboardBackground />
+      <div className="container mx-auto p-8 relative z-10">
         <div className="mb-8 animate-fade-in">
           <div className="flex items-center space-x-4 mb-6">
-            <Link to="/dashboard">
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="text-muted-foreground hover:text-mokm-purple-600 hover:bg-muted/50 rounded-xl transition-all duration-300 font-sf-pro"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                {t('common.back')}
-              </Button>
+            <Link 
+              to="/dashboard"
+              className="inline-flex items-center px-4 py-2 bg-white text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-md border border-slate-200 shadow-sm hover:shadow transition-all duration-300 animate-fade-in"
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" /> {t('common.backToDashboard')}
             </Link>
           </div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent mb-4 font-sf-pro">

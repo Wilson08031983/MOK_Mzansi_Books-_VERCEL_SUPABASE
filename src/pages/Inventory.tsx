@@ -23,6 +23,7 @@ import {
   Loader2,
   PackageOpen,
   ArrowLeft,
+  ChevronLeft,
   Plus,
   Download,
   FileBarChart,
@@ -64,6 +65,7 @@ import AddSupplierModal from '@/components/inventory/AddSupplierModal';
 import AddStorageModal from '@/components/inventory/AddStorageModal';
 import UpdateStockWithBarcodeModal from '@/components/inventory/UpdateStockWithBarcodeModal';
 import SalesModal from '@/components/inventory/SalesModal';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 // Service imports
 import { 
@@ -158,8 +160,8 @@ const Inventory = () => {
     } catch (error) {
       console.error('Error loading inventory data:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load inventory data',
+        title: t('inventory.error'),
+        description: t('inventory.failedToLoadInventoryData'),
         variant: 'destructive',
       });
       setIsLoading(false);
@@ -180,8 +182,8 @@ const Inventory = () => {
         loadInventoryData();
       } catch (error) {
         toast({
-          title: 'Error',
-          description: 'Failed to load inventory data',
+          title: t('inventory.error'),
+          description: t('inventory.failedToLoadInventoryData'),
           variant: 'destructive',
         });
         console.error('Failed to load inventory data:', error);
@@ -262,8 +264,8 @@ const Inventory = () => {
     
     // Show toast notification
     toast({
-      title: `Added to ${type}`,
-      description: `${item.name} has been added to your ${type}`,
+      title: type === 'invoice' ? t('inventory.addedToInvoice') : t('inventory.addedToQuotation'),
+      description: t('inventory.hasBeenAddedTo', { itemName: item.name, type: t(type === 'invoice' ? 'invoices.title' : 'quotations.title') }),
     });
   };
 
@@ -317,8 +319,8 @@ const Inventory = () => {
         // Force a complete refresh of the data from localStorage
         loadInventoryData(true);
         toast({
-          title: 'Refreshed',
-          description: 'Inventory data has been refreshed from storage',
+          title: t('inventory.refreshed'),
+          description: t('inventory.inventoryDataRefreshed'),
           variant: 'default',
         });
         break;
@@ -347,23 +349,23 @@ const Inventory = () => {
         const success = deleteInventoryItem(selectedItem.id);
         if (success) {
           toast({
-            title: 'Item Deleted',
-            description: `${selectedItem.name} has been removed from inventory`,
+            title: t('inventory.itemDeleted'),
+            description: t('inventory.hasBeenRemovedFromInventory', { itemName: selectedItem.name }),
             variant: 'default',
           });
           loadInventoryData(); // Refresh the inventory list
         } else {
           toast({
-            title: 'Error',
-            description: 'Failed to delete item',
+            title: t('inventory.error'),
+            description: t('inventory.failedToDeleteItem'),
             variant: 'destructive',
           });
         }
       } catch (error) {
         console.error('Error deleting item:', error);
         toast({
-          title: 'Error',
-          description: 'An error occurred while deleting the item',
+          title: t('inventory.error'),
+          description: t('inventory.errorOccurredWhileDeleting'),
           variant: 'destructive',
         });
       }
@@ -413,16 +415,18 @@ const Inventory = () => {
   const damagedItems = filteredInventory.filter(item => item.status === STOCK_STATUS.DAMAGED);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 sm:p-8">
+    <div className="min-h-screen bg-background relative">
+      <DashboardBackground />
+      <div className="container mx-auto p-6 sm:p-8 relative z-10">
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-8 animate-fade-in">
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <Link to="/dashboard">
-                <Button variant="outline" className="flex items-center gap-2 hover:bg-slate-100 shadow-business hover:shadow-business-lg transition-all duration-300">
-                  <ArrowLeft className="h-4 w-4" /> {t('common.backToDashboard')}
-                </Button>
+              <Link 
+                to="/dashboard"
+                className="inline-flex items-center px-4 py-2 mb-4 glass backdrop-blur-md bg-white/10 dark:bg-black/30 text-sm font-medium text-slate-300 hover:text-white rounded-xl border border-white/10 shadow-business hover:bg-white/15 dark:hover:bg-white/10 transition-colors animate-fade-in"
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" /> {t('common.backToDashboard')}
               </Link>
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-mokm-orange-600 via-mokm-pink-600 to-mokm-purple-600 bg-clip-text text-transparent font-sf-pro">
@@ -488,7 +492,7 @@ const Inventory = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
-              placeholder="Search by name, ID, barcode, supplier, description..." 
+              placeholder={t('inventory.searchByName')} 
               className="pl-10 shadow-business"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -497,10 +501,10 @@ const Inventory = () => {
           
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="shadow-business">
-              <SelectValue placeholder="Filter by category" />
+              <SelectValue placeholder={t('inventory.filterByCategory')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="all">{t('inventory.allCategories')}</SelectItem>
               {categories
                 .filter(category => !!category && category.trim() !== '')
                 .map((category) => (
@@ -511,10 +515,10 @@ const Inventory = () => {
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="shadow-business">
-              <SelectValue placeholder="Filter by status" />
+              <SelectValue placeholder={t('inventory.filterByStatus')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="all">{t('inventory.allStatuses')}</SelectItem>
               {statuses
                 .filter(status => !!status && status.trim() !== '')
                 .map((status) => (
@@ -719,28 +723,28 @@ const Inventory = () => {
         <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure you want to delete this item?</AlertDialogTitle>
+              <AlertDialogTitle>{t('inventory.deleteConfirmation')}</AlertDialogTitle>
               <AlertDialogDescription>
                 {selectedItem && (
                   <div className="space-y-2">
-                    <p>You are about to delete:</p>
+                    <p>{t('inventory.youAreAboutToDelete')}</p>
                     <div className="bg-slate-50 p-3 rounded-md border border-slate-200">
                       <p className="font-medium">{selectedItem.name}</p>
-                      <p className="text-sm text-slate-500">ID: {selectedItem.id}</p>
-                      <p className="text-sm text-slate-500">Barcode: {selectedItem.barcode}</p>
+                      <p className="text-sm text-slate-500">{t('inventory.itemIdHeader')}: {selectedItem.id}</p>
+                      <p className="text-sm text-slate-500">{t('inventory.barcode')}: {selectedItem.barcode}</p>
                     </div>
-                    <p className="text-red-500">This action cannot be undone.</p>
+                    <p className="text-red-500">{t('inventory.thisActionCannotBeUndone')}</p>
                   </div>
                 )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t('inventory.cancel')}</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleDeleteItem}
                 className="bg-red-500 hover:bg-red-600"
               >
-                Delete
+                {t('inventory.delete')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -751,20 +755,20 @@ const Inventory = () => {
           <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
             <DialogContent className="sm:max-w-[800px]">
               <DialogHeader>
-                <DialogTitle>Item History</DialogTitle>
+                <DialogTitle>{t('inventory.itemHistory')}</DialogTitle>
                 <DialogDescription>
-                  Viewing history for {selectedItem.name} (ID: {selectedItem.id})
+                  {t('inventory.viewingHistoryFor', { name: selectedItem.name, id: selectedItem.id })}
                 </DialogDescription>
               </DialogHeader>
               <div className="max-h-[500px] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Notes</TableHead>
-                      <TableHead>Performed By</TableHead>
+                      <TableHead>{t('inventory.date')}</TableHead>
+                      <TableHead>{t('inventory.type')}</TableHead>
+                      <TableHead>{t('inventory.quantity')}</TableHead>
+                      <TableHead>{t('inventory.notes')}</TableHead>
+                      <TableHead>{t('inventory.performedBy')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -788,7 +792,7 @@ const Inventory = () => {
                     {stockHistory.filter(entry => entry.inventoryItemId === selectedItem.id).length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                          No history records found for this item
+                          {t('inventory.noHistoryRecords')}
                         </TableCell>
                       </TableRow>
                     )}
@@ -797,7 +801,7 @@ const Inventory = () => {
               </div>
               <DialogFooter>
                 <Button onClick={() => setShowHistoryModal(false)} variant="outline">
-                  Close
+                  {t('inventory.close')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -815,8 +819,8 @@ const Inventory = () => {
             );
             setShowUpdateWithBarcodeModal(false);
             toast({
-              title: "Stock Updated",
-              description: `${updatedItem.name} stock has been updated successfully.`,
+              title: t('inventory.stockUpdated'),
+              description: t('inventory.stockUpdatedSuccessfully', { itemName: updatedItem.name }),
             });
           }}
         />
@@ -826,9 +830,9 @@ const Inventory = () => {
           <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
-                <DialogTitle>Edit Item Details</DialogTitle>
+                <DialogTitle>{t('inventory.editItemDetails')}</DialogTitle>
                 <DialogDescription>
-                  Update the details for {selectedItem.name}
+                  {t('inventory.updateDetailsFor', { name: selectedItem.name })}
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4">

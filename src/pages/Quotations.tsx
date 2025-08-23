@@ -23,6 +23,7 @@ import { getQuotations, deleteQuotation, Quotation } from '@/services/quotationS
 import { toast } from 'sonner';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { activityService } from '@/services/activityService';
+import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
 const Quotations = () => {
   const { t, formatCurrency, settings } = useLocalization();
@@ -369,7 +370,9 @@ const Quotations = () => {
   const allTags = Array.from(new Set(quotations.flatMap(q => q.tags || [])));
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-background relative">
+      <DashboardBackground />
+      <div className="p-8 space-y-6 relative z-10">
       <QuotationsHeader
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -459,6 +462,7 @@ const Quotations = () => {
         onQuotationSaved={handleQuotationSaved}
         quotationToEdit={editingQuotation}
       />
+      </div>
     </div>
   );
 };

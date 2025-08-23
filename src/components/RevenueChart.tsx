@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface RevenueChartProps {
   revenueData: { label: string; value: number }[];
@@ -11,33 +12,34 @@ interface RevenueChartProps {
 
 const RevenueChart: React.FC<RevenueChartProps> = ({ revenueData, expensesData }) => {
   const [view, setView] = useState<'revenue' | 'expenses'>('revenue');
+  const { getCurrencySymbol, t } = useLocalization();
 
   const activeData = view === 'revenue' ? revenueData : expensesData;
 
   const chartConfig = useMemo(() => ({
     value: {
-      label: view === 'revenue' ? 'Revenue' : 'Expenses',
+      label: view === 'revenue' ? t('accounting.income') : t('accounting.expenses'),
       color: view === 'revenue' ? '#a855f7' : '#ef4444',
     },
-  }), [view]);
+  }), [view, t]);
 
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in h-full flex flex-col">
+    <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 dark:border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in h-full flex flex-col">
       <CardHeader className="pb-6">
         <CardTitle className="flex items-center justify-between">
-          <span className="text-slate-900 font-sf-pro text-xl">Revenue Overview</span>
+          <span className="text-slate-900 dark:text-slate-100 font-sf-pro text-xl">{`${t('accounting.income')} ${t('common.overview')}`}</span>
           <div className="flex space-x-2">
             <button
               onClick={() => setView('revenue')}
-              className={`px-4 py-2 text-xs font-medium rounded-full transition-all duration-300 hover:scale-105 font-sf-pro ${view === 'revenue' ? 'bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg' : 'glass backdrop-blur-sm bg-white/50 text-slate-600 hover:bg-white/70 border border-white/20'}`}
+              className={`px-4 py-2 text-xs font-medium rounded-full transition-all duration-300 hover:scale-105 font-sf-pro ${view === 'revenue' ? 'bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 text-white shadow-colored hover:shadow-colored-lg' : 'glass backdrop-blur-md bg-white/10 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-white/15 dark:hover:bg-white/10 border border-white/10'}`}
             >
-              Revenue
+              {t('accounting.income')}
             </button>
             <button
               onClick={() => setView('expenses')}
-              className={`px-4 py-2 text-xs font-medium rounded-full transition-all duration-300 hover:scale-105 font-sf-pro ${view === 'expenses' ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-colored hover:shadow-colored-lg' : 'glass backdrop-blur-sm bg-white/50 text-slate-600 hover:bg-white/70 border border-white/20'}`}
+              className={`px-4 py-2 text-xs font-medium rounded-full transition-all duration-300 hover:scale-105 font-sf-pro ${view === 'expenses' ? 'bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-colored hover:shadow-colored-lg' : 'glass backdrop-blur-md bg-white/10 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-white/15 dark:hover:bg-white/10 border border-white/10'}`}
             >
-              Expenses
+              {t('accounting.expenses')}
             </button>
           </div>
         </CardTitle>
@@ -62,7 +64,7 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ revenueData, expensesData }
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: '#64748b', fontSize: 12, fontFamily: 'SF Pro Display' }}
-                tickFormatter={(value) => `R${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value) => `${getCurrencySymbol()}${(Number(value) / 1000).toFixed(0)}k`}
               />
               <ChartTooltip 
                 content={<ChartTooltipContent />}
@@ -83,3 +85,4 @@ const RevenueChart: React.FC<RevenueChartProps> = ({ revenueData, expensesData }
 };
 
 export default RevenueChart;
+
