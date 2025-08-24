@@ -31,6 +31,7 @@ import ClientsGrid from '@/components/clients/ClientsGrid';
 import AddClientModal from '@/components/clients/AddClientModal';
 import BulkActionsBar from '@/components/clients/BulkActionsBar';
 import ClientsStats from '@/components/clients/ClientsStats';
+import { getClientOutstandingBalance } from '@/services/invoiceService';
 import HelpCentre from '@/components/HelpCentre';
 import { Client, getClients, initializeClients } from '@/services/clientService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
@@ -82,8 +83,12 @@ interface ClientDisplay {
   totalValue: number;
   lastActivity: string;
   status: string;
+  statusReason?: string;
   type: string;
   avatar: string;
+  creditLimit: number;
+  outstanding: number;
+  overCredit: boolean;
 }
 
 const Clients = () => {
@@ -130,7 +135,7 @@ const Clients = () => {
     };
 
   // Determine status and last activity based on invoices, payments and incomes
-  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string } => {
+  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string; statusReason?: string } => {
     try {
       const invoices: any[] = JSON.parse(localStorage.getItem('invoices') || '[]');
       const payments: any[] = JSON.parse(localStorage.getItem('payments') || '[]');
@@ -158,17 +163,37 @@ const Clients = () => {
       const latestTs = dateCandidates.length > 0 ? Math.max(...dateCandidates) : Date.now();
       const lastActivity = new Date(latestTs).toISOString();
 
-      // Overdue logic: any invoice with balance > 0 and past dueDate
+      // Improved overdue detection with better credit agreement checks
       const nowTs = Date.now();
       const hasOverdue = clientInvoices.some(inv => {
         const dueTs = new Date(inv.dueDate || inv.date).getTime();
         const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
-        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs;
+        // Invoice is overdue if it has a positive balance and is past due date
+        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs && (nowTs - dueTs) > (7 * 24 * 60 * 60 * 1000); // At least 7 days overdue
       });
+      
+      // Check for at-risk clients (multiple late payments in history but not severely overdue)
+      const hasLatePayments = clientPayments.filter(pay => {
+        const paymentDate = new Date(pay.paymentDate).getTime();
+        const invoice = clientInvoices.find(inv => inv.id === pay.invoiceId);
+        if (invoice && invoice.dueDate) {
+          const dueDate = new Date(invoice.dueDate).getTime();
+          // Payment was made after due date
+          return paymentDate > dueDate;
+        }
+        return false;
+      }).length >= 2; // At least 2 late payments
+      
+      // Check for warning status (approaching credit limit)
+      const clientData = JSON.parse(localStorage.getItem('clients') || '[]').find(c => c.id === clientId);
+      const clientCredit = parseFloat(clientData?.creditLimit || '0');
+      const clientOutstanding = getClientOutstandingBalance(clientId);
+      const isApproachingCreditLimit = clientCredit > 0 && clientOutstanding > (clientCredit * 0.8) && clientOutstanding <= clientCredit;
 
-      // Active logic: recent activity (<= 30 days) or outstanding not overdue
-      const days30 = 30 * 24 * 60 * 60 * 1000;
-      const hasRecentActivity = nowTs - latestTs <= days30;
+      // Active logic: recent activity (<= 90 days) or outstanding not overdue
+      const days90 = 90 * 24 * 60 * 60 * 1000;
+      const hasRecentActivity = nowTs - latestTs <= days90;
+      const hasVeryOldActivity = (nowTs - latestTs) > (180 * 24 * 60 * 60 * 1000); // No activity for 6 months
 
       const outstandingNotOverdue = clientInvoices.some(inv => {
         const dueTs = new Date(inv.dueDate || inv.date).getTime();
@@ -177,13 +202,28 @@ const Clients = () => {
       });
 
       let status = 'inactive';
+      let statusReason: string | undefined;
+      
       if (hasOverdue) status = 'overdue';
+      else if (hasLatePayments) {
+        status = 'at-risk';
+        statusReason = 'Multiple late payments';
+      }
+      else if (isApproachingCreditLimit) {
+        status = 'warning';
+        statusReason = 'Approaching credit limit';
+      }
       else if (hasRecentActivity || outstandingNotOverdue) status = 'active';
+      
+      // Extra check for long-term inactivity
+      if (hasVeryOldActivity && status === 'inactive') {
+        statusReason = 'No activity for over 6 months';
+      }
 
-      return { status, lastActivity };
+      return { status, lastActivity, statusReason };
     } catch (e) {
       console.error('Error determining client status:', e);
-      return { status: 'inactive', lastActivity: new Date().toISOString() };
+      return { status: 'inactive', lastActivity: new Date().toISOString(), statusReason: 'Error calculating status' };
     }
   };
     
@@ -228,7 +268,7 @@ const Clients = () => {
   };
   
   // Determine status and last activity based on invoices, payments and incomes
-  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string } => {
+  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string; statusReason?: string } => {
     try {
       const invoices: any[] = JSON.parse(localStorage.getItem('invoices') || '[]');
       const payments: any[] = JSON.parse(localStorage.getItem('payments') || '[]');
@@ -256,17 +296,37 @@ const Clients = () => {
       const latestTs = dateCandidates.length > 0 ? Math.max(...dateCandidates) : Date.now();
       const lastActivity = new Date(latestTs).toISOString();
 
-      // Overdue logic: any invoice with balance > 0 and past dueDate
+      // Improved overdue detection with better credit agreement checks
       const nowTs = Date.now();
       const hasOverdue = clientInvoices.some(inv => {
         const dueTs = new Date(inv.dueDate || inv.date).getTime();
         const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
-        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs;
+        // Invoice is overdue if it has a positive balance and is past due date
+        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs && (nowTs - dueTs) > (7 * 24 * 60 * 60 * 1000); // At least 7 days overdue
       });
+      
+      // Check for at-risk clients (multiple late payments in history but not severely overdue)
+      const hasLatePayments = clientPayments.filter(pay => {
+        const paymentDate = new Date(pay.paymentDate).getTime();
+        const invoice = clientInvoices.find(inv => inv.id === pay.invoiceId);
+        if (invoice && invoice.dueDate) {
+          const dueDate = new Date(invoice.dueDate).getTime();
+          // Payment was made after due date
+          return paymentDate > dueDate;
+        }
+        return false;
+      }).length >= 2; // At least 2 late payments
+      
+      // Check for warning status (approaching credit limit)
+      const clientData = JSON.parse(localStorage.getItem('clients') || '[]').find(c => c.id === clientId);
+      const clientCredit = parseFloat(clientData?.creditLimit || '0');
+      const clientOutstanding = getClientOutstandingBalance(clientId);
+      const isApproachingCreditLimit = clientCredit > 0 && clientOutstanding > (clientCredit * 0.8) && clientOutstanding <= clientCredit;
 
-      // Active logic: recent activity (<= 30 days) or outstanding not overdue
-      const days30 = 30 * 24 * 60 * 60 * 1000;
-      const hasRecentActivity = nowTs - latestTs <= days30;
+      // Active logic: recent activity (<= 90 days) or outstanding not overdue
+      const days90 = 90 * 24 * 60 * 60 * 1000;
+      const hasRecentActivity = nowTs - latestTs <= days90;
+      const hasVeryOldActivity = (nowTs - latestTs) > (180 * 24 * 60 * 60 * 1000); // No activity for 6 months
 
       const outstandingNotOverdue = clientInvoices.some(inv => {
         const dueTs = new Date(inv.dueDate || inv.date).getTime();
@@ -275,13 +335,28 @@ const Clients = () => {
       });
 
       let status = 'inactive';
+      let statusReason: string | undefined;
+      
       if (hasOverdue) status = 'overdue';
+      else if (hasLatePayments) {
+        status = 'at-risk';
+        statusReason = 'Multiple late payments';
+      }
+      else if (isApproachingCreditLimit) {
+        status = 'warning';
+        statusReason = 'Approaching credit limit';
+      }
       else if (hasRecentActivity || outstandingNotOverdue) status = 'active';
+      
+      // Extra check for long-term inactivity
+      if (hasVeryOldActivity && status === 'inactive') {
+        statusReason = 'No activity for over 6 months';
+      }
 
-      return { status, lastActivity };
+      return { status, lastActivity, statusReason };
     } catch (e) {
       console.error('Error determining client status:', e);
-      return { status: 'inactive', lastActivity: new Date().toISOString() };
+      return { status: 'inactive', lastActivity: new Date().toISOString(), statusReason: 'Error calculating status' };
     }
   };
 
@@ -363,7 +438,10 @@ const Clients = () => {
         .map((client: Client) => {
           // Calculate the true total value based on invoices and payments
           const calculatedTotalValue = calculateClientTotalValues(client.id || '');
-          const { status, lastActivity } = calculateClientStatusAndActivity(client.id || '');
+          const { status, lastActivity, statusReason } = calculateClientStatusAndActivity(client.id || '');
+          const creditLimitNum = Number(client.creditLimit) || 0;
+          const outstanding = getClientOutstandingBalance(client.id || '');
+          const overCredit = creditLimitNum > 0 && outstanding > creditLimitNum;
           
           return {
             id: client.id || '',
@@ -374,8 +452,12 @@ const Clients = () => {
             totalValue: calculatedTotalValue, // Use the calculated value
             lastActivity: lastActivity || client.lastActivity || new Date().toISOString(),
             status: status || client.status || 'inactive',
+            statusReason,
             type: client.clientType || 'individual',
-            avatar: client.avatar || ''
+            avatar: client.avatar || '',
+            creditLimit: creditLimitNum,
+            outstanding,
+            overCredit
           };
         });
       
@@ -408,6 +490,10 @@ const Clients = () => {
         return <Clock className="h-4 w-4 text-slate-500" />;
       case 'overdue':
         return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'warning':
+        return <AlertCircle className="h-4 w-4 text-amber-500" />;
+      case 'at-risk':
+        return <AlertCircle className="h-4 w-4 text-orange-500" />;
       default:
         return <XCircle className="h-4 w-4 text-yellow-500" />;
     }
@@ -422,6 +508,10 @@ const Clients = () => {
         return 'bg-slate-100 text-slate-800';
       case 'overdue':
         return 'bg-red-100 text-red-800';
+      case 'warning':
+        return 'bg-amber-100 text-amber-800';
+      case 'at-risk':
+        return 'bg-orange-100 text-orange-800';
       default:
         return 'bg-yellow-100 text-yellow-800';
     }
@@ -574,6 +664,8 @@ const Clients = () => {
                   <option value="active">{t('clients.active')}</option>
                   <option value="inactive">{t('clients.inactive')}</option>
                   <option value="overdue">{t('clients.overdue')}</option>
+                  <option value="warning">{t('clients.warning')}</option>
+                  <option value="at-risk">{t('clients.at-risk')}</option>
                   <option value="pending">{t('clients.pending')}</option>
                 </select>
               </div>
