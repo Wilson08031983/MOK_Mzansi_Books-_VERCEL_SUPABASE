@@ -8,6 +8,7 @@ export interface QuotationItem {
   taxRate: number;
   discount: number;
   amount: number;
+  markupPercent?: number; // Added to support markup percentage in quotation items
 }
 
 export interface Quotation {
@@ -369,7 +370,8 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
         rate: Number(item.rate) || 0,
         taxRate: Number(item.taxRate) || 0,
         discount: Number(item.discount) || 0,
-        amount: Number(item.amount) || 0
+        amount: Number(item.amount) || 0,
+        markupPercent: Number(item.markupPercent) || 0
       }))
     };
     
@@ -377,7 +379,8 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
     
     if (index >= 0) {
       // Update existing quotation - preserve created date and number if they exist
-      const createdDate = quotations[index].date || now;
+      const createdDateRaw = quotations[index].date || now;
+      const createdDate = createdDateRaw && createdDateRaw.includes('T') ? createdDateRaw.split('T')[0] : createdDateRaw;
       const existingNumber = quotations[index].number || quotationNumber;
       quotations[index] = { 
         ...safeQuotation,
@@ -391,7 +394,7 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
         ...safeQuotation,
         id: safeQuotation.id || Date.now().toString(),
         number: quotationNumber, // Ensure new quotation has a number
-        date: now, // Set creation date
+        date: now.split('T')[0], // Set creation date (YYYY-MM-DD)
         lastModified: now
       });
     }

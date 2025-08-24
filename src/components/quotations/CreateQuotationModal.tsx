@@ -18,7 +18,8 @@ import QuotationPreviewModal, { Quotation as QuotationPreviewType } from '@/comp
 import { generateNextQuotationNumber, generateQuotationPdf, QuotationPdfData } from '@/utils/quotationUtils';
 import { saveQuotation, getQuotations, Quotation as QuotationType } from '@/services/quotationService';
 import { activityService } from '@/services/activityService';
-
+import { useLocalization } from '@/hooks/useLocalization';
+import { useAuth } from '@/hooks/useAuth';
 
 // Email functionality removed as per requirements
 // Mock company service since it's not available
@@ -78,6 +79,8 @@ interface CreateQuotationModalProps {
 }
 
 const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onClose, onQuotationSaved, quotationToEdit }) => {
+  const { t, formatCurrency } = useLocalization();
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     clientId: '',
     quotationNumber: '',
@@ -89,6 +92,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     terms: '',
     project: ''
   });
+
+  // Ensure any stored ISO datetime is converted to YYYY-MM-DD for <input type="date">
+  const normalizeDateStr = (value?: string): string => {
+    if (!value) return '';
+    return value.includes('T') ? value.split('T')[0] : value;
+  };
 
   // Using proper typed state for line items
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -102,7 +111,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           clientId: quotationToEdit.clientId || '',
           quotationNumber: quotationToEdit.number || '',
           reference: quotationToEdit.reference || '',
-          date: quotationToEdit.date || new Date().toISOString().split('T')[0],
+          date: normalizeDateStr(quotationToEdit.date) || new Date().toISOString().split('T')[0],
           expiryDate: quotationToEdit.expiryDate || '',
           currency: quotationToEdit.currency || 'ZAR',
           notes: quotationToEdit.notes || '',
@@ -117,7 +126,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
             description: item.description || '',
             quantity: item.quantity.toString(),
             rate: item.rate.toString(),
-            markupPercent: '0',
+            markupPercent: item.markupPercent?.toString() || '0',
             discount: (item.discount || 0).toString(),
             amount: item.amount || 0,
             vat: 0
@@ -286,6 +295,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
       }
       const now = new Date().toISOString();
       
+      // Determine salesperson info from logged-in user
+      const salespersonName = (user?.fullName && user.fullName.trim())
+        || [user?.user_metadata?.first_name, user?.user_metadata?.last_name].filter(Boolean).join(' ').trim()
+        || (user?.email || '').split('@')[0]
+        || 'User';
+
       // Create quotation data
       const quotationData: QuotationType = {
         id: quotationToEdit?.id || crypto.randomUUID(),
@@ -295,13 +310,13 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
         clientId: formData.clientId,
         clientEmail: selectedClient?.email || '',
         clientContact: selectedClient?.firstName ? `${selectedClient.firstName} ${selectedClient.lastName || ''}`.trim() : '',
-        date: now.split('T')[0],
-        expiryDate: formData.expiryDate || '',
+        date: normalizeDateStr(formData.date) || now.split('T')[0],
+        expiryDate: normalizeDateStr(formData.expiryDate) || '',
         amount: total,
         currency: formData.currency,
         status: isDraft ? 'draft' : 'saved',
-        salesperson: 'Salesperson Name',
-        salespersonId: 'user_1',
+        salesperson: salespersonName,
+        salespersonId: user?.id || 'unknown',
         project: formData.project || '',
         priority: 'medium',
         items: lineItems.map(item => ({
@@ -312,7 +327,8 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           rate: Number(item.rate) || 0,
           taxRate: vatRate, // Use the VAT rate from state
           discount: Number(item.discount) || 0,
-          amount: item.amount
+          amount: item.amount,
+          markupPercent: Number(item.markupPercent) || 0 // Preserve markup percentage
         })),
         subtotal,
         taxRate: vatRate, // Include VAT rate in the main quotation object
@@ -522,7 +538,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Create New Quotation</h2>
+          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">{t('createQuotation')}</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -537,12 +553,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           {/* Basic Information */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-sf-pro">Basic Information</CardTitle>
+              <CardTitle className="text-lg font-sf-pro">{t('basicInformation')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="client" className="font-sf-pro">Client</Label>
+                  <Label htmlFor="client" className="font-sf-pro">{t('client')}</Label>
                   <select
                     id="client"
                     value={formData.clientId}
@@ -556,7 +572,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500 focus:border-mokm-purple-500 font-sf-pro"
                   >
-                    <option value="">Select a client</option>
+                    <option value="">{t('selectClientOption')}</option>
                     {clientList.map((client) => (
                       <option key={client.id} value={client.id}>
                         {client.companyName || `${client.firstName} ${client.lastName}`.trim() || `Client ${client.id}`}
@@ -565,7 +581,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   </select>
                 </div>
                 <div>
-                  <Label htmlFor="reference" className="font-sf-pro">Reference</Label>
+                  <Label htmlFor="reference" className="font-sf-pro">{t('reference')}</Label>
                   <Input
                     id="reference"
                     value={formData.reference}
@@ -575,7 +591,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   />
                 </div>
                 <div>
-                  <Label htmlFor="date" className="font-sf-pro">Date</Label>
+                  <Label htmlFor="date" className="font-sf-pro">{t('date')}</Label>
                   <Input
                     id="date"
                     type="date"
@@ -585,7 +601,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   />
                 </div>
                 <div>
-                  <Label htmlFor="expiryDate" className="font-sf-pro">Expiry Date</Label>
+                  <Label htmlFor="expiryDate" className="font-sf-pro">{t('expiryDate')}</Label>
                   <Input
                     id="expiryDate"
                     type="date"
@@ -602,14 +618,14 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-sf-pro">Line Items</CardTitle>
+                <CardTitle className="text-lg font-sf-pro">{t('lineItems')}</CardTitle>
                 <Button
                   onClick={addItem}
                   size="sm"
                   className="bg-mokm-purple-600 hover:bg-mokm-purple-700 text-white font-sf-pro"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Item
+                  {t('addItem')}
                 </Button>
               </div>
             </CardHeader>
@@ -619,13 +635,13 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                 <table className="w-full min-w-[1200px] border-separate border-spacing-x-6 border-spacing-y-2">
                   <thead>
                     <tr className="font-semibold text-sm text-slate-600 font-sf-pro">
-                      <th className="w-16 text-left pb-3">Item No.</th>
-                      <th className="w-[300px] text-left pb-3">Description</th>
-                      <th className="w-24 text-center pb-3">Qty</th>
-                      <th className="w-32 text-center pb-3">Rate</th>
-                      <th className="w-32 text-center pb-3">Mark Up %</th>
-                      <th className="w-32 text-center pb-3">Discount</th>
-                      <th className="w-36 text-right pb-3">Amount</th>
+                      <th className="w-16 text-left pb-3">{t('itemNo')}</th>
+                      <th className="w-[300px] text-left pb-3">{t('description')}</th>
+                      <th className="w-24 text-center pb-3">{t('quantity')}</th>
+                      <th className="w-32 text-center pb-3">{t('rate')}</th>
+                      <th className="w-32 text-center pb-3">{t('markupPercent')}</th>
+                      <th className="w-32 text-center pb-3">{t('discount')}</th>
+                      <th className="w-36 text-right pb-3">{t('amount')}</th>
                       <th className="w-16 pb-3"></th>
                     </tr>
                   </thead>
@@ -644,7 +660,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                           <Input
                             value={item.description}
                             onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                            placeholder="Item description"
+                            placeholder={t('descriptionPlaceholder')}
                             className="w-full px-4 py-2 border border-slate-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-mokm-purple-400 font-sf-pro"
                           />
                         </td>
@@ -702,7 +718,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                         {/* Amount */}
                         <td className="py-3 align-middle">
                           <div className="font-semibold text-slate-900 py-2 px-4 bg-slate-50 rounded-xl border shadow-sm text-right font-sf-pro">
-                            R {item.amount.toFixed(2)}
+                            {formatCurrency(item.amount)}
                           </div>
                         </td>
                         
@@ -714,7 +730,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                               size="sm"
                               onClick={() => removeItem(item.id)}
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full"
-                              title="Delete Item"
+                              title={t('deleteItem')}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -731,12 +747,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
                     <div className="flex justify-between font-sf-pro">
-                      <span>Subtotal:</span>
-                      <span>R {subtotal.toFixed(2)}</span>
+                      <span>{t('subtotal')}:</span>
+                      <span>{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex justify-between font-sf-pro">
                       <div className="flex items-center">
-                        <span>VAT (</span>
+                        <span>{t('vat')} (</span>
                         <input
                           type="number"
                           min="0"
@@ -750,11 +766,11 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                         />
                         <span>%):</span>
                       </div>
-                      <span>R {vatAmount.toFixed(2)}</span>
+                      <span>{formatCurrency(vatAmount)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-bold border-t pt-2 font-sf-pro">
-                      <span>Total (ZAR):</span>
-                      <span>R {total.toFixed(2)}</span>
+                      <span>{t('total')}:</span>
+                      <span>{formatCurrency(total)}</span>
                     </div>
                   </div>
                 </div>
@@ -765,29 +781,29 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           {/* Terms and Notes */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-sf-pro">Terms & Notes</CardTitle>
+              <CardTitle className="text-lg font-sf-pro">{t('termsAndNotes')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="terms" className="font-sf-pro">Terms & Conditions</Label>
+                <Label htmlFor="terms" className="font-sf-pro">{t('termsAndConditions')}</Label>
                 <textarea
                   id="terms"
                   value={formData.terms}
                   onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500 focus:border-mokm-purple-500 font-sf-pro"
-                  placeholder="Enter terms and conditions..."
+                  placeholder={t('enterTermsAndConditions')}
                 />
               </div>
               <div>
-                <Label htmlFor="notes" className="font-sf-pro">Notes</Label>
+                <Label htmlFor="notes" className="font-sf-pro">{t('notes')}</Label>
                 <textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   rows={3}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500 focus:border-mokm-purple-500 font-sf-pro"
-                  placeholder="Enter internal notes..."
+                  placeholder={t('enterInternalNotes')}
                 />
               </div>
             </CardContent>
@@ -801,7 +817,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
             onClick={onClose}
             className="font-sf-pro"
           >
-            Cancel
+            {t('cancel')}
           </Button>
           
           <div className="flex items-center space-x-3">
@@ -816,7 +832,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   const client = clientList.find(c => c.id === clientId);
                   
                   if (!client) {
-                    toast.error("Please select a valid client before previewing");
+                    toast.error(t('selectClientError'));
                     return;
                   }
                   
@@ -843,12 +859,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                   setIsPreviewModalOpen(true);
                 } catch (error) {
                   console.error('Error opening preview:', error);
-                  toast.error('Could not open preview. Please try again.');
+                  toast.error(t('previewOpenError'));
                 }
               }}
             >
               <Eye className="h-4 w-4 mr-2" />
-              Preview
+              {t('preview')}
             </Button>
             <div className="flex space-x-3">
               <Button
@@ -861,12 +877,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
+                    {t('saving')}
                   </>
                 ) : (
                   <>
                     <Save className="h-4 w-4 mr-2" />
-                    Save as Draft
+                    {t('saveAsDraft')}
                   </>
                 )}
               </Button>
@@ -880,12 +896,12 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
+                    {t('saving')}
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Save & Send
+                    {t('saveAndSend')}
                   </>
                 )}
               </Button>
@@ -893,7 +909,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
           </div>
         </div>
         {/* Quotation Preview Modal */}
-        <ErrorBoundary fallback={<div>Something went wrong with the preview. Please try again.</div>}>
+        <ErrorBoundary fallback={<div>{t('previewError')}</div>}>
           {isPreviewModalOpen && (
             <QuotationPreviewModal
               open={isPreviewModalOpen}
