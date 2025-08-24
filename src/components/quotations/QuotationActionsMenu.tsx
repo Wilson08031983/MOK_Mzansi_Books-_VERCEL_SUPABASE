@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Client as BaseClient } from '@/services/clientService';
+import { markQuotationAsSent } from '@/services/quotationService';
 import { Quotation as ServiceQuotation, QuotationItem } from '@/services/quotationService';
 
 // Extended Client interface with formatted addresses
@@ -137,11 +139,13 @@ interface QuotationActionsMenuProps {
   quotation: Quotation;
   onDelete: (id: string) => void;
   onEdit?: (id: string) => void;
+  onRefresh?: () => void;
 }
 
-const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: rawQuotation, onDelete, onEdit }) => {
+const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: rawQuotation, onDelete, onEdit, onRefresh }) => {
   // Cast quotation to ExtendedQuotation to handle additional fields
   const quotation = rawQuotation as ExtendedQuotation;
+  const { t } = useLocalization();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -301,7 +305,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      toast.error('Error loading data');
+      // Generic error not in translations; keep console and avoid noisy toast
     }
     setIsViewModalOpen(true);
   };
@@ -310,7 +314,8 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
     if (onEdit) {
       onEdit(quotation.id);
     } else {
-      toast.info(`Editing ${quotation.number}`);
+      // Fallback info toast left minimal to avoid hardcoded strings
+      toast.info(quotation.number);
       console.log(`Edit quotation: ${quotation.id}`);
     }
   };
@@ -320,8 +325,21 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
   };
 
   const confirmSend = () => {
-    toast.success(`Quotation sent to ${quotation.clientEmail}`);
-    setIsSendDialogOpen(false);
+    try {
+      // Mark as sent in storage
+      markQuotationAsSent(quotation.id);
+      
+      toast.success(t('quotations.toasts.sent', { email: (quotation as ExtendedQuotation & { clientEmail?: string }).clientEmail || '' }));
+      setIsSendDialogOpen(false);
+      
+      // Trigger parent refresh to update the UI state without full page reload
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error marking quotation as sent:', error);
+      toast.error('Failed to update quotation status');
+    }
   };
 
   /**
@@ -345,7 +363,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       // Success is handled by the PDF generator
     } catch (error) {
       console.error('Error generating quotation PDF:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      toast.error(t('quotations.toasts.pdfFailed'));
     } finally {
       setIsDownloading(false);
     }
@@ -357,7 +375,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
 
   const confirmDelete = () => {
     onDelete(quotation.id);
-    toast.success(`Quotation ${quotation.number} deleted`);
+    toast.success(t('quotations.toasts.deleted'));
     setIsDeleteDialogOpen(false);
   };
 
@@ -446,10 +464,10 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       localStorage.setItem('invoices', JSON.stringify(safeInvoices));
       
       // Show success message
-      toast.success(`Quotation ${quotation.number} converted to Invoice ${invoiceNumber}`);
+      toast.success(t('quotations.toasts.convertedToInvoice'));
     } catch (error) {
       console.error('Error converting quotation to invoice:', error);
-      toast.error('Failed to convert quotation to invoice');
+      toast.error(t('quotations.toasts.convertFailed'));
     } finally {
       setIsConverting(false);
     }
@@ -468,14 +486,13 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="font-sf-pro">
-          {/* View Quotation option removed as requested */}
           <DropdownMenuItem onClick={handleEdit} className="cursor-pointer">
             <Edit className="h-4 w-4 mr-2" />
-            <span>Edit Quotation</span>
+            <span>{t('quotations.editQuotation')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleSend} className="cursor-pointer">
             <Send className="h-4 w-4 mr-2" />
-            <span>Send Quotation</span>
+            <span>{t('quotations.sendQuotation')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem 
             onClick={handleDownload} 
@@ -487,7 +504,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
             ) : (
               <FileDown className="h-4 w-4 mr-2" />
             )}
-            <span>{isDownloading ? 'Generating PDF...' : 'Download Quotation'}</span>
+            <span>{isDownloading ? t('quotations.generatingPDF') : t('quotations.downloadQuotation')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem 
             onClick={handleConvertToInvoice} 
@@ -499,14 +516,14 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
             ) : (
               <Receipt className="h-4 w-4 mr-2" />
             )}
-            <span>{isConverting ? 'Converting...' : 'Convert to Invoice'}</span>
+            <span>{isConverting ? t('quotations.converting') : t('quotations.convertToInvoice')}</span>
           </DropdownMenuItem>
           <DropdownMenuItem 
             onClick={handleDelete}
             className="text-red-600 hover:text-red-700 cursor-pointer"
           >
             <Trash2 className="h-4 w-4 mr-2" />
-            <span>Delete Quotation</span>
+            <span>{t('quotations.dialogs.deleteTitle')}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -515,18 +532,18 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent className="font-sf-pro">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>{t('quotations.dialogs.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete quotation {quotation.number}. This action cannot be undone.
+              {t('quotations.dialogs.deleteDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('quotations.dialogs.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDelete}
               className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white"
             >
-              Delete
+              {t('quotations.dialogs.confirmDelete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -536,18 +553,18 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       <AlertDialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
         <AlertDialogContent className="font-sf-pro">
           <AlertDialogHeader>
-            <AlertDialogTitle>Send Quotation</AlertDialogTitle>
+            <AlertDialogTitle>{t('quotations.dialogs.sendTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Send quotation {quotation.number} to {quotation.clientEmail}?
+              {t('quotations.dialogs.sendDescription', { number: quotation.number, email: (quotation as ExtendedQuotation & { clientEmail?: string }).clientEmail || '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('quotations.dialogs.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmSend}
               className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white"
             >
-              Send
+              {t('quotations.dialogs.sendConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

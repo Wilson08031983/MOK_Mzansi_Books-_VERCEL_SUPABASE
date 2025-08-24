@@ -16,7 +16,7 @@ import {
   User,
   DollarSign,
 } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { useLocalization } from '@/hooks/useLocalization';
 import QuotationActionsMenu from './QuotationActionsMenu';
 import { Quotation, updateQuotationStatus } from '@/services/quotationService';
 import StatusChangeDropdown from './StatusChangeDropdown';
@@ -55,16 +55,17 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
   onStatusFilter,
   onRefresh
 }) => {
+  const { t, formatCurrency, formatDate } = useLocalization();
   const getSortIcon = (column: string) => {
     if (sortColumn !== column) return null;
     return sortDirection === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />;
   };
 
   return (
-    <div className="rounded-xl overflow-hidden border border-white/20">
+    <div className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 rounded-xl overflow-hidden border border-white/10 shadow-business">
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+          <TableRow className="bg-white/5 dark:bg-white/5 hover:bg-white/10 transition-colors">
             <TableHead className="w-12">
               <input
                 type="checkbox"
@@ -78,7 +79,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 onClick={() => onSort('number')}
                 className="flex items-center space-x-1 font-sf-pro font-medium text-slate-600 hover:text-slate-900"
               >
-                <span>Quotation</span>
+                <span>{t('quotations.table.quotation')}</span>
                 {getSortIcon('number')}
               </button>
             </TableHead>
@@ -87,7 +88,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 onClick={() => onSort('client')}
                 className="flex items-center space-x-1 font-sf-pro font-medium text-slate-600 hover:text-slate-900"
               >
-                <span>Client</span>
+                <span>{t('quotations.table.client')}</span>
                 {getSortIcon('client')}
               </button>
             </TableHead>
@@ -96,7 +97,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 onClick={() => onSort('date')}
                 className="flex items-center space-x-1 font-sf-pro font-medium text-slate-600 hover:text-slate-900"
               >
-                <span>Date</span>
+                <span>{t('quotations.table.date')}</span>
                 {getSortIcon('date')}
               </button>
             </TableHead>
@@ -105,7 +106,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 onClick={() => onSort('amount')}
                 className="flex items-center space-x-1 font-sf-pro font-medium text-slate-600 hover:text-slate-900"
               >
-                <span>Amount</span>
+                <span>{t('quotations.table.amount')}</span>
                 {getSortIcon('amount')}
               </button>
             </TableHead>
@@ -114,17 +115,17 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                 onClick={() => onSort('status')}
                 className="flex items-center space-x-1 font-sf-pro font-medium text-slate-600 hover:text-slate-900"
               >
-                <span>Status</span>
+                <span>{t('quotations.table.status')}</span>
                 {getSortIcon('status')}
               </button>
             </TableHead>
-            <TableHead>Salesperson</TableHead>
+            <TableHead>{t('quotations.table.salesperson')}</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {quotations.map((quotation) => (
-            <TableRow key={quotation.id} className="hover:bg-slate-50/50">
+            <TableRow key={quotation.id} className="hover:bg-white/5 dark:hover:bg-white/10 transition-colors">
               <TableCell>
                 <input
                   type="checkbox"
@@ -153,7 +154,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
               <TableCell>
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 text-slate-400 mr-2" />
-                  <span className="font-sf-pro">{formatDate(quotation.date)}</span>
+                  <span className="font-sf-pro">{quotation.date ? formatDate(new Date(quotation.date)) : '-'}</span>
                 </div>
               </TableCell>
               <TableCell>
@@ -172,7 +173,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                       const updatedQuotations = updateQuotationStatus(quotation.id, newStatus);
                       
                       // Notify that a change was made
-                      toast.success(`Status updated to ${newStatus}`);
+                      toast.success(t('quotations.toasts.statusUpdated'));
                       
                       // Call refresh to update the UI with the latest data
                       if (onRefresh) {
@@ -180,7 +181,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                       }
                     } catch (error) {
                       console.error('Error updating status:', error);
-                      toast.error('Failed to update status');
+                      toast.error(t('quotations.toasts.statusUpdateFailed'));
                     }
                   }}
                   size="sm"
@@ -198,6 +199,7 @@ const QuotationsTable: React.FC<QuotationsTableProps> = ({
                   }}
                   onDelete={onDeleteQuotation}
                   onEdit={onEditQuotation}
+                  onRefresh={onRefresh}
                 />
               </TableCell>
             </TableRow>
