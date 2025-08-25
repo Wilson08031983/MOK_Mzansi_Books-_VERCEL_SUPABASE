@@ -169,13 +169,31 @@ export const calculateAttendanceScore = (employeeId: string): number => {
     
     if (!employeeAttendance) return 75;
 
-    const regularHours = employeeAttendance.currentMonthRegularHours || 0;
-    const expectedHours = 173.33; // Standard monthly hours
-    
-    // Calculate attendance score based on hours worked
-    const attendanceRatio = regularHours / expectedHours;
+    // Prefer explicit attendance rate if available (0-100)
+    let attendanceRatio: number | null = null;
+    if (typeof employeeAttendance.attendanceRate === 'number' && employeeAttendance.attendanceRate >= 0) {
+      attendanceRatio = Math.max(0, Math.min(1, employeeAttendance.attendanceRate / 100));
+    }
+
+    // If day-based metrics exist, compute from daysPresent/totalWorkingDays
+    if (
+      attendanceRatio === null &&
+      typeof employeeAttendance.daysPresent === 'number' &&
+      typeof employeeAttendance.totalWorkingDays === 'number' &&
+      employeeAttendance.totalWorkingDays > 0
+    ) {
+      attendanceRatio = Math.max(0, Math.min(1, employeeAttendance.daysPresent / employeeAttendance.totalWorkingDays));
+    }
+
+    // Fallback: use hours-based ratio (regular hours vs expected monthly hours)
+    if (attendanceRatio === null) {
+      const regularHours = employeeAttendance.currentMonthRegularHours || employeeAttendance.regularHours || 0;
+      const expectedHours = 173.33; // Approx standard monthly hours
+      attendanceRatio = expectedHours > 0 ? regularHours / expectedHours : 0;
+    }
+
+    // Score mapping using the existing bands
     let attendanceScore = 50;
-    
     if (attendanceRatio >= 0.95) {
       attendanceScore = 90 + (attendanceRatio - 0.95) * 200; // Excellent attendance
     } else if (attendanceRatio >= 0.85) {
@@ -184,6 +202,20 @@ export const calculateAttendanceScore = (employeeId: string): number => {
       attendanceScore = 50 + (attendanceRatio - 0.75) * 200; // Average attendance
     } else {
       attendanceScore = Math.max(20, attendanceRatio * 66.67); // Poor attendance
+    }
+
+    // Additional explicit penalty for absenteeism (excludes leave)
+    // If daysAbsent and totalWorkingDays are provided, apply a scaled penalty up to 30 points
+    if (
+      typeof (employeeAttendance as any).daysAbsent === 'number' &&
+      typeof (employeeAttendance as any).totalWorkingDays === 'number' &&
+      (employeeAttendance as any).totalWorkingDays > 0
+    ) {
+      const daysAbsent = Math.max(0, (employeeAttendance as any).daysAbsent);
+      const totalWorkingDays = Math.max(1, (employeeAttendance as any).totalWorkingDays);
+      const absenceRatio = Math.min(1, daysAbsent / totalWorkingDays);
+      const absencePenalty = absenceRatio * 30; // up to 30-point penalty for full-month absence
+      attendanceScore = attendanceScore - absencePenalty;
     }
 
     return Math.min(100, Math.max(20, Math.round(attendanceScore)));
@@ -199,42 +231,28 @@ export const calculateAttendanceScore = (employeeId: string): number => {
  */
 export const calculateTrainingScore = (employeeId: string): number => {
   try {
-    // Get actual training qualifications from localStorage
+    // Pull employee qualifications (each may include nqfLevel)
     const qualificationsRaw = localStorage.getItem('employeeQualifications');
-    if (!qualificationsRaw) return 50; // No training data = low score
+    if (!qualificationsRaw) return 0;
 
     const qualifications = JSON.parse(qualificationsRaw);
     const employeeQualifications = qualifications.filter((qual: any) => qual.employeeId === employeeId);
-    
-    // If no qualifications, return low score
-    if (employeeQualifications.length === 0) {
-      return 50;
-    }
 
-    // Calculate score based on number and recency of qualifications
-    let baseScore = 60; // Base score for having any training
-    
-    // Add points for each qualification (max 5 qualifications counted)
-    const qualificationBonus = Math.min(employeeQualifications.length * 8, 40);
-    baseScore += qualificationBonus;
-    
-    // Add bonus for recent training (within last 2 years)
-    const twoYearsAgo = new Date();
-    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-    
-    const recentTraining = employeeQualifications.filter((qual: any) => {
-      const endDate = new Date(qual.endDate);
-      return endDate >= twoYearsAgo;
-    });
-    
-    if (recentTraining.length > 0) {
-      baseScore += Math.min(recentTraining.length * 5, 15); // Up to 15 bonus points
-    }
+    if (employeeQualifications.length === 0) return 0;
 
-    return Math.min(100, Math.max(50, Math.round(baseScore)));
+    // Sum all NQF levels (handle legacy entries that may miss nqfLevel)
+    const totalNqf: number = employeeQualifications.reduce((sum: number, qual: any) => {
+      const lvlRaw = (qual?.nqfLevel ?? qual?.nqf_level ?? 0);
+      const lvl = Number(lvlRaw);
+      return sum + (Number.isFinite(lvl) ? Math.max(0, Math.min(10, lvl)) : 0);
+    }, 0);
+
+    // 1 NQF = 2.5 points; cap at 100
+    const score = totalNqf * 2.5;
+    return Math.min(100, Math.max(0, Math.round(score)));
   } catch (error) {
     console.error('Error calculating training score:', error);
-    return 50;
+    return 0;
   }
 };
 
@@ -252,17 +270,8 @@ export const calculateBehaviorScore = (employeeId: string): number => {
       return behavior.score || 80;
     }
 
-    // Get employee information
-    const employee = getEmployeeById(employeeId);
-    if (!employee) return 80;
-
-    // Base score based on position
-    let baseScore = 75;
-    if (['CEO', 'Manager', 'Director', 'Founder'].includes(employee.position)) {
-      baseScore = 85;
-    } else if (['Team Leader', 'Senior', 'Lead'].some(title => employee.position.includes(title))) {
-      baseScore = 80;
-    }
+    // Behavior starts at 100 and is reduced by disciplinary actions
+    let baseScore = 100;
 
     // Check disciplinary record and adjust score
     const disciplinaryActions = getDisciplinaryActions(employeeId);
@@ -305,16 +314,9 @@ export const calculateBehaviorScore = (employeeId: string): number => {
       }
     });
 
-    // Calculate final score
+    // Calculate final score (no clean-record bonus; 100 is the clean baseline)
     const finalScore = baseScore - disciplinaryDeduction;
-    
-    // Clean record bonus (no random variation)
-    let cleanRecordBonus = 0;
-    if (disciplinaryActions.length === 0) {
-      cleanRecordBonus = 10; // Fixed 10 point bonus for clean record
-    }
-
-    return Math.min(100, Math.max(20, Math.round(finalScore + cleanRecordBonus)));
+    return Math.min(100, Math.max(20, Math.round(finalScore)));
   } catch (error) {
     console.error('Error calculating behavior score:', error);
     return 80;
@@ -343,57 +345,80 @@ const getDisciplinaryActions = (employeeId: string): any[] => {
  */
 export const calculatePromotionsScore = (employeeId: string): number => {
   try {
-    // Get actual promotion history from localStorage
-    const promotionHistoryRaw = localStorage.getItem('promotionHistory');
-    
-    if (promotionHistoryRaw) {
-      const promotionHistory = JSON.parse(promotionHistoryRaw);
-      const employeePromotions = promotionHistory.filter((promo: any) => promo.employeeId === employeeId);
-      
-      if (employeePromotions.length > 0) {
-        // Calculate score based on actual promotions
-        let score = 60; // Base score
-        score += employeePromotions.length * 15; // 15 points per promotion
-        
-        // Bonus for recent promotions (within last 2 years)
-        const twoYearsAgo = new Date();
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-        
-        const recentPromotions = employeePromotions.filter((promo: any) => {
-          const promoDate = new Date(promo.effectiveDate);
-          return promoDate >= twoYearsAgo;
-        });
-        
-        if (recentPromotions.length > 0) {
-          score += recentPromotions.length * 10; // 10 bonus points per recent promotion
-        }
-        
-        return Math.min(100, Math.max(60, Math.round(score)));
-      }
-    }
+    // Helper to map positions to hierarchy influence score (1-100)
+    const getPositionInfluenceScore = (positionRaw: string | undefined): number => {
+      if (!positionRaw) return 60;
+      const position = positionRaw.toLowerCase();
 
-    // If no promotion history exists, base score on tenure and current position
+      // 1) Ownership / Shareholders
+      if (/(owner|shareholder|share holder|investor|board|chair|non[- ]?exec director)/.test(position)) return 100;
+
+      // 2) Executive Leadership
+      if (/(chief executive officer|ceo|managing director|md)/.test(position)) return 95;
+      if (/(chief operating officer|coo)/.test(position)) return 90;
+      if (/(chief financial officer|cfo)/.test(position)) return 88;
+      if (/(chief technology officer|cto|chief information officer|cio)/.test(position)) return 85;
+      if (/(chief marketing officer|cmo)/.test(position)) return 82;
+      if (/(chief human resources officer|chro|chief people officer|cpo)/.test(position)) return 80;
+
+      // 3) Senior Management
+      if (/vice president|vp/.test(position)) return 78;
+      if (/director/.test(position)) return 75;
+      if (/general manager|gm/.test(position)) return 72;
+
+      // 4) Middle Management
+      if (/(department head|head of|department manager)/.test(position)) return 62;
+      if (/manager/.test(position)) return 60;
+
+      // 5) Supervisory / Team Leaders
+      if (/(supervisor|team lead|team leader|coordinator)/.test(position)) return 45;
+
+      // 6) Operational Level
+      if (/(engineer|developer|analyst|specialist|consultant i|staff|employee|technician|operator)/.test(position)) return 30;
+
+      // 7) Support Roles
+      if (/(clerk|administrative|admin assistant|receptionist|office|support)/.test(position)) return 20;
+
+      // 8) External Advisory
+      if (/(consultant|legal|attorney|lawyer|auditor)/.test(position)) return 65; // varies 50–80
+
+      return 60; // sensible default
+    };
+
     const employee = getEmployeeById(employeeId);
     if (!employee) return 60;
 
-    // Calculate tenure in years
-    const startDate = new Date(employee.startDate);
-    const currentDate = new Date();
-    const tenureYears = (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
-    
-    let baseScore = 60; // Base score for no promotions
-    
-    // Slight bonus for longer tenure without promotions (up to 5 points)
-    if (tenureYears > 1) {
-      baseScore += Math.min(tenureYears * 2, 5);
-    }
-    
-    // Slight penalty for very long tenure without promotions
-    if (tenureYears > 5) {
-      baseScore -= Math.min((tenureYears - 5) * 2, 10);
+    // Base from hierarchy influence
+    let score = getPositionInfluenceScore(employee.position);
+
+    // Add small bonuses for actual promotions if any exist
+    const promotionHistoryRaw = localStorage.getItem('promotionHistory');
+    if (promotionHistoryRaw) {
+      const promotionHistory = JSON.parse(promotionHistoryRaw);
+      const employeePromotions = promotionHistory.filter((promo: any) => promo.employeeId === employeeId);
+      if (employeePromotions.length > 0) {
+        // Light-touch bonus to avoid overpowering hierarchy base
+        score += Math.min(15, employeePromotions.length * 5); // up to +15
+
+        // Recency bonus (last 2 years)
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const recentCount = employeePromotions.filter((p: any) => new Date(p.effectiveDate) >= twoYearsAgo).length;
+        if (recentCount > 0) score += Math.min(10, recentCount * 5); // up to +10
+      }
     }
 
-    return Math.min(100, Math.max(50, Math.round(baseScore)));
+    // Minor tenure adjustment if no promotions and mid/low roles
+    if (score <= 75) {
+      const startDate = new Date(employee.startDate);
+      const currentDate = new Date();
+      const tenureYears = (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
+      if (!Number.isNaN(tenureYears) && tenureYears > 1) {
+        score += Math.min(5, Math.floor(tenureYears)); // up to +5
+      }
+    }
+
+    return Math.min(100, Math.max(10, Math.round(score)));
   } catch (error) {
     console.error('Error calculating promotions score:', error);
     return 60;

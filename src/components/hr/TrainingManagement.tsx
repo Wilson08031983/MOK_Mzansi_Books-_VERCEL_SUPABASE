@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,6 +30,8 @@ interface Qualification {
   institute: string;
   startDate: string;
   endDate: string;
+  // South African National Qualifications Framework level (1-10)
+  nqfLevel: number;
   certificateFile: string;
   certificateType: 'pdf' | 'image';
   dateAdded: string;
@@ -47,6 +49,9 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
   const [isAddQualificationOpen, setIsAddQualificationOpen] = useState(false);
   const [currentEmployeeId, setCurrentEmployeeId] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<{ [key: string]: 'active' | 'on-leave' | 'terminated' }>({});
+  // Preview modal state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewQualification, setPreviewQualification] = useState<Qualification | null>(null);
   
   // State for qualifications storage
   const [qualifications, setQualifications] = useState<Qualification[]>([]);
@@ -56,6 +61,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     institute: '',
     startDate: '',
     endDate: '',
+    nqfLevel: '',
     certificateFile: null as File | null,
   });
   
@@ -85,7 +91,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     }
     
     // Initialize status state based on employees
-    const initialStatus = {} as { [key: string]: 'active' | 'terminated' };
+    const initialStatus = {} as { [key: string]: 'active' | 'on-leave' | 'terminated' };
     employees.forEach(emp => {
       initialStatus[emp.id] = emp.status;
     });
@@ -114,6 +120,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       institute: '',
       startDate: '',
       endDate: '',
+      nqfLevel: '',
       certificateFile: null
     });
     setIsAddQualificationOpen(true);
@@ -140,11 +147,29 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
 
   // Handle qualification form submission
   const handleAddQualification = () => {
-    const { institute, startDate, endDate, certificateFile } = qualificationForm;
+    const { institute, startDate, endDate, nqfLevel, certificateFile } = qualificationForm;
     
     if (!institute || !startDate || !endDate || !certificateFile) {
       // Handle validation
       alert('All fields are required');
+      return;
+    }
+
+    // Validate NQF level (1-10)
+    const parsedNqf = parseInt(String(nqfLevel), 10);
+    if (isNaN(parsedNqf) || parsedNqf < 1 || parsedNqf > 10) {
+      alert('Please provide a valid NQF Level between 1 and 10.');
+      return;
+    }
+
+    // Enforce file type restrictions (PDF and images only)
+    const allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const fileTypeOk = allowedMime.includes(certificateFile.type);
+    const nameLower = certificateFile.name?.toLowerCase?.() || '';
+    const extOk = allowedExt.some(ext => nameLower.endsWith(ext));
+    if (!fileTypeOk && !extOk) {
+      alert('Invalid file type. Please upload PDF, JPG, JPEG, or PNG.');
       return;
     }
     
@@ -161,6 +186,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
         institute,
         startDate,
         endDate,
+        nqfLevel: parsedNqf,
         certificateFile: base64String,
         certificateType: fileType as 'pdf' | 'image',
         dateAdded: new Date().toISOString()
@@ -175,6 +201,9 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       
       // Close modal
       setIsAddQualificationOpen(false);
+
+      // Notify other modules (e.g., Performance) to refresh
+      window.dispatchEvent(new Event('employeeQualificationsUpdated'));
     };
     
     reader.readAsDataURL(certificateFile);
@@ -192,6 +221,9 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     
     // Save to localStorage
     localStorage.setItem('employeeQualifications', JSON.stringify(updatedQualifications));
+
+    // Notify other modules (e.g., Performance) to refresh
+    window.dispatchEvent(new Event('employeeQualificationsUpdated'));
   };
 
   // Format date for display
@@ -257,6 +289,10 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
             <div 
               key={qual.id} 
               className="relative flex-shrink-0 w-[40mm] h-[40mm] rounded-md overflow-hidden border border-slate-200 group"
+              onClick={() => {
+                setPreviewQualification(qual);
+                setIsPreviewOpen(true);
+              }}
             >
               {qual.certificateType === 'pdf' ? (
                 <div className="w-full h-full flex items-center justify-center bg-slate-100">
@@ -308,6 +344,46 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
 
   return (
     <div>
+      {/* Preview Qualification Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Qualification Preview</DialogTitle>
+            <DialogDescription>View the uploaded qualification. Click Open in new tab to download or view full-screen.</DialogDescription>
+          </DialogHeader>
+          <div className="w-full max-h-[75vh] overflow-auto">
+            {previewQualification && (
+              previewQualification.certificateType === 'pdf' ? (
+                // Embed PDF data URL
+                <iframe
+                  title="qualification-pdf"
+                  src={previewQualification.certificateFile}
+                  className="w-full h-[70vh] rounded-md border"
+                />
+              ) : (
+                <img
+                  src={previewQualification?.certificateFile}
+                  alt={`${previewQualification?.institute} certificate`}
+                  className="max-h-[70vh] w-auto mx-auto rounded-md border"
+                />
+              )
+            )}
+          </div>
+          <DialogFooter>
+            {previewQualification && (
+              <a
+                href={previewQualification.certificateFile}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mr-auto text-sm text-slate-600 hover:underline"
+              >
+                Open in new tab
+              </a>
+            )}
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Employee Training & Qualifications</h2>
@@ -371,7 +447,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
                     <label className="text-xs text-slate-500 mb-1">Status</label>
                     <Select 
                       value={selectedStatus[employee.id] || employee.status} 
-                      onValueChange={(value) => handleStatusChange(employee.id, value as 'active' | 'terminated')}
+                      onValueChange={(value) => handleStatusChange(employee.id, value as 'active' | 'on-leave' | 'terminated')}
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue />
@@ -412,7 +488,9 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
                   {/* Certificates Gallery - Takes 2 columns */}
                   <div className="md:col-span-2">
                     <label className="text-xs text-slate-500 mb-1 block">Qualifications</label>
-                    <CertificateGallery employeeId={employee.id} />
+                    <div className="min-h-[120px] flex flex-col justify-end">
+                      <CertificateGallery employeeId={employee.id} />
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -426,6 +504,7 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add New Qualification</DialogTitle>
+            <DialogDescription>Upload a PDF or image and provide institution and date details.</DialogDescription>
           </DialogHeader>
           
           <div className="grid gap-4 py-4">
@@ -462,6 +541,25 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
                   onChange={handleQualificationFormChange}
                 />
               </div>
+            </div>
+
+            {/* NQF Level */}
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="nqfLevel">NQF Level</Label>
+                <span className="text-xs text-slate-500">1–10</span>
+              </div>
+              <Input
+                id="nqfLevel"
+                name="nqfLevel"
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                placeholder="e.g. 7"
+                value={qualificationForm.nqfLevel}
+                onChange={handleQualificationFormChange}
+              />
             </div>
             
             <div className="grid gap-2">
