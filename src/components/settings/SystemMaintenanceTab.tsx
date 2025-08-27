@@ -33,6 +33,7 @@ import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 import { resetAuthState, initializeLocalAuth, signOut } from '@/services/localAuthService';
 import { testAllServices } from '@/utils/serviceTest';
 import { useLocalizationContext } from '@/contexts/LocalizationContext';
+import { auditService } from '@/services/auditService';
 
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B';
@@ -99,8 +100,33 @@ const SystemMaintenanceTab: React.FC = () => {
         title: ok ? t('common.success') : t('common.error'),
         description: ok ? tt('settings.help.troubleshooting', 'All services initialized') : t('settings.help.toasts.cacheClearFailedDesc')
       });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Initialize Services',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'services',
+          changeType: 'update',
+          description: ok ? 'Services initialized successfully' : 'Service initialization reported issues',
+          metadata: { servicesReady: areServicesReady() }
+        });
+      } catch {/* noop */}
     } catch (e) {
       toast({ title: t('common.error') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Initialize Services Failed',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'services',
+          changeType: 'update',
+          description: 'Initialization threw an error',
+          metadata: { error: String(e) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     } finally {
       setInitializing(false);
     }
@@ -116,8 +142,33 @@ const SystemMaintenanceTab: React.FC = () => {
         title: res.success ? t('common.success') : t('common.error'),
         description: t('settings.help.troubleshooting')
       });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Run Diagnostics',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'services',
+          changeType: 'read',
+          description: 'Diagnostics executed',
+          metadata: { success: res.success, results: res.results }
+        });
+      } catch {/* noop */}
     } catch (e) {
       toast({ title: t('common.error'), description: t('inventory.errorOccurredWhileDeleting') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Run Diagnostics Failed',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'services',
+          changeType: 'read',
+          description: 'Diagnostics failed to execute',
+          metadata: { error: String(e) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     } finally {
       setRunningDiagnostics(false);
     }
@@ -127,14 +178,39 @@ const SystemMaintenanceTab: React.FC = () => {
     try {
       stuckToastCleanupService.forceCleanupAndShowStatus();
       toast({ title: t('settings.help.toasts.cacheClearedTitle'), description: t('settings.help.toasts.cacheClearedDesc') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Force Cleanup Stuck Toasts',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'cache',
+          changeType: 'delete',
+          description: 'Forced cleanup of stuck toasts executed'
+        });
+      } catch {/* noop */}
     } catch (e) {
       toast({ title: t('common.error'), description: t('settings.help.toasts.cacheClearFailedDesc') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Force Cleanup Stuck Toasts Failed',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'cache',
+          changeType: 'delete',
+          description: 'Failed to cleanup stuck toasts',
+          metadata: { error: String(e) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     }
   };
 
   const handleCleanupSamples = async () => {
     setCleaningSamples(true);
     try {
+      const before = localStorageService.getSize();
       const res = cleanupAllSampleData();
       refreshStorageSize();
       toast({
@@ -143,8 +219,34 @@ const SystemMaintenanceTab: React.FC = () => {
           ? t('settings.dataManagement.clearSuccessDesc')
           : t('settings.dataManagement.clearFailedDesc')
       });
+      try {
+        const after = localStorageService.getSize();
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Cleanup Sample Data',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'data',
+          changeType: 'delete',
+          description: res.success ? 'Sample data cleaned successfully' : 'Sample data cleanup attempted but failed',
+          metadata: { success: res.success, beforeBytes: before, afterBytes: after }
+        });
+      } catch {/* noop */}
     } catch (e) {
       toast({ title: t('common.error'), description: t('settings.help.toasts.cacheClearFailedDesc') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Cleanup Sample Data Failed',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'data',
+          changeType: 'delete',
+          description: 'Sample data cleanup threw an error',
+          metadata: { error: String(e) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     } finally {
       setCleaningSamples(false);
     }
@@ -156,8 +258,32 @@ const SystemMaintenanceTab: React.FC = () => {
       resetAuthState();
       initializeLocalAuth();
       toast({ title: t('common.success'), description: t('settings.help.confirms.resetAuth') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Reset Auth State',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'auth',
+          changeType: 'update',
+          description: 'Local auth state reset and reinitialized'
+        });
+      } catch {/* noop */}
     } catch (e) {
       toast({ title: t('common.error'), description: t('settings.help.toasts.cacheClearFailedDesc') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Reset Auth State Failed',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'auth',
+          changeType: 'update',
+          description: 'Failed to reset local auth state',
+          metadata: { error: String(e) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     } finally {
       setAuthResetting(false);
     }
@@ -167,8 +293,32 @@ const SystemMaintenanceTab: React.FC = () => {
     try {
       signOut();
       toast({ title: t('common.signOut') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Sign Out',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'auth',
+          changeType: 'update',
+          description: 'User signed out from the device'
+        });
+      } catch {/* noop */}
     } catch (e) {
       toast({ title: t('common.error') });
+      try {
+        auditService.logAudit({
+          category: 'maintenance',
+          action: 'Sign Out Failed',
+          page: 'Settings',
+          section: 'Maintenance',
+          entityType: 'auth',
+          changeType: 'update',
+          description: 'Sign out failed',
+          metadata: { error: String(e) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     }
   };
 
