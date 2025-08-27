@@ -32,6 +32,7 @@ import { cleanupAllSampleData } from '@/services/cleanupSampleData';
 import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 import { resetAuthState, initializeLocalAuth, signOut } from '@/services/localAuthService';
 import { testAllServices } from '@/utils/serviceTest';
+import { useLocalizationContext } from '@/contexts/LocalizationContext';
 
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B';
@@ -42,6 +43,7 @@ const formatBytes = (bytes: number): string => {
 };
 
 const SystemMaintenanceTab: React.FC = () => {
+  const { t } = useLocalizationContext();
   const [initializing, setInitializing] = useState(false);
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [cleaningSamples, setCleaningSamples] = useState(false);
@@ -50,6 +52,17 @@ const SystemMaintenanceTab: React.FC = () => {
   const [status, setStatus] = useState<Record<string, ServiceStatus>>({});
   const [servicesReady, setServicesReady] = useState<boolean>(false);
   const [diagResults, setDiagResults] = useState<Record<string, { success: boolean; message: string }>>({});
+
+  // Local i18n fallback helper
+  const tt = (key: string, fallback: string, params?: Record<string, any>) => {
+    try {
+      const val = t(key as any, params as any);
+      if (!val || val === key) return fallback;
+      return val;
+    } catch {
+      return fallback;
+    }
+  };
 
   const statusList = useMemo(() => Object.entries(status), [status]);
 
@@ -83,11 +96,11 @@ const SystemMaintenanceTab: React.FC = () => {
       const ok = await initializeServices();
       refreshStatus();
       toast({
-        title: ok ? 'Services initialized' : 'Initialization completed with issues',
-        description: ok ? 'All services are ready.' : 'Some services may have failed. See status below.',
+        title: ok ? t('common.success') : t('common.error'),
+        description: ok ? t('about.toasts.upToDateDesc', { version: '' }) : t('settings.help.toasts.cacheClearFailedDesc')
       });
     } catch (e) {
-      toast({ title: 'Initialization failed', description: 'See console for details.' });
+      toast({ title: t('common.error') });
     } finally {
       setInitializing(false);
     }
@@ -100,11 +113,11 @@ const SystemMaintenanceTab: React.FC = () => {
       setDiagResults(res.results);
       refreshStatus();
       toast({
-        title: res.success ? 'Diagnostics passed' : 'Diagnostics found issues',
-        description: 'See results below.',
+        title: res.success ? t('common.success') : t('common.error'),
+        description: t('settings.help.troubleshooting')
       });
     } catch (e) {
-      toast({ title: 'Diagnostics failed', description: 'See console for details.' });
+      toast({ title: t('common.error'), description: t('inventory.errorOccurredWhileDeleting') });
     } finally {
       setRunningDiagnostics(false);
     }
@@ -113,9 +126,9 @@ const SystemMaintenanceTab: React.FC = () => {
   const handleCleanupStuckToasts = () => {
     try {
       stuckToastCleanupService.forceCleanupAndShowStatus();
-      toast({ title: 'Cleanup triggered', description: 'Stuck toast notifications were cleaned.' });
+      toast({ title: t('settings.help.toasts.cacheClearedTitle'), description: t('settings.help.toasts.cacheClearedDesc') });
     } catch (e) {
-      toast({ title: 'Cleanup failed', description: 'Could not clean stuck toasts.' });
+      toast({ title: t('common.error'), description: t('settings.help.toasts.cacheClearFailedDesc') });
     }
   };
 
@@ -125,11 +138,13 @@ const SystemMaintenanceTab: React.FC = () => {
       const res = cleanupAllSampleData();
       refreshStorageSize();
       toast({
-        title: res.success ? 'Sample data removed' : 'Cleanup completed with errors',
-        description: `Removed ${res.employeesRemoved} sample employees.`,
+        title: res.success ? t('settings.dataManagement.clearSuccessTitle') : t('settings.dataManagement.clearFailedTitle'),
+        description: res.success
+          ? t('settings.dataManagement.clearSuccessDesc')
+          : t('settings.dataManagement.clearFailedDesc')
       });
     } catch (e) {
-      toast({ title: 'Cleanup failed', description: 'See console for details.' });
+      toast({ title: t('common.error'), description: t('settings.help.toasts.cacheClearFailedDesc') });
     } finally {
       setCleaningSamples(false);
     }
@@ -140,9 +155,9 @@ const SystemMaintenanceTab: React.FC = () => {
     try {
       resetAuthState();
       initializeLocalAuth();
-      toast({ title: 'Local auth reset', description: 'Authentication state has been reset.' });
+      toast({ title: t('common.success'), description: t('settings.help.confirms.resetAuth') });
     } catch (e) {
-      toast({ title: 'Auth reset failed', description: 'See console for details.' });
+      toast({ title: t('common.error'), description: t('settings.help.toasts.cacheClearFailedDesc') });
     } finally {
       setAuthResetting(false);
     }
@@ -151,24 +166,24 @@ const SystemMaintenanceTab: React.FC = () => {
   const handleSignOut = async () => {
     try {
       signOut();
-      toast({ title: 'Signed out', description: 'Current user has been signed out.' });
+      toast({ title: t('common.signOut') });
     } catch (e) {
-      toast({ title: 'Sign out failed', description: 'See console for details.' });
+      toast({ title: t('common.error') });
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-sf-pro">
             <Monitor className="h-5 w-5" />
-            System Maintenance
+            {t('settings.tabs.maintenance')}
             {servicesReady ? (
-              <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700">All Services Ready</Badge>
+              <Badge variant="secondary" className="ml-2">{t('common.success')}</Badge>
             ) : (
-              <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-700">Attention Needed</Badge>
+              <Badge variant="secondary" className="ml-2">{tt('settings.notifications.permissionNotGranted', 'Permission not granted')}</Badge>
             )}
           </CardTitle>
         </CardHeader>
@@ -176,37 +191,37 @@ const SystemMaintenanceTab: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <Button size="sm" onClick={handleInitialize} disabled={initializing}>
               <RefreshCcw className="h-4 w-4 mr-2" />
-              {initializing ? 'Initializing...' : 'Initialize Services'}
+              {initializing ? t('security.saving') : tt('settings.users.refresh', 'Refresh')}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => { refreshStatus(); toast({ title: 'Status refreshed' }); }}>
+            <Button size="sm" variant="secondary" onClick={() => { refreshStatus(); toast({ title: tt('settings.users.refresh', 'Refresh') }); }}>
               <ActivityIcon className="h-4 w-4 mr-2" />
-              Refresh Status
+              {tt('settings.users.refresh', 'Refresh')}
             </Button>
             <Button size="sm" variant="outline" onClick={refreshStorageSize}>
               <HardDrive className="h-4 w-4 mr-2" />
-              Check Storage Size
+              {tt('settings.dataManagement.storageUsage', 'Storage usage')}
             </Button>
           </div>
 
           {/* Service Status List */}
           <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {statusList.length === 0 ? (
-              <p className="text-sm text-gray-600">No service status available yet.</p>
+              <p className="text-sm text-slate-400">{t('common.noData')}</p>
             ) : (
               statusList.map(([key, s]) => (
-                <div key={key} className="rounded-lg border border-gray-200 p-3 bg-white/70">
+                <div key={key} className="rounded-lg border border-white/10 p-3 bg-slate-900/40">
                   <div className="flex items-center justify-between">
                     <div className="font-medium">{s.name || key}</div>
                     {s.initialized ? (
-                      <Badge className="bg-emerald-100 text-emerald-700">Initialized</Badge>
+                      <Badge>{t('common.success')}</Badge>
                     ) : s.error ? (
-                      <Badge className="bg-red-100 text-red-700">Error</Badge>
+                      <Badge variant="destructive">{t('common.error')}</Badge>
                     ) : (
-                      <Badge className="bg-gray-100 text-gray-700">Pending</Badge>
+                      <Badge variant="secondary">{t('clients.pending')}</Badge>
                     )}
                   </div>
                   {s.error && (
-                    <p className="mt-2 text-xs text-red-600">{s.error}</p>
+                    <p className="mt-2 text-xs text-red-300">{s.error}</p>
                   )}
                 </div>
               ))
@@ -215,43 +230,43 @@ const SystemMaintenanceTab: React.FC = () => {
 
           {/* LocalStorage size */}
           <div className="mt-4">
-            <div className="flex items-center justify-between text-sm text-gray-700">
-              <span className="flex items-center gap-2"><HardDrive className="h-4 w-4" /> Local Storage Usage</span>
+            <div className="flex items-center justify-between text-sm text-slate-300">
+              <span className="flex items-center gap-2"><HardDrive className="h-4 w-4" /> {tt('settings.dataManagement.storageUsage', 'Storage usage')}</span>
               <span>{formatBytes(storageSize)}</span>
             </div>
-            <Progress value={Math.min(100, (storageSize / (5 * 1024 * 1024)) * 100)} className="mt-2" />
-            <p className="text-xs text-gray-500 mt-1">Browser storage limit varies by browser (approx. 5-10 MB).</p>
+            <Progress value={Math.min(100, (storageSize / (30 * 1024 * 1024)) * 100)} className="mt-2" />
+            <p className="text-xs text-slate-400 mt-1">{t('settings.description')}</p>
           </div>
         </CardContent>
       </Card>
 
       {/* Diagnostics */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-sf-pro">
             <TestTube className="h-5 w-5" />
-            Diagnostics
+            {t('settings.help.troubleshooting')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-3">
             <Button size="sm" onClick={handleDiagnostics} disabled={runningDiagnostics}>
               <TestTube className="h-4 w-4 mr-2" />
-              {runningDiagnostics ? 'Running...' : 'Run Service Test'}
+              {runningDiagnostics ? t('common.loading') : t('settings.help.troubleshooting')}
             </Button>
           </div>
 
           {Object.keys(diagResults).length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {Object.entries(diagResults).map(([k, r]) => (
-                <div key={k} className="rounded-lg border border-gray-200 p-3 bg-white/70">
+                <div key={k} className="rounded-lg border border-white/10 p-3 bg-slate-900/40">
                   <div className="flex items-center justify-between">
                     <div className="font-medium capitalize">{k.replace(/_/g, ' ')}</div>
-                    <Badge className={r.success ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}>
-                      {r.success ? 'OK' : 'Issue'}
+                    <Badge className={r.success ? '' : ''} variant={r.success ? 'secondary' : 'destructive'}>
+                      {r.success ? t('common.success') : t('common.error')}
                     </Badge>
                   </div>
-                  <p className="mt-2 text-xs text-gray-700">{r.message}</p>
+                  <p className="mt-2 text-xs text-slate-300">{r.message}</p>
                 </div>
               ))}
             </div>
@@ -260,85 +275,66 @@ const SystemMaintenanceTab: React.FC = () => {
       </Card>
 
       {/* Cleanup Operations */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-sf-pro">
             <Trash2 className="h-5 w-5" />
-            Cleanup Operations
+            {t('settings.help.buttons.clearAppCache')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-3">
             <Button size="sm" variant="secondary" onClick={handleCleanupStuckToasts}>
               <ShieldAlert className="h-4 w-4 mr-2" />
-              Cleanup Stuck Toasts
+              {t('settings.help.buttons.forceCleanupNow')}
             </Button>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" variant="destructive" disabled={cleaningSamples}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {cleaningSamples ? 'Cleaning...' : 'Remove Sample HR Data'}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Remove all sample HR data?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will remove sample employees and related HR records (time entries, allowances, payroll, etc.). This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleCleanupSamples} className="bg-red-600 hover:bg-red-700">Confirm</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
-        </CardContent>
-      </Card>
+          <Progress value={Math.min(100, (storageSize / (30 * 1024 * 1024)) * 100)} className="mt-2" />
+          <p className="text-xs text-slate-400 mt-1">{t('settings.description')}</p>
+      </CardContent>
+    </Card>
 
-      {/* Auth Maintenance */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 font-sf-pro">
-            <Wrench className="h-5 w-5" />
-            Authentication Maintenance
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-3">
-            <Button size="sm" variant="outline" onClick={handleAuthReset} disabled={authResetting}>
-              <ShieldAlert className="h-4 w-4 mr-2" />
-              {authResetting ? 'Resetting...' : 'Reset Local Auth State'}
-            </Button>
+    {/* Diagnostics */}
+    <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 font-sf-pro">
+          <TestTube className="h-5 w-5" />
+          {t('settings.help.troubleshooting')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-3">
+          <Button size="sm" onClick={handleDiagnostics} disabled={runningDiagnostics}>
+            <TestTube className="h-4 w-4 mr-2" />
+            {runningDiagnostics ? t('common.loading') : t('settings.help.troubleshooting')}
+          </Button>
+        </div>
 
-            <Button size="sm" variant="secondary" onClick={() => { initializeLocalAuth(); toast({ title: 'Local auth initialized' }); }}>
+            <Button size="sm" variant="secondary" onClick={() => { initializeLocalAuth(); toast({ title: t('common.success') }); }}>
               <RefreshCcw className="h-4 w-4 mr-2" />
-              Reinitialize Local Auth
+              {t('settings.help.buttons.resetAuthReload')}
             </Button>
 
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button size="sm" variant="destructive" onClick={() => {}}>
                   <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out Current User
+                  {t('common.signOut')}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Sign out current user?</AlertDialogTitle>
+                  <AlertDialogTitle>{t('common.signOut')}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will end the current session on this device.
+                    {t('settings.help.confirms.resetAuth')}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleSignOut} className="bg-red-600 hover:bg-red-700">Sign Out</AlertDialogAction>
+                  <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleSignOut} className="bg-red-600 hover:bg-red-700">{t('common.signOut')}</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
         </CardContent>
       </Card>
     </div>
