@@ -34,9 +34,10 @@ export const initializeServices = async (): Promise<boolean> => {
     
     // Initialize local auth service
     try {
-      const authInitialized = await localAuthService.initialize();
-      serviceStatus.localAuth.initialized = authInitialized;
-      console.log('Local auth service initialized:', authInitialized);
+      // localAuthService has initializeLocalAuth()/initializeAuth(), not initialize()
+      localAuthService.initializeLocalAuth();
+      serviceStatus.localAuth.initialized = true;
+      console.log('Local auth service initialized:', true);
     } catch (error) {
       serviceStatus.localAuth.error = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to initialize local auth service:', error);

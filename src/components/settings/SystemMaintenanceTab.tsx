@@ -97,7 +97,7 @@ const SystemMaintenanceTab: React.FC = () => {
       refreshStatus();
       toast({
         title: ok ? t('common.success') : t('common.error'),
-        description: ok ? t('about.toasts.upToDateDesc', { version: '' }) : t('settings.help.toasts.cacheClearFailedDesc')
+        description: ok ? tt('settings.help.troubleshooting', 'All services initialized') : t('settings.help.toasts.cacheClearFailedDesc')
       });
     } catch (e) {
       toast({ title: t('common.error') });
@@ -191,7 +191,7 @@ const SystemMaintenanceTab: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <Button size="sm" onClick={handleInitialize} disabled={initializing}>
               <RefreshCcw className="h-4 w-4 mr-2" />
-              {initializing ? t('security.saving') : tt('settings.users.refresh', 'Refresh')}
+              {initializing ? t('settings.security.saving') : tt('settings.users.refresh', 'Refresh')}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => { refreshStatus(); toast({ title: tt('settings.users.refresh', 'Refresh') }); }}>
               <ActivityIcon className="h-4 w-4 mr-2" />
