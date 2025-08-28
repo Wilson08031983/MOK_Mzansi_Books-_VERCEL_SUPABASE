@@ -277,8 +277,8 @@ class EMP201Service {
     let totalTaxableIncome = 0;
     let totalUIFEmployee = 0;
     let totalUIFSalaries = 0;
-    let totalSDL = 0;
-    let totalSDLSalaries = 0;
+    const totalSDL = 0;
+    const totalSDLSalaries = 0;
     let totalGrossSalary = 0;
     
     const employeeBreakdown: EMP201EmployeeBreakdown[] = [];

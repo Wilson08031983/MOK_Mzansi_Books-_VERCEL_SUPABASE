@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log Testing</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0D0D0D;
+            color: #F5F5F5;
+        }
+        h1, h2, h3 {
+            color: #E858C6;
+            background: linear-gradient(to right, #3C3CE8, #8E61F0, #E858C6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .card {
+            background: #1E1E1E;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #3D3D3D;
+        }
+        .log-entry {
+            background: #2A2A2A;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #8E61F0;
+        }
+        .log-meta {
+            color: #A0A0A0;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        button {
+            background: linear-gradient(to right, #3C3CE8, #8E61F0, #E858C6);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .filter button {
+            font-size: 0.9em;
+            padding: 5px 10px;
+        }
+        .metadata {
+            background: #333;
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 8px;
+            font-family: monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+        .active {
+            box-shadow: 0 0 0 2px white;
+        }
+    </style>
+</head>
+<body>
+    <h1>MOK Mzansi Books - Audit Log Tester</h1>
+    
+    <div class="controls">
+        <button id="loadLogs">Load Audit Logs</button>
+        <button id="clearLogs">Clear All Logs</button>
+    </div>
+
+    <h2>Filter Logs</h2>
+    <div class="filter">
+        <button class="filter-btn active" data-filter="all">All Logs</button>
+        <button class="filter-btn" data-filter="data_security">Data Security</button>
+        <button class="filter-btn" data-filter="maintenance">System Maintenance</button>
+        <button class="filter-btn" data-filter="general">General Settings</button>
+        <button class="filter-btn" data-filter="security">Security Settings</button>
+        <button class="filter-btn" data-filter="navigation">Tab Navigation</button>
+    </div>
+
+    <h2>Audit Logs</h2>
+    <div id="logs-container" class="container">
+        <div class="card">
+            <p>Click "Load Audit Logs" to fetch logs from localStorage</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const logsContainer = document.getElementById('logs-container');
+            const loadButton = document.getElementById('loadLogs');
+            const clearButton = document.getElementById('clearLogs');
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            
+            let allLogs = [];
+            let currentFilter = 'all';
+
+            loadButton.addEventListener('click', () => {
+                loadAuditLogs();
+            });
+
+            clearButton.addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear all audit logs? This cannot be undone.')) {
+                    localStorage.removeItem('auditLogs');
+                    allLogs = [];
+                    displayLogs();
+                }
+            });
+
+            filterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    currentFilter = button.dataset.filter;
+                    
+                    // Update active button
+                    filterButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    
+                    displayLogs();
+                });
+            });
+
+            function loadAuditLogs() {
+                const logsJson = localStorage.getItem('auditLogs');
+                if (!logsJson) {
+                    logsContainer.innerHTML = `
+                        <div class="card">
+                            <h3>No audit logs found</h3>
+                            <p>No audit logs were found in localStorage.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                try {
+                    allLogs = JSON.parse(logsJson);
+                    displayLogs();
+                } catch (e) {
+                    logsContainer.innerHTML = `
+                        <div class="card">
+                            <h3>Error parsing logs</h3>
+                            <p>Error: ${e.message}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            function displayLogs() {
+                if (!allLogs || !allLogs.length) {
+                    logsContainer.innerHTML = `
+                        <div class="card">
+                            <h3>No audit logs found</h3>
+                            <p>No audit logs were found in localStorage.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Filter logs based on current filter
+                const filteredLogs = currentFilter === 'all' 
+                    ? allLogs 
+                    : allLogs.filter(log => {
+                        if (currentFilter === 'navigation') {
+                            return log.action && log.action.includes('Navigate');
+                        }
+                        return log.category === currentFilter;
+                    });
+
+                // Group logs by section
+                const groupedLogs = {};
+                filteredLogs.forEach(log => {
+                    const key = log.section || 'Other';
+                    if (!groupedLogs[key]) {
+                        groupedLogs[key] = [];
+                    }
+                    groupedLogs[key].push(log);
+                });
+
+                logsContainer.innerHTML = '';
+
+                // Display each section's logs
+                Object.keys(groupedLogs).forEach(section => {
+                    const sectionCard = document.createElement('div');
+                    sectionCard.className = 'card';
+                    
+                    const sectionTitle = document.createElement('h3');
+                    sectionTitle.textContent = section;
+                    sectionCard.appendChild(sectionTitle);
+
+                    const logs = groupedLogs[section];
+                    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                    logs.forEach(log => {
+                        const logEntry = document.createElement('div');
+                        logEntry.className = 'log-entry';
+                        
+                        const action = document.createElement('strong');
+                        action.textContent = log.action;
+                        logEntry.appendChild(action);
+
+                        const description = document.createElement('p');
+                        description.textContent = log.description || 'No description';
+                        logEntry.appendChild(description);
+
+                        if (log.metadata) {
+                            const metadata = document.createElement('div');
+                            metadata.className = 'metadata';
+                            metadata.textContent = JSON.stringify(log.metadata, null, 2);
+                            logEntry.appendChild(metadata);
+                        }
+
+                        const meta = document.createElement('div');
+                        meta.className = 'log-meta';
+                        meta.textContent = `${new Date(log.timestamp).toLocaleString()} | Category: ${log.category} | Page: ${log.page}`;
+                        logEntry.appendChild(meta);
+
+                        sectionCard.appendChild(logEntry);
+                    });
+
+                    logsContainer.appendChild(sectionCard);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

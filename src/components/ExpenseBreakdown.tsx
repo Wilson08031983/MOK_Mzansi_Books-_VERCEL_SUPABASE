@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface ExpenseBreakdownProps {
   data: { label: string; value: number }[];
@@ -27,6 +28,7 @@ const chartConfig = {
 
 const ExpenseBreakdown: React.FC<ExpenseBreakdownProps> = ({ data }) => {
   const navigate = useNavigate();
+  const { t, formatCurrency } = useLocalization();
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   // Map dashboard labels to category values used by ExpensesTab filters (normalized to lowercase keys)
@@ -69,9 +71,9 @@ const ExpenseBreakdown: React.FC<ExpenseBreakdownProps> = ({ data }) => {
   };
 
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in h-full flex flex-col">
+    <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 dark:border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300 animate-fade-in h-full flex flex-col">
       <CardHeader className="pb-6">
-        <CardTitle className="text-slate-900 font-sf-pro text-xl">Expenses by Category</CardTitle>
+        <CardTitle className="text-slate-900 dark:text-slate-100 font-sf-pro text-xl">{t('dashboard.expensesByCategory')}</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col">
         <div className="flex-1 flex flex-col">
@@ -117,7 +119,7 @@ const ExpenseBreakdown: React.FC<ExpenseBreakdownProps> = ({ data }) => {
             {data.map((item, index) => (
               <div 
                 key={item.label} 
-                className="flex items-center justify-between text-sm glass backdrop-blur-sm bg-white/30 rounded-xl p-3 hover:bg-white/40 transition-all duration-300 cursor-pointer"
+                className="flex items-center justify-between text-sm glass backdrop-blur-md bg-white/10 dark:bg-white/5 rounded-xl p-3 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 cursor-pointer"
                 onClick={() => handleNavigateToCategory(item.label)}
               >
                 <div className="flex items-center">
@@ -125,12 +127,12 @@ const ExpenseBreakdown: React.FC<ExpenseBreakdownProps> = ({ data }) => {
                     className="w-4 h-4 rounded-full mr-3 shadow-sm" 
                     style={{ backgroundColor: MOKM_COLORS[index % MOKM_COLORS.length] }}
                   />
-                  <span className="text-slate-700 font-medium font-sf-pro">{item.label}</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-medium font-sf-pro">{item.label}</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-slate-900 font-sf-pro">R {item.value.toLocaleString()}</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100 font-sf-pro">{formatCurrency(item.value || 0)}</span>
                   <span className="text-xs text-slate-500 font-sf-pro">
-                    {((item.value / total) * 100).toFixed(1)}%
+                    {total > 0 ? ((item.value / total) * 100).toFixed(1) : '0.0'}%
                   </span>
                 </div>
               </div>

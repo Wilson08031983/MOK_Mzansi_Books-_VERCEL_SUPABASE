@@ -36,6 +36,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
     client: '',
     clientId: '',
     manager: '',
+    projectType: 'timeline' as 'timeline' | 'ongoing',
     startDate: '',
     endDate: '',
     status: 'Planning',
@@ -412,6 +413,20 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Project Type *</label>
+                  <select
+                    value={formState.projectType}
+                    onChange={(e) => handleInputChange('projectType', e.target.value as 'timeline' | 'ongoing')}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
+                  >
+                    <option value="timeline">Timeline (with start/end dates)</option>
+                    <option value="ongoing">Ongoing (shop/market, no dates)</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
                 <textarea
@@ -530,29 +545,37 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Start Date *</label>
-                  <input
-                    type="date"
-                    value={formState.startDate}
-                    onChange={(e) => handleInputChange('startDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
-                    required
-                  />
+              {formState.projectType === 'timeline' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Start Date *</label>
+                    <input
+                      type="date"
+                      value={formState.startDate}
+                      onChange={(e) => handleInputChange('startDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">End Date *</label>
+                    <input
+                      type="date"
+                      value={formState.endDate}
+                      onChange={(e) => handleInputChange('endDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">End Date *</label>
-                  <input
-                    type="date"
-                    value={formState.endDate}
-                    onChange={(e) => handleInputChange('endDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-mokm-purple-500 focus:border-transparent"
-                    required
-                  />
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="text-sm text-slate-600">
+                    This is an ongoing project. Start/end dates are not required and can be set later if needed.
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -656,8 +679,11 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose, onSubm
                   onClick={() => setCurrentStep(currentStep + 1)}
                   className="bg-mokm-purple-500 hover:bg-mokm-purple-600 text-white"
                   disabled={
-                    (currentStep === 1 && (!formState.name || !formState.client)) ||
-                    (currentStep === 2 && (!formState.manager || !formState.startDate || !formState.endDate))
+                    (currentStep === 1 && (!formState.name || !formState.client || !formState.projectType)) ||
+                    (currentStep === 2 && (
+                      !formState.manager ||
+                      (formState.projectType === 'timeline' && (!formState.startDate || !formState.endDate))
+                    ))
                   }
                 >
                   Next

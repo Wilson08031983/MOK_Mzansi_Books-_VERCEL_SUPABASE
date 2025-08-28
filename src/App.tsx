@@ -5,18 +5,18 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@/contexts/LocalizationContext";
 import { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess, initializeDefaultUsers, updatePrimaryUserInTeamMembers } from "@/services/localAuthService";
 import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";
 import { companyEmployeeSyncService } from "@/services/companyEmployeeSyncService";
 import { useProjectAttendanceSync } from "@/hooks/useProjectAttendanceSync";
-import { activityService } from "@/services/activityService";
 import AccessGuard from "@/components/AccessGuard";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { safeExecute } from "@/utils/safeAccess";
 import { setupGlobalErrorHandlers } from "@/utils/crashPrevention";
+import AuditProvider from "@/components/common/AuditProvider";
 import Index from "./pages/Index";
 import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
@@ -55,74 +55,8 @@ import WelcomeBack from "./pages/WelcomeBack";
 import AuthReset from "./pages/AuthReset";
 import AuthDebug from "./pages/AuthDebug";
 import ServiceTestPanel from "./components/ServiceTestPanel";
-
-// Route tracking component to log navigation activities
-const RouteTracker = () => {
-  const location = useLocation();
-  
-  useEffect(() => {
-    try {
-      const pageName = getPageNameFromPath(location.pathname);
-      activityService.logUserAction(
-        'Page Navigation',
-        `Navigated to ${pageName}`,
-        { 
-          path: location.pathname,
-          pageName,
-          timestamp: new Date().toISOString()
-        }
-      );
-    } catch (error) {
-      console.error('Error logging route change:', error);
-    }
-  }, [location.pathname]);
-  
-  return null;
-};
-
-// Helper function to convert path to readable page name
-const getPageNameFromPath = (pathname: string): string => {
-  const pathMap: Record<string, string> = {
-    '/': 'Home',
-    '/login': 'Login',
-    '/signup': 'Sign Up',
-    '/dashboard': 'Dashboard',
-    '/quotations': 'Quotations',
-    '/invoices': 'Invoices',
-    '/clients': 'Clients',
-    '/company': 'Company',
-    '/projects': 'Projects',
-    '/inventory': 'Inventory',
-    '/hr-management': 'HR Management',
-    '/accounting': 'Accounting',
-    '/reports': 'Reports',
-    '/settings': 'Settings',
-    '/features': 'Features',
-    '/pricing': 'Pricing',
-    '/contact': 'Contact',
-    '/demo': 'Demo',
-    '/integrations': 'Integrations',
-    '/terms': 'Terms of Service',
-    '/privacy': 'Privacy Policy',
-    '/payment': 'Payment',
-    '/forgot-password': 'Forgot Password',
-    '/reset-password': 'Reset Password',
-    '/welcome-back': 'Welcome Back'
-  };
-  
-  // Handle dynamic routes like /quotations/123
-  if (pathname.startsWith('/quotations/') && pathname !== '/quotations') {
-    return 'Quotation Detail';
-  }
-  if (pathname.startsWith('/invoices/') && pathname !== '/invoices') {
-    return 'Invoice Detail';
-  }
-  if (pathname.startsWith('/projects/') && pathname !== '/projects') {
-    return 'Project Detail';
-  }
-  
-  return pathMap[pathname] || 'Unknown Page';
-};
+// TwoFactorVerify removed
+import SessionTimeoutWatcher from "@/components/auth/SessionTimeoutWatcher";
 
 // Initialize global error handlers
 safeExecute(() => {
@@ -210,9 +144,11 @@ const App = () => {
               <Toaster />
               <Sonner />
               <Router>
-                <RouteTracker />
-                <AuthProviderSelector>
-                  <Routes>
+                <AuditProvider>
+                  <AuthProviderSelector>
+                    {/* Global session timeout watcher with 15s countdown */}
+                    <SessionTimeoutWatcher />
+                    <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
@@ -233,6 +169,7 @@ const App = () => {
                     <Route path="/auth-reset" element={<AuthReset />} />
                     <Route path="/auth-debug" element={<AuthDebug />} />
                     <Route path="/service-test" element={<ServiceTestPanel />} />
+                    {/* Two-Factor verification route removed */}
                     <Route path="/disciplinary-test" element={<DisciplinaryTest />} />
                     <Route 
                       path="/welcome-back" 
@@ -302,6 +239,7 @@ const App = () => {
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </AuthProviderSelector>
+                </AuditProvider>
               </Router>
             </TooltipProvider>
           </LocalizationProvider>

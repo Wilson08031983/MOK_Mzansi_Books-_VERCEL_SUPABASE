@@ -65,7 +65,7 @@ export class SlipOCRService {
   async processSlipUpload(file: File, expenseId?: string): Promise<ReceiptData> {
     const receiptId = `receipt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    let receiptData: ReceiptData = {
+    const receiptData: ReceiptData = {
       id: receiptId,
       expenseId: expenseId || '',
       vatIncluded: false,

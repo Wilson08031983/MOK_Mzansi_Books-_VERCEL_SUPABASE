@@ -10,12 +10,14 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { Invoice } from '@/types/invoice';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface InvoicesSummaryCardsProps {
   invoices: Invoice[];
 }
 
 const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices }) => {
+  const { formatCurrency, t } = useLocalization();
   // Calculate total invoiced amount (excluding cancelled invoices)
   const totalInvoiced = invoices
     .filter(invoice => invoice.status !== 'cancelled')
@@ -45,8 +47,8 @@ const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices })
 
   const summaryCards = [
     {
-      title: 'Total Invoiced',
-      value: `R ${totalInvoiced.toLocaleString()}`,
+      title: t('invoices.summary.totalInvoiced'),
+      value: formatCurrency(totalInvoiced),
       icon: DollarSign,
       trend: '+12.5%',
       trendUp: true,
@@ -55,8 +57,8 @@ const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices })
       trendColor: 'text-green-600'
     },
     {
-      title: 'Outstanding Balance',
-      value: `R ${totalOutstanding.toLocaleString()}`,
+      title: t('invoices.summary.outstandingBalance'),
+      value: formatCurrency(totalOutstanding),
       icon: Clock,
       trend: '-8.2%',
       trendUp: false,
@@ -65,8 +67,8 @@ const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices })
       trendColor: 'text-red-600'
     },
     {
-      title: 'Overdue Amount',
-      value: `R ${overdueAmount.toLocaleString()}`,
+      title: t('invoices.summary.overdueAmount'),
+      value: formatCurrency(overdueAmount),
       icon: AlertTriangle,
       trend: '+15.3%',
       trendUp: false,
@@ -75,8 +77,8 @@ const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices })
       trendColor: 'text-red-600'
     },
     {
-      title: 'Paid This Period',
-      value: `R ${totalPaid.toLocaleString()}`,
+      title: t('invoices.summary.paidThisPeriod'),
+      value: formatCurrency(totalPaid),
       icon: CheckCircle,
       trend: '+22.1%',
       trendUp: true,
@@ -91,7 +93,7 @@ const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices })
       {summaryCards.map((card, index) => (
         <Card 
           key={index} 
-          className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-500 hover-lift animate-fade-in"
+          className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-500 hover-lift animate-fade-in"
           style={{ animationDelay: `${index * 100}ms` }}
         >
           <CardContent className="p-8">
@@ -112,7 +114,7 @@ const InvoicesSummaryCards: React.FC<InvoicesSummaryCardsProps> = ({ invoices })
                   <span className={card.trendColor}>
                     {card.trend}
                   </span>
-                  <span className="text-sm text-slate-500 ml-1 font-sf-pro">vs last period</span>
+                  <span className="text-sm text-slate-500 ml-1 font-sf-pro">{t('invoices.summary.vsLastPeriod')}</span>
                 </p>
               </div>
               <div 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search,
   Plus,
@@ -8,9 +8,10 @@ import {
   Image as ImageIcon,
   Calendar,
   Trash2,
-  School
+  School,
+  Loader2
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,9 +20,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 import { Employee } from '@/services/employeeService';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { logQualificationAdded, logQualificationDeleted } from '@/services/hrAuditService';
 
 // Type for qualification
 interface Qualification {
@@ -65,37 +69,120 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     certificateFile: null as File | null,
   });
   
-  // Handle status change
-  const handleStatusChange = (employeeId: string, status: 'active' | 'on-leave' | 'terminated') => {
-    // Update status in local state
-    setSelectedStatus(prev => ({
-      ...prev,
-      [employeeId]: status
-    }));
-    
-    // Update status in employees array
-    const updatedEmployees = employees.map(emp => 
-      emp.id === employeeId ? { ...emp, status } : emp
-    );
-    setEmployees(updatedEmployees);
-    
-    // Save to localStorage
-    localStorage.setItem('employees', JSON.stringify(updatedEmployees));
-  };
+  // Handle status change with audit logging
+  const handleStatusChange = useCallback(async (employeeId: string, status: 'active' | 'on-leave' | 'terminated') => {
+    try {
+      if (!employeeId) {
+        throw new Error('Invalid employee ID');
+      }
+
+      // Get the employee being updated
+      const employee = employees.find(emp => emp.id === employeeId);
+      if (!employee) {
+        throw new Error('Employee not found');
+      }
+
+      const previousStatus = employee.status;
+      
+      // Update status in local state
+      setSelectedStatus(prev => ({
+        ...prev,
+        [employeeId]: status
+      }));
+      
+      // Update status in employees array
+      const updatedEmployees = employees.map(emp => 
+        emp.id === employeeId ? { ...emp, status } : emp
+      );
+      setEmployees(updatedEmployees);
+      
+      // Save to localStorage
+      localStorage.setItem('employees', JSON.stringify(updatedEmployees));
+
+      // Log the status change to audit log
+      try {
+        await auditService.logAudit({
+          action: 'UPDATE_EMPLOYEE_STATUS',
+          category: 'hr',
+          targetId: employeeId,
+          targetType: 'employee',
+          userId: user?.id || 'system',
+          userEmail: user?.email || 'system',
+          metadata: {
+            employeeId,
+            previousStatus,
+            newStatus: status,
+            employeeName: `${employee.firstName} ${employee.surname}`.trim(),
+            timestamp: new Date().toISOString()
+          },
+          severity: 'info'
+        });
+      } catch (auditError) {
+        console.error('Failed to log audit:', auditError);
+        // Don't fail the operation if audit logging fails
+      }
+
+      toast({
+        title: 'Status Updated',
+        description: `Employee status updated to ${status}`,
+      });
+    } catch (err) {
+      console.error('Error updating employee status:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update employee status',
+        variant: 'destructive',
+      });
+    }
+  }, [employees, setEmployees, user]);
+
+  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load qualifications from localStorage on component mount
   useEffect(() => {
-    const storedQualifications = localStorage.getItem('employeeQualifications');
-    if (storedQualifications) {
-      setQualifications(JSON.parse(storedQualifications));
-    }
-    
-    // Initialize status state based on employees
-    const initialStatus = {} as { [key: string]: 'active' | 'on-leave' | 'terminated' };
-    employees.forEach(emp => {
-      initialStatus[emp.id] = emp.status;
-    });
-    setSelectedStatus(initialStatus);
+    const loadQualifications = async () => {
+      try {
+        setIsLoading(true);
+        const storedQualifications = localStorage.getItem('employeeQualifications');
+        if (storedQualifications) {
+          const parsed = JSON.parse(storedQualifications);
+          // Validate and sanitize the data
+          const validQualifications = parsed.filter((q: any) => 
+            q && q.id && q.employeeId && q.institute && q.startDate && q.endDate
+          );
+          setQualifications(validQualifications);
+          
+          // If we filtered out invalid entries, update localStorage
+          if (validQualifications.length !== parsed.length) {
+            localStorage.setItem('employeeQualifications', JSON.stringify(validQualifications));
+            console.warn('Removed invalid qualification entries from storage');
+          }
+        }
+        
+        // Initialize status state based on employees
+        const initialStatus = {} as { [key: string]: 'active' | 'on-leave' | 'terminated' };
+        employees.forEach(emp => {
+          if (emp && emp.id) {
+            initialStatus[emp.id] = emp.status || 'active';
+          }
+        });
+        setSelectedStatus(initialStatus);
+      } catch (err) {
+        console.error('Error loading qualifications:', err);
+        setError('Failed to load training data. Please refresh the page.');
+        toast({
+          title: 'Error',
+          description: 'Failed to load training data',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadQualifications();
   }, [employees]);
 
   // Filter employees based on search term
@@ -145,50 +232,74 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     }
   };
 
-  // Handle qualification form submission
-  const handleAddQualification = () => {
-    const { institute, startDate, endDate, nqfLevel, certificateFile } = qualificationForm;
-    
-    if (!institute || !startDate || !endDate || !certificateFile) {
-      // Handle validation
-      alert('All fields are required');
-      return;
-    }
+  // Handle qualification form submission with validation and audit logging
+  const handleAddQualification = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const { institute, startDate, endDate, nqfLevel, certificateFile } = qualificationForm;
+      
+      // Validate required fields
+      if (!institute?.trim() || !startDate || !endDate || !certificateFile) {
+        throw new Error('All fields are required');
+      }
 
-    // Validate NQF level (1-10)
-    const parsedNqf = parseInt(String(nqfLevel), 10);
-    if (isNaN(parsedNqf) || parsedNqf < 1 || parsedNqf > 10) {
-      alert('Please provide a valid NQF Level between 1 and 10.');
-      return;
-    }
+      // Validate date format and range
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (!isValid(start) || !isValid(end)) {
+        throw new Error('Invalid date format');
+      }
+      
+      if (end < start) {
+        throw new Error('End date cannot be before start date');
+      }
 
-    // Enforce file type restrictions (PDF and images only)
-    const allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
-    const fileTypeOk = allowedMime.includes(certificateFile.type);
-    const nameLower = certificateFile.name?.toLowerCase?.() || '';
-    const extOk = allowedExt.some(ext => nameLower.endsWith(ext));
-    if (!fileTypeOk && !extOk) {
-      alert('Invalid file type. Please upload PDF, JPG, JPEG, or PNG.');
-      return;
-    }
-    
-    // Convert file to base64 for localStorage storage
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      const fileType = certificateFile.type.includes('pdf') ? 'pdf' : 'image';
+      // Validate NQF level (1-10)
+      const parsedNqf = parseInt(String(nqfLevel), 10);
+      if (isNaN(parsedNqf) || parsedNqf < 1 || parsedNqf > 10) {
+        throw new Error('Please provide a valid NQF Level between 1 and 10');
+      }
+
+      // Enforce file type restrictions (PDF and images only)
+      const allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+      const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'];
+      const fileTypeOk = certificateFile.type && allowedMime.includes(certificateFile.type);
+      const nameLower = certificateFile.name?.toLowerCase?.() || '';
+      const extOk = allowedExt.some(ext => nameLower.endsWith(ext));
+      
+      if (!fileTypeOk && !extOk) {
+        throw new Error('Invalid file type. Please upload PDF, JPG, JPEG, or PNG.');
+      }
+      
+      // Get employee details for audit log
+      const employee = employees.find(emp => emp.id === currentEmployeeId);
+      if (!employee) {
+        throw new Error('Employee not found');
+      }
+      
+      // Convert file to base64 for localStorage storage
+      const base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(certificateFile);
+      });
+      
+      const fileType = certificateFile.type?.includes('pdf') ? 'pdf' : 'image';
       
       // Create new qualification
       const newQualification: Qualification = {
-        id: `qual_${Date.now()}`,
+        id: `qual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         employeeId: currentEmployeeId,
-        institute,
-        startDate,
-        endDate,
+        institute: institute.trim(),
+        startDate: new Date(startDate).toISOString(),
+        endDate: new Date(endDate).toISOString(),
         nqfLevel: parsedNqf,
         certificateFile: base64String,
-        certificateType: fileType as 'pdf' | 'image',
+        certificateType: fileType,
         dateAdded: new Date().toISOString()
       };
       
@@ -199,45 +310,160 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       // Save to localStorage
       localStorage.setItem('employeeQualifications', JSON.stringify(updatedQualifications));
       
-      // Close modal
+      // Log the action to audit log
+      try {
+        await auditService.logAudit({
+          action: 'ADD_QUALIFICATION',
+          category: 'hr',
+          targetId: newQualification.id,
+          targetType: 'qualification',
+          userId: user?.id || 'system',
+          userEmail: user?.email || 'system',
+          metadata: {
+            employeeId: currentEmployeeId,
+            employeeName: `${employee.firstName} ${employee.surname}`.trim(),
+            institute: newQualification.institute,
+            nqfLevel: newQualification.nqfLevel,
+            startDate: newQualification.startDate,
+            endDate: newQualification.endDate,
+            timestamp: newQualification.dateAdded
+          },
+          severity: 'info'
+        });
+      } catch (auditError) {
+        console.error('Failed to log audit:', auditError);
+        // Don't fail the operation if audit logging fails
+      }
+      
+      // Show success message
+      toast({
+        title: 'Qualification Added',
+        description: `${employee.firstName}'s qualification has been added successfully`,
+      });
+      
+      // Close modal and reset form
       setIsAddQualificationOpen(false);
+      setQualificationForm({
+        institute: '',
+        startDate: '',
+        endDate: '',
+        nqfLevel: '',
+        certificateFile: null
+      });
 
       // Notify other modules (e.g., Performance) to refresh
       window.dispatchEvent(new Event('employeeQualificationsUpdated'));
-    };
-    
-    reader.readAsDataURL(certificateFile);
-  };
-
-  // Delete qualification
-  const handleDeleteQualification = (qualificationId: string) => {
-    // Filter out the qualification to be deleted
-    const updatedQualifications = qualifications.filter(
-      qual => qual.id !== qualificationId
-    );
-    
-    // Update state
-    setQualifications(updatedQualifications);
-    
-    // Save to localStorage
-    localStorage.setItem('employeeQualifications', JSON.stringify(updatedQualifications));
-
-    // Notify other modules (e.g., Performance) to refresh
-    window.dispatchEvent(new Event('employeeQualificationsUpdated'));
-  };
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'dd MMM yyyy');
-    } catch {
-      return dateString;
+    } catch (err) {
+      console.error('Error adding qualification:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add qualification';
+      setError(errorMessage);
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Get employee name initials for avatar fallback
-  const getInitials = (firstName: string, surname: string) => {
-    return `${firstName.charAt(0)}${surname.charAt(0)}`.toUpperCase();
+  // Delete qualification with confirmation and audit logging
+  const handleDeleteQualification = async (qualificationId: string) => {
+    try {
+      if (!window.confirm('Are you sure you want to delete this qualification? This action cannot be undone.')) {
+        return;
+      }
+      
+      setIsLoading(true);
+      
+      // Find the qualification to be deleted for audit logging
+      const qualificationToDelete = qualifications.find(q => q.id === qualificationId);
+      if (!qualificationToDelete) {
+        throw new Error('Qualification not found');
+      }
+      
+      // Find the employee for audit logging
+      const employee = employees.find(emp => emp.id === qualificationToDelete.employeeId);
+      
+      // Filter out the qualification to be deleted
+      const updatedQualifications = qualifications.filter(
+        qual => qual.id !== qualificationId
+      );
+      
+      // Update state
+      setQualifications(updatedQualifications);
+      
+      // Save to localStorage
+      localStorage.setItem('employeeQualifications', JSON.stringify(updatedQualifications));
+      
+      // Log the deletion to audit log
+      try {
+        await auditService.logAudit({
+          action: 'DELETE_QUALIFICATION',
+          category: 'hr',
+          targetId: qualificationId,
+          targetType: 'qualification',
+          userId: user?.id || 'system',
+          userEmail: user?.email || 'system',
+          metadata: {
+            employeeId: qualificationToDelete.employeeId,
+            employeeName: employee ? `${employee.firstName} ${employee.surname}`.trim() : 'Unknown',
+            institute: qualificationToDelete.institute,
+            nqfLevel: qualificationToDelete.nqfLevel,
+            startDate: qualificationToDelete.startDate,
+            endDate: qualificationToDelete.endDate,
+            timestamp: new Date().toISOString()
+          },
+          severity: 'warning'
+        });
+      } catch (auditError) {
+        console.error('Failed to log audit:', auditError);
+        // Don't fail the operation if audit logging fails
+      }
+      
+      // Show success message
+      toast({
+        title: 'Qualification Deleted',
+        description: 'The qualification has been removed successfully',
+      });
+      
+      // Close preview if open
+      if (previewQualification?.id === qualificationId) {
+        setIsPreviewOpen(false);
+      }
+
+      // Notify other modules (e.g., Performance) to refresh
+      window.dispatchEvent(new Event('employeeQualificationsUpdated'));
+    } catch (err) {
+      console.error('Error deleting qualification:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete qualification',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Format date for display with better error handling
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+      return isValid(date) ? format(date, 'dd MMM yyyy') : 'Invalid date';
+    } catch (err) {
+      console.error('Error formatting date:', err);
+      return 'Invalid date';
+    }
+  };
+
+  // Get employee name initials for avatar fallback with null checks
+  const getInitials = (firstName?: string, surname?: string) => {
+    const first = firstName?.charAt(0) || '';
+    const last = surname?.charAt(0) || first || '?';
+    return `${first}${last}`.toUpperCase();
   };
 
   // Certificate thumbnail component with horizontal scrolling
@@ -314,17 +540,29 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
                 <p className="text-white text-xs">
                   {formatDate(qual.startDate)} - {formatDate(qual.endDate)}
                 </p>
-                <Button 
-                  variant="destructive" 
-                  size="icon" 
-                  className="h-6 w-6 mt-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteQualification(qual.id);
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      size="icon" 
+                      className="h-6 w-6 mt-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteQualification(qual.id);
+                      }}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Delete qualification</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           ))}
@@ -341,6 +579,34 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       </div>
     );
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-mokm-purple-500" />
+        <span className="ml-2">Loading training data...</span>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md">
+        <h3 className="font-medium">Error Loading Training Data</h3>
+        <p className="text-sm mt-1">{error}</p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="mt-2"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -500,7 +766,20 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       </div>
 
       {/* Add Qualification Modal */}
-      <Dialog open={isAddQualificationOpen} onOpenChange={setIsAddQualificationOpen}>
+      <Dialog open={isAddQualificationOpen} onOpenChange={(open) => {
+        if (!open) {
+          // Reset form when closing
+          setQualificationForm({
+            institute: '',
+            startDate: '',
+            endDate: '',
+            nqfLevel: '',
+            certificateFile: null
+          });
+          setError(null);
+        }
+        setIsAddQualificationOpen(open);
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add New Qualification</DialogTitle>

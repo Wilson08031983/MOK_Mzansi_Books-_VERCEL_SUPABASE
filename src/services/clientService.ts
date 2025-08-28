@@ -128,6 +128,20 @@ export function addClient(clientData: ClientFormData): Client {
   clients.push(newClient);
   saveClients(clients);
   
+  // Notify application about client creation
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('clients-updated', {
+          detail: { action: 'created', client: newClient }
+        })
+      );
+    }
+  } catch (e) {
+    // Non-blocking: log and continue
+    console.warn('clients-updated event dispatch failed (create):', e);
+  }
+  
   return newClient;
 }
 
@@ -139,6 +153,19 @@ export function updateClient(id: string, clientData: Partial<Client>): Client | 
   if (index !== -1) {
     clients[index] = { ...clients[index], ...clientData };
     saveClients(clients);
+    
+    // Notify application about client update
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('clients-updated', {
+            detail: { action: 'updated', client: clients[index] }
+          })
+        );
+      }
+    } catch (e) {
+      console.warn('clients-updated event dispatch failed (update):', e);
+    }
     return clients[index];
   }
   
@@ -148,20 +175,48 @@ export function updateClient(id: string, clientData: Partial<Client>): Client | 
 // Delete a client
 export function deleteClient(id: string): boolean {
   const clients = getClients();
+  const deletedClient = clients.find((client: Client) => client.id === id) || null;
   const updatedClients = clients.filter((client: Client) => client.id !== id);
   
   if (updatedClients.length === clients.length) return false;
   
   saveClients(updatedClients);
+  
+  // Notify application about single client deletion
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('clients-updated', {
+          detail: { action: 'deleted', clientId: id, client: deletedClient }
+        })
+      );
+    }
+  } catch (e) {
+    console.warn('clients-updated event dispatch failed (delete):', e);
+  }
   return true;
 }
 
 // Delete multiple clients
 export function deleteClients(ids: string[]): boolean {
   const clients = getClients();
+  const toDelete = clients.filter(client => ids.includes(client.id));
   const updatedClients = clients.filter(client => !ids.includes(client.id));
   
   saveClients(updatedClients);
+  
+  // Notify application about multiple deletions
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('clients-updated', {
+          detail: { action: 'deleted-multiple', clientIds: ids, clients: toDelete }
+        })
+      );
+    }
+  } catch (e) {
+    console.warn('clients-updated event dispatch failed (delete-multiple):', e);
+  }
   return true;
 }
 
@@ -356,11 +411,11 @@ export const createInvitationTemplate = (clientId: string): ClientInvitationTemp
   let contactPerson = 'Account Manager';
   
   try {
-    const companyDetails = safeLocalStorage.getItem('companyDetails', null);
+    const companyDetails = safeLocalStorage.getItem('companyDetails', null as any);
     if (companyDetails) {
-      const company = safeGet(companyDetails, {});
-      companyName = safeString(company.name) || companyName;
-      contactPerson = safeString(company.contactPerson) || contactPerson;
+      const company = companyDetails as any;
+      companyName = safeString(company?.name, companyName) || companyName;
+      contactPerson = safeString(company?.contactPerson, contactPerson) || contactPerson;
     }
   } catch (error) {
     console.error('Error parsing company details:', error);

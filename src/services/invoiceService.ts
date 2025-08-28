@@ -1,6 +1,6 @@
 import { safeLocalStorage, safeString, safeGet } from '@/utils/safeAccess';
 import { withCrashPrevention } from '@/utils/crashPrevention';
-import { Invoice, InvoiceInput, InvoiceResponse, InvoiceItem, InvoiceStatus } from '@/types/invoice';
+import { Invoice, InvoiceInput, InvoiceResponse, InvoiceItem, InvoiceStatus, isValidInvoiceStatus } from '@/types/invoice';
 
 // Define a type for the client object that can be either string or object
 type ClientRef = string | { id: string; name: string; email?: string };
@@ -51,6 +51,9 @@ const mapToInvoice = (data: InvoiceInput, existingInvoice?: Invoice): InvoiceRes
   const amount = subtotal + vatTotal;
   const paidAmount = existingInvoice?.paidAmount || 0;
   
+  // Validate and normalize status
+  const normalizedStatus: InvoiceStatus = isValidInvoiceStatus((data as any).status) ? (data as any).status : 'draft';
+
   // Build the invoice response with all required properties
   const invoice: InvoiceResponse = {
     id: existingInvoice?.id || generateInvoiceId(),
@@ -68,7 +71,7 @@ const mapToInvoice = (data: InvoiceInput, existingInvoice?: Invoice): InvoiceRes
     total: amount,
     paidAmount,
     balance: amount - paidAmount,
-    status: data.status || 'draft',
+    status: normalizedStatus,
     currency: data.currency || 'ZAR',
     vatRate: data.vatRate || 0,
     reference: data.reference || '',
@@ -143,6 +146,16 @@ export const createInvoice = withCrashPrevention(async (invoiceData: InvoiceInpu
   
   const updatedInvoices = [...invoices, newInvoice];
   saveInvoices(updatedInvoices);
+  // Dispatch event for create
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('invoices-updated', {
+        detail: { action: 'created', invoice: newInvoice }
+      }));
+    }
+  } catch (e) {
+    console.warn('invoices-updated dispatch failed (create):', e);
+  }
   return newInvoice;
 }, () => ({
   id: '',
@@ -175,11 +188,44 @@ export const updateInvoice = withCrashPrevention(async (id: string, updates: Par
   
   if (!existingInvoice) return null;
   
+  // Prepare items for InvoiceInput (omit id, amount, taxAmount)
+  type InputItem = Omit<InvoiceItem, 'id' | 'amount' | 'taxAmount'>;
+  const inputItems: InputItem[] = (updates.items
+    ? (updates.items as any[]).map((it: any, idx) => ({
+        itemNo: it.itemNo ?? idx + 1,
+        description: it.description ?? '',
+        quantity: Number(it.quantity) || 0,
+        unitPrice: Number(it.unitPrice ?? it.rate) || 0,
+        rate: Number(it.rate ?? it.unitPrice) || 0,
+        markupPercent: Number(it.markupPercent) || 0,
+        discount: Number(it.discount) || 0,
+        taxRate: Number(it.taxRate) || 0,
+      }))
+    : existingInvoice.items.map((item, idx) => ({
+        itemNo: item.itemNo ?? idx + 1,
+        description: item.description,
+        quantity: Number(item.quantity) || 0,
+        unitPrice: Number(item.unitPrice ?? item.rate) || 0,
+        rate: Number(item.rate ?? item.unitPrice) || 0,
+        markupPercent: Number(item.markupPercent) || 0,
+        discount: Number(item.discount) || 0,
+        taxRate: Number(item.taxRate) || 0,
+      }))
+  );
+
   // Create a proper InvoiceInput object from existing invoice and updates
   const invoiceInput: InvoiceInput = {
-    client: updates.client || existingInvoice.clientId || existingInvoice.client as string,
+    // Ensure client is a string id
+    client: (typeof updates.client === 'string' && updates.client)
+      || existingInvoice.clientId
+      || (typeof existingInvoice.client === 'string' ? existingInvoice.client : existingInvoice.clientId),
+    // Include mandatory identity/name fields for InvoiceInput
+    clientId: updates.clientId || existingInvoice.clientId,
+    clientName: updates.clientName || existingInvoice.clientName,
     number: updates.number || existingInvoice.number,
     date: updates.date || existingInvoice.date,
+    // Keep invoiceDate in sync with date unless explicitly provided in updates
+    invoiceDate: (updates as any).invoiceDate || existingInvoice.invoiceDate || (updates.date || existingInvoice.date),
     dueDate: updates.dueDate || existingInvoice.dueDate,
     amount: updates.amount || existingInvoice.amount,
     total: updates.total || existingInvoice.total,
@@ -192,19 +238,8 @@ export const updateInvoice = withCrashPrevention(async (id: string, updates: Par
     salesperson: updates.salesperson || existingInvoice.salesperson,
     salespersonId: updates.salespersonId || existingInvoice.salespersonId,
     tags: updates.tags || existingInvoice.tags,
-    items: updates.items || existingInvoice.items.map(item => ({
-       id: item.id || `item-${Date.now()}-${Math.random()}`,
-       itemNo: item.itemNo || 1,
-       description: item.description,
-       quantity: item.quantity,
-       unitPrice: item.unitPrice || item.rate,
-       rate: item.rate,
-       amount: item.amount || (item.quantity * item.rate),
-       markupPercent: item.markupPercent,
-       discount: item.discount,
-       taxRate: item.taxRate,
-       taxAmount: item.taxAmount || ((item.quantity * item.rate) * (item.taxRate / 100)),
-     })),
+    // Use typed items
+    items: inputItems,
     notes: updates.notes || existingInvoice.notes,
     terms: updates.terms || existingInvoice.terms,
     clientEmail: updates.clientEmail || existingInvoice.clientEmail,
@@ -220,17 +255,38 @@ export const updateInvoice = withCrashPrevention(async (id: string, updates: Par
   );
   
   saveInvoices(updatedInvoices);
+  // Dispatch event for update
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('invoices-updated', {
+        detail: { action: 'updated', invoice: updatedInvoice }
+      }));
+    }
+  } catch (e) {
+    console.warn('invoices-updated dispatch failed (update):', e);
+  }
   return updatedInvoice;
 }, () => null);
 
 // Delete an invoice
 export const deleteInvoice = withCrashPrevention(async (id: string): Promise<boolean> => {
   const invoices = getInvoices();
+  const toDelete = invoices.find(inv => inv.id === id);
   const filtered = invoices.filter(invoice => invoice.id !== id);
   
   if (filtered.length === invoices.length) return false;
   
   saveInvoices(filtered);
+  // Dispatch event for delete
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('invoices-updated', {
+        detail: { action: 'deleted', invoiceId: id, invoice: toDelete }
+      }));
+    }
+  } catch (e) {
+    console.warn('invoices-updated dispatch failed (delete):', e);
+  }
   return true;
 }, () => false);
 
@@ -428,7 +484,19 @@ export const saveInvoice = withCrashPrevention((invoice: Invoice): Invoice[] => 
 
 // Update invoice status
 export const updateInvoiceStatus = withCrashPrevention((id: string, status: InvoiceStatus): Promise<InvoiceResponse | null> => {
-  return updateInvoice(id, { status });
+  return updateInvoice(id, { status }).then(result => {
+    // Dispatch event for status change
+    try {
+      if (result && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('invoices-updated', {
+          detail: { action: 'status-changed', invoice: result, status }
+        }));
+      }
+    } catch (e) {
+      console.warn('invoices-updated dispatch failed (status):', e);
+    }
+    return result;
+  });
 }, () => Promise.resolve(null));
 
 // Record payment for an invoice
@@ -446,10 +514,21 @@ export const recordPayment = withCrashPrevention(async (id: string, paymentAmoun
     newStatus = 'partial';
   }
   
-  return await updateInvoice(id, {
+  const result = await updateInvoice(id, {
     paidAmount: newPaidAmount,
     status: newStatus
   });
+  // Dispatch event for payment recorded
+  try {
+    if (result && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('invoices-updated', {
+        detail: { action: 'payment-recorded', invoice: result, paymentAmount: paymentAmount, newStatus }
+      }));
+    }
+  } catch (e) {
+    console.warn('invoices-updated dispatch failed (payment):', e);
+  }
+  return result;
 }, () => Promise.resolve(null));
 
 // Export invoice data for backup
@@ -464,6 +543,16 @@ export const importInvoices = withCrashPrevention((data: string): boolean => {
     const invoices = JSON.parse(data);
     if (Array.isArray(invoices)) {
       saveInvoices(invoices);
+      // Dispatch import event
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('invoices-updated', {
+            detail: { action: 'imported', count: invoices.length }
+          }));
+        }
+      } catch (e) {
+        console.warn('invoices-updated dispatch failed (import):', e);
+      }
       return true;
     }
     return false;
@@ -472,3 +561,42 @@ export const importInvoices = withCrashPrevention((data: string): boolean => {
     return false;
   }
 }, false);
+
+// Compute a client's outstanding balance (sum of balances of unpaid/non-cancelled invoices)
+export const getClientOutstandingBalance = withCrashPrevention((clientId: string): number => {
+  try {
+    const invoices = getInvoices();
+    return invoices
+      .filter(inv => inv.clientId === clientId && inv.status !== 'paid' && inv.status !== 'cancelled')
+      .reduce((sum, inv) => {
+        const paid = inv.paidAmount || 0;
+        const balance = typeof inv.balance === 'number' ? inv.balance : (inv.amount - paid);
+        return sum + Math.max(0, balance);
+      }, 0);
+  } catch (e) {
+    console.error('Error calculating outstanding balance:', e);
+    return 0;
+  }
+}, 0);
+
+// Apply a client-level discount rate to a subtotal and then compute VAT and total
+export const applyClientDiscountToTotals = withCrashPrevention((subtotal: number, vatRate: number, clientDiscountRate?: number) => {
+  const dRate = Number(clientDiscountRate) || 0;
+  const discountAmount = subtotal * (dRate / 100);
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+  const vatTotal = discountedSubtotal * ((Number(vatRate) || 0) / 100);
+  const total = discountedSubtotal + vatTotal;
+  return { discountedSubtotal, discountAmount, vatTotal, total, discountRate: dRate };
+}, { discountedSubtotal: 0, discountAmount: 0, vatTotal: 0, total: 0, discountRate: 0 });
+
+// Determine if a new charge can proceed under a client's credit limit
+export const canProceedWithCredit = withCrashPrevention((clientId: string, newChargeAmount: number, creditLimit: number) => {
+  const limit = Number(creditLimit) || 0;
+  const outstanding = getClientOutstandingBalance(clientId);
+  if (limit <= 0) {
+    // No limit configured -> allow
+    return { allowed: true, remaining: Infinity, outstanding } as { allowed: boolean; remaining: number; outstanding: number };
+  }
+  const remaining = Math.max(0, limit - outstanding);
+  return { allowed: newChargeAmount <= remaining, remaining, outstanding } as { allowed: boolean; remaining: number; outstanding: number };
+}, { allowed: true, remaining: Infinity, outstanding: 0 });

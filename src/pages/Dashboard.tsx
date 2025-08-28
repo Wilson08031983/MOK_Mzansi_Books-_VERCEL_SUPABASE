@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { 
   DollarSign, 
@@ -68,7 +67,7 @@ type GeneralTask = {
   category?: string; // e.g., Accounting, HR, Inventory, Sales, General
 };
 
-const Dashboard = () => {
+const Dashboard: React.FC = () => {
   const { 
     t, 
     formatCurrency: localizeCurrency, 
@@ -79,6 +78,45 @@ const Dashboard = () => {
     getTimezoneDisplayName
   } = useLocalization();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Sync sidebar visibility with localStorage hideSidebar setting
+  useEffect(() => {
+    // Get hideSidebar setting from localStorage
+    try {
+      const appSettings = localStorage.getItem('app.settings');
+      if (appSettings) {
+        const settings = JSON.parse(appSettings);
+        const hideSidebar = settings?.layout?.hideSidebar;
+        
+        // If hideSidebar is true and on mobile, ensure sidebar is closed
+        if (hideSidebar === true && window.innerWidth < 1024) {
+          setSidebarOpen(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error reading sidebar settings:', error);
+    }
+    
+    // Listen for changes to hideSidebar setting
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'app.settings' && event.newValue) {
+        try {
+          const settings = JSON.parse(event.newValue);
+          const hideSidebar = settings?.layout?.hideSidebar;
+          
+          // Only auto-hide on mobile devices
+          if (hideSidebar === true && window.innerWidth < 1024) {
+            setSidebarOpen(false);
+          }
+        } catch (error) {
+          console.error('Error parsing storage change:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
   const [period, setPeriod] = useState('month');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
@@ -517,20 +555,20 @@ const Dashboard = () => {
       <Dialog open={showAddTaskModal} onOpenChange={setShowAddTaskModal}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="font-sf-pro">Add New Task</DialogTitle>
+            <DialogTitle className="font-sf-pro dark:text-slate-100">Add New Task</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmitNewTask} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="taskTitle" className="font-sf-pro">Title *</Label>
+                <Label htmlFor="taskTitle" className="font-sf-pro dark:text-slate-200">Title *</Label>
                 <Input id="taskTitle" value={newTask.title} onChange={(e) => handleNewTaskChange('title', e.target.value)} placeholder="e.g., Prepare Client Invoice" required />
               </div>
               <div>
-                <Label htmlFor="taskAssignee" className="font-sf-pro">Assignee</Label>
+                <Label htmlFor="taskAssignee" className="font-sf-pro dark:text-slate-200">Assignee</Label>
                 <Input id="taskAssignee" value={newTask.assignee} onChange={(e) => handleNewTaskChange('assignee', e.target.value)} placeholder="e.g., Jane Doe" />
               </div>
               <div>
-                <Label className="font-sf-pro">Priority</Label>
+                <Label className="font-sf-pro dark:text-slate-200">Priority</Label>
                 <Select value={newTask.priority} onValueChange={(v) => handleNewTaskChange('priority', v)}>
                   <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
                   <SelectContent>
@@ -542,7 +580,7 @@ const Dashboard = () => {
                 </Select>
               </div>
               <div>
-                <Label className="font-sf-pro">Status</Label>
+                <Label className="font-sf-pro dark:text-slate-200">Status</Label>
                 <Select value={newTask.status} onValueChange={(v) => handleNewTaskChange('status', v)}>
                   <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                   <SelectContent>
@@ -554,11 +592,11 @@ const Dashboard = () => {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="taskDueDate" className="font-sf-pro">Due Date</Label>
+                <Label htmlFor="taskDueDate" className="font-sf-pro dark:text-slate-200">Due Date</Label>
                 <Input id="taskDueDate" type="date" value={newTask.dueDate} onChange={(e) => handleNewTaskChange('dueDate', e.target.value)} />
               </div>
               <div>
-                <Label className="font-sf-pro">Category/Department</Label>
+                <Label className="font-sf-pro dark:text-slate-200">Category/Department</Label>
                 <Select value={newTask.category} onValueChange={(v) => handleNewTaskChange('category', v)}>
                   <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>
@@ -573,16 +611,16 @@ const Dashboard = () => {
               </div>
             </div>
             <div>
-              <Label htmlFor="taskDescription" className="font-sf-pro">Description</Label>
+              <Label htmlFor="taskDescription" className="font-sf-pro dark:text-slate-200">Description</Label>
               <Textarea id="taskDescription" value={newTask.description} onChange={(e) => handleNewTaskChange('description', e.target.value)} placeholder="Detailed instructions or notes about the task" rows={3} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="taskSubtasks" className="font-sf-pro">Subtasks</Label>
+                <Label htmlFor="taskSubtasks" className="font-sf-pro dark:text-slate-200">Subtasks</Label>
                 <Textarea id="taskSubtasks" value={newTask.subtasksText} onChange={(e) => handleNewTaskChange('subtasksText', e.target.value)} placeholder="One per line" rows={3} />
               </div>
               <div>
-                <Label htmlFor="taskAttachments" className="font-sf-pro">Attachments (URLs)</Label>
+                <Label htmlFor="taskAttachments" className="font-sf-pro dark:text-slate-200">Attachments (URLs)</Label>
                 <Textarea id="taskAttachments" value={newTask.attachmentsText} onChange={(e) => handleNewTaskChange('attachmentsText', e.target.value)} placeholder="Paste links, separated by commas or new lines" rows={3} />
               </div>
             </div>

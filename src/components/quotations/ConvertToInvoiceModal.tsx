@@ -14,6 +14,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { Quotation } from '@/services/quotationService';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface ConvertToInvoiceModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
   onClose,
   quotation
 }) => {
+  const { formatCurrency } = useLocalization();
   const [invoiceNumber, setInvoiceNumber] = useState(generateInvoiceNumber());
   const [issueDate, setIssueDate] = useState(getCurrentDate());
   const [dueDate, setDueDate] = useState(getDueDate());
@@ -264,16 +266,16 @@ const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                           {item.quantity}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right font-sf-pro">
-                          R {item.rate.toLocaleString()}
+                          {formatCurrency(item.rate)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right font-sf-pro">
-                          R {item.discount.toLocaleString()}
+                          {formatCurrency(item.discount)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right font-sf-pro">
-                          R {itemTax.toLocaleString()} ({item.taxRate}%)
+                          {formatCurrency(itemTax)} ({item.taxRate}%)
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 text-right font-sf-pro">
-                          R {itemTotal.toLocaleString()}
+                          {formatCurrency(itemTotal)}
                         </td>
                       </tr>
                     );
@@ -287,21 +289,21 @@ const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                 <div className="w-full md:w-64">
                   <div className="flex justify-between py-2 font-sf-pro">
                     <span className="text-slate-600">Subtotal:</span>
-                    <span>R {quotation.subtotal.toLocaleString()}</span>
+                    <span>{formatCurrency(quotation.subtotal)}</span>
                   </div>
                   {quotation.discount > 0 && (
                     <div className="flex justify-between py-2 text-slate-600 font-sf-pro">
                       <span>Discount:</span>
-                      <span>- R {quotation.discount.toLocaleString()}</span>
+                      <span>- {formatCurrency(quotation.discount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between py-2 text-slate-600 font-sf-pro">
                     <span>Tax:</span>
-                    <span>R {quotation.taxAmount.toLocaleString()}</span>
+                    <span>{formatCurrency(quotation.taxAmount)}</span>
                   </div>
                   <div className="flex justify-between py-2 font-bold text-lg border-t border-slate-200 mt-2 pt-2 font-sf-pro">
                     <span>Total:</span>
-                    <span>R {quotation.totalAmount.toLocaleString()}</span>
+                    <span>{formatCurrency(quotation.totalAmount)}</span>
                   </div>
                 </div>
               </div>

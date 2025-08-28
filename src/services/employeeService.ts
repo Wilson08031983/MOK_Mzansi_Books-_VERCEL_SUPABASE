@@ -1,5 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 
+// Lightweight HR event dispatcher for cross-component updates/notifications
+const dispatchHREvent = (detail: any) => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('hr-updated', { detail }));
+    }
+  } catch (err) {
+    // Non-fatal
+    console.warn('[employeeService] Failed to dispatch hr-updated event:', err);
+  }
+};
+
 export interface Employee {
   id: string;
   employeeNumber: string;
@@ -123,6 +135,8 @@ export const addEmployee = (employeeData: EmployeeFormData): Employee => {
   
   employees.push(newEmployee);
   localStorage.setItem('employees', JSON.stringify(employees));
+  // Notify listeners
+  dispatchHREvent({ entity: 'employee', action: 'created', employee: newEmployee });
   
   return newEmployee;
 };
@@ -135,6 +149,7 @@ export const updateEmployee = (id: string, employeeData: Partial<Employee>): Emp
     return null;
   }
   
+  const prev = employees[index];
   const updatedEmployee = {
     ...employees[index],
     ...employeeData
@@ -142,6 +157,18 @@ export const updateEmployee = (id: string, employeeData: Partial<Employee>): Emp
   
   employees[index] = updatedEmployee;
   localStorage.setItem('employees', JSON.stringify(employees));
+  // Notify listeners (status-specific action if changed)
+  const prevStatus = prev.status;
+  const newStatus = updatedEmployee.status;
+  if (prevStatus !== newStatus) {
+    let action = 'status-changed';
+    if (newStatus === 'terminated') action = 'terminated';
+    if (newStatus === 'on-leave') action = 'on-leave';
+    if (newStatus === 'active' && prevStatus === 'on-leave') action = 'returned-from-leave';
+    dispatchHREvent({ entity: 'employee', action, employee: updatedEmployee, prevStatus, newStatus });
+  } else {
+    dispatchHREvent({ entity: 'employee', action: 'updated', employee: updatedEmployee });
+  }
   
   return updatedEmployee;
 };
@@ -260,6 +287,10 @@ export const deleteEmployee = (id: string): boolean => {
     }
     
     console.log(`✅ Employee ${employeeToDelete?.firstName} ${employeeToDelete?.surname} and all related data deleted successfully`);
+    // Notify listeners of deletion
+    if (employeeToDelete) {
+      dispatchHREvent({ entity: 'employee', action: 'deleted', employee: employeeToDelete });
+    }
     return true;
   } catch (error) {
     console.error(`💥 [employeeService] Critical error during deleteEmployee operation:`, {
@@ -387,45 +418,8 @@ export const initializeEmployees = (): void => {
   const employees = getAllEmployees();
   
   if (employees.length === 0) {
-    const sampleEmployees: EmployeeFormData[] = [
-      {
-        firstName: 'Admin',
-        surname: 'User',
-        contactNumber: '071 123 4567',
-        email: 'admin.user@mokmzansibooks.com',
-        idType: 'ID Number',
-        idValue: '8501015800087',
-        dateOfBirth: '1985-01-01',
-        employmentType: 'Full Time',
-        startDate: '2023-01-15',
-        paymentCycle: 'Monthly',
-        salary: 80000,
-        department: 'IT',
-        position: 'Software Developer',
-        location: 'Pretoria Office',
-        addressLine1: '123 Main Street',
-        addressLine2: 'Sunnyside',
-        addressLine3: 'Pretoria',
-        addressLine4: '0002',
-        kinRelationship: 'Spouse',
-        kinName: 'Jane',
-        kinSurname: 'Smith',
-        kinContactNumber: '071 987 6543',
-        bankName: 'Standard Bank',
-        accountHolderName: 'John Smith',
-        accountNumber: '123456789',
-        branchCode: '051001',
-        dayShift: true,
-        nightShift: false,
-        flexibleShift: false
-      }
-    ];
-
-    // Add each sample employee
-    sampleEmployees.forEach(employeeData => {
-      addEmployee(employeeData);
-    });
-
-    console.log('Sample employees initialized successfully');
+    // Do not seed any default employees here. HR employees should be sourced from Company Team Members
+    // via team-employee sync. Leaving empty ensures no static Admin employee appears in HR.
+    console.log('initializeEmployees: no employees present; leaving empty. Team Management will sync employees from Team Members.');
   }
 };

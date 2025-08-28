@@ -1,0 +1,3101 @@
+
+import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
+import { 
+  Search, 
+  Plus, 
+  Filter, 
+  Receipt, 
+  FileText, 
+  Calendar, 
+  Upload, 
+  Edit, 
+  Trash2, 
+  FileCheck, 
+  UserCheck, 
+  Clock, 
+  ChevronDown, 
+  ChevronUp, 
+  AlertCircle,
+  Database,
+  Eye,
+  Download,
+  FolderOpen,
+  Link,
+  FileX,
+  CheckCircle,
+  XCircle,
+  Save,
+  X,
+  Coins
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import BankStatementUpload from './BankStatementUpload';
+import BankStatementUploadWithSnippets from './BankStatementUploadWithSnippets';
+import BankStatementTestTool from './BankStatementTestTool';
+
+import RecordExpenseModal, { NewExpenseData } from './RecordExpenseModal';
+import PettyCashModal from './PettyCashModal';
+import bankStatementService from '../../services/bankStatementService';
+import expenseCategorizationService, { CategorizedExpense } from '../../services/expenseCategorizationService';
+import expenseStorageService, { StoredExpense } from '../../services/expenseStorageService';
+import fileStorageService from '../../services/fileStorageService';
+import { Project } from '@/types/project';
+import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
+import { slipOCRService, ReceiptData } from '../../services/slipOCRService';
+import ocrVATExtractionService from '../../services/ocrVATExtractionService';
+import vatCalculationService from '../../services/vatCalculationService';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+
+
+interface Expense {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  category: string;
+  paymentMethod: string;
+  assignedTo?: string;
+  project?: string;
+  // Enhanced project linking fields
+  projectId?: number;
+  projectCode?: string;
+  projectName?: string;
+  hasReceipt: boolean;
+  submittedBy: string;
+  submittedDate: string;
+  notes?: string;
+  // Bank statement specific fields
+  debit?: number;
+  credit?: number;
+  balance?: number;
+  transactionType?: 'debit' | 'credit';
+  source?: 'manual' | 'bank_statement';
+  bankStatementId?: string;
+
+}
+
+interface ExpensesTabProps {
+  onAddExpense: () => void;
+  companyId?: string;
+  initialCategoryFilter?: string;
+}
+
+const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'current-company-id', initialCategoryFilter }) => {
+  const { formatCurrency } = useLocalization();
+  const { user } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>(initialCategoryFilter ?? 'all');
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
+  const [bankStatements, setBankStatements] = useState<any[]>([]);
+  const [categorizedExpenses, setCategorizedExpenses] = useState<CategorizedExpense[]>([]);
+  const [showBankUpload, setShowBankUpload] = useState(false);
+
+  const [viewMode, setViewMode] = useState<'expense' | 'bank_statement'>('expense');
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState<any[]>([]);
+  // Project-related state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [selectedExpensesForBulkProject, setSelectedExpensesForBulkProject] = useState<string[]>([]);
+  // companyId is now passed as a prop
+  
+  // Manual expense recording state
+  const [showRecordExpenseModal, setShowRecordExpenseModal] = useState(false);
+  const [manualExpenses, setManualExpenses] = useState<StoredExpense[]>([]);
+  
+  // Petty cash modal state
+  const [showPettyCashModal, setShowPettyCashModal] = useState(false);
+  
+  // Force refresh data when component mounts
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  // Initialize sync service
+  const syncService = ExpenseProjectSyncService.getInstance();
+  
+  // Edit functionality state
+  const [editingExpense, setEditingExpense] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Expense>>({});
+  
+  // Inline category editing state
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryUpdateLoading, setCategoryUpdateLoading] = useState<string | null>(null);
+  
+  // Receipt processing state
+  const [processingReceipts, setProcessingReceipts] = useState<Set<string>>(new Set());
+  const [receiptData, setReceiptData] = useState<Map<string, ReceiptData>>(new Map());
+  
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | CategorizedExpense | StoredExpense | null>(null);
+  const [showTestTool, setShowTestTool] = useState(false);
+  
+  // Receipt viewer modal state
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [currentReceiptData, setCurrentReceiptData] = useState<{expenseId: string, receiptImage: string, isPDF: boolean} | null>(null);
+  
+  // Receipt verification modal state
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationData, setVerificationData] = useState<{
+    expenseId: string;
+    receiptImage: string;
+    receiptText: string;
+    extractedAmount: number;
+    extractedVAT: number;
+  } | null>(null);
+  
+
+
+  // Load bank statements, expenses, and projects on component mount
+  useEffect(() => {
+    console.log('ExpensesTab: Loading data for company:', companyId, 'refreshKey:', refreshKey);
+    
+    
+    loadBankStatements();
+    loadCategorizedExpenses();
+    loadManualExpenses();
+    loadProjects();
+    loadReceiptData();
+    
+    // Initialize sync service
+    syncService.initializeSync();
+  }, [companyId, refreshKey]);
+
+  // Load existing receipt data
+  const loadReceiptData = () => {
+    try {
+      const allReceipts = slipOCRService.getAllReceiptData();
+      
+      const receiptMap = new Map<string, ReceiptData>();
+      allReceipts.forEach(receipt => {
+        if (receipt.expenseId) {
+          receiptMap.set(receipt.expenseId, receipt);
+        }
+      });
+      
+      setReceiptData(receiptMap);
+    } catch (error) {
+      console.error('Error loading receipt data:', error);
+    }
+  };
+  
+
+  
+  // Subscribe to sync service updates
+  useEffect(() => {
+    const unsubscribe = syncService.subscribe(() => {
+      console.log('ExpensesTab: Received sync update, refreshing projects');
+      loadProjects();
+    });
+    
+    return unsubscribe;
+  }, [syncService]);
+
+  // Load projects from localStorage
+  const loadProjects = () => {
+    try {
+      const storedProjects = localStorage.getItem('projects');
+      if (storedProjects) {
+        const parsed = JSON.parse(storedProjects);
+        // Filter projects available for expense assignment (exclude only cancelled projects)
+        const activeProjects = parsed.filter((project: Project) => 
+          project.status !== 'Cancelled'
+        );
+        setProjects(activeProjects);
+        console.log('ExpensesTab: Loaded active projects:', activeProjects.length);
+      } else {
+        setProjects([]);
+      }
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      setProjects([]);
+    }
+  };
+
+  const loadBankStatements = async () => {
+    try {
+      const statements = await bankStatementService.getBankStatements(companyId);
+      console.log('ExpensesTab: Loaded bank statements:', statements.length);
+      setBankStatements(statements);
+    } catch (error) {
+      console.error('Error loading bank statements:', error);
+    }
+  };
+
+  const loadCategorizedExpenses = async () => {
+    try {
+      console.log('ExpensesTab: Loading categorized expenses for companyId:', companyId);
+      const expenses = await bankStatementService.getExpenses(companyId);
+      console.log('ExpensesTab: Loaded categorized expenses:', expenses.length);
+      console.log('ExpensesTab: Company ID used for filtering:', companyId);
+      console.log('ExpensesTab: Sample expense data:', expenses.slice(0, 2));
+      
+      // Debug: Check localStorage directly
+      const allExpensesInStorage = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+      console.log('ExpensesTab: Total expenses in localStorage:', allExpensesInStorage.length);
+      console.log('ExpensesTab: Sample localStorage expense:', allExpensesInStorage.slice(0, 2));
+      
+      // Debug: Check bank statements
+      const allBankStatements = JSON.parse(localStorage.getItem('bankStatements') || '[]');
+      console.log('ExpensesTab: Total bank statements in localStorage:', allBankStatements.length);
+      console.log('ExpensesTab: Bank statements for current company:', allBankStatements.filter(s => s.companyId === companyId).length);
+      
+      setCategorizedExpenses(expenses);
+      console.log('ExpensesTab: Set categorized expenses state with', expenses.length, 'items');
+    } catch (error) {
+      console.error('Error loading expenses:', error);
+    }
+  };
+
+  const handleBankStatementUpload = async (statementId: string) => {
+    console.log('ExpensesTab: Bank statement uploaded with ID:', statementId);
+    console.log('ExpensesTab: Using companyId for data reload:', companyId);
+    setShowBankUpload(false);
+    
+    // Add a small delay to ensure data is saved
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    await loadBankStatements();
+    await loadCategorizedExpenses();
+    
+    // Force component refresh
+    setRefreshKey(prev => prev + 1);
+    console.log('ExpensesTab: Data reloaded after bank statement upload');
+    
+    // Show success message
+    toast.success('Bank statement processed successfully! Transactions have been added to the table.');
+  };
+
+  // Enhanced date parsing function for bank statements
+  const standardizeDate = (dateStr: string): string => {
+    if (!dateStr || typeof dateStr !== 'string') {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    const currentYear = new Date().getFullYear();
+    const trimmedDate = dateStr.trim();
+
+    try {
+      // First, try standard Date parsing for complete dates
+      const standardDate = new Date(trimmedDate);
+      if (!isNaN(standardDate.getTime()) && trimmedDate.includes(currentYear.toString())) {
+        return standardDate.toISOString().split('T')[0];
+      }
+
+      // Handle various date formats with comprehensive parsing
+      
+      // Format: DD MMM YYYY (e.g., "05 Oct 2025")
+      const ddMmmYyyyMatch = trimmedDate.match(/^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$/i);
+      if (ddMmmYyyyMatch) {
+        const [, day, monthName, year] = ddMmmYyyyMatch;
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthIndex = monthNames.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+        if (monthIndex !== -1) {
+          const parsedDate = new Date(parseInt(year), monthIndex, parseInt(day));
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.toISOString().split('T')[0];
+          }
+        }
+      }
+
+      // Format: MMM DD, YYYY (e.g., "Oct 05, 2025")
+      const mmmDdYyyyMatch = trimmedDate.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})$/i);
+      if (mmmDdYyyyMatch) {
+        const [, monthName, day, year] = mmmDdYyyyMatch;
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthIndex = monthNames.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+        if (monthIndex !== -1) {
+          const parsedDate = new Date(parseInt(year), monthIndex, parseInt(day));
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.toISOString().split('T')[0];
+          }
+        }
+      }
+
+      // Split by common delimiters
+      const parts = trimmedDate.split(/[-\/\s]/).filter(part => part.length > 0);
+      
+      if (parts.length >= 2) {
+        let day: number, month: number, year: number;
+
+        // Handle 2-part dates (MM/DD or DD/MM) - DEFAULT TO CURRENT YEAR
+        if (parts.length === 2) {
+          const part1 = parseInt(parts[0]);
+          const part2 = parseInt(parts[1]);
+          
+          // Determine if it's MM/DD or DD/MM based on values
+          if (part1 > 12 && part2 <= 12) {
+            // DD/MM format
+            day = part1;
+            month = part2 - 1; // 0-indexed
+          } else if (part2 > 12 && part1 <= 12) {
+            // MM/DD format  
+            month = part1 - 1; // 0-indexed
+            day = part2;
+          } else {
+            // Ambiguous - default to MM/DD for consistency with bank statements
+            month = part1 - 1; // 0-indexed
+            day = part2;
+          }
+          year = currentYear; // ALWAYS use current year for 2-part dates
+          
+          console.log(`📅 [Date Parser] Parsed ${trimmedDate} as ${day}/${month + 1}/${year} (defaulted to current year)`);
+        }
+        // Handle 3-part dates
+        else if (parts.length === 3) {
+          const part1 = parseInt(parts[0]);
+          const part2 = parseInt(parts[1]);
+          const part3 = parseInt(parts[2]);
+
+          // Determine format based on which part looks like a year
+          if (part3 > 31) {
+            // Format: DD/MM/YYYY or MM/DD/YYYY
+            year = part3;
+            if (part1 > 12 && part2 <= 12) {
+              // DD/MM/YYYY
+              day = part1;
+              month = part2 - 1;
+            } else {
+              // MM/DD/YYYY
+              month = part1 - 1;
+              day = part2;
+            }
+          } else if (part1 > 31) {
+            // Format: YYYY/MM/DD
+            year = part1;
+            month = part2 - 1;
+            day = part3;
+          } else {
+            // Ambiguous 3-part date, default to MM/DD/YY and convert 2-digit year
+            month = part1 - 1;
+            day = part2;
+            year = part3;
+            
+            // Convert 2-digit year to 4-digit (assume 20xx for years 00-99)
+            if (year < 100) {
+              year = year < 50 ? 2000 + year : 1900 + year;
+            }
+          }
+        } else {
+          // Fallback for unexpected formats
+          return new Date().toISOString().split('T')[0];
+        }
+
+        // Validate and create the date
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && year >= 1900) {
+          const parsedDate = new Date(year, month, day);
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.toISOString().split('T')[0];
+          }
+        }
+      }
+
+      // Final fallback: try native Date parsing
+      const fallbackDate = new Date(trimmedDate);
+      if (!isNaN(fallbackDate.getTime())) {
+        return fallbackDate.toISOString().split('T')[0];
+      }
+
+      // Ultimate fallback: current date
+      console.warn(`⚠️ [Date Parser] Could not parse date: ${trimmedDate}, using current date`);
+      return new Date().toISOString().split('T')[0];
+      
+    } catch (error) {
+      console.error(`❌ [Date Parser] Error parsing date: ${trimmedDate}`, error);
+      return new Date().toISOString().split('T')[0];
+    }
+  };
+
+  // Fix existing dates with wrong years (migration function)
+  const fixExistingDates = () => {
+    console.log(`🔍 [Date Migration] Button clicked! Function called.`);
+    const currentYear = new Date().getFullYear();
+    console.log(`🔧 [Date Migration] Starting date fix for year ${currentYear}`);
+    
+    // Get all expenses from localStorage (both manual and bank statement expenses)
+    const manualExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+    const bankExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+    const allExpenses = [...manualExpenses, ...bankExpenses];
+    
+    console.log(`📊 [Date Migration] Found ${manualExpenses.length} manual expenses, ${bankExpenses.length} bank expenses`);
+    console.log(`📊 [Date Migration] Total expenses to check: ${allExpenses.length}`);
+    
+    let fixedCount = 0;
+    
+    const updatedExpenses = allExpenses.map((expense: any) => {
+      if (expense.date && expense.source === 'bank_statement') {
+        const dateObj = new Date(expense.date);
+        const year = dateObj.getFullYear();
+        
+        // Fix dates with obviously wrong years (before 2020 or future years)
+        if (year < 2020 || year > currentYear + 1) {
+          const month = dateObj.getMonth();
+          const day = dateObj.getDate();
+          
+          // Create new date with current year
+          const fixedDate = new Date(currentYear, month, day);
+          const fixedDateStr = fixedDate.toISOString().split('T')[0];
+          
+          console.log(`🔧 [Date Migration] Fixed expense ${expense.id}: ${expense.date} → ${fixedDateStr}`);
+          fixedCount++;
+          
+          return {
+            ...expense,
+            date: fixedDateStr
+          };
+        }
+      }
+      return expense;
+    });
+    
+    if (fixedCount > 0) {
+      // Separate and save back to respective storage locations
+      const updatedManualExpenses = updatedExpenses.filter((exp: any) => !exp.source || exp.source !== 'bank_statement');
+      const updatedBankExpenses = updatedExpenses.filter((exp: any) => exp.source === 'bank_statement');
+      
+      localStorage.setItem('expenses', JSON.stringify(updatedManualExpenses));
+      localStorage.setItem('categorizedExpenses', JSON.stringify(updatedBankExpenses));
+      
+      console.log(`✅ [Date Migration] Fixed ${fixedCount} expense dates`);
+      
+      // Refresh the expenses data
+      loadManualExpenses();
+      toast.success(`Fixed ${fixedCount} expense dates to use current year (${currentYear})`);
+    } else {
+      console.log(`✅ [Date Migration] No dates needed fixing`);
+      toast.info('All expense dates are already correct');
+    }
+  };
+
+  // Debug function to analyze transaction extraction
+  const debugTransactionExtraction = () => {
+    console.log('🔬 [DEBUG] Starting transaction extraction analysis...');
+    
+    // Check localStorage data
+    const bankStatements = JSON.parse(localStorage.getItem('bankStatements') || '[]');
+    const categorizedExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+    
+    console.log('🔬 [DEBUG] Storage analysis:');
+    console.log('  - Bank statements in storage:', bankStatements.length);
+    console.log('  - Categorized expenses in storage:', categorizedExpenses.length);
+    
+    bankStatements.forEach((statement: any, index: number) => {
+      console.log(`🔬 [DEBUG] Statement ${index + 1}:`);
+      console.log('    - ID:', statement.id);
+      console.log('    - File:', statement.fileName);
+      console.log('    - Company ID:', statement.companyId);
+      console.log('    - Transactions count:', statement.transactions?.length || 0);
+      console.log('    - Processed transactions count:', statement.processedTransactions?.length || 0);
+      
+      if (statement.transactions?.length > 0) {
+        console.log('    - Sample transactions:');
+        statement.transactions.slice(0, 5).forEach((t: any, i: number) => {
+          console.log(`      ${i + 1}. ${t.date} | ${t.description} | ${t.amount} | ${t.type}`);
+        });
+        
+        // Look for the missing transactions
+        const missingTransactions = statement.transactions.filter((t: any) => 
+          t.description.includes('WIMPY QUAGGA') || 
+          t.description.includes('PEP HOME ATTER') || 
+          t.description.includes('SASOL QUAGGA')
+        );
+        
+        if (missingTransactions.length > 0) {
+          console.log('    - 🎯 Found missing transactions in raw data:');
+          missingTransactions.forEach((t: any) => {
+            console.log(`      ✅ ${t.description} | ${t.amount}`);
+          });
+        } else {
+          console.log('    - ❌ Missing transactions not found in raw data');
+        }
+      }
+    });
+    
+    // Check if the issue is in the processed transactions
+    const allProcessedTransactions = bankStatements.flatMap((s: any) => s.processedTransactions || []);
+    console.log('🔬 [DEBUG] Total processed transactions:', allProcessedTransactions.length);
+    
+    const missingInProcessed = allProcessedTransactions.filter((t: any) => 
+      t.description.includes('WIMPY QUAGGA') || 
+      t.description.includes('PEP HOME ATTER') || 
+      t.description.includes('SASOL QUAGGA')
+    );
+    
+    if (missingInProcessed.length > 0) {
+      console.log('🔬 [DEBUG] 🎯 Missing transactions found in processed data:');
+      missingInProcessed.forEach((t: any) => {
+        console.log(`      ✅ ${t.description} | ${t.amount}`);
+      });
+    } else {
+      console.log('🔬 [DEBUG] ❌ Missing transactions not found in processed data either');
+    }
+    
+    toast.info('Check browser console for detailed transaction analysis');
+  };
+
+  // Check for duplicate transactions
+  const isDuplicateTransaction = (transaction: any, existingExpenses: any[]): boolean => {
+    return existingExpenses.some(expense => {
+      const dateDiff = Math.abs(new Date(expense.date).getTime() - new Date(transaction.date).getTime());
+      const amountDiff = Math.abs(expense.amount - Math.abs(transaction.amount));
+      const descriptionMatch = (expense.description && transaction.description && 
+                              expense.description.toLowerCase().includes(transaction.description.toLowerCase().substring(0, 10))) ||
+                              (expense.description && transaction.description && 
+                              transaction.description.toLowerCase().includes(expense.description.toLowerCase().substring(0, 10)));
+      
+      // Consider duplicate if same day, similar amount (within R1), and similar description
+      return dateDiff < 24 * 60 * 60 * 1000 && amountDiff < 1.0 && descriptionMatch;
+    });
+  };
+
+  // Handle import from bank statement with preview
+  const handleImportFromBankStatement = () => {
+    // Get unprocessed bank statement transactions
+    const unprocessedTransactions = bankStatements.flatMap(statement => 
+      statement.transactions?.filter(transaction => {
+        // Check if transaction is already imported
+        const isAlreadyImported = categorizedExpenses.some(expense => 
+          expense.bankStatementId === statement.id &&
+          expense.description === transaction.description &&
+          Math.abs(expense.amount - transaction.amount) < 0.01
+        );
+        return !isAlreadyImported;
+      }).map(transaction => ({
+        ...transaction,
+        date: standardizeDate(transaction.date),
+        bankStatementId: statement.id,
+        isDuplicate: isDuplicateTransaction(transaction, categorizedExpenses),
+        selected: !isDuplicateTransaction(transaction, categorizedExpenses) // Auto-select non-duplicates
+      })) || []
+    );
+    
+    if (unprocessedTransactions.length === 0) {
+      alert('No new transactions to import. All bank statement transactions have already been processed.');
+      return;
+    }
+    
+    setPendingImportData(unprocessedTransactions);
+    setShowImportPreview(true);
+  };
+
+  // Handle bulk import of selected transactions
+  const handleBulkImport = async (selectedTransactions: any[]) => {
+    try {
+      const expenseCategorizationService = (await import('../../services/expenseCategorizationService')).default;
+      
+      const newExpenses = selectedTransactions.map(transaction => {
+        const categorization = expenseCategorizationService.categorizeExpense(
+          transaction.description,
+          transaction.amount
+        );
+        
+        return {
+          id: `import_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          date: transaction.date,
+          description: transaction.description,
+          amount: transaction.amount,
+          category: categorization.category,
+          subcategory: categorization.subcategory,
+          confidence: categorization.confidence,
+          vatDeductible: categorization.vatDeductible,
+          autoDetected: true,
+          bankStatementId: transaction.bankStatementId || 'unknown',
+          status: 'pending',
+          submittedDate: new Date().toISOString(),
+          slipAttached: false
+        };
+      });
+      
+      // Save to localStorage
+      const existingExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
+      const updatedExpenses = [...existingExpenses, ...newExpenses];
+      localStorage.setItem('categorizedExpenses', JSON.stringify(updatedExpenses));
+      
+      // Refresh data
+      await loadCategorizedExpenses();
+      setShowImportPreview(false);
+      setPendingImportData([]);
+      
+      alert(`Successfully imported ${selectedTransactions.length} transactions!`);
+    } catch (error) {
+      console.error('Error importing transactions:', error);
+      alert('Error importing transactions. Please try again.');
+    }
+  };
+
+
+
+  const handleCategoryChange = async (expenseId: string, newCategory: string, newSubcategory: string) => {
+    try {
+      const expense = categorizedExpenses.find(e => e.id === expenseId);
+      if (expense) {
+        const updatedExpense = {
+          ...expense,
+          category: newCategory,
+          subcategory: newSubcategory
+        };
+        await bankStatementService.updateExpense(expenseId, updatedExpense);
+        await loadCategorizedExpenses();
+      }
+    } catch (error) {
+      console.error('Error updating expense category:', error);
+    }
+  };
+
+  // Handle inline category update
+  const handleInlineCategoryUpdate = async (expenseId: string, newCategoryValue: string) => {
+    try {
+      setCategoryUpdateLoading(expenseId);
+      const [category, subcategory] = newCategoryValue.split('|');
+      
+      // Determine expense type
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      
+      if (isManualExpense) {
+        // Update manual expense
+        const updateData = { category: category };
+        const success = expenseStorageService.updateExpense(expenseId, updateData);
+        if (success) {
+          toast.success('Category updated successfully');
+          loadManualExpenses();
+        } else {
+          throw new Error('Failed to update manual expense category');
+        }
+      } else if (isCategorizedExpense) {
+        // Update categorized expense
+        await handleCategoryChange(expenseId, category, subcategory);
+        toast.success('Category updated successfully');
+      }
+      
+      setEditingCategory(null);
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Error updating category. Please try again.');
+    } finally {
+      setCategoryUpdateLoading(null);
+    }
+  };
+
+
+
+  // Manual expenses data (legacy)
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  // Load manual expenses from expenseStorageService
+  const loadManualExpenses = () => {
+    try {
+      const storedExpenses = expenseStorageService.getAllExpenses();
+      setManualExpenses(storedExpenses);
+      console.log('ExpensesTab: Loaded manual expenses:', storedExpenses.length);
+      
+      // Also load legacy expenses for backward compatibility
+      const legacyExpenses = localStorage.getItem('expenses');
+      if (legacyExpenses) {
+        const parsed = JSON.parse(legacyExpenses);
+        setExpenses(parsed);
+        console.log('ExpensesTab: Loaded legacy expenses:', parsed.length);
+      } else {
+        // Set empty array if no legacy expenses exist
+        setExpenses([]);
+        console.log('ExpensesTab: No legacy expenses found, setting empty array');
+      }
+    } catch (error) {
+      console.error('Error loading manual expenses:', error);
+      setExpenses([]);
+      setManualExpenses([]);
+    }
+  };
+
+  /**
+   * Handle saving new expense from modal
+   */
+  const handleSaveExpense = async (expenseData: NewExpenseData) => {
+    try {
+      const newExpense = expenseStorageService.createExpense(expenseData);
+      console.log('ExpensesTab: Created new expense:', newExpense.id);
+      
+      // Reload manual expenses to update the display
+      loadManualExpenses();
+      
+      // Update summary statistics
+      setRefreshKey(prev => prev + 1);
+      
+      return newExpense;
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Handle receipt upload and OCR processing
+   */
+  const handleReceiptUpload = async (expenseId: string) => {
+    try {
+      // Create file input element
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,application/pdf';
+      input.multiple = false;
+      
+      input.onchange = async (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        
+        // Validate file type
+        const isImage = file.type.startsWith('image/');
+        const isPDF = file.type === 'application/pdf';
+        
+        if (!isImage && !isPDF) {
+          toast.error('Please select an image or PDF file');
+          return;
+        }
+        
+        // Validate file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+          toast.error('File size too large. Maximum allowed: 10MB');
+          return;
+        }
+        
+        // Start processing
+        setProcessingReceipts(prev => new Set(prev).add(expenseId));
+        toast.info(`Processing ${isPDF ? 'PDF' : 'receipt'}...`, {
+          description: isPDF ? 'Uploading PDF document' : 'Extracting information from your receipt'
+        });
+        
+        try {
+          let receiptResult;
+          
+          if (isPDF) {
+            // For PDF files, store as base64 without OCR processing
+            const base64 = await fileToBase64(file);
+            receiptResult = {
+              id: `receipt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              expenseId,
+              vatIncluded: false,
+              status: 'manual_verification_required' as const,
+              matchStatus: 'manual_review' as const,
+              source: 'manual' as const,
+              receiptImage: base64,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            slipOCRService.saveReceiptData(receiptResult);
+          } else {
+            // Process images with OCR
+            receiptResult = await slipOCRService.processSlipUpload(file, expenseId);
+            
+            // Also process with VAT extraction service for slip VAT extractions
+            try {
+              await ocrVATExtractionService.processSlipImage(file, expenseId);
+              console.log('VAT extraction completed for expense:', expenseId);
+            } catch (vatError) {
+              console.warn('VAT extraction failed, but receipt processing continues:', vatError);
+            }
+          }
+          
+          // Validate amount matching and update receipt status
+          const currentExpense = allExpenses.find(e => e.id === expenseId);
+          if (currentExpense && receiptResult.extractedAmount && !isPDF) {
+            const tolerance = 0.01; // 1 cent tolerance
+            const amountsMatch = Math.abs(receiptResult.extractedAmount - currentExpense.amount) <= tolerance;
+            
+            if (amountsMatch) {
+              receiptResult.status = 'completed';
+              receiptResult.matchStatus = 'verified';
+            } else {
+              receiptResult.status = 'manual_verification_required';
+              receiptResult.matchStatus = 'amount_mismatch';
+            }
+            
+            receiptResult.updatedAt = new Date().toISOString();
+            slipOCRService.saveReceiptData(receiptResult);
+          }
+          
+          // Update receipt data state
+          setReceiptData(prev => new Map(prev).set(expenseId, receiptResult));
+          
+          // Show success message with extracted information
+          if (isPDF) {
+            toast.success('PDF uploaded successfully!', {
+              description: 'PDF document has been attached to the expense'
+            });
+          } else if (receiptResult.status === 'completed' && receiptResult.extractedAmount) {
+            const tolerance = 0.01;
+            const amountsMatch = currentExpense && Math.abs(receiptResult.extractedAmount - currentExpense.amount) <= tolerance;
+            
+            if (amountsMatch) {
+              toast.success('Receipt processed successfully!', {
+                description: `Amount matches: ${formatCurrency(receiptResult.extractedAmount)}${receiptResult.vatAmount != null ? ` (VAT: ${formatCurrency(receiptResult.vatAmount)})` : ''}`
+              });
+            } else {
+              toast.warning('Receipt uploaded - amount mismatch detected', {
+                description: `Extracted: ${formatCurrency(receiptResult.extractedAmount)}, Expected: ${currentExpense ? formatCurrency(currentExpense.amount) : formatCurrency(0)}`
+              });
+            }
+          } else if (receiptResult.status === 'manual_verification_required') {
+            toast.warning('Receipt uploaded but needs verification', {
+              description: 'Please review the extracted information'
+            });
+          } else {
+            toast.info('Receipt uploaded', {
+              description: 'Processing completed with limited extraction'
+            });
+          }
+          
+          // Update expense to mark as having receipt
+           if (currentExpense) {
+             currentExpense.hasReceipt = true;
+             // Update in storage if it's a manual expense
+             if (currentExpense.source === 'manual') {
+               const receipt = receiptData.get(expenseId);
+               expenseStorageService.updateExpense(expenseId, { receipt: receipt?.receiptImage || '' });
+               loadManualExpenses();
+             }
+           }
+          
+        } catch (error) {
+          console.error('Receipt processing failed:', error);
+          toast.error('Failed to process receipt', {
+            description: error instanceof Error ? error.message : 'Unknown error occurred'
+          });
+        } finally {
+          // Remove from processing set
+          setProcessingReceipts(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(expenseId);
+            return newSet;
+          });
+        }
+      };
+      
+      // Trigger file selection
+      input.click();
+      
+    } catch (error) {
+      console.error('Error setting up file upload:', error);
+      toast.error('Failed to open file selector');
+    }
+  };
+
+  // Helper function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  /**
+   * Handle viewing receipt in modal
+   */
+  const handleViewReceipt = (expenseId: string) => {
+    const receipt = receiptData.get(expenseId) || slipOCRService.getReceiptData(expenseId);
+    
+    if (receipt?.receiptImage) {
+      try {
+        const isPDF = receipt.receiptImage.startsWith('data:application/pdf');
+        
+        // Set the receipt data for the modal
+        setCurrentReceiptData({
+          expenseId,
+          receiptImage: receipt.receiptImage,
+          isPDF
+        });
+        
+        // Show the modal
+        setShowReceiptModal(true);
+        
+        toast.success('Receipt opened in viewer');
+      } catch (error) {
+        console.error('Error opening receipt:', error);
+        toast.error('Failed to open receipt viewer');
+      }
+    } else {
+      toast.error('No receipt found for this expense');
+    }
+  };
+
+  /**
+   * Handle receipt verification
+   */
+  const handleVerifyReceipt = (expenseId: string) => {
+    const receipt = receiptData.get(expenseId) || slipOCRService.getReceiptData(expenseId);
+    
+    if (receipt && receipt.status === 'manual_verification_required') {
+      setVerificationData({
+        expenseId,
+        receiptImage: receipt.receiptImage || '',
+        receiptText: receipt.receiptText || '',
+        extractedAmount: receipt.extractedAmount || 0,
+        extractedVAT: receipt.vatAmount || 0
+      });
+      setShowVerificationModal(true);
+    } else {
+      toast.error('No receipt verification needed for this expense');
+    }
+  };
+
+  /**
+   * Handle saving verified receipt data
+   */
+  const handleSaveVerification = async (updatedData: {
+    receiptText: string;
+    extractedAmount: number;
+    extractedVAT: number;
+  }) => {
+    if (!verificationData) return;
+
+    try {
+      const receipt = receiptData.get(verificationData.expenseId) || slipOCRService.getReceiptData(verificationData.expenseId);
+      
+      if (receipt) {
+        // Validate amount matching
+        const expense = allExpenses.find(e => e.id === verificationData.expenseId);
+        const tolerance = 0.01; // 1 cent tolerance
+        const amountsMatch = expense && Math.abs(updatedData.extractedAmount - expense.amount) <= tolerance;
+        
+        // Update receipt data with verified information
+        const updatedReceipt: ReceiptData = {
+          ...receipt,
+          receiptText: updatedData.receiptText,
+          extractedAmount: updatedData.extractedAmount,
+          vatAmount: updatedData.extractedVAT,
+          status: amountsMatch ? 'completed' : 'manual_verification_required',
+          matchStatus: amountsMatch ? 'verified' : 'amount_mismatch',
+          updatedAt: new Date().toISOString()
+        };
+
+        // Save updated receipt data
+        slipOCRService.saveReceiptData(updatedReceipt);
+        setReceiptData(prev => new Map(prev).set(verificationData.expenseId, updatedReceipt));
+
+        // Close modal and show success message
+        setShowVerificationModal(false);
+        setVerificationData(null);
+        
+        toast.success('Receipt verification completed!', {
+          description: `Verified amount: ${formatCurrency(updatedData.extractedAmount)}${updatedData.extractedVAT != null ? ` (VAT: ${formatCurrency(updatedData.extractedVAT)})` : ''}`
+        });
+      }
+    } catch (error) {
+      console.error('Error saving verification:', error);
+      toast.error('Failed to save verification data');
+    }
+  };
+
+  /**
+   * Handle replacing receipt
+   */
+  const handleReplaceReceipt = async (expenseId: string) => {
+    // First delete the existing receipt
+    const receipt = receiptData.get(expenseId) || slipOCRService.getReceiptData(expenseId);
+    if (receipt) {
+      slipOCRService.deleteReceiptData(receipt.id);
+      setReceiptData(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(expenseId);
+        return newMap;
+      });
+    }
+    
+    // Then trigger upload for new receipt
+    await handleReceiptUpload(expenseId);
+  };
+
+  /**
+   * Create test receipt data for debugging
+   */
+  const createTestReceiptData = (expenseId: string) => {
+    console.log('🧪 [TEST RECEIPT] Creating test receipt for expense:', expenseId);
+    
+    const testReceipt: ReceiptData = {
+      id: `test_receipt_${Date.now()}_${Math.random()}`,
+      expenseId,
+      extractedAmount: 100.00,
+      vatAmount: 15.00,
+      vatIncluded: true,
+      vatRate: 0.15,
+      status: 'completed',
+      matchStatus: 'verified',
+      source: 'manual',
+      receiptText: 'Test receipt text - DELETE RECEIPT TEST',
+      receiptImage: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      confidence: 95,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    console.log('🧪 [TEST RECEIPT] Test receipt object:', testReceipt);
+    
+    // Save to service
+    slipOCRService.saveReceiptData(testReceipt);
+    console.log('🧪 [TEST RECEIPT] Saved to OCR service');
+    
+    // Update local state
+    setReceiptData(prev => {
+      const newMap = new Map(prev);
+      newMap.set(expenseId, testReceipt);
+      console.log('🧪 [TEST RECEIPT] Updated local state, new map size:', newMap.size);
+      return newMap;
+    });
+    
+    // Update expense hasReceipt flag
+    const expense = allExpenses.find(e => e.id === expenseId);
+    if (expense) {
+      console.log('🧪 [TEST RECEIPT] Updating expense hasReceipt flag from', expense.hasReceipt, 'to true');
+      expense.hasReceipt = true;
+    } else {
+      console.log('🧪 [TEST RECEIPT] No expense found for ID:', expenseId);
+    }
+    
+    // Force refresh
+    setRefreshKey(prev => {
+      const newKey = prev + 1;
+      console.log('🧪 [TEST RECEIPT] Forcing refresh, key updated from', prev, 'to', newKey);
+      return newKey;
+    });
+    
+    console.log('🧪 [TEST RECEIPT] Test receipt creation completed');
+    toast.success('Test receipt created successfully! Now try deleting it.');
+  };
+
+  /**
+   * Handle deleting receipt
+   */
+  const handleDeleteReceipt = async (expenseId: string) => {
+    console.log('🗑️ [DELETE RECEIPT] Function called with expenseId:', expenseId);
+    console.log('🗑️ [DELETE RECEIPT] Current receiptData Map:', receiptData);
+    console.log('🗑️ [DELETE RECEIPT] All expenses:', allExpenses.map(e => ({ id: e.id, hasReceipt: e.hasReceipt })));
+    
+    try {
+      const receiptFromMap = receiptData.get(expenseId);
+      const receiptFromService = slipOCRService.getReceiptData(expenseId);
+      console.log('🗑️ [DELETE RECEIPT] Receipt from Map:', receiptFromMap);
+      console.log('🗑️ [DELETE RECEIPT] Receipt from Service:', receiptFromService);
+      
+      const receipt = receiptFromMap || receiptFromService;
+      console.log('🗑️ [DELETE RECEIPT] Combined receipt:', receipt);
+      
+      if (receipt) {
+        console.log('🗑️ [DELETE RECEIPT] Receipt found, showing confirmation dialog');
+        
+        // Show confirmation dialog
+        const confirmed = window.confirm('Are you sure you want to delete this receipt? This action cannot be undone.');
+        console.log('🗑️ [DELETE RECEIPT] User confirmed deletion:', confirmed);
+        
+        if (!confirmed) {
+          console.log('🗑️ [DELETE RECEIPT] User cancelled deletion');
+          return;
+        }
+        
+        console.log('🗑️ [DELETE RECEIPT] Starting deletion process...');
+        
+        // Debug: Check all receipts before deletion
+        const allReceiptsBefore = slipOCRService.getAllReceiptData();
+        console.log('🗑️ [DELETE RECEIPT] All receipts before deletion:', allReceiptsBefore);
+        
+        // Delete from OCR service using receipt ID
+        console.log('🗑️ [DELETE RECEIPT] Deleting from OCR service with receipt ID:', receipt.id);
+        slipOCRService.deleteReceiptData(receipt.id);
+        
+        // Debug: Check all receipts after deletion
+        const allReceiptsAfter = slipOCRService.getAllReceiptData();
+        console.log('🗑️ [DELETE RECEIPT] All receipts after deletion:', allReceiptsAfter);
+        console.log('🗑️ [DELETE RECEIPT] Receipt count before:', allReceiptsBefore.length, 'after:', allReceiptsAfter.length);
+        
+        // Also delete from file storage service using expense ID
+        console.log('🗑️ [DELETE RECEIPT] Deleting from file storage with expense ID:', expenseId);
+        const fileDeleted = fileStorageService.deleteExpenseReceipt(expenseId);
+        console.log('🗑️ [DELETE RECEIPT] File deletion result:', fileDeleted);
+        
+        // Remove from local state
+        console.log('🗑️ [DELETE RECEIPT] Updating local receiptData state');
+        setReceiptData(prev => {
+          const newMap = new Map(prev);
+          const hadEntry = newMap.has(expenseId);
+          newMap.delete(expenseId);
+          console.log('🗑️ [DELETE RECEIPT] State update - had entry:', hadEntry, 'new size:', newMap.size);
+          return newMap;
+        });
+        
+        // Update expense record to remove receipt
+        const expense = allExpenses.find(e => e.id === expenseId);
+        console.log('🗑️ [DELETE RECEIPT] Found expense to update:', expense);
+        
+        if (expense) {
+          console.log('🗑️ [DELETE RECEIPT] Updating expense hasReceipt flag from', expense.hasReceipt, 'to false');
+          expense.hasReceipt = false;
+          
+          if (expense.source === 'manual') {
+            console.log('🗑️ [DELETE RECEIPT] Updating manual expense in storage');
+            const updateResult = expenseStorageService.updateExpense(expenseId, { receipt: '' });
+            console.log('🗑️ [DELETE RECEIPT] Manual expense update result:', updateResult);
+            loadManualExpenses();
+          } else {
+            console.log('🗑️ [DELETE RECEIPT] Expense source is not manual:', expense.source);
+          }
+        } else {
+          console.log('🗑️ [DELETE RECEIPT] No expense found in allExpenses for ID:', expenseId);
+        }
+        
+        // Reload receipt data to ensure UI is updated
+        console.log('🗑️ [DELETE RECEIPT] Reloading receipt data');
+        await loadReceiptData();
+        
+        // Force refresh the entire component
+        console.log('🗑️ [DELETE RECEIPT] Forcing component refresh');
+        setRefreshKey(prev => {
+          const newKey = prev + 1;
+          console.log('🗑️ [DELETE RECEIPT] Refresh key updated from', prev, 'to', newKey);
+          return newKey;
+        });
+        
+        console.log('🗑️ [DELETE RECEIPT] Deletion process completed successfully');
+        
+        if (fileDeleted) {
+          toast.success('Receipt deleted successfully');
+        } else {
+          toast.warning('Receipt data cleared, but file deletion may have failed');
+        }
+      } else {
+        console.log('🗑️ [DELETE RECEIPT] No receipt found for expenseId:', expenseId);
+        console.log('🗑️ [DELETE RECEIPT] Available receipts:', slipOCRService.getAllReceiptData().map(r => ({ id: r.id, expenseId: r.expenseId })));
+        toast.error('No receipt found to delete');
+      }
+    } catch (error) {
+      console.error('🗑️ [DELETE RECEIPT] Error during deletion:', error);
+      console.error('🗑️ [DELETE RECEIPT] Error stack:', error.stack);
+      toast.error('Failed to delete receipt');
+    }
+  };
+
+  /**
+   * Handle opening record expense modal
+   */
+  const handleOpenRecordExpenseModal = () => {
+    setShowRecordExpenseModal(true);
+  };
+
+  /**
+   * Handle closing record expense modal
+   */
+  const handleCloseRecordExpenseModal = () => {
+    setShowRecordExpenseModal(false);
+  };
+
+  /**
+   * Handle opening petty cash modal
+   */
+  const handleOpenPettyCashModal = () => {
+    setShowPettyCashModal(true);
+  };
+
+  /**
+   * Handle closing petty cash modal
+   */
+  const handleClosePettyCashModal = () => {
+    setShowPettyCashModal(false);
+  };
+
+  /**
+   * Delete manual expense
+   */
+  const handleDeleteManualExpense = (expenseId: string) => {
+    try {
+      const success = expenseStorageService.deleteExpense(expenseId);
+      if (success) {
+        toast.success('Expense deleted successfully');
+        loadManualExpenses();
+        setRefreshKey(prev => prev + 1);
+      } else {
+        toast.error('Failed to delete expense');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Error deleting expense');
+    }
+  };
+
+  /**
+   * Update manual expense status
+   */
+  const handleUpdateExpenseStatus = (expenseId: string, status: 'pending' | 'approved' | 'rejected') => {
+    try {
+      const updatedExpense = expenseStorageService.updateExpense(expenseId, { status });
+      if (updatedExpense) {
+        toast.success(`Expense ${status} successfully`);
+        loadManualExpenses();
+        setRefreshKey(prev => prev + 1);
+      } else {
+        toast.error('Failed to update expense status');
+      }
+    } catch (error) {
+      console.error('Error updating expense status:', error);
+      toast.error('Error updating expense status');
+    }
+  };
+
+  // Combine all expense sources: legacy manual, new manual, and categorized bank expenses
+  console.log('📊 [EXPENSES DEBUG] Data sources:');
+  console.log('  - Legacy manual expenses:', expenses.length);
+  console.log('  - New manual expenses:', manualExpenses.length);
+  console.log('  - Categorized bank expenses:', categorizedExpenses.length);
+  console.log('  - Bank statements:', bankStatements.length);
+  
+  const allExpenses: Expense[] = [
+    // Legacy manual expenses
+    ...expenses.map(expense => ({
+      ...expense,
+      source: 'manual' as const,
+      debit: expense.amount,
+      credit: undefined,
+      balance: undefined,
+      transactionType: 'debit' as const
+    })),
+    // New manual expenses from expenseStorageService
+     ...manualExpenses.map(expense => ({
+        id: expense.id,
+        date: expense.date,
+        description: expense.description,
+        amount: expense.amount,
+        category: expense.category,
+        status: expense.status,
+        paymentMethod: expense.transactionType === 'bank' ? 'Bank Transfer' : 'Cash/Card',
+        assignedTo: 'Current User',
+        project: expense.projectName || undefined,
+        projectId: expense.projectId || undefined,
+        projectCode: expense.projectCode || undefined,
+        projectName: expense.projectName || undefined,
+        hasReceipt: expense.hasReceipt,
+        submittedBy: expense.submittedBy,
+        submittedDate: expense.submittedDate,
+        notes: expense.notes,
+        source: 'manual' as const,
+        debit: expense.amount,
+        credit: undefined,
+        balance: undefined,
+        transactionType: 'debit' as const
+      })),
+    ...categorizedExpenses.map(expense => {
+      // Get original transaction data from bank statements
+      const bankStatement = bankStatements.find(bs => bs.id === expense.bankStatementId);
+      const originalTransaction = bankStatement?.transactions?.find(t => 
+        t.description === expense.description && 
+        Math.abs(t.amount - expense.amount) < 0.01
+      );
+      
+      return {
+        id: expense.id,
+        date: expense.date,
+        description: expense.description,
+        amount: expense.amount,
+        category: expense.category,
+        status: (expense.slipAttached ? 'approved' : 'pending') as 'pending' | 'approved' | 'rejected',
+        paymentMethod: 'Bank Transfer',
+        assignedTo: undefined,
+        project: expense.bankStatementId || '',
+        // Include project assignment fields
+        projectId: expense.projectId,
+        projectName: expense.projectName,
+        projectCode: expense.projectCode,
+        hasReceipt: expense.slipAttached || false,
+        submittedBy: 'Auto-extracted',
+        submittedDate: expense.date,
+        notes: expense.subcategory ? `Subcategory: ${expense.subcategory}` : undefined,
+        // Bank statement specific fields
+        source: 'bank_statement' as const,
+        debit: originalTransaction?.type === 'debit' ? originalTransaction.amount : undefined,
+        credit: originalTransaction?.type === 'credit' ? originalTransaction.amount : undefined,
+        balance: originalTransaction?.balance,
+        transactionType: originalTransaction?.type || 'debit',
+        bankStatementId: expense.bankStatementId
+      };
+    })
+  ];
+  
+  console.log('📊 [EXPENSES DEBUG] Combined results:');
+  console.log('  - Total allExpenses:', allExpenses.length);
+  console.log('  - Legacy manual:', expenses.length);
+  console.log('  - New manual:', manualExpenses.length);
+  console.log('  - Bank extracted:', categorizedExpenses.length);
+  console.log('  - Sample bank expense descriptions:', categorizedExpenses.slice(0, 5).map(e => e.description));
+  console.log('  - Sample allExpenses descriptions:', allExpenses.slice(0, 10).map(e => `${e.source}: ${e.description}`));
+
+  // Project assignment functions
+  const handleProjectAssignment = async (expenseId: string, projectId: number | null) => {
+    try {
+      console.log('ExpensesTab: Assigning project', projectId, 'to expense', expenseId);
+      
+      // Determine expense type (manual or categorized)
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      
+      let expenseType: 'manual' | 'categorized' = 'manual';
+      if (isCategorizedExpense) {
+        expenseType = 'categorized';
+      }
+      
+      // Use sync service to handle the assignment
+      const success = syncService.assignExpenseToProject(expenseId, projectId, expenseType);
+      
+      if (success) {
+        console.log('ExpensesTab: Project assignment successful');
+        
+        // Refresh local data to reflect changes
+        await loadCategorizedExpenses();
+        loadManualExpenses();
+        
+        // Show success feedback
+        const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
+        const message = selectedProject 
+          ? `Expense assigned to ${selectedProject.name}` 
+          : 'Project assignment removed';
+        
+        // You could add a toast notification here
+        console.log(message);
+      } else {
+        throw new Error('Failed to assign project to expense');
+      }
+    } catch (error) {
+      console.error('Error assigning project to expense:', error);
+      alert('Error assigning project. Please try again.');
+    }
+  };
+  
+  // Update project expenses totals
+  const updateProjectExpenses = async (projectId: number, amount: number, operation: 'add' | 'remove') => {
+    try {
+      const storedProjects = localStorage.getItem('projects');
+      if (storedProjects) {
+        const projects = JSON.parse(storedProjects);
+        const updatedProjects = projects.map((project: Project) => {
+          if (project.id === projectId) {
+            const currentExpenses = project.expenses || 0;
+            const newExpenses = operation === 'add' 
+              ? currentExpenses + amount 
+              : Math.max(0, currentExpenses - amount);
+            
+            return {
+              ...project,
+              expenses: newExpenses,
+              totalProjectExpenses: newExpenses + (project.salaryExpenses || 0)
+            };
+          }
+          return project;
+        });
+        
+        localStorage.setItem('projects', JSON.stringify(updatedProjects));
+        loadProjects(); // Refresh local projects state
+        console.log('Project expenses updated:', projectId, operation, amount);
+      }
+    } catch (error) {
+      console.error('Error updating project expenses:', error);
+    }
+  };
+  
+  // Bulk project assignment
+  const handleBulkProjectAssignment = async (projectId: number | null) => {
+    if (selectedExpensesForBulkProject.length === 0) {
+      alert('Please select expenses to assign to project.');
+      return;
+    }
+    
+    for (const expenseId of selectedExpensesForBulkProject) {
+      await handleProjectAssignment(expenseId, projectId);
+    }
+    
+    setSelectedExpensesForBulkProject([]);
+    alert(`Successfully assigned ${selectedExpensesForBulkProject.length} expenses to project.`);
+  };
+
+  // Filter and sort expenses
+  const filteredExpenses = allExpenses
+    .filter(expense => {
+      const matchesSearch = 
+        (expense.description && expense.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (expense.id && expense.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (expense.project && expense.project.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (expense.projectName && expense.projectName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (expense.projectCode && expense.projectCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (expense.assignedTo && expense.assignedTo.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
+      const matchesProject = projectFilter === 'all' || 
+        (projectFilter === 'unassigned' && !expense.projectId) ||
+        (expense.projectId && expense.projectId.toString() === projectFilter);
+      
+      let matchesDateRange = true;
+      const today = new Date();
+      const expenseDate = new Date(expense.date);
+      
+      if (dateRangeFilter === 'today') {
+        matchesDateRange = expenseDate.toDateString() === today.toDateString();
+      } else if (dateRangeFilter === 'week') {
+        const weekAgo = new Date();
+        weekAgo.setDate(today.getDate() - 7);
+        matchesDateRange = expenseDate >= weekAgo;
+      } else if (dateRangeFilter === 'month') {
+        const monthAgo = new Date();
+        monthAgo.setMonth(today.getMonth() - 1);
+        matchesDateRange = expenseDate >= monthAgo;
+      }
+      
+      return matchesSearch && matchesCategory && matchesProject && matchesDateRange;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+          break;
+        case 'amount':
+          comparison = a.amount - b.amount;
+          break;
+        case 'description':
+          comparison = a.description.localeCompare(b.description);
+          break;
+        case 'category':
+          comparison = a.category.localeCompare(b.category);
+          break;
+
+        default:
+          comparison = 0;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+  console.log('🔍 [FILTERING DEBUG] Results:');
+  console.log('  - allExpenses count:', allExpenses.length);
+  console.log('  - filteredExpenses count:', filteredExpenses.length);
+  console.log('  - Current filters:', { searchQuery, categoryFilter, projectFilter, dateRangeFilter, sortBy, sortOrder });
+  console.log('  - Sample filtered descriptions:', filteredExpenses.slice(0, 10).map(e => e.description));
+  if (filteredExpenses.length !== allExpenses.length) {
+    console.log('  - ⚠️ Filtering is active! Some expenses are being filtered out.');
+  }
+
+  // Get unique categories from all expenses
+  const categories = Array.from(new Set(allExpenses.map(expense => expense.category)));
+
+
+
+  // Toggle sort order
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+  };
+
+  // Toggle expense details
+  const toggleExpenseDetails = (id: string) => {
+    if (selectedExpense === id) {
+      setSelectedExpense(null);
+    } else {
+      setSelectedExpense(id);
+    }
+  };
+
+  // Handle edit expense
+  const handleEditExpense = (expenseId: string) => {
+    console.log('ExpensesTab: Looking for expense to edit:', expenseId);
+    console.log('ExpensesTab: Available expenses for editing:', [...expenses, ...categorizedExpenses, ...manualExpenses].map(e => e.id));
+    
+    // Find the expense to edit in all sources
+    const allExpenses = [...expenses, ...categorizedExpenses, ...manualExpenses];
+    const expenseToEdit = allExpenses.find(e => e.id === expenseId);
+    if (!expenseToEdit) {
+      console.error('ExpensesTab: Expense not found for editing:', expenseId);
+      toast.error(`Expense ${expenseId} not found for editing`);
+      return;
+    }
+    
+    console.log('ExpensesTab: Found expense to edit:', expenseToEdit);
+    
+    // Set edit mode and populate form data
+     setEditingExpense(expenseId);
+     setEditFormData({
+       description: expenseToEdit.description,
+       amount: expenseToEdit.amount,
+       category: expenseToEdit.category,
+       paymentMethod: 'paymentMethod' in expenseToEdit ? expenseToEdit.paymentMethod : 'Bank Transfer',
+       notes: expenseToEdit.notes || ''
+     });
+    
+    // Expand the expense details if not already expanded
+    if (selectedExpense !== expenseId) {
+      setSelectedExpense(expenseId);
+    }
+  };
+  
+  // Handle save edit
+  const handleSaveEdit = async (expenseId: string) => {
+    try {
+      console.log('ExpensesTab: Saving edit for expense:', expenseId);
+      
+      // Determine expense type and source
+      const isLegacyExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      const isStoredExpense = manualExpenses.some(e => e.id === expenseId);
+      
+      let success = false;
+      
+      if (isStoredExpense) {
+         // Update stored manual expense
+         const updateData = {
+           description: editFormData.description,
+           amount: editFormData.amount,
+           category: editFormData.category,
+           notes: editFormData.notes
+         };
+         const updatedExpense = expenseStorageService.updateExpense(expenseId, updateData);
+         success = updatedExpense !== null;
+         if (success) {
+           console.log('ExpensesTab: Updated stored expense successfully');
+           loadManualExpenses();
+         }
+      } else if (isLegacyExpense) {
+        // Update legacy expense in localStorage
+        const legacyExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+        const expenseIndex = legacyExpenses.findIndex((e: any) => e.id === expenseId);
+        if (expenseIndex !== -1) {
+          legacyExpenses[expenseIndex] = { ...legacyExpenses[expenseIndex], ...editFormData };
+          localStorage.setItem('expenses', JSON.stringify(legacyExpenses));
+          success = true;
+          console.log('ExpensesTab: Updated legacy expense successfully');
+          setRefreshKey(prev => prev + 1); // Trigger refresh
+        }
+      } else if (isCategorizedExpense) {
+        // Update categorized expense
+        const expense = categorizedExpenses.find(e => e.id === expenseId);
+        if (expense) {
+          const updatedExpense = { ...expense, ...editFormData };
+          await bankStatementService.updateExpense(expenseId, updatedExpense);
+          await loadCategorizedExpenses();
+          success = true;
+          console.log('ExpensesTab: Updated categorized expense successfully');
+        }
+      }
+      
+      if (success) {
+        toast.success('Expense updated successfully');
+        // Clear edit mode
+        setEditingExpense(null);
+        setEditFormData({});
+      } else {
+        throw new Error('Failed to update expense in any source');
+      }
+      
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      toast.error('Error updating expense. Please try again.');
+    }
+  };
+  
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setEditingExpense(null);
+    setEditFormData({});
+  };
+
+  // Handle delete expense - show confirmation modal
+  const handleDeleteExpense = (expenseId: string) => {
+    console.log('ExpensesTab: Looking for expense to delete:', expenseId);
+    console.log('ExpensesTab: Available expenses:', [...expenses, ...categorizedExpenses, ...manualExpenses].map(e => e.id));
+    
+    // Look in all possible expense sources
+    const allExpenses = [...expenses, ...categorizedExpenses, ...manualExpenses];
+    const expense = allExpenses.find(e => e.id === expenseId);
+    
+    if (expense) {
+      console.log('ExpensesTab: Found expense to delete:', expense);
+      setExpenseToDelete(expense);
+      setShowDeleteModal(true);
+    } else {
+      console.error('ExpensesTab: Expense not found in any source:', expenseId);
+      toast.error(`Expense ${expenseId} not found in any data source`);
+    }
+  };
+  
+  // Confirm delete expense
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
+    
+    try {
+      console.log('ExpensesTab: Deleting expense', expenseToDelete.id);
+      
+      // Determine expense type and source
+      const isLegacyExpense = expenses.some(e => e.id === expenseToDelete.id);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseToDelete.id);
+      const isStoredExpense = manualExpenses.some(e => e.id === expenseToDelete.id);
+      
+      let success = false;
+      
+      if (isStoredExpense) {
+        // Delete from manual expense storage service
+        success = expenseStorageService.deleteExpense(expenseToDelete.id);
+        console.log('ExpensesTab: Deleted from manual expense storage:', success);
+      } else if (isLegacyExpense) {
+        // Delete from legacy expenses (localStorage)
+        const legacyExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+        const filteredExpenses = legacyExpenses.filter((e: any) => e.id !== expenseToDelete.id);
+        localStorage.setItem('expenses', JSON.stringify(filteredExpenses));
+        success = true;
+        console.log('ExpensesTab: Deleted from legacy expenses');
+      } else if (isCategorizedExpense) {
+        // Delete from categorized expenses
+        success = syncService.deleteExpense(expenseToDelete.id, 'categorized');
+        if (success) {
+          await bankStatementService.deleteExpense(expenseToDelete.id, true); // admin delete
+        }
+        console.log('ExpensesTab: Deleted from categorized expenses:', success);
+      }
+      
+      if (success) {
+        console.log('ExpensesTab: Expense deletion successful');
+        
+        // Add small delay to ensure localStorage operations complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Refresh all data sources
+        await loadCategorizedExpenses();
+        loadManualExpenses();
+        setRefreshKey(prev => prev + 1);
+        
+        // Additional delay to ensure state updates are processed
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        toast.success(`Expense ${expenseToDelete.id} deleted successfully`);
+        console.log('Expense deleted successfully:', expenseToDelete.id);
+      } else {
+        throw new Error('Failed to delete expense from any source');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Failed to delete expense. Please try again.');
+    } finally {
+      setShowDeleteModal(false);
+      setExpenseToDelete(null);
+    }
+  };
+  
+  // Cancel delete expense
+  const cancelDeleteExpense = () => {
+    setShowDeleteModal(false);
+    setExpenseToDelete(null);
+  };
+
+
+
+  // Handle approve expense
+  const handleApproveExpense = async (expenseId: string) => {
+    try {
+      console.log('ExpensesTab: Approving expense', expenseId);
+      
+      // Determine expense type
+      const isManualExpense = expenses.some(e => e.id === expenseId);
+      const isCategorizedExpense = categorizedExpenses.some(e => e.id === expenseId);
+      
+      let expenseType: 'manual' | 'categorized' = 'manual';
+      if (isCategorizedExpense) {
+        expenseType = 'categorized';
+      }
+      
+      // Use sync service to handle status change (this will update project totals)
+      const success = syncService.updateExpenseStatus(expenseId, 'approved', expenseType);
+      
+      if (success) {
+        console.log('ExpensesTab: Expense approval successful');
+        
+        // For categorized expenses, also update in bank statement service
+        if (isCategorizedExpense) {
+          const expense = categorizedExpenses.find(e => e.id === expenseId);
+          if (expense) {
+            const updatedExpense = {
+              ...expense,
+              status: 'approved' as const
+            };
+            await bankStatementService.updateExpense(expenseId, updatedExpense);
+          }
+        }
+        
+        // Refresh local data
+        await loadCategorizedExpenses();
+        loadManualExpenses();
+        
+        console.log('Expense approved successfully:', expenseId);
+      } else {
+        throw new Error('Failed to approve expense');
+      }
+    } catch (error) {
+      console.error('Error approving expense:', error);
+      alert('Error approving expense. Please try again.');
+    }
+  };
+
+
+
+  // Calculate totals
+  const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const expensesWithReceipts = filteredExpenses.filter(expense => expense.hasReceipt).length;
+  const expensesWithoutReceipts = filteredExpenses.filter(expense => !expense.hasReceipt).length;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardContent className="p-4">
+            <div className="text-sm text-slate-300 font-sf-pro">Total Expenses (Filtered)</div>
+            <div className="text-xl font-bold mt-1 font-sf-pro">{formatCurrency(totalExpenses)}</div>
+            <div className="mt-2 text-sm text-slate-400">
+              <div className="flex items-center space-x-1">
+                <Receipt className="h-4 w-4" />
+                <span>{filteredExpenses.length} expense records</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardContent className="p-4">
+            <div className="text-sm text-slate-300 font-sf-pro">With Receipts</div>
+            <div className="text-xl font-bold mt-1 text-mokm-green-600 font-sf-pro">{expensesWithReceipts}</div>
+            <div className="mt-2 text-sm text-slate-400">
+              <div className="flex items-center space-x-1">
+                <FileCheck className="h-4 w-4" />
+                <span>receipts attached</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardContent className="p-4">
+            <div className="text-sm text-slate-300 font-sf-pro">Missing Receipts</div>
+            <div className="text-xl font-bold mt-1 text-mokm-yellow-600 font-sf-pro">{expensesWithoutReceipts}</div>
+            <div className="mt-2 text-sm text-slate-400">
+              <div className="flex items-center space-x-1">
+                <Receipt className="h-4 w-4" />
+                <span>receipts needed</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* Search and basic filters */}
+      <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+            <div className="w-full md:w-auto">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
+                <Input
+                  type="text"
+                  placeholder="Search expenses..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 glass backdrop-blur-sm bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-1 text-sm text-slate-400">
+              <Filter className="h-4 w-4" />
+              <span>Status:</span>
+            </div>
+            
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2 border border-white/10 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-slate-900/40 text-slate-100"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            
+            <div className="flex items-center space-x-1 text-sm text-slate-400">
+              <Calendar className="h-4 w-4" />
+              <span>Period:</span>
+            </div>
+            
+            <select
+              value={dateRangeFilter}
+              onChange={(e) => setDateRangeFilter(e.target.value)}
+              className="px-4 py-2 border border-white/10 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-slate-900/40 text-slate-100"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+            
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant="outline"
+              className="ml-auto"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              {showFilters ? 'Hide Filters' : 'More Filters'}
+              {showFilters ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+            </Button>
+          </div>
+          
+          {/* Advanced filters */}
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t border-white/20">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
+                    Category
+                  </label>
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-white/50"
+                  >
+                    <option value="all">All Categories</option>
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
+                    Project
+                  </label>
+                  <select
+                    value={projectFilter}
+                    onChange={(e) => setProjectFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-white/50"
+                  >
+                    <option value="all">All Projects</option>
+                    <option value="unassigned">Unassigned</option>
+                    {projects.map(project => (
+                      <option key={project.id} value={project.id}>
+                        {project.name} ({project.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
+                    Sort By
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => handleSort(e.target.value)}
+                    className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-white/50"
+                  >
+                    <option value="date">Date</option>
+                    <option value="amount">Amount</option>
+                    <option value="description">Description</option>
+                    <option value="category">Category</option>
+                    <option value="status">Status</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
+                    Sort Order
+                  </label>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                    className="w-full px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-white/50"
+                  >
+                    <option value="desc">Newest First</option>
+                    <option value="asc">Oldest First</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Bulk Project Assignment */}
+      {selectedExpensesForBulkProject.length > 0 && (
+        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business mb-4">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-slate-700 font-sf-pro">
+                  {selectedExpensesForBulkProject.length} expenses selected
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <select
+                   value=""
+                   onChange={(e) => {
+                     if (e.target.value) {
+                       const projectId = e.target.value === 'unassigned' ? null : parseInt(e.target.value);
+                       handleBulkProjectAssignment(projectId);
+                     }
+                   }}
+                   className="px-3 py-2 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-white/50"
+                 >
+                   <option value="">Assign to Project...</option>
+                   <option value="unassigned">Remove Project Assignment</option>
+                   {projects.map(project => (
+                     <option key={project.id} value={project.id}>
+                       {project.name} ({project.code})
+                     </option>
+                   ))}
+                 </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedExpensesForBulkProject([])}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <Button
+            onClick={handleOpenRecordExpenseModal}
+            className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600 font-sf-pro"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Record Expense
+          </Button>
+          
+          <Button
+            onClick={handleOpenPettyCashModal}
+            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 font-sf-pro"
+          >
+            <Coins className="h-4 w-4 mr-2" />
+            Petty Cash
+          </Button>
+          
+          {/* Upload Bank Statement - Hidden as requested */}
+          {/* <Dialog open={showBankUpload} onOpenChange={setShowBankUpload}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="border-mokm-green-500 text-mokm-green-700 hover:bg-mokm-green-50 font-sf-pro"
+              >
+                <Database className="h-4 w-4 mr-2" />
+                Upload Bank Statement
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Upload Bank Statement</DialogTitle>
+              </DialogHeader>
+              <BankStatementUpload
+                companyId={companyId}
+                onUploadComplete={handleBankStatementUpload}
+              />
+            </DialogContent>
+          </Dialog> */}
+          
+          {/* Fix Date Years and Debug Transactions buttons removed as requested */}
+          
+          {/* View Mode Toggle */}
+          <div className="flex items-center space-x-2 glass backdrop-blur-sm bg-slate-900/40 border border-white/10 rounded-lg p-1">
+            <Button
+              variant={viewMode === 'expense' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('expense')}
+              className={viewMode === 'expense' ? 'bg-mokm-blue-500 text-white' : 'text-slate-300 hover:bg-white/5'}
+            >
+              <Receipt className="h-4 w-4 mr-1" />
+              Expense View
+            </Button>
+            <Button
+              variant={viewMode === 'bank_statement' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('bank_statement')}
+              className={viewMode === 'bank_statement' ? 'bg-mokm-green-500 text-white' : 'text-slate-300 hover:bg-white/5'}
+            >
+              <Database className="h-4 w-4 mr-1" />
+              Bank Statement View
+            </Button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Expenses table */}
+      <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-900/30">
+                <tr className="border-b border-white/10">
+                  <th className="py-3 px-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    <input
+                      type="checkbox"
+                      checked={selectedExpensesForBulkProject.length === filteredExpenses.length && filteredExpenses.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedExpensesForBulkProject(filteredExpenses.map(exp => exp.id));
+                        } else {
+                          setSelectedExpensesForBulkProject([]);
+                        }
+                      }}
+                      className="rounded border-white/10 bg-slate-900/40"
+                    />
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    <button 
+                      onClick={() => handleSort('date')} 
+                      className="flex items-center space-x-1 hover:text-slate-200"
+                    >
+                      <span>Date</span>
+                      {sortBy === 'date' && (
+                        sortOrder === 'asc' ? 
+                          <ChevronUp className="h-4 w-4" /> : 
+                          <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    <button 
+                      onClick={() => handleSort('description')} 
+                      className="flex items-center space-x-1 hover:text-slate-200"
+                    >
+                      <span>Description</span>
+                      {sortBy === 'description' && (
+                        sortOrder === 'asc' ? 
+                          <ChevronUp className="h-4 w-4" /> : 
+                          <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  {viewMode === 'bank_statement' && (
+                    <>
+                      <th className="py-3 px-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                        <span>Debit</span>
+                      </th>
+                      <th className="py-3 px-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                        <span>Credit</span>
+                      </th>
+                      <th className="py-3 px-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                        <span>Balance</span>
+                      </th>
+                    </>
+                  )}
+                  <th className="py-3 px-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    <button 
+                      onClick={() => handleSort('category')} 
+                      className="flex items-center space-x-1 hover:text-slate-200"
+                    >
+                      <span>Category</span>
+                      {sortBy === 'category' && (
+                        sortOrder === 'asc' ? 
+                          <ChevronUp className="h-4 w-4" /> : 
+                          <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    <span>Project</span>
+                  </th>
+                  {viewMode === 'expense' && (
+                    <th className="py-3 px-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                      <button 
+                        onClick={() => handleSort('amount')} 
+                        className="flex items-center space-x-1 ml-auto hover:text-slate-200"
+                      >
+                        <span>Amount</span>
+                        {sortBy === 'amount' && (
+                          sortOrder === 'asc' ? 
+                            <ChevronUp className="h-4 w-4" /> : 
+                            <ChevronDown className="h-4 w-4" />
+                        )}
+                      </button>
+                    </th>
+                  )}
+
+                  <th className="py-3 px-4 text-center text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    <div className="flex items-center justify-center space-x-1">
+                      <Receipt className="h-4 w-4" />
+                      <span>RECEIPT</span>
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider font-sf-pro">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {filteredExpenses.length > 0 ? (
+                  filteredExpenses.map(expense => (
+                    <React.Fragment key={expense.id}>
+                      <tr 
+                        className={`group hover:bg-slate-800/30 cursor-pointer transition-colors ${selectedExpense === expense.id ? 'bg-slate-800/30' : ''}`}
+                        onClick={() => toggleExpenseDetails(expense.id)}
+                      >
+                        <td className="py-3 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedExpensesForBulkProject.includes(expense.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedExpensesForBulkProject([...selectedExpensesForBulkProject, expense.id]);
+                              } else {
+                                setSelectedExpensesForBulkProject(selectedExpensesForBulkProject.filter(id => id !== expense.id));
+                              }
+                            }}
+                            className="rounded border-white/10 bg-slate-900/40"
+                          />
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="text-sm text-slate-100 font-sf-pro">{new Date(expense.date).toLocaleDateString()}</div>
+                          <div className="text-xs text-slate-400 font-sf-pro">{expense.id}</div>
+                          {expense.source === 'bank_statement' && (
+                            <div className="mt-1">
+                              <Badge variant="outline" className="text-xs">Bank Import</Badge>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-sm text-slate-100 font-sf-pro">{expense.description}</div>
+                        </td>
+                        {viewMode === 'bank_statement' && (
+                          <>
+                            <td className="py-3 px-4 text-right">
+                              <div className="text-sm font-medium text-slate-900 font-sf-pro">
+                                {expense.debit != null ? formatCurrency(expense.debit) : '-'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="text-sm font-medium text-mokm-green-600 font-sf-pro">
+                                {expense.credit != null ? formatCurrency(expense.credit) : '-'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="text-sm font-medium text-slate-700 font-sf-pro">
+                                {expense.balance != null ? formatCurrency(expense.balance) : '-'}
+                              </div>
+                            </td>
+                          </>
+                        )}
+                        <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                          {editingCategory === expense.id ? (
+                            <Select
+                              value={`${expense.category}|${expense.notes?.includes('Subcategory:') ? expense.notes.replace('Subcategory: ', '') : ''}`}
+                              onValueChange={(value) => handleInlineCategoryUpdate(expense.id, value)}
+                              onOpenChange={(open) => {
+                                if (!open) {
+                                  setEditingCategory(null);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="operating|Rent & Lease">💼 Operating - Rent & Lease</SelectItem>
+                                <SelectItem value="operating|Utilities">💼 Operating - Utilities</SelectItem>
+                                <SelectItem value="operating|Salaries">💼 Operating - Salaries</SelectItem>
+                                <SelectItem value="operating|Repairs">💼 Operating - Repairs</SelectItem>
+                                <SelectItem value="operating|Security">💼 Operating - Security</SelectItem>
+                                <SelectItem value="operating|Office Supplies">💼 Operating - Office Supplies</SelectItem>
+                                <SelectItem value="operating|Cleaning">💼 Operating - Cleaning</SelectItem>
+                                <SelectItem value="cost_of_sales|Raw Materials">🚚 Cost of Sales - Raw Materials</SelectItem>
+                                <SelectItem value="cost_of_sales|Hiring Equipment">🚚 Cost of Sales - Hiring Equipment</SelectItem>
+                                <SelectItem value="cost_of_sales|Inventory">🚚 Cost of Sales - Inventory</SelectItem>
+                                <SelectItem value="cost_of_sales|Subcontractors">🚚 Cost of Sales - Subcontractors</SelectItem>
+                                <SelectItem value="marketing|Ads">📣 Marketing - Ads</SelectItem>
+                                <SelectItem value="marketing|Promotions">📣 Marketing - Promotions</SelectItem>
+                                <SelectItem value="marketing|Campaigns">📣 Marketing - Campaigns</SelectItem>
+                                <SelectItem value="professional|Legal">🧑‍💻 Professional - Legal</SelectItem>
+                                <SelectItem value="professional|Accounting">🧑‍💻 Professional - Accounting</SelectItem>
+                                <SelectItem value="professional|Consulting">🧑‍💻 Professional - Consulting</SelectItem>
+                                <SelectItem value="financial|Bank Charges">🧾 Financial - Bank Charges</SelectItem>
+                                <SelectItem value="financial|Loan Interest">🧾 Financial - Loan Interest</SelectItem>
+                                <SelectItem value="financial|Insurance">🧾 Financial - Insurance</SelectItem>
+                                <SelectItem value="financial|Fines">🧾 Financial - Fines</SelectItem>
+                                <SelectItem value="it_software|Subscriptions">🖥️ IT & Software - Subscriptions</SelectItem>
+                                <SelectItem value="it_software|Hosting">🖥️ IT & Software - Hosting</SelectItem>
+                                <SelectItem value="it_software|Software">🖥️ IT & Software - Software</SelectItem>
+                                <SelectItem value="travel|Fuel">🚗 Travel - Fuel</SelectItem>
+                                <SelectItem value="travel|Accommodation">🚗 Travel - Accommodation</SelectItem>
+                                <SelectItem value="travel|Flights">🚗 Travel - Flights</SelectItem>
+                                <SelectItem value="travel|Per Diems">🚗 Travel - Per Diems</SelectItem>
+                                <SelectItem value="regulatory|SARS">🏛️ Regulatory - SARS</SelectItem>
+                                <SelectItem value="regulatory|CIPC">🏛️ Regulatory - CIPC</SelectItem>
+                                <SelectItem value="regulatory|Workman's Comp">🏛️ Regulatory - Workman's Comp</SelectItem>
+                                <SelectItem value="training|Courses">🎓 Training - Courses</SelectItem>
+                                <SelectItem value="training|Seminars">🎓 Training - Seminars</SelectItem>
+                                <SelectItem value="miscellaneous|Donations">🎁 Miscellaneous - Donations</SelectItem>
+                                <SelectItem value="miscellaneous|Gifts">🎁 Miscellaneous - Gifts</SelectItem>
+                                <SelectItem value="miscellaneous|Entertainment">🎁 Miscellaneous - Entertainment</SelectItem>
+                                <SelectItem value="miscellaneous|Sundry">🎁 Miscellaneous - Sundry</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div 
+                              className="cursor-pointer hover:bg-white/20 p-1 rounded transition-colors"
+                              onClick={() => setEditingCategory(expense.id)}
+                            >
+                              {categoryUpdateLoading === expense.id ? (
+                                <div className="flex items-center space-x-2">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-mokm-blue-500"></div>
+                                  <span className="text-xs text-slate-500">Updating...</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-sm text-slate-900 font-sf-pro">{expense.category}</div>
+                                  {expense.notes && expense.notes.includes('Subcategory:') && (
+                                    <div className="text-xs text-slate-500 font-sf-pro">{expense.notes.replace('Subcategory: ', '')}</div>
+                                  )}
+                                  <div className="text-xs text-slate-500 font-sf-pro">{expense.paymentMethod}</div>
+                                  {categorizedExpenses.find(e => e.id === expense.id)?.vatDeductible && (
+                                    <Badge variant="secondary" className="text-xs mt-1">VAT Deductible</Badge>
+                                  )}
+                                  <div className="text-xs text-mokm-blue-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                          {expense.projectId ? (
+                            <div>
+                              <div className="text-sm text-slate-900 font-sf-pro">{expense.projectName}</div>
+                              <div className="text-xs text-slate-500 font-sf-pro">{expense.projectCode}</div>
+                            </div>
+                          ) : (
+                            <select
+                              value={expense.projectId || ''}
+                              onChange={(e) => {
+                                const projectId = e.target.value ? parseInt(e.target.value) : null;
+                                handleProjectAssignment(expense.id, projectId);
+                              }}
+                              className="text-sm px-2 py-1 border border-white/20 rounded focus:ring-2 focus:ring-mokm-blue-500 focus:border-transparent glass backdrop-blur-sm bg-white/50"
+                            >
+                              <option value="">Assign Project...</option>
+                              {projects.map(project => (
+                                <option key={project.id} value={project.id}>
+                                  {project.name} ({project.code})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
+                        {viewMode === 'expense' && (
+                          <td className="py-3 px-4 text-right">
+                            <div className="text-sm font-medium text-slate-900 font-sf-pro">{formatCurrency(expense.amount)}</div>
+                          </td>
+                        )}
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex flex-col items-center space-y-1">
+                            {(() => {
+                              const receiptFromMap = receiptData.get(expense.id);
+                              const receiptFromService = slipOCRService.getReceiptData(expense.id);
+                              const receipt = receiptFromMap || receiptFromService;
+                              
+                              if (!receipt) {
+                                return (
+                                  <>
+                                    <Receipt className="h-5 w-5 text-mokm-yellow-500" />
+                                    <span className="text-xs text-mokm-yellow-600 font-sf-pro">Missing</span>
+                                  </>
+                                );
+                              }
+                              
+                              // Check if amounts match
+                              const extractedAmount = receipt.extractedAmount;
+                              const expenseAmount = expense.amount;
+                              const tolerance = 0.01; // 1 cent tolerance
+                              const amountsMatch = extractedAmount && Math.abs(extractedAmount - expenseAmount) <= tolerance;
+                              
+                              if (receipt.status === 'completed' && amountsMatch) {
+                                return (
+                                  <>
+                                    <CheckCircle className="h-5 w-5 text-mokm-green-500" />
+                                    <span className="text-xs text-mokm-green-600 font-sf-pro">Uploaded</span>
+                                  </>
+                                );
+                              } else if (extractedAmount && !amountsMatch) {
+                                return (
+                                  <>
+                                    <XCircle className="h-5 w-5 text-red-500" />
+                                    <span className="text-xs text-red-600 font-sf-pro">Incorrect</span>
+                                  </>
+                                );
+                              } else {
+                                return (
+                                  <>
+                                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                                    <span className="text-xs text-orange-600 font-sf-pro">Uploaded</span>
+                                  </>
+                                );
+                              }
+                            })()} 
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditExpense(expense.id);
+                              }}
+                              title="Edit expense"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteExpense(expense.id);
+                              }}
+                              title="Delete expense"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+
+                          </div>
+                        </td>
+                      </tr>
+                      {selectedExpense === expense.id && (
+                        <tr>
+                        <td colSpan={viewMode === 'bank_statement' ? 12 : 9} className="p-0">
+                            <div className="glass backdrop-blur-sm bg-slate-900/40 p-4 border-t border-b border-white/10">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <h4 className="text-sm font-medium text-slate-300 mb-3 font-sf-pro">Details</h4>
+                                  <div className="text-sm space-y-2">
+                                    <div className="flex justify-between items-center py-3 px-4 glass backdrop-blur-sm bg-slate-900/30 rounded-lg border border-white/10 shadow-sm">
+                                      <span className="text-slate-300 font-medium text-xs uppercase tracking-wide">Submitted by:</span>
+                                      <span className="font-sf-pro text-slate-100 font-semibold text-right">
+                                        {user?.user_metadata?.first_name && user?.user_metadata?.last_name 
+                                          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}` 
+                                          : user?.user_metadata?.full_name || user?.email || 'Unknown User'}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center py-3 px-4 glass backdrop-blur-sm bg-slate-900/30 rounded-lg border border-white/10 shadow-sm">
+                                      <span className="text-slate-300 font-medium text-xs uppercase tracking-wide">Submitted date:</span>
+                                      <span className="font-sf-pro text-slate-100 font-semibold text-right">
+                                        {(() => {
+                                          if (expense.bankStatementId) {
+                                            const bankStatement = bankStatements.find(bs => bs.id === expense.bankStatementId);
+                                            return bankStatement?.uploadDate 
+                                              ? new Date(bankStatement.uploadDate).toLocaleDateString()
+                                              : new Date(expense.submittedDate).toLocaleDateString();
+                                          }
+                                          return new Date(expense.submittedDate).toLocaleDateString();
+                                        })()} 
+                                      </span>
+                                    </div>
+                                    {expense.assignedTo && (
+                                      <div className="flex justify-between items-center py-3 px-4 glass backdrop-blur-sm bg-slate-900/30 rounded-lg border border-white/10 shadow-sm">
+                                        <span className="text-slate-300 font-medium text-xs uppercase tracking-wide">Assigned to:</span>
+                                        <span className="font-sf-pro text-slate-100 font-semibold text-right">{expense.assignedTo}</span>
+                                      </div>
+                                    )}
+                                    {categorizedExpenses.find(e => e.id === expense.id) && (
+                                       <div className="flex justify-between items-center py-3 px-4 glass backdrop-blur-sm bg-slate-900/30 rounded-lg border border-white/10 shadow-sm">
+                                         <span className="text-slate-300 font-medium text-xs uppercase tracking-wide">Category:</span>
+                                         <Select
+                                           value={(() => {
+                                             // Extract subcategory from notes if it exists
+                                             const subcategory = expense.notes?.includes('Subcategory:') 
+                                               ? expense.notes.replace('Subcategory: ', '') 
+                                               : '';
+                                             return `${expense.category}|${subcategory}`;
+                                           })()}
+                                           onValueChange={(value) => {
+                                             const [category, subcategory] = value.split('|');
+                                             handleCategoryChange(expense.id, category, subcategory);
+                                           }}
+                                         >
+                                           <SelectTrigger className="w-[220px] bg-slate-900/40 border-white/10 text-slate-100">
+                                             <SelectValue placeholder="Select category" />
+                                           </SelectTrigger>
+                                           <SelectContent>
+                                             {(() => {
+                                               const categories = expenseCategorizationService.categorizeExpense(expense.description, expense.amount)?.categories || [];
+                                               const subcategories = expenseCategorizationService.categorizeExpense(expense.description, expense.amount)?.subcategories || [];
+                                               return (
+                                                 <>
+                                                   {categories.map(category => (
+                                                     <SelectItem key={category} value={category}>
+                                                       {category}
+                                                     </SelectItem>
+                                                   ))}
+                                                   {subcategories.map(subcategory => (
+                                                     <SelectItem key={subcategory} value={subcategory}>
+                                                       {subcategory}
+                                                     </SelectItem>
+                                                   ))}
+                                                 </>
+                                               );
+                                             })()}
+                                           </SelectContent>
+                                         </Select>
+                                       </div>
+                                     )}
+                                    <div className="flex justify-between items-center py-3 px-4 glass backdrop-blur-sm bg-slate-900/30 rounded-lg border border-white/10 shadow-sm">
+                                       <span className="text-slate-300 font-medium text-xs uppercase tracking-wide">Project:</span>
+                                       <select
+                                        value={expense.projectId || ''}
+                                        onChange={(e) => {
+                                          const projectId = e.target.value ? parseInt(e.target.value) : null;
+                                          handleProjectAssignment(expense.id, projectId);
+                                        }}
+                                        className="w-full px-3 py-2 border border-white/10 rounded-lg focus:ring-2 focus:ring-mokm-blue-500/30 focus:border-transparent glass backdrop-blur-sm bg-slate-900/40 text-slate-100"
+                                      >
+                                        <option value="">No Project Assigned</option>
+                                        {projects.map(project => (
+                                          <option key={project.id} value={project.id}>
+                                            {project.name} ({project.code})
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {expense.projectId && (
+                                        <div className="text-xs text-slate-400 mt-1">
+                                          Budget: {(() => { const p = projects.find(p => p.id === expense.projectId); return p?.budget != null ? formatCurrency(p.budget) : 'N/A'; })()}
+                                        </div>
+                                      )}
+                                  <h4 className="text-sm font-medium text-slate-300 mb-2 font-sf-pro">Actions</h4>
+                                  <div className="space-y-2">
+                                    {editingExpense === expense.id ? (
+                                      // Edit Form
+                                      <div className="space-y-4 p-4 glass backdrop-blur-sm bg-slate-900/30 rounded-lg border border-white/10 shadow-sm">
+                                        <h5 className="text-sm font-semibold text-slate-300 mb-3 font-sf-pro">Edit Expense</h5>
+                                        
+                                        <div>
+                                          <label className="block text-xs font-medium text-slate-300 mb-1 font-sf-pro">Description *</label>
+                                          <Input
+                                            value={editFormData.description || ''}
+                                            onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                                            className="w-full bg-slate-900/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20"
+                                            placeholder="Enter expense description"
+                                          />
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="block text-xs font-medium text-slate-300 mb-1 font-sf-pro">Category *</label>
+                                          <Select
+                                            value={`${editFormData.category || ''}|`}
+                                            onValueChange={(value) => {
+                                              const [category] = value.split('|');
+                                              setEditFormData({...editFormData, category});
+                                            }}
+                                          >
+                                            <SelectTrigger className="w-full bg-slate-900/40 border-white/10 text-slate-100 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20">
+                                              <SelectValue placeholder="Select a category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="operating|">💼 Operating Expenses</SelectItem>
+                                              <SelectItem value="cost_of_sales|">🚚 Cost of Sales / Direct Costs</SelectItem>
+                                              <SelectItem value="marketing|">📣 Marketing & Advertising</SelectItem>
+                                              <SelectItem value="professional|">🧑‍💻 Professional Services</SelectItem>
+                                              <SelectItem value="financial|">🧾 Financial Expenses</SelectItem>
+                                              <SelectItem value="it_software|">🖥️ IT & Software</SelectItem>
+                                              <SelectItem value="travel|">🚗 Travel & Transport</SelectItem>
+                                              <SelectItem value="regulatory|">🏛️ Regulatory & Government Fees</SelectItem>
+                                              <SelectItem value="training|">🎓 Training & Development</SelectItem>
+                                              <SelectItem value="miscellaneous|">🎁 Miscellaneous / Other</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="block text-xs font-medium text-slate-300 mb-1 font-sf-pro">Notes</label>
+                                          <Input
+                                            value={editFormData.notes || ''}
+                                            onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                                            className="w-full bg-slate-900/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20"
+                                            placeholder="Add any additional notes (optional)"
+                                          />
+                                        </div>
+                                        
+                                        <div className="flex justify-end space-x-3 pt-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleCancelEdit}
+                                            className="border-slate-300 text-slate-600 hover:bg-slate-50"
+                                          >
+                                            Cancel
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleSaveEdit(expense.id)}
+                                            disabled={!editFormData.description?.trim() || !editFormData.category}
+                                            className="bg-mokm-blue-600 hover:bg-mokm-blue-700 text-white font-medium px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          >
+                                            <Save className="h-4 w-4 mr-2" />
+                                            Save Changes
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      // Normal Actions
+                                      <>
+                                        {(() => {
+                                          const receiptFromMap = receiptData.get(expense.id);
+                                          const receiptFromService = slipOCRService.getReceiptData(expense.id);
+                                          const hasReceipt = receiptFromMap || receiptFromService;
+                                          
+                                          // Enhanced debugging for receipt detection
+                                          console.log(`[DEBUG] Expense ${expense.id} (${expense.description}):`, {
+                                            receiptFromMap,
+                                            receiptFromService,
+                                            hasReceipt,
+                                            expenseHasReceiptFlag: expense.hasReceipt,
+                                            amount: expense.amount
+                                          });
+                                          
+                                          if (hasReceipt) {
+                                            console.log(`[DEBUG] Rendering receipt buttons for expense ${expense.id} (hasReceipt: ${hasReceipt})`);
+                                            const needsVerification = hasReceipt.status === 'manual_verification_required';
+                                            return (
+                                              <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-green-600 border-green-200 hover:bg-green-50 flex-1"
+                                                    onClick={() => {
+                                                      console.log('[DEBUG] View button clicked for expense:', expense.id);
+                                                      handleViewReceipt(expense.id);
+                                                    }}
+                                                    disabled={!hasReceipt}
+                                                  >
+                                                    <Eye className="h-4 w-4 mr-1" />
+                                                    View
+                                                  </Button>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-orange-600 border-orange-200 hover:bg-orange-50 flex-1"
+                                                    onClick={() => {
+                                                      console.log('[DEBUG] Replace button clicked for expense:', expense.id);
+                                                      handleReplaceReceipt(expense.id);
+                                                    }}
+                                                    disabled={processingReceipts.has(expense.id)}
+                                                  >
+                                                    <Upload className="h-4 w-4 mr-1" />
+                                                    Replace
+                                                  </Button>
+                                                </div>
+                                                {needsVerification && (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-yellow-600 border-yellow-200 hover:bg-yellow-50 w-full"
+                                                    onClick={() => {
+                                                      console.log('[DEBUG] Verify button clicked for expense:', expense.id);
+                                                      handleVerifyReceipt(expense.id);
+                                                    }}
+                                                  >
+                                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                                    Verify Receipt
+                                                  </Button>
+                                                )}
+                                              </div>
+                                            );
+                                          } else {
+                                            console.log(`[DEBUG] Rendering upload buttons for expense ${expense.id} (no receipt found)`);
+                                            return (
+                                              <div className="space-y-2">
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="text-mokm-blue-600 border-mokm-blue-200 hover:bg-mokm-blue-50 w-full"
+                                                  onClick={() => handleReceiptUpload(expense.id)}
+                                                  disabled={processingReceipts.has(expense.id)}
+                                                >
+                                                  <Upload className="h-4 w-4 mr-1" />
+                                                  {processingReceipts.has(expense.id) ? 'Processing...' : 'Upload Receipt'}
+                                                </Button>
+
+                                              </div>
+                                            );
+                                          }
+                                        })()}
+
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  {expense.notes && (
+                                    <>
+                                      <h4 className="text-sm font-medium text-slate-700 mb-2 font-sf-pro">Notes</h4>
+                                      <p className="text-sm text-slate-600 bg-white/50 p-2 rounded font-sf-pro">
+                                        {expense.notes}
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))
+                ) : (
+                  <tr>
+                    <td colSpan={viewMode === 'bank_statement' ? 10 : 7} className="py-8 text-center text-slate-400">
+                      <Receipt className="h-12 w-12 mx-auto text-slate-300" />
+                      <p className="mt-2 text-lg font-medium font-sf-pro">No expenses found</p>
+                      <p className="mt-1 font-sf-pro">Adjust your filters or add a new expense</p>
+                      <div className="mt-4">
+                        <Button
+                          onClick={handleOpenRecordExpenseModal}
+                          className="bg-gradient-to-r from-mokm-blue-500 to-mokm-purple-500 hover:from-mokm-blue-600 hover:to-mokm-purple-600"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Record Expense
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+      
+
+      
+      {/* Import Preview Dialog */}
+      <Dialog open={showImportPreview} onOpenChange={setShowImportPreview}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Bank Statement Transactions</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+             <div className="text-sm text-slate-600">
+               Found {pendingImportData.length} new transactions to import. Select the transactions you want to import:
+             </div>
+             
+             <div className="max-h-96 overflow-y-auto border border-white/20 rounded-lg">
+               <table className="w-full">
+                 <thead className="bg-white/20 sticky top-0">
+                   <tr>
+                     <th className="text-left p-3 text-sm font-medium text-slate-700">
+                       <input
+                         type="checkbox"
+                         onChange={(e) => {
+                           const allSelected = e.target.checked;
+                           setPendingImportData(prev => 
+                             prev.map(t => ({ ...t, selected: allSelected }))
+                           );
+                         }}
+                         checked={pendingImportData.every(t => t.selected)}
+                       />
+                     </th>
+                     <th className="text-left p-3 text-sm font-medium text-slate-700">Date</th>
+                     <th className="text-left p-3 text-sm font-medium text-slate-700">Description</th>
+                     <th className="text-left p-3 text-sm font-medium text-slate-700">Amount</th>
+                     <th className="text-left p-3 text-sm font-medium text-slate-700">Type</th>
+                     <th className="text-left p-3 text-sm font-medium text-slate-700">Suggested Category</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {pendingImportData.map((transaction, index) => {
+                     const categorization = expenseCategorizationService.categorizeExpense(
+                       transaction.description,
+                       transaction.amount
+                     );
+                     
+                     return (
+                        <tr key={index} className={`border-b border-white/10 hover:bg-white/10 ${
+                          transaction.isDuplicate ? 'bg-yellow-50/50' : ''
+                        }`}>
+                          <td className="p-3">
+                            <input
+                              type="checkbox"
+                              checked={transaction.selected || false}
+                              onChange={(e) => {
+                                setPendingImportData(prev => 
+                                  prev.map((t, i) => 
+                                    i === index ? { ...t, selected: e.target.checked } : t
+                                  )
+                                );
+                              }}
+                            />
+                          </td>
+                          <td className="p-3 text-sm">
+                            {new Date(transaction.date).toLocaleDateString('en-ZA', {
+                              day: '2-digit',
+                              month: '2-digit', 
+                              year: 'numeric'
+                            })}
+                          </td>
+                          <td className="p-3 text-sm">
+                            <div>
+                              {transaction.description}
+                              {transaction.isDuplicate && (
+                                <div className="flex items-center mt-1">
+                                  <AlertCircle className="h-3 w-3 text-yellow-500 mr-1" />
+                                  <span className="text-xs text-yellow-600">Possible duplicate</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-sm font-medium">
+                            {formatCurrency(Math.abs(transaction.amount))}
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={transaction.type === 'debit' ? 'destructive' : 'default'}>
+                              {transaction.type === 'debit' ? 'Expense' : 'Income'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-sm">
+                            <div className="flex items-center space-x-2">
+                              <span>{categorization.category}</span>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs ${
+                                  categorization.confidence > 0.8 ? 'border-green-300 text-green-700' :
+                                  categorization.confidence > 0.6 ? 'border-yellow-300 text-yellow-700' :
+                                  'border-red-300 text-red-700'
+                                }`}
+                              >
+                                {Math.round(categorization.confidence * 100)}% confidence
+                              </Badge>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                   })}
+                 </tbody>
+               </table>
+             </div>
+             
+             <div className="flex justify-between items-center pt-4 border-t border-white/20">
+               <div className="text-sm text-slate-600">
+                 {pendingImportData.filter(t => t.selected).length} of {pendingImportData.length} transactions selected
+               </div>
+               <div className="flex space-x-3">
+                 <Button
+                   variant="outline"
+                   onClick={() => {
+                     setShowImportPreview(false);
+                     setPendingImportData([]);
+                   }}
+                 >
+                   Cancel
+                 </Button>
+                 <Button
+                   onClick={() => {
+                     const selectedTransactions = pendingImportData.filter(t => t.selected);
+                     if (selectedTransactions.length === 0) {
+                       alert('Please select at least one transaction to import.');
+                       return;
+                     }
+                     handleBulkImport(selectedTransactions);
+                   }}
+                   className="bg-mokm-green-600 hover:bg-mokm-green-700"
+                 >
+                   Import Selected ({pendingImportData.filter(t => t.selected).length})
+                 </Button>
+               </div>
+             </div>
+           </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <span>Confirm Delete</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete this expense? This action cannot be undone.
+            </p>
+            {expenseToDelete && (
+              <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Description:</span>
+                  <span className="text-sm">{expenseToDelete.description}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Amount:</span>
+                  <span className="text-sm font-medium">{formatCurrency(expenseToDelete.amount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Date:</span>
+                  <span className="text-sm">{expenseToDelete.date}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-sm">Category:</span>
+                  <span className="text-sm">{expenseToDelete.category}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              onClick={cancelDeleteExpense}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteExpense}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Expense
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Record Expense Modal */}
+      <RecordExpenseModal
+        isOpen={showRecordExpenseModal}
+        onClose={handleCloseRecordExpenseModal}
+        onSave={handleSaveExpense}
+        projects={projects}
+      />
+      
+      {/* Petty Cash Modal */}
+      <PettyCashModal
+        isOpen={showPettyCashModal}
+        onClose={handleClosePettyCashModal}
+        onSave={handleSaveExpense}
+        projects={projects}
+      />
+      
+      {/* Receipt Viewer Modal */}
+      <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Receipt for Expense: {currentReceiptData?.expenseId}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto min-h-0">
+            {currentReceiptData && (
+              <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg p-4">
+                {currentReceiptData.isPDF ? (
+                  <div className="w-full h-[60vh] bg-white rounded border">
+                    <iframe
+                      src={currentReceiptData.receiptImage}
+                      className="w-full h-full border-0"
+                      title={`Receipt for expense ${currentReceiptData.expenseId}`}
+                    />
+                  </div>
+                ) : (
+                  <img
+                    src={currentReceiptData.receiptImage}
+                    alt={`Receipt for expense ${currentReceiptData.expenseId}`}
+                    className="max-w-full max-h-[60vh] object-contain rounded shadow-lg"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-4 border-t flex-shrink-0 bg-white">
+            <div className="flex gap-2">
+              {currentReceiptData && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (currentReceiptData) {
+                        const link = document.createElement('a');
+                        link.href = currentReceiptData.receiptImage;
+                        link.download = `receipt-${currentReceiptData.expenseId}.${currentReceiptData.isPDF ? 'pdf' : 'jpg'}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        toast.success('Receipt downloaded successfully');
+                      }
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.print()}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
+                </>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowReceiptModal(false)}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt Verification Modal */}
+      <Dialog open={showVerificationModal} onOpenChange={setShowVerificationModal}>
+        <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-yellow-600" />
+              Verify Receipt Data - Expense: {verificationData?.expenseId}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto min-h-0">
+            {verificationData && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                {/* Receipt Image */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-700">Receipt Image</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 h-[400px] flex items-center justify-center">
+                    <img
+                      src={verificationData.receiptImage}
+                      alt={`Receipt for expense ${verificationData.expenseId}`}
+                      className="max-w-full max-h-full object-contain rounded shadow-lg"
+                    />
+                  </div>
+                </div>
+                
+                {/* Extracted Data Form */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-700">Extracted Data</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Extracted Text
+                      </label>
+                      <textarea
+                        className="w-full p-3 border border-gray-300 rounded-lg resize-none h-32"
+                        value={verificationData.receiptText}
+                        onChange={(e) => setVerificationData(prev => prev ? {
+                          ...prev,
+                          receiptText: e.target.value
+                        } : null)}
+                        placeholder="Extracted text from receipt..."
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Amount
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={verificationData.extractedAmount}
+                          onChange={(e) => setVerificationData(prev => prev ? {
+                            ...prev,
+                            extractedAmount: parseFloat(e.target.value) || 0
+                          } : null)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          VAT Amount
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={verificationData.extractedVAT}
+                          onChange={(e) => setVerificationData(prev => prev ? {
+                            ...prev,
+                            extractedVAT: parseFloat(e.target.value) || 0
+                          } : null)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">Instructions</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        <li>• Review the extracted text and correct any errors</li>
+                        <li>• Verify the amount matches the receipt</li>
+                        <li>• Enter VAT amount if applicable</li>
+                        <li>• Click "Save Verification" when complete</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-4 border-t flex-shrink-0 bg-white">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowVerificationModal(false);
+                setVerificationData(null);
+              }}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (verificationData) {
+                  handleSaveVerification({
+                    receiptText: verificationData.receiptText,
+                    extractedAmount: verificationData.extractedAmount,
+                    extractedVAT: verificationData.extractedVAT
+                  });
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Verification
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default ExpensesTab;

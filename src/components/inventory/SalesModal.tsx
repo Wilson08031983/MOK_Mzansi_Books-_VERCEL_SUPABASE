@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Package, Printer, FileText, FileCheck, Truck, Search, X, Plus, Check, T
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -14,9 +15,10 @@ import { getAllInventoryItems, updateInventoryItem, getInventoryItemByBarcode, s
 import { getClients, Client as ClientType } from '@/services/clientService';
 import companyService from '@/services/companyService';
 import { generateQuotationNumber, saveQuotation } from '@/services/quotationService';
-import { generateInvoiceNumber } from '@/services/invoiceService';
+import { generateInvoiceNumber, applyClientDiscountToTotals, canProceedWithCredit } from '@/services/invoiceService';
 import BarcodeScanner from '@/components/inventory/BarcodeScanner';
-import { formatCurrency, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { useLocalization } from '@/hooks/useLocalization';
 import { generateDeliveryNotePdf } from '@/utils/deliveryNotePdfGenerator';
 import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
 
@@ -62,6 +64,9 @@ interface DeliveryNote {
   deliveryCost: number;
   location: string;
   signature: string;
+  // Optional contact details for printing and PDF generation compatibility
+  contactPerson?: string;
+  phone?: string;
 }
 
 interface SalesModalProps {
@@ -70,6 +75,8 @@ interface SalesModalProps {
 }
 
 const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
+  const { formatCurrency, settings, getCurrencySymbol } = useLocalization();
+  const { logFinancial, logDocument, logAudit } = useAuditLogger();
   const [activeTab, setActiveTab] = useState('scan');
   const [salesItems, setSalesItems] = useState<SalesItem[]>([]);
   const [manualBarcode, setManualBarcode] = useState('');
@@ -84,8 +91,11 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   const [printingDeliveryNote, setPrintingDeliveryNote] = useState(false);
   const [clients, setClients] = useState<ClientType[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [clientFinance, setClientFinance] = useState<{ discountRate: number; creditLimit: number }>({ discountRate: 0, creditLimit: 0 });
   const [companyInfo, setCompanyInfo] = useState<import('@/types/company').Company | null>(null);
   const [companyLogo, setCompanyLogo] = useState<string>('');
+  // A unique session id that groups slip income with any follow-up invoice
+  const [saleSessionId, setSaleSessionId] = useState<string>('');
   const [deliveryNote, setDeliveryNote] = useState<DeliveryNote>({
     customerName: '',
     customerSurname: '',
@@ -95,9 +105,16 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     addressLine4: '',
     deliveryCost: 0,
     location: '',
-    signature: ''
+    signature: '',
+    contactPerson: '',
+    phone: ''
   });
   const { toast } = useToast();
+
+  // Derived selected client from id for safer access in JSX and printing sections
+  const selectedClient = useMemo(() => {
+    return clients.find(c => c.id === selectedClientId) || null;
+  }, [clients, selectedClientId]);
 
   // Helper function to save income record
   const saveIncomeRecord = (description: string, amount: number, category: string, paymentMethod: string = 'Cash') => {
@@ -113,7 +130,10 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         status: 'received' as const,
         paymentMethod: paymentMethod,
         client: selectedClientId ? (clients.find(c => c.id === selectedClientId)?.companyName || clients.find(c => c.id === selectedClientId)?.contactPerson) : undefined,
+        clientId: selectedClientId || undefined,
+        source: 'sales_slip' as const,
         hasInvoice: false,
+        saleSessionId,
         notes: 'Auto-generated from sales transaction'
       };
       
@@ -134,9 +154,21 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen) {
       try {
+        // Create a new sale session id on open
+        setSaleSessionId(`SALESESS-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`);
         // Load clients
         const loadedClients = getClients();
         setClients(loadedClients);
+        // Reset client finance when opening
+        if (selectedClientId) {
+          const sc = loadedClients.find(c => c.id === selectedClientId);
+          setClientFinance({
+            discountRate: Number((sc as any)?.discountRate) || 0,
+            creditLimit: Number((sc as any)?.creditLimit) || 0
+          });
+        } else {
+          setClientFinance({ discountRate: 0, creditLimit: 0 });
+        }
         
         // Load company info
         const companyData = companyService.getCompany();
@@ -155,14 +187,29 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
 
   // Calculate subtotal, VAT, and total amount whenever salesItems or vatPercentage changes
   useEffect(() => {
-    const subtotal = salesItems.reduce((sum, item) => sum + item.total, 0);
-    const vat = subtotal * (vatPercentage / 100);
-    const total = subtotal + vat;
-    
-    setSubtotalAmount(subtotal);
-    setVatAmount(vat);
-    setTotalAmount(total);
-  }, [salesItems, vatPercentage]);
+    const baseSubtotal = salesItems.reduce((sum, item) => sum + item.total, 0);
+    const discounted = applyClientDiscountToTotals(baseSubtotal, vatPercentage, clientFinance.discountRate);
+    setSubtotalAmount(discounted.discountedSubtotal);
+    setVatAmount(discounted.vatTotal);
+    setTotalAmount(discounted.total);
+  }, [salesItems, vatPercentage, clientFinance.discountRate]);
+
+  // For UI display: compute base subtotal and discount meta
+  const baseSubtotal = useMemo(() => salesItems.reduce((sum, item) => sum + item.total, 0), [salesItems]);
+  const discountMeta = useMemo(() => applyClientDiscountToTotals(baseSubtotal, vatPercentage, clientFinance.discountRate), [baseSubtotal, vatPercentage, clientFinance.discountRate]);
+
+  // Update client finance when selection changes
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientFinance({ discountRate: 0, creditLimit: 0 });
+      return;
+    }
+    const sc = clients.find(c => c.id === selectedClientId);
+    setClientFinance({
+      discountRate: Number((sc as any)?.discountRate) || 0,
+      creditLimit: Number((sc as any)?.creditLimit) || 0
+    });
+  }, [selectedClientId, clients]);
 
   // Handle barcode scan result
   const handleScanResult = (result: string) => {
@@ -360,6 +407,12 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               'Sales',
               'Cash'
             );
+            // Audit: record financial event for slip sale
+            try {
+              logFinancial('Recorded Sale', 'income', incomeRecord?.id || 'Sales Slip', incomeRecord?.id, totalAmount);
+            } catch (e) {
+              console.warn('Audit log (sales slip income) failed:', e);
+            }
             
             // Show success message
             toast({
@@ -410,7 +463,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         date: now.toISOString(),
         expiryDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
         status: 'draft' as 'draft' | 'saved' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'cancelled',
-        currency: 'ZAR',
+        currency: settings.currency,
         amount: totalAmount,
         items: salesItems.map((item, index) => ({
           id: `item-${Date.now()}-${index}`,
@@ -440,6 +493,12 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
 
       // Save the quotation using the service function
       saveQuotation(newQuotation);
+      // Audit: log quotation creation
+      try {
+        logDocument('Created Quotation', 'quotation', newQuotation.number, newQuotation.id);
+      } catch (e) {
+        console.warn('Audit log (create quotation) failed:', e);
+      }
 
       // Update inventory quantities
       updateInventoryQuantities();
@@ -488,6 +547,16 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
       const invoiceNumber = generateInvoiceNumber();
       const now = new Date();
       const selectedClient = clients.find(client => client.id === selectedClientId);
+      // Enforce credit limit if configured using the discounted total
+      const creditCheck = canProceedWithCredit(selectedClientId, totalAmount, clientFinance.creditLimit);
+      if (!creditCheck.allowed) {
+        toast({
+          title: "Credit limit exceeded",
+          description: `Outstanding: ${formatCurrency(creditCheck.outstanding)} | Remaining credit: ${formatCurrency(creditCheck.remaining)} | Invoice total: ${formatCurrency(totalAmount)}`,
+          variant: "destructive"
+        });
+        return;
+      }
       
       // Create new invoice with proper structure matching Invoice interface
       const newInvoice = {
@@ -505,7 +574,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
         paidAmount: 0,
         balance: totalAmount,
         status: 'pending',
-        currency: 'ZAR',
+        currency: settings.currency,
         vatRate: vatPercentage || 0,
         reference: `SALE-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`,
         terms: 'Payment due within 30 days',
@@ -525,6 +594,43 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
 
       // Save updated invoices to localStorage
       localStorage.setItem('invoices', JSON.stringify([...existingInvoices, newInvoice]));
+      // Audit: log invoice creation (document + financial)
+      try {
+        logDocument('Created Invoice', 'invoice', newInvoice.number, newInvoice.id);
+        logFinancial('Created Invoice', 'invoice', newInvoice.number, newInvoice.id, newInvoice.total);
+      } catch (e) {
+        console.warn('Audit log (create invoice) failed:', e);
+      }
+
+      // Mark any related slip incomes (same session + same client) as converted to invoice
+      try {
+        const incomes: any[] = JSON.parse(localStorage.getItem('incomes') || '[]');
+        let changed = false;
+        const updatedIncomes = incomes.map((inc) => {
+          if (
+            inc &&
+            inc.source === 'sales_slip' &&
+            inc.saleSessionId === saleSessionId &&
+            inc.clientId === selectedClientId &&
+            inc.hasInvoice !== true
+          ) {
+            changed = true;
+            return {
+              ...inc,
+              hasInvoice: true,
+              linkedInvoiceId: newInvoice.id,
+            };
+          }
+          return inc;
+        });
+        if (changed) {
+          localStorage.setItem('incomes', JSON.stringify(updatedIncomes));
+          // Notify listeners so totals refresh in Clients page
+          window.dispatchEvent(new CustomEvent('income-updated'));
+        }
+      } catch (e) {
+        console.error('Failed to mark related slip incomes as invoiced:', e);
+      }
 
       // Update inventory quantities
       updateInventoryQuantities();
@@ -594,6 +700,20 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     
     // Save updated inventory items
     saveInventoryItems(inventoryItems);
+    // Audit: summarize inventory quantity changes for this sale
+    try {
+      const changed = salesItems.map(si => ({ itemId: si.itemId, name: si.name, qtySold: si.quantity }));
+      logAudit({
+        category: 'crud',
+        action: 'Updated Inventory Quantities',
+        changeType: 'update',
+        entityType: 'inventory',
+        description: `Stock reduced for ${changed.length} item(s) due to sale`,
+        newValues: { changes: changed }
+      });
+    } catch (e) {
+      console.warn('Audit log (inventory update after sale) failed:', e);
+    }
   };
 
   // Handle delivery note form submission
@@ -629,6 +749,12 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
 
       // Save updated delivery notes to localStorage
       localStorage.setItem('deliveryNotes', JSON.stringify([...existingDeliveryNotes, newDeliveryNote]));
+      // Audit: log delivery note creation
+      try {
+        logDocument('Created Delivery Note', 'delivery_note', newDeliveryNote.id, newDeliveryNote.id);
+      } catch (e) {
+        console.warn('Audit log (create delivery note) failed:', e);
+      }
 
       // Update inventory quantities
       updateInventoryQuantities();
@@ -944,17 +1070,12 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               
               {/* Totals */}
               <div className="mt-3 pt-2 border-t">
-                <div className="flex justify-between text-[10px]">
-                  <div>Subtotal:</div>
-                  <div>{formatCurrency(subtotalAmount)}</div>
-                </div>
-                
-                {vatAmount > 0 && (
-                  <div className="flex justify-between text-[10px]">
-                    <div>VAT ({vatPercentage}%):</div>
-                    <div>{formatCurrency(vatAmount)}</div>
-                  </div>
+                <div className="flex justify-between text-[10px]"><div>Items Subtotal:</div><div>{formatCurrency(baseSubtotal)}</div></div>
+                {clientFinance.discountRate > 0 && (
+                  <div className="flex justify-between text-[10px]"><div>Client Discount ({clientFinance.discountRate}%):</div><div className="text-red-600">- {formatCurrency(discountMeta.discountAmount)}</div></div>
                 )}
+                
+                {vatAmount > 0 && (<div className="flex justify-between text-[10px]"><div>VAT ({vatPercentage}%):</div><div>{formatCurrency(vatAmount)}</div></div>)}
                 
                 <div className="flex justify-between text-[10px]">
                   <div>Delivery Cost:</div>
@@ -1070,22 +1191,10 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               ))}
               
               <div className="border-t mt-3 pt-2">
-                <div className="flex justify-between text-[10px] mb-1">
-                  <div className="text-[10px] font-medium">Subtotal:</div>
-                  <div className="text-[10px] font-medium">{formatCurrency(subtotalAmount)}</div>
-                </div>
-                
-                {vatPercentage > 0 && (
-                  <div className="flex justify-between text-[10px] mb-1">
-                    <div className="text-[10px] font-medium">VAT ({vatPercentage}%):</div>
-                    <div className="text-[10px] font-medium">{formatCurrency(vatAmount)}</div>
-                  </div>
-                )}
-                
-                <div className="flex justify-between font-bold text-[10px] border-t mt-2 pt-2">
-                  <div className="text-[10px]">Total:</div>
-                  <div className="text-[10px]">{formatCurrency(totalAmount)}</div>
-                </div>
+                <div className="flex justify-between text-[10px] mb-1"><div className="text-[10px] font-medium">Items Subtotal:</div><div className="text-[10px] font-medium">{formatCurrency(baseSubtotal)}</div></div>
+                {clientFinance.discountRate > 0 && (<div className="flex justify-between text-[10px] mb-1"><div className="text-[10px] font-medium">Client Discount ({clientFinance.discountRate}%):</div><div className="text-[10px] font-medium text-red-600">- {formatCurrency(discountMeta.discountAmount)}</div></div>)}
+                {vatPercentage > 0 && (<div className="flex justify-between text-[10px] mb-1"><div className="text-[10px] font-medium">VAT ({vatPercentage}%):</div><div className="text-[10px] font-medium">{formatCurrency(vatAmount)}</div></div>)}
+                <div className="flex justify-between font-bold text-[10px] border-t mt-2 pt-2"><div className="text-[10px]">Total:</div><div className="text-[10px]">{formatCurrency(totalAmount)}</div></div>
               </div>
               
               <div className="text-center text-[10px] mt-4 mb-3 border-t pt-3">
@@ -1196,7 +1305,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
                 <div className="space-y-2">
                   <Label htmlFor="deliveryCost" className="text-sm font-medium flex items-center">
                     <Truck className="h-4 w-4 mr-1 text-mokm-pink-500" /> 
-                    Delivery Cost (ZAR)
+                    Delivery Cost ({getCurrencySymbol()})
                   </Label>
                   <Input 
                     id="deliveryCost" 
@@ -1280,8 +1389,8 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price (ZAR)</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total (ZAR)</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price ({getCurrencySymbol()})</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total ({getCurrencySymbol()})</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">

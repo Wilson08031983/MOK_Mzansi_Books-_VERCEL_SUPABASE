@@ -779,7 +779,7 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       console.log(`🔄 [AddReturnModal] Calculating VAT for period ${startDate} to ${endDate}`);
       
       // Check if we have data in localStorage
-      let localStorageInvoices = localStorage.getItem('invoices');
+      const localStorageInvoices = localStorage.getItem('invoices');
       const incomesData = localStorage.getItem('incomes');
       const expensesData = localStorage.getItem('expenses');
       

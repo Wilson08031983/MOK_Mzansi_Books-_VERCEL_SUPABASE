@@ -18,17 +18,20 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Database, Download, Upload, Trash2, HardDrive, RefreshCw } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { getAllKeys, getSize, clear as clearStorage } from '@/services/localStorageService';
+import { useLocalization } from '@/hooks/useLocalization';
+import { getAllKeys, getSize, clear as clearStorage, removeItem as removeStorageItem } from '@/services/localStorageService';
 
 const DataManagementTab = () => {
+  const { t } = useLocalization();
   const [storageSize, setStorageSize] = useState(0);
   const [storageKeys, setStorageKeys] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const maxStorageSize = 10 * 1024 * 1024; // 10MB demo threshold
+  const maxStorageSize = 25 * 1024 * 1024; // 25MB threshold per request
 
   const refreshStorageInfo = () => {
     try {
@@ -36,6 +39,36 @@ const DataManagementTab = () => {
       setStorageKeys(getAllKeys());
     } catch (e) {
       console.error('Failed to read storage info', e);
+    }
+  };
+
+  const getKeySize = (key: string): number => {
+    try {
+      const value = localStorage.getItem(key) || '';
+      return key.length + value.length;
+    } catch {
+      return 0;
+    }
+  };
+
+  const handleDeleteKey = async (key: string) => {
+    try {
+      setDeletingKey(key);
+      removeStorageItem(key);
+      toast({
+        title: t('settings.dataManagement.keyDeletedTitle') || 'Key deleted',
+        description: key,
+      });
+      refreshStorageInfo();
+    } catch (error) {
+      console.error('Delete key failed', error);
+      toast({
+        title: t('settings.dataManagement.keyDeleteFailedTitle') || 'Delete failed',
+        description: key,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingKey(null);
     }
   };
 
@@ -73,14 +106,14 @@ const DataManagementTab = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast({
-         title: 'Export successful',
-         description: 'Data export created successfully',
-       });
+        title: t('settings.dataManagement.exportSuccessTitle'),
+        description: t('settings.dataManagement.exportSuccessDesc'),
+      });
     } catch (error) {
       console.error('Export failed', error);
       toast({
-        title: 'Export failed',
-        description: 'Failed to export data',
+        title: t('settings.dataManagement.exportFailedTitle'),
+        description: t('settings.dataManagement.exportFailedDesc'),
         variant: 'destructive',
       });
     } finally {
@@ -111,15 +144,15 @@ const DataManagementTab = () => {
         }
       }
       toast({
-        title: 'Import successful',
-        description: `Imported ${importedCount} data entries`,
+        title: t('settings.dataManagement.importSuccessTitle'),
+        description: t('settings.dataManagement.importSuccessDesc', { count: importedCount }),
       });
       refreshStorageInfo();
     } catch (error) {
       console.error('Import failed', error);
       toast({
-        title: 'Import failed',
-        description: 'Failed to import data. Please check the file format.',
+        title: t('settings.dataManagement.importFailedTitle'),
+        description: t('settings.dataManagement.importFailedDesc'),
         variant: 'destructive',
       });
     } finally {
@@ -132,11 +165,18 @@ const DataManagementTab = () => {
     try {
       setClearing(true);
       clearStorage();
-      toast({ title: 'All data cleared', description: 'All application data has been cleared' });
+      toast({
+        title: t('settings.dataManagement.clearSuccessTitle'),
+        description: t('settings.dataManagement.clearSuccessDesc'),
+      });
       refreshStorageInfo();
     } catch (error) {
       console.error('Clear data failed', error);
-      toast({ title: 'Clear failed', description: 'Failed to clear data', variant: 'destructive' });
+      toast({
+        title: t('settings.dataManagement.clearFailedTitle'),
+        description: t('settings.dataManagement.clearFailedDesc'),
+        variant: 'destructive',
+      });
     } finally {
       setClearing(false);
     }
@@ -144,81 +184,136 @@ const DataManagementTab = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
+          <CardTitle className="flex items-center font-sf-pro text-slate-100">
             <Database className="h-5 w-5 mr-2" />
-            Data Management
+            {t('settings.dataManagement.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Storage Overview */}
-          <div className="rounded-xl border bg-white/60 p-4">
+          <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <HardDrive className="h-5 w-5 text-slate-700" />
-                <Label className="text-base">Local Storage Usage</Label>
+                <HardDrive className="h-5 w-5 text-slate-300" />
+                <Label className="text-base text-slate-100">{t('settings.dataManagement.storageUsage')}</Label>
               </div>
-              <Button variant="ghost" size="sm" onClick={refreshStorageInfo}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+              <Button variant="ghost" size="sm" onClick={refreshStorageInfo} className="text-slate-200 hover:bg-white/10">
+                <RefreshCw className="h-4 w-4 mr-1" /> {t('settings.dataManagement.refresh')}
               </Button>
             </div>
-            <div className="text-sm text-slate-600 mb-2">
-              {(storageSize / 1024).toFixed(1)} KB of {(maxStorageSize / 1024 / 1024).toFixed(0)} MB
+            <div className="text-sm text-slate-400 mb-2">
+              {t('settings.dataManagement.ofMb', { used: (storageSize / 1024).toFixed(1), total: (maxStorageSize / 1024 / 1024).toFixed(0) })}
             </div>
             <Progress value={Math.min(100, (storageSize / maxStorageSize) * 100)} />
-            <div className="text-xs text-slate-500 mt-2">{storageKeys.length} keys</div>
+            <div className="text-xs text-slate-500 mt-2">{t('settings.dataManagement.keysCount', { count: storageKeys.length })}</div>
+          </div>
+
+          {/* Keys List */}
+          <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <HardDrive className="h-5 w-5 text-slate-300" />
+              <Label className="text-base text-slate-100">{t('settings.dataManagement.keysListTitle') || 'Stored Keys'}</Label>
+            </div>
+            {storageKeys.length === 0 ? (
+              <p className="text-sm text-slate-400">{t('settings.dataManagement.noKeys') || 'No keys found in local storage.'}</p>
+            ) : (
+              <div className="max-h-72 overflow-auto divide-y divide-white/5">
+                {storageKeys
+                  .slice()
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((key) => {
+                    const sizeBytes = getKeySize(key);
+                    const sizeKB = (sizeBytes / 1024).toFixed(2);
+                    return (
+                      <div key={key} className="flex items-center justify-between py-2">
+                        <div className="min-w-0 pr-3">
+                          <div className="text-slate-200 truncate" title={key}>{key}</div>
+                          <div className="text-xs text-slate-500">{sizeKB} KB</div>
+                        </div>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={deletingKey === key}
+                              className="bg-red-800/60 hover:bg-red-800 text-red-100 border border-red-800/50"
+                            >
+                              {deletingKey === key ? t('common.deleting') || 'Deleting…' : t('common.delete')}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{t('settings.dataManagement.confirmDeleteKeyTitle') || 'Delete this key?'}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {t('settings.dataManagement.confirmDeleteKeyDesc') || 'This action cannot be undone.'}
+                                <br />
+                                <span className="text-slate-300">{key}</span>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteKey(key)}>{t('common.delete')}</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
 
           {/* Backup & Restore */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl border bg-white/60 p-4">
+            <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Download className="h-5 w-5" />
-                <Label className="text-base">Export Data</Label>
+                <Label className="text-base text-slate-100">{t('settings.dataManagement.exportTitle')}</Label>
               </div>
-              <p className="text-sm text-gray-600 mb-3">Download a JSON backup of your application data.</p>
-              <Button onClick={handleExport} disabled={exporting}>
-                {exporting ? 'Exporting...' : 'Export Data'}
+              <p className="text-sm text-slate-400 mb-3">{t('settings.dataManagement.exportDesc')}</p>
+              <Button onClick={handleExport} disabled={exporting} className="bg-slate-800/70 hover:bg-slate-800 text-slate-100 border border-white/10">
+                {exporting ? t('settings.dataManagement.exporting') : t('settings.dataManagement.exportButton')}
               </Button>
             </div>
 
-            <div className="rounded-xl border bg-white/60 p-4">
+            <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Upload className="h-5 w-5" />
-                <Label className="text-base">Import Data</Label>
+                <Label className="text-base text-slate-100">{t('settings.dataManagement.importTitle')}</Label>
               </div>
-              <p className="text-sm text-gray-600 mb-3">Restore data from a previously exported JSON file.</p>
+              <p className="text-sm text-slate-400 mb-3">{t('settings.dataManagement.importDesc')}</p>
               <div className="flex items-center gap-2">
                 <Input type="file" accept="application/json" className="hidden" ref={fileInputRef} onChange={handleImport} />
-                <Button onClick={handleImportClick} disabled={importing}>
-                  {importing ? 'Importing...' : 'Import Data'}
+                <Button onClick={handleImportClick} disabled={importing} className="bg-slate-800/70 hover:bg-slate-800 text-slate-100 border border-white/10">
+                  {importing ? t('settings.dataManagement.importing') : t('settings.dataManagement.importButton')}
                 </Button>
               </div>
             </div>
           </div>
 
           {/* Danger Zone */}
-          <div className="rounded-xl border bg-red-50/70 p-4">
+          <div className="rounded-xl border border-red-800/40 bg-red-900/20 p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Trash2 className="h-5 w-5 text-red-700" />
-              <Label className="text-base text-red-800">Clear All Data</Label>
+              <Trash2 className="h-5 w-5 text-red-300" />
+              <Label className="text-base text-red-200">{t('settings.dataManagement.clearAllTitle')}</Label>
             </div>
-            <p className="text-sm text-red-700 mb-3">This will permanently delete all application data in your browser.</p>
+            <p className="text-sm text-red-300 mb-3">{t('settings.dataManagement.clearAllDesc')}</p>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={clearing}>Clear All Data</Button>
+                <Button variant="destructive" disabled={clearing} className="bg-red-800/60 hover:bg-red-800 text-red-100 border border-red-800/50">{t('settings.dataManagement.clearAllButton')}</Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete all local data?</AlertDialogTitle>
+                  <AlertDialogTitle>{t('settings.dataManagement.confirmDeleteTitle')}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. All locally stored data including invoices, clients, and reports will be removed.
+                    {t('settings.dataManagement.confirmDeleteDesc')}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearAll}>Delete</AlertDialogAction>
+                  <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearAll}>{t('common.delete')}</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>

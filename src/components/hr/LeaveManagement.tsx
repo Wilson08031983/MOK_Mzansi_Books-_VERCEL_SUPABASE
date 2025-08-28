@@ -99,25 +99,25 @@ const getLeaveTypeIcon = (leaveType: LeaveTypes) => {
 const getLeaveTypeColor = (leaveType: LeaveTypes) => {
   switch (leaveType) {
     case LeaveTypes.Annual:
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-500/20 text-blue-300';
     case LeaveTypes.Sick:
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-500/20 text-red-300';
     case LeaveTypes.FamilyResponsibility:
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-500/20 text-green-300';
     case LeaveTypes.Maternity:
-      return 'bg-pink-100 text-pink-800';
+      return 'bg-pink-500/20 text-pink-300';
     case LeaveTypes.Parental:
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-purple-500/20 text-purple-300';
     case LeaveTypes.Bereavement:
-      return 'bg-slate-100 text-slate-800';
+      return 'bg-slate-500/20 text-slate-300';
     case LeaveTypes.Religious:
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-500/20 text-yellow-300';
     case LeaveTypes.Study:
-      return 'bg-orange-100 text-orange-800';
+      return 'bg-orange-500/20 text-orange-300';
     case LeaveTypes.Unpaid:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-slate-500/20 text-slate-300';
     default:
-      return 'bg-slate-100 text-slate-800';
+      return 'bg-slate-500/20 text-slate-300';
   }
 };
 
@@ -125,13 +125,13 @@ const getLeaveTypeColor = (leaveType: LeaveTypes) => {
 const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
     case 'pending':
-      return 'bg-amber-100 text-amber-800';
+      return 'bg-amber-500/20 text-amber-300';
     case 'approved':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-500/20 text-green-300';
     case 'rejected':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-500/20 text-red-300';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-slate-500/20 text-slate-300';
   }
 };
 
@@ -157,85 +157,85 @@ const ViewDetailsModal: React.FC<ViewDetailsModalProps> = ({ isOpen, onClose, le
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
+      <DialogContent className="sm:max-w-lg glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-slate-900 font-sf-pro">Leave Request Details</DialogTitle>
-          <DialogDescription className="text-slate-600 font-sf-pro">
+          <DialogTitle className="text-xl font-bold text-slate-100 font-sf-pro">Leave Request Details</DialogTitle>
+          <DialogDescription className="text-slate-400 font-sf-pro">
             Complete information about this leave request
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
           <div className="flex flex-col space-y-1.5">
-            <Label className="text-sm font-medium text-slate-700 font-sf-pro">Employee</Label>
+            <Label className="text-sm font-medium text-slate-400 font-sf-pro">Employee</Label>
             <div className="flex items-center space-x-3">
               <div className="h-10 w-10 rounded-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-medium font-sf-pro">
                 {leaveRequest.employeeName?.split(' ').map(n => n[0]).join('')}
               </div>
               <div>
-                <p className="font-medium text-slate-900 font-sf-pro">{leaveRequest.employeeName}</p>
-                <p className="text-sm text-slate-600 font-sf-pro">{leaveRequest.employeePosition}</p>
+                <p className="font-medium text-slate-100 font-sf-pro">{leaveRequest.employeeName}</p>
+                <p className="text-sm text-slate-400 font-sf-pro">{leaveRequest.employeePosition}</p>
               </div>
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Leave Type</Label>
+              <Label className="text-sm font-medium text-slate-400 font-sf-pro">Leave Type</Label>
               <div className="mt-1 flex items-center space-x-2">
                 {getLeaveTypeIcon(leaveRequest.leaveType)}
-                <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getLeaveTypeColor(leaveRequest.leaveType)}`}>
+                <span className={`px-2 py-1 text-xs rounded-full border border-white/10 font-sf-pro ${getLeaveTypeColor(leaveRequest.leaveType)}`}>
                   {leaveRequest.leaveType.charAt(0).toUpperCase() + leaveRequest.leaveType.slice(1)}
                 </span>
               </div>
             </div>
             
             <div>
-              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Status</Label>
+              <Label className="text-sm font-medium text-slate-400 font-sf-pro">Status</Label>
               <div className="mt-1">
-                <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getStatusColor(leaveRequest.status)}`}>
+                <span className={`px-2 py-1 text-xs rounded-full border border-white/10 font-sf-pro ${getStatusColor(leaveRequest.status)}`}>
                   {leaveRequest.status.charAt(0).toUpperCase() + leaveRequest.status.slice(1)}
                 </span>
               </div>
             </div>
             
             <div>
-              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Start Date</Label>
-              <p className="mt-1 text-slate-800 font-sf-pro">{formatDateString(leaveRequest.startDate)}</p>
+              <Label className="text-sm font-medium text-slate-400 font-sf-pro">Start Date</Label>
+              <p className="mt-1 text-slate-100 font-sf-pro">{formatDateString(leaveRequest.startDate)}</p>
             </div>
             
             <div>
-              <Label className="text-sm font-medium text-slate-700 font-sf-pro">End Date</Label>
-              <p className="mt-1 text-slate-800 font-sf-pro">{formatDateString(leaveRequest.endDate)}</p>
+              <Label className="text-sm font-medium text-slate-400 font-sf-pro">End Date</Label>
+              <p className="mt-1 text-slate-100 font-sf-pro">{formatDateString(leaveRequest.endDate)}</p>
             </div>
             
             <div>
-              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Days Requested</Label>
-              <p className="mt-1 text-slate-800 font-sf-pro">{leaveRequest.days} days</p>
+              <Label className="text-sm font-medium text-slate-400 font-sf-pro">Days Requested</Label>
+              <p className="mt-1 text-slate-100 font-sf-pro">{leaveRequest.days} days</p>
             </div>
           </div>
           
           <div>
-            <Label className="text-sm font-medium text-slate-700 font-sf-pro">Reason</Label>
-            <p className="mt-1 text-slate-800 font-sf-pro p-2 bg-slate-50 rounded-md">{leaveRequest.reason}</p>
+            <Label className="text-sm font-medium text-slate-400 font-sf-pro">Reason</Label>
+            <p className="mt-1 text-slate-100 font-sf-pro p-2 bg-white/5 border border-white/10 rounded-md">{leaveRequest.reason}</p>
           </div>
           
           {leaveRequest.rejectedReason && (
             <div>
-              <Label className="text-sm font-medium text-red-700 font-sf-pro">Rejection Reason</Label>
-              <p className="mt-1 text-red-700 font-sf-pro p-2 bg-red-50 rounded-md">{leaveRequest.rejectedReason}</p>
+              <Label className="text-sm font-medium text-red-300 font-sf-pro">Rejection Reason</Label>
+              <p className="mt-1 text-red-300 font-sf-pro p-2 bg-red-500/10 border border-red-500/20 rounded-md">{leaveRequest.rejectedReason}</p>
             </div>
           )}
           
           {leaveRequest.attachmentUrl && (
             <div>
-              <Label className="text-sm font-medium text-slate-700 font-sf-pro">Attachment</Label>
+              <Label className="text-sm font-medium text-slate-400 font-sf-pro">Attachment</Label>
               <div className="mt-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => onDownload(leaveRequest.attachmentUrl, leaveRequest.attachmentName)}
-                  className="flex items-center space-x-2 font-sf-pro"
+                  className="flex items-center space-x-2 font-sf-pro border border-white/10 text-slate-200"
                 >
                   <Download className="h-4 w-4" />
                   <span>{leaveRequest.attachmentName || 'Download Attachment'}</span>
@@ -531,33 +531,33 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
     <div className="space-y-6">
       {/* Leave Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white/90 backdrop-blur-lg border border-white/20 shadow-sm rounded-xl overflow-hidden">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 font-sf-pro">On Leave Today</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-400 font-sf-pro">On Leave Today</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end">
-              <div className="text-4xl font-semibold text-mokm-purple-600 font-sf-pro">{hrMetrics.onLeaveToday}</div>
-              <div className="ml-2 text-sm font-medium text-slate-500 font-sf-pro">employees</div>
+              <div className="text-4xl font-semibold text-slate-900 dark:text-slate-100 font-sf-pro">{hrMetrics.onLeaveToday}</div>
+              <div className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-400 font-sf-pro">employees</div>
             </div>
-            <div className="mt-3 text-xs text-slate-500 font-sf-pro">
+            <div className="mt-3 text-xs text-slate-600 dark:text-slate-400 font-sf-pro">
               {hrMetrics.onLeaveToday > 0 ? 'Employees currently on leave' : 'No employees on leave today'}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-white/90 backdrop-blur-lg border border-white/20 shadow-sm rounded-xl overflow-hidden">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 font-sf-pro">Pending Requests</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-400 font-sf-pro">Pending Requests</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end">
-              <div className="text-4xl font-semibold text-mokm-blue-600 font-sf-pro">
+              <div className="text-4xl font-semibold text-slate-900 dark:text-slate-100 font-sf-pro">
                 {leaveRequests.filter(r => r.status === 'pending').length}
               </div>
-              <div className="ml-2 text-sm font-medium text-slate-500 font-sf-pro">requests</div>
+              <div className="ml-2 text-sm font-medium text-slate-600 dark:text-slate-400 font-sf-pro">requests</div>
             </div>
-            <div className="mt-3 text-xs text-slate-500 font-sf-pro">
+            <div className="mt-3 text-xs text-slate-600 dark:text-slate-400 font-sf-pro">
               {leaveRequests.filter(r => r.status === 'pending').length > 0 
                 ? 'Requires your attention'
                 : 'No pending requests'}
@@ -565,9 +565,9 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
           </CardContent>
         </Card>
 
-        <Card className="bg-white/90 backdrop-blur-lg border border-white/20 shadow-sm rounded-xl overflow-hidden">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 font-sf-pro">Next Holiday</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-400 font-sf-pro">Next Holiday</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <NextPublicHolidayDisplay />
@@ -576,9 +576,9 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
       </div>
       
       {/* Leave Request Management */}
-      <div className="bg-white/90 backdrop-blur-lg border border-white/20 shadow-sm rounded-xl p-6">
+      <div className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-xl p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-slate-900 font-sf-pro">Leave Requests</h2>
+          <h2 className="text-xl font-bold text-slate-100 font-sf-pro">Leave Requests</h2>
           <Button onClick={() => setIsCreateModalOpen(true)} className="bg-mokm-purple-600 hover:bg-mokm-purple-700 font-sf-pro">
             <Plus className="h-4 w-4 mr-2" />
             New Request
@@ -594,51 +594,51 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                 placeholder="Search by employee or leave type..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 border-slate-200 font-sf-pro"
+                className="pl-10 font-sf-pro bg-white/10 dark:bg-black/30 border border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-slate-300"
               />
             </div>
           </div>
           
           <div className="flex space-x-3">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px] border-slate-200 font-sf-pro">
+              <SelectTrigger className="w-[150px] font-sf-pro bg-white/10 dark:bg-black/30 border border-white/10 text-slate-100">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-md rounded-lg font-sf-pro">
-                <SelectItem value="all" className="font-sf-pro">All Statuses</SelectItem>
-                <SelectItem value="pending" className="font-sf-pro">Pending</SelectItem>
-                <SelectItem value="approved" className="font-sf-pro">Approved</SelectItem>
-                <SelectItem value="rejected" className="font-sf-pro">Rejected</SelectItem>
+              <SelectContent className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-lg font-sf-pro text-slate-100">
+                <SelectItem value="all" className="font-sf-pro hover:bg-white/10">All Statuses</SelectItem>
+                <SelectItem value="pending" className="font-sf-pro hover:bg-white/10">Pending</SelectItem>
+                <SelectItem value="approved" className="font-sf-pro hover:bg-white/10">Approved</SelectItem>
+                <SelectItem value="rejected" className="font-sf-pro hover:bg-white/10">Rejected</SelectItem>
               </SelectContent>
             </Select>
             
             <Select value={leaveTypeFilter} onValueChange={setLeaveTypeFilter}>
-              <SelectTrigger className="w-[150px] border-slate-200 font-sf-pro">
+              <SelectTrigger className="w-[150px] font-sf-pro bg-white/10 dark:bg-black/30 border border-white/10 text-slate-100">
                 <SelectValue placeholder="Leave Type" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-md rounded-lg font-sf-pro">
-                <SelectItem value="all" className="font-sf-pro">All Types</SelectItem>
-                <SelectItem value="annual" className="font-sf-pro">Annual Leave</SelectItem>
-                <SelectItem value="sick" className="font-sf-pro">Sick Leave</SelectItem>
-                <SelectItem value="family" className="font-sf-pro">Family Responsibility</SelectItem>
-                <SelectItem value="maternity" className="font-sf-pro">Maternity Leave</SelectItem>
-                <SelectItem value="parental" className="font-sf-pro">Parental Leave</SelectItem>
-                <SelectItem value="bereavement" className="font-sf-pro">Bereavement Leave</SelectItem>
-                <SelectItem value="religious" className="font-sf-pro">Religious Leave</SelectItem>
-                <SelectItem value="study" className="font-sf-pro">Study Leave</SelectItem>
-                <SelectItem value="unpaid" className="font-sf-pro">Unpaid Leave</SelectItem>
+              <SelectContent className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-lg font-sf-pro text-slate-100">
+                <SelectItem value="all" className="font-sf-pro hover:bg-white/10">All Types</SelectItem>
+                <SelectItem value="annual" className="font-sf-pro hover:bg-white/10">Annual Leave</SelectItem>
+                <SelectItem value="sick" className="font-sf-pro hover:bg-white/10">Sick Leave</SelectItem>
+                <SelectItem value="family" className="font-sf-pro hover:bg-white/10">Family Responsibility</SelectItem>
+                <SelectItem value="maternity" className="font-sf-pro hover:bg-white/10">Maternity Leave</SelectItem>
+                <SelectItem value="parental" className="font-sf-pro hover:bg-white/10">Parental Leave</SelectItem>
+                <SelectItem value="bereavement" className="font-sf-pro hover:bg-white/10">Bereavement Leave</SelectItem>
+                <SelectItem value="religious" className="font-sf-pro hover:bg-white/10">Religious Leave</SelectItem>
+                <SelectItem value="study" className="font-sf-pro hover:bg-white/10">Study Leave</SelectItem>
+                <SelectItem value="unpaid" className="font-sf-pro hover:bg-white/10">Unpaid Leave</SelectItem>
               </SelectContent>
             </Select>
             
             <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger className="w-[150px] border-slate-200 font-sf-pro">
+              <SelectTrigger className="w-[150px] font-sf-pro bg-white/10 dark:bg-black/30 border border-white/10 text-slate-100">
                 <SelectValue placeholder="Time" />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-slate-200 shadow-md rounded-lg font-sf-pro">
-                <SelectItem value="all" className="font-sf-pro">All Time</SelectItem>
-                <SelectItem value="thisWeek" className="font-sf-pro">This Week</SelectItem>
-                <SelectItem value="thisMonth" className="font-sf-pro">This Month</SelectItem>
-                <SelectItem value="nextMonth" className="font-sf-pro">Next Month</SelectItem>
+              <SelectContent className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-lg font-sf-pro text-slate-100">
+                <SelectItem value="all" className="font-sf-pro hover:bg-white/10">All Time</SelectItem>
+                <SelectItem value="thisWeek" className="font-sf-pro hover:bg-white/10">This Week</SelectItem>
+                <SelectItem value="thisMonth" className="font-sf-pro hover:bg-white/10">This Month</SelectItem>
+                <SelectItem value="nextMonth" className="font-sf-pro hover:bg-white/10">Next Month</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -650,7 +650,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
             filteredLeaveRequests.map(request => (
               <div 
                 key={request.id} 
-                className="bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow p-4"
+                className="glass bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl shadow-business hover:bg-white/15 dark:hover:bg-white/10 transition-colors p-4"
               >
                 <div className="flex justify-between items-center">
                   <div className="flex items-center space-x-4">
@@ -658,8 +658,8 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                       {getInitials(request.employeeName)}
                     </div>
                     <div>
-                      <h3 className="font-medium text-slate-900 font-sf-pro">{request.employeeName}</h3>
-                      <p className="text-sm text-slate-500 font-sf-pro">{request.employeePosition}</p>
+                      <h3 className="font-medium text-slate-100 font-sf-pro">{request.employeeName}</h3>
+                      <p className="text-sm text-slate-400 font-sf-pro">{request.employeePosition}</p>
                     </div>
                   </div>
                   
@@ -668,7 +668,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                       onClick={() => handleUploadOpen(request.id)}
                       variant="outline"
                       size="sm"
-                      className="text-mokm-purple-600 border-slate-200 hover:border-mokm-purple-600 font-sf-pro"
+                      className="font-sf-pro border border-white/10 text-slate-200 hover:bg-white/10"
                       title="Upload document"
                     >
                       <Upload className="h-4 w-4" />
@@ -678,7 +678,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                       onClick={() => handleDownload(request.attachmentUrl, request.attachmentName)}
                       variant="outline"
                       size="sm"
-                      className={`${request.attachmentUrl ? 'text-mokm-blue-600 border-slate-200 hover:border-mokm-blue-600' : 'text-slate-400 border-slate-200 cursor-not-allowed'} font-sf-pro`}
+                      className={`${request.attachmentUrl ? 'border border-white/10 text-slate-200 hover:bg-white/10' : 'text-slate-500 border border-white/10 cursor-not-allowed'} font-sf-pro`}
                       disabled={!request.attachmentUrl}
                       title={request.attachmentUrl ? "Download document" : "No attachment available"}
                     >
@@ -687,14 +687,14 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                     
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="font-sf-pro">
+                        <Button variant="outline" size="sm" className="font-sf-pro border border-white/10 text-slate-200 hover:bg-white/10">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent side="right" align="end" className="min-w-[180px] bg-white/90 backdrop-blur-lg border border-slate-200 shadow-md rounded-lg">
+                      <DropdownMenuContent side="right" align="end" className="min-w-[180px] glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-lg text-slate-100">
                         <DropdownMenuItem
                           onClick={() => setViewDetailsModal({ isOpen: true, leaveRequest: request })}
-                          className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-slate-700"
+                          className="flex items-center cursor-pointer hover:bg-white/10 font-sf-pro text-sm text-slate-100"
                         >
                           <Info className="mr-2 h-4 w-4" />
                           View Full Details
@@ -704,7 +704,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                           <>
                             <DropdownMenuItem
                               onClick={() => handleLeaveAction(request.id, 'approve')}
-                              className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-green-700"
+                              className="flex items-center cursor-pointer hover:bg-white/10 font-sf-pro text-sm text-green-300"
                             >
                               <Check className="mr-2 h-4 w-4" />
                               Approve Leave
@@ -712,7 +712,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                             
                             <DropdownMenuItem
                               onClick={() => setRejectModalOpen({ isOpen: true, requestId: request.id })}
-                              className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-red-700"
+                              className="flex items-center cursor-pointer hover:bg-white/10 font-sf-pro text-sm text-red-300"
                             >
                               <X className="mr-2 h-4 w-4" />
                               Decline Leave
@@ -722,7 +722,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                         
                         <DropdownMenuItem
                           onClick={() => handleDeleteLeaveRequest(request.id)}
-                          className="flex items-center cursor-pointer hover:bg-slate-100 font-sf-pro text-sm text-red-700"
+                          className="flex items-center cursor-pointer hover:bg-white/10 font-sf-pro text-sm text-red-300"
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete Request
@@ -737,18 +737,18 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
                     <div className="flex-shrink-0">
                       {getLeaveTypeIcon(request.leaveType)}
                     </div>
-                    <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getLeaveTypeColor(request.leaveType)}`}>
+                    <span className={`px-2 py-1 text-xs rounded-full border border-white/10 font-sf-pro ${getLeaveTypeColor(request.leaveType)}`}>
                       {request.leaveType.charAt(0).toUpperCase() + request.leaveType.slice(1)}
                     </span>
                   </div>
                   
-                  <div className="flex items-center space-x-1 text-sm text-slate-600 font-sf-pro">
+                  <div className="flex items-center space-x-1 text-sm text-slate-400 font-sf-pro">
                     <CalendarDays className="h-4 w-4 text-slate-400" />
                     <span>{formatDateString(request.startDate)} to {formatDateString(request.endDate)}</span>
                   </div>
                   
                   <div className="flex items-center justify-end md:justify-start">
-                    <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${getStatusColor(request.status)}`}>
+                    <span className={`px-2 py-1 text-xs rounded-full border border-white/10 font-sf-pro ${getStatusColor(request.status)}`}>
                       {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                     </span>
                   </div>
@@ -757,10 +757,10 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
             ))
           ) : (
             <div className="text-center py-12">
-              <div className="mx-auto w-24 h-24 rounded-full bg-gradient-to-r from-mokm-purple-100 to-mokm-blue-100 flex items-center justify-center">
-                <Calendar className="h-12 w-12 text-mokm-purple-500" />
+              <div className="mx-auto w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                <Calendar className="h-12 w-12 text-slate-300" />
               </div>
-              <h3 className="mt-4 text-lg font-medium text-slate-500 font-sf-pro">No leave requests found</h3>
+              <h3 className="mt-4 text-lg font-medium text-slate-300 font-sf-pro">No leave requests found</h3>
               <p className="mt-1 text-slate-400 font-sf-pro">
                 Adjust your filters to see leave requests
               </p>
@@ -780,21 +780,21 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
       
       {/* Reject Leave Request Modal */}
       <Dialog open={rejectModalOpen.isOpen} onOpenChange={(open) => !open && setRejectModalOpen({ isOpen: false, requestId: '' })}>
-        <DialogContent className="bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
+        <DialogContent className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900 font-sf-pro">Reject Leave Request</DialogTitle>
-            <DialogDescription className="text-slate-600 font-sf-pro">
+            <DialogTitle className="text-xl font-bold text-slate-100 font-sf-pro">Reject Leave Request</DialogTitle>
+            <DialogDescription className="text-slate-400 font-sf-pro">
               Please provide a reason for rejecting this leave request.
             </DialogDescription>
           </DialogHeader>
           
           <form className="space-y-4">
             <div>
-              <Label htmlFor="rejectReason" className="text-slate-700 font-sf-pro">Rejection Reason</Label>
+              <Label htmlFor="rejectReason" className="text-slate-400 font-sf-pro">Rejection Reason</Label>
               <Textarea 
                 id="rejectReason" 
                 placeholder="Enter reason for rejecting this leave request..." 
-                className="h-32 resize-none mt-2 font-sf-pro"
+                className="h-32 resize-none mt-2 font-sf-pro bg-white/10 dark:bg-black/30 border border-white/10 text-slate-100 placeholder:text-slate-400"
               />
             </div>
           </form>
@@ -804,7 +804,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
               type="button" 
               variant="outline" 
               onClick={() => setRejectModalOpen({ isOpen: false, requestId: '' })}
-              className="font-sf-pro"
+              className="font-sf-pro border border-white/10 text-slate-200 hover:bg-white/10"
             >
               Cancel
             </Button>
@@ -825,29 +825,29 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
       
       {/* Upload Modal */}
       <Dialog open={uploadModalOpen.isOpen} onOpenChange={(open) => !open && setUploadModalOpen({ isOpen: false, requestId: '' })}>
-        <DialogContent className="bg-white/90 backdrop-blur-lg border border-white/20 shadow-business rounded-xl">
+        <DialogContent className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900 font-sf-pro">Upload Document</DialogTitle>
-            <DialogDescription className="text-slate-600 font-sf-pro">
+            <DialogTitle className="text-xl font-bold text-slate-100 font-sf-pro">Upload Document</DialogTitle>
+            <DialogDescription className="text-slate-400 font-sf-pro">
               Upload a document to attach to this leave request.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="attachment" className="text-slate-700 font-sf-pro">Attachment</Label>
+              <Label htmlFor="attachment" className="text-slate-400 font-sf-pro">Attachment</Label>
               <Input 
                 id="attachment" 
                 type="file" 
-                className="font-sf-pro"
+                className="font-sf-pro bg-white/10 dark:bg-black/30 border border-white/10 text-slate-100 file:text-slate-100"
                 onChange={handleFileChange}
               />
             </div>
             
             {selectedFile && (
-              <div className="p-3 bg-slate-50 rounded-md">
-                <p className="text-sm font-medium text-slate-700 font-sf-pro">{selectedFile.name}</p>
-                <p className="text-xs text-slate-500 font-sf-pro">{(selectedFile.size / 1024).toFixed(2)} KB</p>
+              <div className="p-3 bg-white/5 border border-white/10 rounded-md">
+                <p className="text-sm font-medium text-slate-100 font-sf-pro">{selectedFile.name}</p>
+                <p className="text-xs text-slate-400 font-sf-pro">{(selectedFile.size / 1024).toFixed(2)} KB</p>
               </div>
             )}
           </div>
@@ -857,7 +857,7 @@ const LeaveManagement: React.FC<LeaveManagementProps> = ({
               type="button" 
               variant="outline" 
               onClick={() => setUploadModalOpen({ isOpen: false, requestId: '' })}
-              className="font-sf-pro"
+              className="font-sf-pro border border-white/10 text-slate-200 hover:bg-white/10"
             >
               Cancel
             </Button>

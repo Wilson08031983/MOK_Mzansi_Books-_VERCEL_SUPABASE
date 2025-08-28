@@ -60,9 +60,13 @@ class ExpenseProjectSyncService {
   // Get all expenses from localStorage
   private getAllExpenses(): Expense[] {
     try {
-      const manualExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+      // Legacy/manual entries stored by other modules
+      const legacyManualExpenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+      // Bank statement categorized entries
       const categorizedExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
-      return [...manualExpenses, ...categorizedExpenses];
+      // Manual expenses stored via ExpenseStorageService
+      const sharedManualExpenses = JSON.parse(localStorage.getItem('manual_expenses') || '[]');
+      return [...legacyManualExpenses, ...categorizedExpenses, ...sharedManualExpenses];
     } catch (error) {
       console.error('Error loading expenses:', error);
       return [];
@@ -92,10 +96,24 @@ class ExpenseProjectSyncService {
   calculateProjectExpenses(projectId: number): ProjectExpenseData {
     const expenses = this.getAllExpenses().filter(expense => expense.projectId === projectId);
     
-    const totalExpenses = expenses.reduce((sum, expense) => {
+    // External/manual expenses total (bank/manual sources)
+    const externalExpensesTotal = expenses.reduce((sum, expense) => {
       const amount = expense.amount || expense.debit || 0;
       return sum + amount;
     }, 0);
+
+    // Attendance Pay expenses stored directly on the project.expenses_list
+    const projects = this.getAllProjects();
+    const project = projects.find(p => p.id === projectId);
+    const attendanceExpensesTotal = project && Array.isArray((project as any).expenses_list)
+      ? (project as any).expenses_list.reduce((sum: number, e: any) => {
+          const isAttendance = e && (e.type === 'Attendance Pay');
+          const amount = typeof e?.amount === 'number' ? e.amount : 0;
+          return sum + (isAttendance ? amount : 0);
+        }, 0)
+      : 0;
+
+    const totalExpenses = externalExpensesTotal + attendanceExpensesTotal;
 
     const approvedExpenses = expenses
       .filter(expense => expense.status === 'approved')
@@ -159,37 +177,23 @@ class ExpenseProjectSyncService {
   // Update all project expenses
   updateAllProjectExpenses(): void {
     const projects = this.getAllProjects();
-    const expenses = this.getAllExpenses();
-    
-    // Get unique project IDs from expenses
-    const projectIds = new Set(expenses.map(expense => expense.projectId).filter(id => id !== null && id !== undefined));
-    
-    // Update each project
-    projectIds.forEach(projectId => {
-      this.updateProjectExpenses(projectId as number);
-    });
-
-    // Also update projects that might have had expenses removed
+    const updated = this.getAllProjects();
     projects.forEach(project => {
-      if (!projectIds.has(project.id)) {
-        // This project has no expenses, reset to 0
-        const updatedProjects = this.getAllProjects();
-        const projectIndex = updatedProjects.findIndex(p => p.id === project.id);
-        if (projectIndex !== -1) {
-          updatedProjects[projectIndex] = {
-            ...updatedProjects[projectIndex],
-            expenses: 0,
-            approvedExpenses: 0,
-            pendingExpenses: 0,
-            rejectedExpenses: 0,
-            expenseCount: 0,
-            lastExpenseUpdate: new Date().toISOString()
-          };
-          this.saveProjects(updatedProjects);
-        }
+      const data = this.calculateProjectExpenses(project.id);
+      const idx = updated.findIndex(p => p.id === project.id);
+      if (idx !== -1) {
+        updated[idx] = {
+          ...updated[idx],
+          expenses: data.totalExpenses,
+          approvedExpenses: data.approvedExpenses,
+          pendingExpenses: data.pendingExpenses,
+          rejectedExpenses: data.rejectedExpenses,
+          expenseCount: data.expenseCount,
+          lastExpenseUpdate: data.lastUpdated
+        };
       }
     });
-
+    this.saveProjects(updated);
     this.notifyListeners();
   }
 

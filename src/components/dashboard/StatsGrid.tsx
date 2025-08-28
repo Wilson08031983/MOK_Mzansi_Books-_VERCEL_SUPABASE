@@ -36,7 +36,7 @@ const StatsGrid: React.FC<StatsGridProps> = ({ stats }) => {
         return (
           <Card
             key={index}
-            className={`glass backdrop-blur-sm bg-card border border-border shadow-business hover:shadow-business-lg transition-all duration-500 hover-lift animate-fade-in delay-${index * 100} group ${clickable ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50' : ''}`}
+            className={`liquid-glass glow-hover border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-500 hover-lift animate-fade-in delay-${index * 100} group ${clickable ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50' : ''}`}
             onClick={handleClick}
             role={clickable ? 'button' : undefined}
             tabIndex={clickable ? 0 : -1}
@@ -51,14 +51,14 @@ const StatsGrid: React.FC<StatsGridProps> = ({ stats }) => {
             <CardContent className="p-8">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-muted-foreground font-sf-pro">{stat.name}</p>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300 font-sf-pro">{stat.name}</p>
                   <div className="mt-3">
-                    <p className={`${stat.name === 'Total Revenue' ? 'text-base' : 'text-lg'} font-bold text-foreground font-sf-pro truncate`}>
+                    <p className={`${stat.name === 'Total Revenue' ? 'text-base' : 'text-lg'} font-bold text-slate-900 dark:text-slate-100 font-sf-pro truncate`}>
                       {stat.value}
                     </p>
                   </div>
                   {stat.change && (
-                    <p className={`text-sm mt-2 flex items-center font-medium font-sf-pro ${stat.color || 'text-muted-foreground'}`}>
+                    <p className={`text-sm mt-2 flex items-center font-medium font-sf-pro ${stat.color || 'text-slate-600 dark:text-slate-400'}`}>
                       {stat.trend === 'up' ? (
                         <ArrowUpRight className="h-4 w-4 mr-1" />
                       ) : (

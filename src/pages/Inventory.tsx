@@ -67,6 +67,9 @@ import UpdateStockWithBarcodeModal from '@/components/inventory/UpdateStockWithB
 import SalesModal from '@/components/inventory/SalesModal';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 
+// Notifications
+import { addNotification, getNotifications } from '@/services/notificationService';
+
 // Service imports
 import { 
   getAllInventoryItems, 
@@ -207,6 +210,96 @@ const Inventory = () => {
   useEffect(() => {
     // Force a refresh on initial load
     loadInventoryData(true);
+  }, [loadInventoryData]);
+
+  // Listen for inventory updates and create de-duplicated notifications
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent;
+      const detail = (custom && custom.detail) || {};
+      const { entity, action, item, storage, itemId, storageId, quantity, reason } = detail;
+
+      // Build a user-friendly title and message
+      let title = '';
+      let message = '';
+
+      if (entity === 'item') {
+        const name = item?.name || itemId || 'Inventory Item';
+        switch (action) {
+          case 'created':
+            title = 'Inventory: Item Added';
+            message = `${name} was added to inventory.`;
+            break;
+          case 'updated':
+            title = 'Inventory: Item Updated';
+            message = `${name} details were updated.`;
+            break;
+          case 'deleted':
+            title = 'Inventory: Item Deleted';
+            message = `Item ${name} was removed from inventory.`;
+            break;
+          case 'damaged':
+            title = 'Inventory: Damaged Stock';
+            message = `${quantity || ''} unit(s) of ${name} marked damaged${reason ? `: ${reason}` : ''}.`;
+            break;
+          case 'expired':
+            title = 'Inventory: Expired Stock';
+            message = `${quantity || ''} unit(s) of ${name} marked expired${reason ? `: ${reason}` : ''}.`;
+            break;
+          case 'low-stock':
+            title = 'Inventory: Low Stock';
+            message = `${name} is running low.`;
+            break;
+          case 'out-of-stock':
+            title = 'Inventory: Out of Stock';
+            message = `${name} is out of stock.`;
+            break;
+          default:
+            break;
+        }
+      } else if (entity === 'storage') {
+        const name = storage?.name || storageId || 'Storage Location';
+        switch (action) {
+          case 'created':
+            title = 'Inventory: Storage Added';
+            message = `New storage '${name}' was added.`;
+            break;
+          case 'updated':
+            title = 'Inventory: Storage Updated';
+            message = `Storage '${name}' was updated.`;
+            break;
+          case 'deleted':
+            title = 'Inventory: Storage Deleted';
+            message = `Storage '${name}' was deleted.`;
+            break;
+          default:
+            break;
+        }
+      }
+
+      // Only proceed if we recognized an actionable event
+      if (!title || !message) return;
+
+      // De-duplicate within 5 minutes by matching exact title+message
+      try {
+        const now = Date.now();
+        const recent = getNotifications().find(n => n.title === title && n.message === message && (now - new Date(n.date).getTime()) < 5 * 60 * 1000);
+        if (!recent) {
+          addNotification({ title, message, type: 'system' });
+        }
+      } catch (e) {
+        // Non-fatal if notifications unavailable
+      }
+
+      // Refresh data and history to reflect changes immediately
+      loadInventoryData(true);
+      setStockHistory(getAllStockHistory());
+    };
+
+    window.addEventListener('inventory-updated', handler as EventListener);
+    return () => {
+      window.removeEventListener('inventory-updated', handler as EventListener);
+    };
   }, [loadInventoryData]);
 
   const handleBarcodeResult = (result: string) => {

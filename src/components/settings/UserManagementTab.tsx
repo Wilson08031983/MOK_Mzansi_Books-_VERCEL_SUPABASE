@@ -31,11 +31,13 @@ import { userLinkingService } from '@/services/userLinkingService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { updateEmployeeFromTeamMember } from '@/services/teamEmployeeSyncService';
+import { useLocalization } from '@/hooks/useLocalization';
 
 // Define admin roles locally
 const ADMIN_ROLES = ['CEO', 'Manager', 'Bookkeeper', 'Director', 'Founder'];
 
 const UserManagementTab = () => {
+  const { t } = useLocalization();
   const [searchQuery, setSearchQuery] = useState('');
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -331,48 +333,48 @@ const UserManagementTab = () => {
     <div className="space-y-6">
       {/* Admin Users Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Admin Users</p>
-                <p className="text-2xl font-bold text-gray-900">{adminUsers.length}</p>
+                <p className="text-sm font-medium text-slate-300">{t('settings.users.totalAdminUsers')}</p>
+                <p className="text-2xl font-bold text-slate-100">{adminUsers.length}</p>
               </div>
               <Shield className="h-8 w-8 text-mokm-purple-500" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">CEO Level</p>
-                <p className="text-2xl font-bold text-gray-900">{roleStats.CEO}</p>
+                <p className="text-sm font-medium text-slate-300">{t('settings.users.ceoLevel')}</p>
+                <p className="text-2xl font-bold text-slate-100">{roleStats.CEO}</p>
               </div>
               <Crown className="h-8 w-8 text-mokm-purple-500" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Managers</p>
-                <p className="text-2xl font-bold text-gray-900">{roleStats.Manager}</p>
+                <p className="text-sm font-medium text-slate-300">{t('settings.users.managers')}</p>
+                <p className="text-2xl font-bold text-slate-100">{roleStats.Manager}</p>
               </div>
               <Users className="h-8 w-8 text-mokm-blue-500" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Directors</p>
-                <p className="text-2xl font-bold text-gray-900">{roleStats.Director}</p>
+                <p className="text-sm font-medium text-slate-300">{t('settings.users.directors')}</p>
+                <p className="text-2xl font-bold text-slate-100">{roleStats.Director}</p>
               </div>
               <Building className="h-8 w-8 text-mokm-green-500" />
             </div>
@@ -384,12 +386,12 @@ const UserManagementTab = () => {
       <div id="admin-users" className="-mt-24 pt-24" />
 
       {/* Admin Users Table */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between font-sf-pro">
+          <CardTitle className="flex items-center justify-between font-sf-pro text-slate-100">
             <div className="flex items-center">
               <Shield className="h-5 w-5 mr-2" />
-              Administrative Users
+              {t('settings.users.administrativeUsers')}
               <Badge className="ml-2 bg-mokm-purple-100 text-mokm-purple-800">
                 {adminUsers.length} Admin{adminUsers.length !== 1 ? 's' : ''}
               </Badge>
@@ -402,7 +404,7 @@ const UserManagementTab = () => {
                 disabled={isLoading}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
+                {t('settings.users.refresh')}
               </Button>
             </div>
           </CardTitle>
@@ -410,12 +412,12 @@ const UserManagementTab = () => {
         <CardContent>
           <div className="mb-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search admin users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 bg-slate-900/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus:border-mokm-blue-500 focus:ring-mokm-blue-500/20"
               />
             </div>
           </div>
@@ -423,10 +425,10 @@ const UserManagementTab = () => {
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Zap className="h-4 w-4 animate-pulse mr-2" />
-              <span className="ml-2 text-gray-600">Loading admin users...</span>
+              <span className="ml-2 text-slate-300">Loading admin users...</span>
             </div>
           ) : filteredAdminUsers.length === 0 ? (
-            <div className="text-center py-8 text-gray-600">
+            <div className="text-center py-8 text-slate-300">
               <Mail className="h-12 w-12 mx-auto mb-4 text-mokm-purple-300" />
               <p className="mb-2 font-medium">No admin users found</p>
               <p className="text-sm">Add admin users from HR Management or by inviting team members with admin roles.</p>
@@ -434,14 +436,14 @@ const UserManagementTab = () => {
           ) : (
             <div className="space-y-2">
               {filteredAdminUsers.map((user) => (
-                <div key={user.id} data-user-id={user.id} className={`flex items-center justify-between p-4 rounded-xl bg-white/60 border border-white/30 transition-colors ${highlightUserId === String(user.id) ? 'ring-2 ring-mokm-purple-400 bg-white' : ''}`}>
+                <div key={user.id} data-user-id={user.id} className={`flex items-center justify-between p-4 rounded-xl glass backdrop-blur-sm bg-slate-900/40 border border-white/10 transition-colors ${highlightUserId === String(user.id) ? 'ring-2 ring-mokm-purple-400 bg-slate-900/50' : ''}`}>
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-semibold">
                       {user.avatar}
                     </div>
                     <div>
-                      <div className="font-medium">{user.name}</div>
-                      <div className="text-sm text-gray-600">{user.email}</div>
+                      <div className="font-medium text-slate-100">{user.name}</div>
+                      <div className="text-sm text-slate-400">{user.email}</div>
                     </div>
                     <Badge className={`ml-2 border ${getRoleBadgeColor(user.role)}`}>{user.role}</Badge>
                     <Badge className="ml-2 bg-green-100 text-green-800 border-green-200">{user.status}</Badge>

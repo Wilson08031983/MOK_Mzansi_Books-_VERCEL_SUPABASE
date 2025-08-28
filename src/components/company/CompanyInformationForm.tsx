@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface CompanyData {
   name: string;
@@ -18,6 +18,7 @@ interface CompanyInformationFormProps {
 }
 
 const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: CompanyInformationFormProps) => {
+  const { t } = useLocalization();
   
   const handleWebsiteCheckboxChange = (checked: boolean) => {
     onInputChange('websiteNotApplicable', checked ? 'true' : 'false');
@@ -26,7 +27,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
   return (
     <>
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">Company Name</label>
+        <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">{t('company.forms.information.nameLabel')}</label>
         {isEditing ? (
           <input
             type="text"
@@ -41,7 +42,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">Email</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">{t('company.forms.information.emailLabel')}</label>
           {isEditing ? (
             <input
               type="email"
@@ -54,7 +55,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
           )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">Phone</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">{t('company.forms.information.phoneLabel')}</label>
           {isEditing ? (
             <input
               type="tel"
@@ -68,7 +69,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
         </div>
         <div>
           <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-slate-300 font-sf-pro">Website</label>
+            <label className="block text-sm font-medium text-slate-300 font-sf-pro">{t('company.forms.information.websiteLabel')}</label>
             {isEditing && (
               <div className="flex items-center space-x-2">
                 <Checkbox 
@@ -77,7 +78,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
                   onCheckedChange={handleWebsiteCheckboxChange}
                   className="data-[state=checked]:bg-mokm-purple-500"
                 />
-                <label htmlFor="websiteNA" className="text-xs text-slate-400 cursor-pointer">Not Applicable</label>
+                <label htmlFor="websiteNA" className="text-xs text-slate-400 cursor-pointer">{t('company.forms.common.notApplicable')}</label>
               </div>
             )}
           </div>
@@ -91,7 +92,7 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
             />
           ) : (
             <p className="px-4 py-3 bg-white/5 dark:bg-black/20 border border-white/10 rounded-xl font-sf-pro text-foreground">
-              {companyData.websiteNotApplicable ? 'Not Applicable' : companyData.website}
+              {companyData.websiteNotApplicable ? t('company.forms.common.notApplicable') : companyData.website}
             </p>
           )}
         </div>

@@ -82,7 +82,7 @@ class OCRService {
       }
       
       let extractedText = '';
-      let processingErrors: string[] = [];
+      const processingErrors: string[] = [];
       
       try {
         if (file.type === 'application/pdf') {
@@ -166,7 +166,7 @@ class OCRService {
       }
       
       let extractedText = '';
-      let processingErrors: string[] = [];
+      const processingErrors: string[] = [];
       
       // Always attempt text extraction
       try {

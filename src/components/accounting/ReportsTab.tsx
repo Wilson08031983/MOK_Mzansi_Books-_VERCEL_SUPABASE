@@ -22,12 +22,14 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { reportGenerationService, ReportType, ReportFilters, ReportData } from '../../services/reportGenerationService';
 import { pdfReportService } from '../../services/pdfReportService';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 interface ReportsTabProps {
   companyId?: string;
 }
 
 const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id' }) => {
+  const { logAudit, logDocument } = useAuditLogger();
   const [selectedReportType, setSelectedReportType] = useState<ReportType | ''>('');
   const [reportFilters, setReportFilters] = useState<ReportFilters>({
     dateRange: 'all',
@@ -153,6 +155,21 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
         recordCount: data.summary?.totalRecords || 0,
         totalAmount: data.summary?.totalAmount || 0
       });
+
+      // Audit: manual report generation
+      try {
+        const label = getReportTypeLabel(selectedReportType);
+        logAudit({
+          category: 'financial',
+          action: 'Generated Report',
+          entityType: 'report',
+          entityId: String(selectedReportType),
+          entityName: label,
+          changeType: 'create',
+          description: `Generated report: ${label}`,
+          metadata: { filters: reportFilters, recordCount: data.summary?.totalRecords, totalAmount: data.summary?.totalAmount }
+        });
+      } catch {}
     } catch (error) {
       console.error('❌ [REPORTS] Error generating report:', error);
       toast.error('Failed to generate report');
@@ -179,6 +196,12 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
       );
       
       toast.success('Report downloaded successfully');
+
+      // Audit: PDF download
+      try {
+        const label = getReportTypeLabel(selectedReportType);
+        logDocument('Downloaded Report PDF', 'report', label, String(selectedReportType));
+      } catch {}
     } catch (error) {
       console.error('❌ [REPORTS] Error downloading PDF:', error);
       toast.error('Failed to download report');
@@ -225,14 +248,14 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Financial Reports</h2>
-          <p className="text-slate-600 font-sf-pro">Generate comprehensive reports for your business finances</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">Financial Reports</h2>
+          <p className="text-slate-600 dark:text-slate-400 font-sf-pro">Generate comprehensive reports for your business finances</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             onClick={resetFilters}
-            className="text-slate-600 hover:text-slate-900"
+            className="border-white/10 text-slate-200 hover:bg-white/5"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Reset Filters
@@ -241,9 +264,9 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
       </div>
 
       {/* Report Selection */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20">
+      <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-slate-900 font-sf-pro">
+          <CardTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 font-sf-pro">
             <FileText className="h-5 w-5 text-mokm-purple-600" />
             Select Report Type
           </CardTitle>
@@ -255,7 +278,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
               const IconComponent = category.icon;
               return (
                 <div key={key} className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
                     <IconComponent className="h-4 w-4 text-mokm-purple-600" />
                     {category.title}
                   </div>
@@ -263,7 +286,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
                     value={selectedReportType}
                     onValueChange={(value) => setSelectedReportType(value as ReportType)}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full bg-slate-900/40 border-white/10 text-slate-100">
                       <SelectValue placeholder="Select report..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -281,17 +304,17 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
 
           {/* Report Filters */}
           {selectedReportType && (
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-medium text-slate-900 mb-4 font-sf-pro">Report Filters</h3>
+            <div className="border-t border-white/10 pt-6">
+              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-4 font-sf-pro">Report Filters</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Date Range */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Date Range</label>
+                  <label className="text-sm font-medium text-slate-300">Date Range</label>
                   <Select
                     value={reportFilters.dateRange}
                     onValueChange={(value) => updateFilter('dateRange', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-900/40 border-white/10 text-slate-100">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -312,19 +335,21 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
                 {reportFilters.dateRange === 'custom' && (
                   <>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Start Date</label>
+                      <label className="text-sm font-medium text-slate-300">Start Date</label>
                       <Input
                         type="date"
                         value={reportFilters.startDate}
                         onChange={(e) => updateFilter('startDate', e.target.value)}
+                        className="bg-slate-900/40 border-white/10 text-slate-100"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">End Date</label>
+                      <label className="text-sm font-medium text-slate-300">End Date</label>
                       <Input
                         type="date"
                         value={reportFilters.endDate}
                         onChange={(e) => updateFilter('endDate', e.target.value)}
+                        className="bg-slate-900/40 border-white/10 text-slate-100"
                       />
                     </div>
                   </>
@@ -332,12 +357,12 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
 
                 {/* Status Filter */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Status</label>
+                  <label className="text-sm font-medium text-slate-300">Status</label>
                   <Select
                     value={reportFilters.status}
                     onValueChange={(value) => updateFilter('status', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-900/40 border-white/10 text-slate-100">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -353,12 +378,12 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
 
                 {/* Category Filter */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Category</label>
+                  <label className="text-sm font-medium text-slate-300">Category</label>
                   <Select
                     value={reportFilters.category}
                     onValueChange={(value) => updateFilter('category', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-900/40 border-white/10 text-slate-100">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -376,21 +401,23 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
 
                 {/* Amount Range */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Min Amount</label>
+                  <label className="text-sm font-medium text-slate-300">Min Amount</label>
                   <Input
                     type="number"
                     placeholder="0.00"
                     value={reportFilters.amountMin}
                     onChange={(e) => updateFilter('amountMin', e.target.value)}
+                    className="bg-slate-900/40 border-white/10 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Max Amount</label>
+                  <label className="text-sm font-medium text-slate-300">Max Amount</label>
                   <Input
                     type="number"
                     placeholder="999999.99"
                     value={reportFilters.amountMax}
                     onChange={(e) => updateFilter('amountMax', e.target.value)}
+                    className="bg-slate-900/40 border-white/10 text-slate-100 placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -398,7 +425,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
           )}
 
           {/* Generate Report Button */}
-          <div className="flex items-center gap-3 pt-4 border-t">
+          <div className="flex items-center gap-3 pt-4 border-t border-white/10">
             <Button
               onClick={handleGenerateReport}
               disabled={!selectedReportType || isGenerating}
@@ -422,7 +449,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
                 onClick={handleDownloadPDF}
                 disabled={isDownloading}
                 variant="outline"
-                className="border-mokm-purple-600 text-mokm-purple-600 hover:bg-mokm-purple-50"
+                className="border-white/10 text-slate-200 hover:bg-white/5"
               >
                 {isDownloading ? (
                   <>
@@ -443,14 +470,14 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
 
       {/* Report Results */}
       {reportData && (
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
           <CardHeader>
-            <CardTitle className="flex items-center justify-between text-slate-900 font-sf-pro">
+            <CardTitle className="flex items-center justify-between text-slate-900 dark:text-slate-100 font-sf-pro">
               <div className="flex items-center gap-2">
                 <PieChart className="h-5 w-5 text-mokm-purple-600" />
                 {getReportTypeLabel(selectedReportType)}
               </div>
-              <Badge variant="secondary" className="bg-mokm-purple-100 text-mokm-purple-700">
+              <Badge variant="secondary" className="bg-mokm-purple-500/20 text-mokm-purple-300 border border-mokm-purple-400/30">
                 {reportData.summary?.totalRecords || 0} records
               </Badge>
             </CardTitle>
@@ -459,21 +486,21 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
             {/* Report Summary */}
             {reportData.summary && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg">
-                  <div className="text-sm text-green-600 font-medium">Total Amount</div>
-                  <div className="text-2xl font-bold text-green-700">
+                <div className="glass backdrop-blur-sm bg-slate-900/50 border border-white/10 p-4 rounded-lg">
+                  <div className="text-sm text-slate-300 font-medium">Total Amount</div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                     R{reportData.summary.totalAmount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 }) || '0.00'}
                   </div>
                 </div>
-                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg">
-                  <div className="text-sm text-blue-600 font-medium">Total Records</div>
-                  <div className="text-2xl font-bold text-blue-700">
+                <div className="glass backdrop-blur-sm bg-slate-900/50 border border-white/10 p-4 rounded-lg">
+                  <div className="text-sm text-slate-300 font-medium">Total Records</div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                     {reportData.summary.totalRecords || 0}
                   </div>
                 </div>
-                <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg">
-                  <div className="text-sm text-purple-600 font-medium">Average Amount</div>
-                  <div className="text-2xl font-bold text-purple-700">
+                <div className="glass backdrop-blur-sm bg-slate-900/50 border border-white/10 p-4 rounded-lg">
+                  <div className="text-sm text-slate-300 font-medium">Average Amount</div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                     R{reportData.summary.averageAmount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 }) || '0.00'}
                   </div>
                 </div>
@@ -485,9 +512,9 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200">
+                    <tr className="border-b border-white/10">
                       {Object.keys(reportData.data[0]).map((key) => (
-                        <th key={key} className="text-left p-3 font-medium text-slate-700 capitalize">
+                        <th key={key} className="text-left p-3 font-medium text-slate-300 capitalize">
                           {key.replace(/([A-Z])/g, ' $1').trim()}
                         </th>
                       ))}
@@ -495,9 +522,9 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
                   </thead>
                   <tbody>
                     {reportData.data.slice(0, 10).map((row, index) => (
-                      <tr key={index} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={index} className="border-b border-white/5 hover:bg-white/5">
                         {Object.entries(row).map(([key, value], cellIndex) => (
-                          <td key={cellIndex} className="p-3 text-slate-600">
+                          <td key={cellIndex} className="p-3 text-slate-300">
                             {typeof value === 'number' && key.toLowerCase().includes('amount') 
                               ? `R${value.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`
                               : String(value || '-')
@@ -509,7 +536,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
                   </tbody>
                 </table>
                 {reportData.data.length > 10 && (
-                  <div className="text-center py-3 text-sm text-slate-500">
+                  <div className="text-center py-3 text-sm text-slate-400">
                     Showing first 10 of {reportData.data.length} records. Download PDF for complete report.
                   </div>
                 )}
@@ -518,7 +545,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ companyId = 'current-company-id
 
             {/* No Data Message */}
             {reportData.data && reportData.data.length === 0 && (
-              <div className="text-center py-8 text-slate-500">
+              <div className="text-center py-8 text-slate-400">
                 <FileSpreadsheet className="h-12 w-12 mx-auto mb-3 text-slate-300" />
                 <div className="text-lg font-medium">No data found</div>
                 <div className="text-sm">Try adjusting your filters or date range</div>

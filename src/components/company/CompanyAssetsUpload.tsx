@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import useAuditLogger from '@/hooks/useAuditLogger';
 
 interface AssetType {
   name: string;
@@ -15,6 +16,7 @@ interface AssetType {
 
 const CompanyAssetsUpload = () => {
   const [assets, setAssets] = useState<Record<string, AssetType>>({});
+  const { logDocument, logDelete, logSystem } = useAuditLogger();
   
   // Load assets from localStorage on component mount
   useEffect(() => {
@@ -39,6 +41,7 @@ const CompanyAssetsUpload = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const reader = new FileReader();
+      const previous = assets[assetType];
       
       reader.onload = (loadEvent) => {
         const result = loadEvent.target?.result as string;
@@ -94,6 +97,15 @@ const CompanyAssetsUpload = () => {
                 aspectRatio: width / height
               }
             }));
+            // Audit: upload or replace asset (logo)
+            try {
+              if (previous) {
+                logDocument('Upload Asset (Replace)', 'asset', `${assetType} - ${file.name}`, assetType.toLowerCase());
+                logSystem('Asset Replaced', `Replaced ${assetType}`, { assetType, oldName: previous.name, newName: file.name });
+              } else {
+                logDocument('Upload Asset', 'asset', `${assetType} - ${file.name}`, assetType.toLowerCase());
+              }
+            } catch {}
             
             // Dispatch logo update event for Settings page sync
             if (assetType === 'Logo') {
@@ -113,6 +125,15 @@ const CompanyAssetsUpload = () => {
               lastModified: Date.now()
             }
           }));
+          // Audit: upload or replace asset (non-logo)
+          try {
+            if (previous) {
+              logDocument('Upload Asset (Replace)', 'asset', `${assetType} - ${file.name}`, assetType.toLowerCase());
+              logSystem('Asset Replaced', `Replaced ${assetType}`, { assetType, oldName: previous.name, newName: file.name });
+            } else {
+              logDocument('Upload Asset', 'asset', `${assetType} - ${file.name}`, assetType.toLowerCase());
+            }
+          } catch {}
         }
       };
       
@@ -121,38 +142,46 @@ const CompanyAssetsUpload = () => {
   };
   
   const removeAsset = (assetType: string) => () => {
+    const prevAsset = assets[assetType];
     setAssets(prev => {
       const newAssets = {...prev};
       delete newAssets[assetType];
       return newAssets;
     });
+    // Audit: removal
+    try {
+      logDelete('asset', assetType, assetType.toLowerCase());
+      if (prevAsset) {
+        logSystem('Asset Removed', `Removed ${assetType}`, { assetType, name: prevAsset.name });
+      }
+    } catch {}
   };
   
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+    <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
       <CardHeader>
-        <CardTitle className="text-slate-900 font-sf-pro text-xl">Company Assets</CardTitle>
+        <CardTitle className="text-slate-900 dark:text-slate-100 font-sf-pro text-xl">Company Assets</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {['Logo', 'Stamp', 'Signature'].map((asset) => (
             <div key={asset} className="text-center">
-              <label className="block text-sm font-medium text-slate-700 mb-4 font-sf-pro">{asset}</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-4 font-sf-pro">{asset}</label>
               
               {assets[asset] ? (
                 <div className="relative group">
                   <img 
                     src={assets[asset].dataUrl} 
                     alt={`Company ${asset}`} 
-                    className="h-48 w-full object-contain p-4 glass backdrop-blur-sm bg-white/30 border-2 border-white/40 rounded-2xl"
+                    className="h-48 w-full object-contain p-4 glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-2xl shadow-business"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/20 rounded-2xl">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/30 backdrop-blur-sm rounded-2xl">
                     <div className="flex space-x-2">
                       <Button 
                         variant="secondary" 
                         size="sm"
                         onClick={() => document.getElementById(`${asset.toLowerCase()}-upload`)?.click()}
-                        className="bg-white hover:bg-slate-100 text-slate-700"
+                        className="glass backdrop-blur-md bg-white/10 dark:bg-white/5 hover:bg-white/15 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 border border-white/10"
                       >
                         <RefreshCw className="h-4 w-4 mr-1" />
                         Replace
@@ -161,19 +190,19 @@ const CompanyAssetsUpload = () => {
                         variant="destructive" 
                         size="sm"
                         onClick={removeAsset(asset)}
-                        className="bg-red-500 hover:bg-red-600 text-white"
+                        className="bg-red-500/90 hover:bg-red-500 text-white shadow-sm"
                       >
                         <X className="h-4 w-4 mr-1" />
                         Remove
                       </Button>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">{assets[asset].name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">{assets[asset].name}</p>
                 </div>
               ) : (
-                <label htmlFor={`${asset.toLowerCase()}-upload`} className="glass backdrop-blur-sm bg-white/30 border-2 border-dashed border-white/40 rounded-2xl p-8 hover:bg-white/40 transition-all duration-300 group cursor-pointer flex flex-col items-center justify-center h-48">
+                <label htmlFor={`${asset.toLowerCase()}-upload`} className="glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-dashed border-white/10 rounded-2xl p-8 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 group cursor-pointer flex flex-col items-center justify-center h-48 shadow-business">
                   <Upload className="h-12 w-12 text-slate-400 mx-auto mb-4 group-hover:text-mokm-purple-500 transition-colors" />
-                  <p className="text-slate-600 font-sf-pro text-sm">Click to upload {asset.toLowerCase()}</p>
+                  <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm">Click to upload {asset.toLowerCase()}</p>
                 </label>
               )}
               
@@ -188,8 +217,8 @@ const CompanyAssetsUpload = () => {
           ))}
         </div>
         
-        <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-xl">
-          <p className="text-yellow-700 text-sm font-sf-pro">
+        <div className="glass backdrop-blur-md bg-amber-500/10 dark:bg-amber-400/10 border border-amber-200/20 text-amber-800 dark:text-amber-200 p-4 rounded-xl shadow-business">
+          <p className="text-sm font-sf-pro">
             <strong>Note:</strong> Images with no backgrounds are preferred.
           </p>
         </div>

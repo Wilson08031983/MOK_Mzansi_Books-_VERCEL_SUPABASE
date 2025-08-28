@@ -115,7 +115,7 @@ class FileStorageService {
    */
   private getStorageUsage(): number {
     let totalSize = 0;
-    for (let key in localStorage) {
+    for (const key in localStorage) {
       if (localStorage.hasOwnProperty(key)) {
         totalSize += localStorage[key].length;
       }

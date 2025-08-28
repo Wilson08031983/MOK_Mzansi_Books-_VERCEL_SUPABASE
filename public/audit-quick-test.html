@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit Log Quick Tester</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#7c3aed; }
+    body { font-family: Inter, system-ui, Arial, sans-serif; margin: 0; padding: 24px; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 24px; }
+    .muted { color: var(--muted); margin-bottom: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .card { background: var(--card); border: 1px solid #1f2937; border-radius: 10px; padding: 16px; }
+    .controls .card { display: flex; flex-direction: column; gap: 8px; }
+    button { background: #2563eb; color: white; border: 0; border-radius: 8px; padding: 10px 12px; cursor: pointer; font-weight: 600; }
+    button:hover { opacity: .9; }
+    .btn-secondary { background: #374151; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .entry { background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; }
+    .entry h4 { margin: 0 0 8px; font-size: 14px; }
+    .entry .small { color: var(--muted); font-size: 12px; }
+    .key { display: inline-block; padding: 2px 6px; border-radius: 6px; background: #1f2937; border: 1px solid #374151; margin-right: 6px; font-size: 11px; color: #cbd5e1; }
+    .filters select, .filters input { background: #0b1220; color: var(--text); border: 1px solid #1f2937; padding: 8px; border-radius: 8px; }
+    .pill { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #374151; background: #111827; color: #cbd5e1; }
+    .section-title { margin: 20px 0 8px; font-size: 16px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Audit Log Quick Tester</h1>
+    <div class="muted">Reads from localStorage key <code>auditLog</code> and listens to <code>audit-log-updated</code> events. Use buttons to simulate entries or perform actions in-app and watch updates live.</div>
+
+    <div class="row controls">
+      <div class="card" style="flex:1 1 360px;">
+        <strong>Simulate Supplier</strong>
+        <div class="row">
+          <button onclick="simulateCRUD('Created Supplier','supplier')">Create</button>
+          <button onclick="simulateCRUD('Updated Supplier','supplier')">Update</button>
+          <button onclick="simulateCRUD('Deleted Supplier','supplier')">Delete</button>
+        </div>
+      </div>
+      <div class="card" style="flex:1 1 360px;">
+        <strong>Simulate Inventory</strong>
+        <div class="row">
+          <button onclick="simulateCRUD('Created Inventory Item','inventoryItem')">Create Item</button>
+          <button onclick="simulateAdjustment('Received Stock','inventoryItem', +5)">Receive +5</button>
+          <button onclick="simulateAdjustment('Adjusted Stock','inventoryItem', -3)">Adjust -3</button>
+          <button onclick="simulateFlag('Marked Item as Damaged','inventoryItem','damaged')">Damage</button>
+          <button onclick="simulateFlag('Marked Item as Expired','inventoryItem','expired')">Expire</button>
+        </div>
+      </div>
+      <div class="card" style="flex:1 1 260px;">
+        <strong>Utilities</strong>
+        <div class="row">
+          <button class="btn-secondary" onclick="refresh()">Refresh</button>
+          <button class="btn-secondary" onclick="clearAudit()">Clear Audit Log</button>
+          <button class="btn-secondary" onclick="seedSamples()">Seed 5 Samples</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row filters" style="margin-top:16px;">
+      <div class="card" style="flex:1 1 280px;">
+        <div class="row">
+          <input id="search" placeholder="Search action/description/user/page" oninput="render()" style="flex:1" />
+          <select id="category" onchange="render()">
+            <option value="all">All Categories</option>
+            <option value="crud">crud</option>
+            <option value="navigation">navigation</option>
+            <option value="auth">auth</option>
+            <option value="settings">settings</option>
+            <option value="financial">financial</option>
+            <option value="hr">hr</option>
+            <option value="document">document</option>
+            <option value="system">system</option>
+          </select>
+          <select id="changeType" onchange="render()">
+            <option value="all">All Changes</option>
+            <option>create</option>
+            <option>update</option>
+            <option>delete</option>
+            <option>send</option>
+            <option>export</option>
+            <option>import</option>
+            <option>approve</option>
+            <option>reject</option>
+            <option>read</option>
+          </select>
+        </div>
+      </div>
+      <div class="card" style="flex:0 0 auto; display:flex; align-items:center; gap:10px;">
+        <span id="count" class="pill">0</span>
+        <span class="muted">entries</span>
+      </div>
+    </div>
+
+    <div class="section-title">Latest Entries</div>
+    <div id="list" class="grid"></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'auditLog';
+
+    function getEntries(){
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+    }
+    function setEntries(entries){ localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }
+    function dispatch(entry){ window.dispatchEvent(new CustomEvent('audit-log-updated', { detail: entry })); }
+
+    function nowISO(){ return new Date().toISOString(); }
+    function user(){
+      try {
+        const u = JSON.parse(localStorage.getItem('currentUser')||'null') || JSON.parse(localStorage.getItem('mokUser')||'null');
+        if (u) return { id: u.id||'unknown', name: (u.fullName || (u.user_metadata?.full_name)) || (u.email||'user').split('@')[0], role: u.role || u.user_metadata?.role || 'User' };
+      } catch{}
+      return { id:'system', name:'System User', role:'System' };
+    }
+    function severity(changeType, action, entityType){
+      const a = (action||'').toLowerCase();
+      const critical = ['delete','remove','clear','reset','approve','reject','send','export'];
+      if (critical.some(c => a.includes(c))) return 'critical';
+      if (['user','employee','setting','permission'].includes(entityType) && (changeType==='update'||changeType==='delete')) return 'high';
+      if (['invoice','quotation','expense','income'].includes(entityType)) return 'medium';
+      if (changeType==='read' || a.includes('navigat') || a.includes('view')) return 'low';
+      return 'medium';
+    }
+
+    function makeEntry({category, action, page, section, entityType, entityId, entityName, changeType, oldValues, newValues, description, metadata}){
+      const u = user();
+      const entry = {
+        id: crypto.randomUUID(),
+        timestamp: nowISO(),
+        userId: u.id,
+        userName: u.name,
+        userRole: u.role,
+        category, action, page, section,
+        entityType, entityId, entityName,
+        changeType, oldValues, newValues,
+        description,
+        severity: severity(changeType, action, entityType),
+        immutable: true,
+        metadata: { ...(metadata||{}), userAgent: navigator.userAgent, timestamp: Date.now() }
+      };
+      const entries = getEntries();
+      entries.unshift(entry);
+      if (entries.length > 2000) entries.splice(2000);
+      setEntries(entries);
+      dispatch(entry);
+      render();
+    }
+
+    // Simulators
+    function simulateCRUD(action, entityType){
+      const id = entityType==='supplier' ? `SUP-${Math.floor(Math.random()*1000)}` : `INV-${Math.floor(Math.random()*1000)}`;
+      const name = entityType==='supplier' ? `Supplier ${id}` : `Item ${id}`;
+      const ct = action.toLowerCase().includes('creat') ? 'create' : action.toLowerCase().includes('delet') ? 'delete' : 'update';
+      makeEntry({
+        category: 'crud', action, page: 'Inventory', entityType, entityId: id, entityName: name,
+        changeType: ct, description: `${action} ${entityType}: ${name}`,
+        oldValues: ct==='create'? undefined : { sample: 'old' },
+        newValues: ct==='delete'? undefined : { sample: 'new' }
+      });
+    }
+    function simulateAdjustment(action, entityType, delta){
+      const id = `INV-${Math.floor(Math.random()*1000)}`;
+      const name = `Item ${id}`;
+      const oldLevel = Math.floor(Math.random()*20)+1;
+      const newLevel = Math.max(0, oldLevel + delta);
+      makeEntry({
+        category: 'crud', action, page: 'Inventory', entityType, entityId: id, entityName: name,
+        changeType: 'update', description: `${action} ${Math.abs(delta)} units for ${name}`,
+        oldValues: { stockLevel: oldLevel }, newValues: { stockLevel: newLevel }, metadata: { changeAmount: delta }
+      });
+    }
+    function simulateFlag(action, entityType, flag){
+      const id = `INV-${Math.floor(Math.random()*1000)}`;
+      const name = `Item ${id}`;
+      const qty = Math.floor(Math.random()*5)+1;
+      const oldLevel = Math.floor(Math.random()*20)+qty;
+      const newLevel = oldLevel - qty;
+      makeEntry({
+        category: 'crud', action, page: 'Inventory', entityType, entityId: id, entityName: name,
+        changeType: 'update', description: `Marked ${qty} units of ${name} as ${flag}. Reason: Test case`,
+        oldValues: { stockLevel: oldLevel }, newValues: { stockLevel: newLevel },
+        metadata: { quantity: qty, reason: 'Test case', notes: 'N/A', actionTaken: 'write-off', location: 'Main' }
+      });
+    }
+
+    function clearAudit(){ localStorage.removeItem(STORAGE_KEY); render(); }
+    function seedSamples(){
+      simulateCRUD('Created Supplier','supplier');
+      simulateCRUD('Created Inventory Item','inventoryItem');
+      simulateAdjustment('Received Stock','inventoryItem', +10);
+      simulateFlag('Marked Item as Damaged','inventoryItem','damaged');
+      simulateCRUD('Deleted Supplier','supplier');
+    }
+
+    function render(){
+      const list = document.getElementById('list');
+      const search = (document.getElementById('search').value||'').toLowerCase();
+      const category = document.getElementById('category').value;
+      const changeType = document.getElementById('changeType').value;
+      const entries = getEntries();
+      const filtered = entries.filter(e => {
+        if (search) {
+          const s = `${e.action} ${e.description} ${e.userName} ${e.page}`.toLowerCase();
+          if (!s.includes(search)) return false;
+        }
+        if (category!=='all' && e.category!==category) return false;
+        if (changeType!=='all' && e.changeType!==changeType) return false;
+        return true;
+      });
+      document.getElementById('count').textContent = String(filtered.length);
+      list.innerHTML = filtered.slice(0, 50).map(e => `
+        <div class="entry">
+          <h4>${e.action} <span class="pill">${e.changeType}</span> <span class="pill">${e.severity}</span></h4>
+          <div class="small">${new Date(e.timestamp).toLocaleString()} • ${e.userName} • ${e.page}${e.section?(' › '+e.section):''}</div>
+          <div style="margin-top:8px;">
+            <span class="key">${e.entityType||'entity'}</span>
+            <span class="key">${e.entityId||'-'}</span>
+            <span class="key">${e.entityName||'-'}</span>
+          </div>
+          <div class="small" style="margin-top:8px;">${e.description||''}</div>
+          ${e.oldValues||e.newValues ? `
+            <div class="small" style="margin-top:8px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+              <div><strong>Old</strong><pre style="white-space:pre-wrap; background:#0b1220; padding:8px; border-radius:6px; border:1px solid #1f2937;">${JSON.stringify(e.oldValues,null,2)}</pre></div>
+              <div><strong>New</strong><pre style="white-space:pre-wrap; background:#0b1220; padding:8px; border-radius:6px; border:1px solid #1f2937;">${JSON.stringify(e.newValues,null,2)}</pre></div>
+            </div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function refresh(){ render(); }
+
+    window.addEventListener('audit-log-updated', () => render());
+    render();
+  </script>
+</body>
+</html>

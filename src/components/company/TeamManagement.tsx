@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -37,6 +38,8 @@ import { getUserPermissions, isAdminRole } from '@/services/permissionService';
 import { syncTeamMembersToEmployees, getSyncStatus } from '@/services/teamEmployeeSyncService';
 import { userLinkingService } from '@/services/userLinkingService';
 import { useNavigate } from 'react-router-dom';
+import { addNotification, getNotifications } from '@/services/notificationService';
+import useAuditLogger from '@/hooks/useAuditLogger';
 
 const TeamManagement = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -70,6 +73,8 @@ const TeamManagement = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLocalization();
+  const { logNavigation, logHR, logSystem, logDelete } = useAuditLogger();
   
   // Function to load team members and sync status
   const loadTeamMembers = () => {
@@ -107,8 +112,19 @@ const TeamManagement = () => {
   
   // Load team members on component mount
   useEffect(() => {
+    // Audit: viewing Team Management tab
+    try { logNavigation('Team Management'); } catch {}
     console.log('🔄 TeamManagement: Component mounted, loading team members');
     loadTeamMembers();
+    // Auto-sync Team Members to HR Employees so HR reflects Team as source of truth
+    try {
+      const result = syncTeamMembersToEmployees();
+      console.log('🔗 TeamManagement: Auto-sync result:', result);
+      // Refresh counts/status after sync
+      loadTeamMembers();
+    } catch (e) {
+      console.warn('⚠️ TeamManagement: Auto-sync failed (non-fatal):', e);
+    }
   }, []);
   
   // Also reload when component becomes visible (navigation)
@@ -128,8 +144,27 @@ const TeamManagement = () => {
   }, []);
 
   // Handle successful invitation
-  const handleInviteSuccess = () => {
+  const handleInviteSuccess = (payload?: { email: string; role: string }) => {
     loadTeamMembers();
+
+    // Build a concise summary and avoid duplicate notifications
+    if (payload && payload.email) {
+      const title = 'New Team Member Invited';
+      const message = `${payload.email} invited as ${payload.role}`;
+      const now = Date.now();
+      const existing = getNotifications().some(n =>
+        n.type === 'system' &&
+        n.title === title &&
+        n.message === message &&
+        now - new Date(n.date).getTime() < 5 * 60 * 1000 // 5 minutes window
+      );
+      if (!existing) {
+        addNotification({ title, message, type: 'system' });
+      }
+      // Audit: invite recorded
+      try { logHR('Invited Team Member', 'user', payload.email, payload.email); } catch {}
+    }
+
     toast({
       title: "Team Updated",
       description: "The team member list has been refreshed with the new invitation."
@@ -143,6 +178,8 @@ const TeamManagement = () => {
       title: "Permissions Updated",
       description: "User permissions have been updated successfully."
     });
+    // Audit: permissions updated
+    try { logSystem('Permissions Updated', 'Team member permissions updated'); } catch {}
   };
   
   // Handle sync team members to employees
@@ -237,12 +274,15 @@ const TeamManagement = () => {
           description: `${selectedMember.email} has been removed from your team.`,
           variant: "default"
         });
+        // Audit: deletion recorded
+        try { logDelete('user', selectedMember.email, selectedMember.id); } catch {}
       } else {
         toast({
           title: "Deletion Failed",
           description: "There was a problem removing this user.",
           variant: "destructive"
         });
+        try { logSystem('Deletion Failed', `Failed to delete user ${selectedMember.email}`); } catch {}
       }
     }
   };
@@ -369,8 +409,8 @@ const TeamManagement = () => {
       {/* Team Management Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro tracking-tight">Team Management</h2>
-          <p className="text-slate-600 font-sf-pro">Manage your company's team members and permissions.</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro tracking-tight">{t('company.team.headerTitle')}</h2>
+          <p className="text-slate-600 dark:text-slate-300 font-sf-pro">{t('company.team.headerSubtitle')}</p>
         </div>
         <div className="flex items-center space-x-3">
           {/* Sync to HR button hidden as sync is now automatic when opening Team Management tab */}
@@ -392,56 +432,56 @@ const TeamManagement = () => {
             onClick={handleAddNewUser}
             className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white rounded-xl px-4"
           >
-            <UserPlus className="mr-2 h-4 w-4" /> Invite Team Member
+            <UserPlus className="mr-2 h-4 w-4" /> {t('company.team.inviteButton')}
           </Button>
         </div>
       </div>
 
       {/* Team Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 rounded-2xl shadow-colored">
                 <User className="h-6 w-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-900 font-sf-pro">{stats.total}</p>
-                <p className="text-slate-600 font-sf-pro text-sm">Total Members</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">{stats.total}</p>
+                <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm">{t('company.team.stats.totalMembers')}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+        <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl shadow-colored">
                 <Shield className="h-6 w-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-900 font-sf-pro">{stats.active}</p>
-                <p className="text-slate-600 font-sf-pro text-sm">Active Members</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">{stats.active}</p>
+                <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm">{t('company.team.stats.activeMembers')}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+        <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl shadow-colored">
                 <Mail className="h-6 w-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-900 font-sf-pro">{stats.pending}</p>
-                <p className="text-slate-600 font-sf-pro text-sm">Pending Invites</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">{stats.pending}</p>
+                <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm">{t('company.team.stats.pendingInvites')}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+        <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-4">
@@ -449,11 +489,11 @@ const TeamManagement = () => {
                   <Users className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-slate-900 font-sf-pro">{syncStatus.syncedMembers}</p>
-                  <p className="text-slate-600 font-sf-pro text-sm">Synced to HR</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">{syncStatus.syncedMembers}</p>
+                  <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm">{t('company.team.stats.syncedToHR')}</p>
                   {syncStatus.unsyncedMembers.length > 0 && (
                     <p className="text-xs text-mokm-orange-600 font-sf-pro">
-                      {syncStatus.unsyncedMembers.length} pending sync
+                      {t('company.team.stats.pendingSync', { count: syncStatus.unsyncedMembers.length })}
                     </p>
                   )}
                 </div>
@@ -464,31 +504,31 @@ const TeamManagement = () => {
       </div>
 
       {/* Team Members List */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business hover:shadow-business-lg transition-all duration-300">
+      <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader className="flex items-center justify-between">
-          <CardTitle className="text-slate-900 font-sf-pro text-xl">Team Members</CardTitle>
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-sf-pro text-xl">{t('company.team.listTitle')}</CardTitle>
           <Button
             variant="link"
             className="text-mokm-purple-700 hover:text-mokm-purple-900 font-sf-pro"
             onClick={() => navigate('/settings?tab=users#admin-users')}
-            title="View Administrative Users in Settings"
+            title={t('company.team.viewAdminUsersTooltip')}
           >
-            <Shield className="h-4 w-4 mr-1" /> Admin Employees Only
+            <Shield className="h-4 w-4 mr-1" /> {t('company.team.adminEmployeesOnly')}
           </Button>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {displayMembers.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
+              <div className="text-center py-8 text-slate-500 dark:text-slate-400">
                 <Mail className="h-12 w-12 mx-auto mb-3 text-mokm-purple-300" />
-                <p className="mb-1">No team members found</p>
-                <p className="text-sm">Invite your first team member to get started</p>
+                <p className="mb-1">{t('company.team.empty.noMembers')}</p>
+                <p className="text-sm">{t('company.team.empty.inviteFirst')}</p>
               </div>
             ) : (
               displayMembers.map((member) => (
                 <div
                   key={member.id}
-                  className="glass backdrop-blur-sm bg-white/30 rounded-2xl p-6 hover:bg-white/40 transition-all duration-300 hover-lift"
+                  className="glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 hover-lift shadow-business"
                 >
                   <div className="flex items-center justify-between">
                     <div className={`flex items-center space-x-4 ${((member.isPrimary) || isAdminRole(((member.isPrimary && member.position) ? member.position : member.role) as string) || member.isAdmin) ? 'cursor-pointer' : 'cursor-default'}`}
@@ -508,24 +548,24 @@ const TeamManagement = () => {
                       role="button"
                       tabIndex={0}
                       title={((member.isPrimary) || isAdminRole(((member.isPrimary && member.position) ? member.position : member.role) as string) || member.isAdmin)
-                        ? 'Go to Administrative Users in Settings to manage this member'
-                        : 'Only Admin or Primary users are linked to Administrative Users'}
+                        ? t('company.team.goToAdminUsersTitle')
+                        : t('company.team.adminOnlyLinkedTitle')}
                     >
                       <div className="w-12 h-12 bg-gradient-to-br from-mokm-purple-500 to-mokm-blue-500 rounded-2xl flex items-center justify-center shadow-colored">
                         <span className="text-white font-semibold font-sf-pro text-lg">{member.avatar}</span>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-slate-900 font-sf-pro flex items-center gap-2">
+                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 font-sf-pro flex items-center gap-2">
                           {member.name}
                           {member.isPrimary && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Primary</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">{t('company.team.badges.primary')}</span>
                           )}
                         </h3>
                         {member.isPrimary && member.position && (
-                          <p className="text-slate-700 font-sf-pro text-sm">{member.position}</p>
+                          <p className="text-slate-700 dark:text-slate-300 font-sf-pro text-sm">{member.position}</p>
                         )}
-                        <p className="text-slate-600 font-sf-pro text-sm">{member.email}</p>
-                        <p className="text-slate-500 font-sf-pro text-xs">Last active: {member.lastActive}</p>
+                        <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm">{member.email}</p>
+                        <p className="text-slate-500 dark:text-slate-500/80 font-sf-pro text-xs">{t('company.team.badges.lastActivePrefix')} {member.lastActive}</p>
                       </div>
                     </div>
                     
@@ -538,25 +578,25 @@ const TeamManagement = () => {
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium font-sf-pro ${getStatusBadgeColor(member.status)}`}>
-                          {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium font-sf-pro ${getStatusBadgeColor(member.status)} }`}>
+                          {t(`company.team.status.${member.status.toLowerCase()}`)}
                         </span>
                         
                         {!member.isAdmin && (
                           <div className="flex gap-1">
                             <span className="px-3 py-1 rounded-full text-xs font-medium font-sf-pro bg-blue-100 text-blue-800 flex items-center gap-1">
-                              <Eye className="h-3 w-3" /> {member.permissionCount} Page{member.permissionCount !== 1 ? 's' : ''}
+                              <Eye className="h-3 w-3" /> {t('company.team.permissions.viewPages', { count: member.permissionCount })}
                             </span>
                             
                             <span className="px-3 py-1 rounded-full text-xs font-medium font-sf-pro bg-green-100 text-green-800 flex items-center gap-1">
-                              <Edit2 className="h-3 w-3" /> {member.writePermissionCount} Write
+                              <Edit2 className="h-3 w-3" /> {t('company.team.permissions.writeCount', { count: member.writePermissionCount })}
                             </span>
                           </div>
                         )}
                         
                         {member.isAdmin ? (
                           <span className="px-3 py-1 rounded-full text-xs font-medium font-sf-pro bg-purple-100 text-purple-800 flex items-center gap-1">
-                            <KeyRound className="h-3 w-3" /> Full Access
+                            <KeyRound className="h-3 w-3" /> {t('company.team.badges.fullAccess')}
                           </span>
                         ) : null}
                         
@@ -566,7 +606,7 @@ const TeamManagement = () => {
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="glass backdrop-blur-sm bg-white/70 border border-white/20">
+                          <DropdownMenuContent align="end" className="glass backdrop-blur-md bg-white/10 dark:bg-black/40 border border-white/10 rounded-2xl shadow-business-xl">
                             {!member.isAdmin && (
                               <DropdownMenuItem
                                 className="flex items-center gap-2 cursor-pointer"
@@ -578,7 +618,7 @@ const TeamManagement = () => {
                                 })}
                               >
                                 <LockIcon className="h-4 w-4" />
-                                <span>Edit Access</span>
+                                <span>{t('company.team.menu.editAccess')}</span>
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem
@@ -592,7 +632,7 @@ const TeamManagement = () => {
                               })}
                             >
                               <Trash2 className="h-4 w-4" />
-                              <span>Delete User</span>
+                              <span>{t('company.team.menu.deleteUser')}</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -628,7 +668,7 @@ const TeamManagement = () => {
         onClose={() => setIsAuthVerificationModalOpen(false)}
         onVerified={authAction === 'delete' ? handleAuthVerifiedForDeletion : handleAuthVerifiedForPermissions}
         actionType={authAction}
-        targetEntityName={authAction === 'delete' ? 'User' : 'User Permissions'}
+        targetEntityName={authAction === 'delete' ? t('company.team.authTarget.user') : t('company.team.authTarget.userPermissions')}
       />
     </div>
   );

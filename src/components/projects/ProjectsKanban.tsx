@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Project } from '@/types/project';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface ProjectsKanbanProps {
   projects: Project[];
@@ -22,12 +23,14 @@ const ProjectsKanban: React.FC<ProjectsKanbanProps> = ({
   getStatusColor,
   getPriorityColor
 }) => {
+  const { t } = useLocalization();
+
   const columns = [
-    { id: 'Planning', title: 'Planning', color: 'bg-yellow-100 border-yellow-200' },
-    { id: 'In Progress', title: 'In Progress', color: 'bg-blue-100 border-blue-200' },
-    { id: 'On Hold', title: 'On Hold', color: 'bg-orange-100 border-orange-200' },
-    { id: 'Completed', title: 'Completed', color: 'bg-green-100 border-green-200' },
-    { id: 'Cancelled', title: 'Cancelled', color: 'bg-red-100 border-red-200' }
+    { id: 'Planning', titleKey: 'projects.status.planning', color: 'bg-yellow-100 border-yellow-200' },
+    { id: 'In Progress', titleKey: 'projects.status.inProgress', color: 'bg-blue-100 border-blue-200' },
+    { id: 'On Hold', titleKey: 'projects.status.onHold', color: 'bg-orange-100 border-orange-200' },
+    { id: 'Completed', titleKey: 'projects.status.completed', color: 'bg-green-100 border-green-200' },
+    { id: 'Cancelled', titleKey: 'projects.status.cancelled', color: 'bg-red-100 border-red-200' }
   ];
 
   const getProjectsByStatus = (status: string) => {
@@ -43,7 +46,7 @@ const ProjectsKanban: React.FC<ProjectsKanbanProps> = ({
           <div key={column.id} className="flex-shrink-0 w-80">
             <div className={`rounded-lg border-2 ${column.color} p-4 mb-4`}>
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-slate-700">{column.title}</h3>
+                <h3 className="font-semibold text-slate-700">{t(column.titleKey as any)}</h3>
                 <Badge variant="secondary" className="text-xs">
                   {columnProjects.length}
                 </Badge>
@@ -88,7 +91,7 @@ const ProjectsKanban: React.FC<ProjectsKanbanProps> = ({
                     {/* Progress */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-slate-600">Progress</span>
+                        <span className="text-xs text-slate-600">{t('projects.grid.projectProgress')}</span>
                         <span className="text-xs font-medium text-slate-900">{project.progress}%</span>
                       </div>
                       <div className="w-full bg-slate-200 rounded-full h-1.5">
@@ -101,7 +104,7 @@ const ProjectsKanban: React.FC<ProjectsKanbanProps> = ({
 
                     {/* Budget */}
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Budget:</span>
+                      <span className="text-slate-600">{t('projects.grid.budget')}:</span>
                       <span className="text-slate-900 font-medium">R{project.budget.toLocaleString()}</span>
                     </div>
 
@@ -146,7 +149,7 @@ const ProjectsKanban: React.FC<ProjectsKanbanProps> = ({
               
               {columnProjects.length === 0 && (
                 <div className="text-center py-8 text-slate-400">
-                  <p className="text-sm">No projects</p>
+                  <p className="text-sm">{t('projects.grid.empty')}</p>
                 </div>
               )}
             </div>

@@ -15,6 +15,7 @@ import InvoiceViewModal from '@/components/invoices/InvoiceViewModal';
 import { Invoice, InvoiceItem, InvoiceStatus } from '@/types/invoice';
 import { activityService } from '@/services/activityService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import { addNotification, getNotifications, NotificationItem } from '@/services/notificationService';
 
 // Define types for the invoice modal data
 interface ModalLineItem {
@@ -123,6 +124,69 @@ const Invoices: React.FC = () => {
       setCompanyDetails(JSON.parse(storedCompanyDetails));
     }
   }, []);
+
+  // Listen for invoices-updated: refresh list and create de-duplicated notifications
+  useEffect(() => {
+    const handleInvoicesUpdated = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent;
+        const detail = (e && e.detail) || {};
+        const action: string = detail.action || '';
+        const invoice: any = detail.invoice;
+        const invoiceId: string | undefined = detail.invoiceId;
+        const number = invoice?.number || invoiceId || 'Invoice';
+
+        // Refresh from localStorage to keep UI in sync
+        const updatedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+        setInvoices(Array.isArray(updatedInvoices) ? updatedInvoices : []);
+
+        // Build notification content
+        let title = '';
+        let message = '';
+        if (action === 'created') {
+          title = `Invoice Created: ${number}`;
+          message = `Created for ${invoice?.clientName ?? 'a client'} (${localizeCurrency(invoice?.total || 0)}).`;
+        } else if (action === 'updated') {
+          title = `Invoice Updated: ${number}`;
+          message = `Details updated${invoice?.clientName ? ` (${invoice.clientName})` : ''}.`;
+        } else if (action === 'deleted') {
+          title = `Invoice Deleted: ${number}`;
+          message = `An invoice was deleted${invoice?.clientName ? ` (${invoice.clientName})` : ''}.`;
+        } else if (action === 'status-changed') {
+          const newStatus = detail.status || invoice?.status;
+          title = `Invoice Status: ${number}`;
+          message = `Status changed to ${String(newStatus).toUpperCase()}.`;
+        } else if (action === 'payment-recorded') {
+          const amt = detail.paymentAmount || 0;
+          title = `Payment Recorded: ${number}`;
+          message = `Payment of ${localizeCurrency(amt)} captured${invoice?.clientName ? ` for ${invoice.clientName}` : ''}.`;
+        } else if (action === 'imported') {
+          const count = detail.count || 0;
+          if (!count) return;
+          title = `Invoices Imported: ${count}`;
+          message = `${count} invoice(s) imported.`;
+        } else {
+          return;
+        }
+
+        // De-duplicate within 5 minutes by same title+message and type 'invoice' or 'system'
+        const existing: NotificationItem[] = getNotifications();
+        const windowMs = 5 * 60 * 1000;
+        const threshold = Date.now() - windowMs;
+        const dup = existing.some(n => {
+          const ts = new Date(n.date).getTime();
+          return n.title === title && n.message === message && (n.type === 'invoice' || n.type === 'system') && !isNaN(ts) && ts >= threshold;
+        });
+        if (!dup) {
+          addNotification({ title, message, type: 'invoice' });
+        }
+      } catch (err) {
+        console.warn('Failed handling invoices-updated event:', err);
+      }
+    };
+    window.addEventListener('invoices-updated', handleInvoicesUpdated as EventListener);
+    return () => window.removeEventListener('invoices-updated', handleInvoicesUpdated as EventListener);
+  }, [localizeCurrency]);
   
   // Function to generate sample invoices
   const generateSampleInvoices = () => {
@@ -347,6 +411,13 @@ const Invoices: React.FC = () => {
       // Update state
       setInvoices(prev => [...prev, newInvoice]);
 
+      // Dispatch event for create (so listeners notify + dashboard bell updates)
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('invoices-updated', { detail: { action: 'created', invoice: newInvoice } }));
+        }
+      } catch {}
+
       // Log activity: invoice created
       activityService.logFinancialAction(
         'Invoice created',
@@ -387,6 +458,18 @@ const Invoices: React.FC = () => {
   const handleRecordPayment = (invoice: Invoice) => {
     setSelectedInvoiceForPayment(invoice);
     setShowPaymentModal(true);
+    // Log activity: record payment modal opened
+    try {
+      activityService.logFinancialAction(
+        'Record payment opened',
+        `Opened record payment for invoice ${invoice.number}`,
+        'invoice',
+        invoice.id,
+        { status: invoice.status, balance: invoice.balance, amount: invoice.total }
+      );
+    } catch (err) {
+      console.warn('Failed to log record payment open:', err);
+    }
   };
 
   const handleDeleteInvoice = (invoiceId: string) => {
@@ -436,6 +519,13 @@ const Invoices: React.FC = () => {
       }
     );
 
+    // Dispatch event for delete
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('invoices-updated', { detail: { action: 'deleted', invoiceId, invoice: invoiceToDelete } }));
+      }
+    } catch {}
+
     toast.success(t('invoices.toasts.deleted'));
   };
 
@@ -473,6 +563,13 @@ const Invoices: React.FC = () => {
       invoiceId,
       { previousStatus: updatedInvoiceForLog?.status, newStatus }
     );
+
+    // Dispatch event for status change
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('invoices-updated', { detail: { action: 'status-changed', invoice: updatedInvoiceForLog, status: newStatus } }));
+      }
+    } catch {}
 
     toast.success(t('invoices.toasts.statusUpdated'));
   };
@@ -523,6 +620,150 @@ const Invoices: React.FC = () => {
       newInvoice.id,
       { amount: newInvoice.total, clientName: newInvoice.clientName }
     );
+  };
+
+  // UI interaction logging handlers
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    try {
+      activityService.logFinancialAction(
+        'Invoices searched',
+        query ? `Searched invoices: "${query}"` : 'Cleared invoice search',
+        'invoice',
+        undefined,
+        { query }
+      );
+    } catch (err) {
+      console.warn('Failed to log invoice search:', err);
+    }
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    try {
+      activityService.logFinancialAction(
+        'Invoice status filter changed',
+        `Filtered invoices by status: ${status}`,
+        'invoice',
+        undefined,
+        { status }
+      );
+    } catch (err) {
+      console.warn('Failed to log status filter change:', err);
+    }
+  };
+
+  const handleDateFilterChange = (date: string) => {
+    setDateFilter(date);
+    try {
+      activityService.logFinancialAction(
+        'Invoice date filter changed',
+        `Filtered invoices by date range: ${date}`,
+        'invoice',
+        undefined,
+        { dateRange: date }
+      );
+    } catch (err) {
+      console.warn('Failed to log date filter change:', err);
+    }
+  };
+
+  const handleClientFilterChange = (clientId: string) => {
+    setClientFilter(clientId);
+    try {
+      activityService.logFinancialAction(
+        'Invoice client filter changed',
+        clientId === 'all' ? 'Cleared client filter' : `Filtered invoices by client: ${clientId}`,
+        'invoice',
+        undefined,
+        { clientId }
+      );
+    } catch (err) {
+      console.warn('Failed to log client filter change:', err);
+    }
+  };
+
+  const handleViewModeChange = (mode: 'table' | 'grid') => {
+    setViewMode(mode);
+    try {
+      activityService.logFinancialAction(
+        'Invoices view mode changed',
+        `Changed invoices view to ${mode}`,
+        'invoice',
+        undefined,
+        { viewMode: mode }
+      );
+    } catch (err) {
+      console.warn('Failed to log view mode change:', err);
+    }
+  };
+
+  const handleSort = (field: string) => {
+    let newSortField = field;
+    let newSortDirection: 'asc' | 'desc' = 'desc';
+    if (sortField === field) {
+      newSortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      setSortDirection(newSortDirection);
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+    try {
+      activityService.logFinancialAction(
+        'Invoices sorted',
+        `Sorted invoices by ${newSortField} (${sortField === field ? newSortDirection : 'desc'})`,
+        'invoice',
+        undefined,
+        { field, direction: sortField === field ? newSortDirection : 'desc' }
+      );
+    } catch (err) {
+      console.warn('Failed to log sort change:', err);
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    try {
+      activityService.logFinancialAction(
+        'Invoices page changed',
+        `Changed invoices page to ${page}`,
+        'invoice',
+        undefined,
+        { page, itemsPerPage }
+      );
+    } catch (err) {
+      console.warn('Failed to log page change:', err);
+    }
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+    setCurrentPage(1); // reset to first page when page size changes
+    try {
+      activityService.logFinancialAction(
+        'Invoices page size changed',
+        `Changed invoices per page to ${items}`,
+        'invoice',
+        undefined,
+        { itemsPerPage: items }
+      );
+    } catch (err) {
+      console.warn('Failed to log items-per-page change:', err);
+    }
+  };
+
+  const handleOpenCreateInvoice = () => {
+    setSelectedInvoiceForEdit(null);
+    setShowCreateModal(true);
+    try {
+      activityService.logFinancialAction(
+        'Create invoice opened',
+        'Opened create invoice modal',
+        'invoice'
+      );
+    } catch (err) {
+      console.warn('Failed to log create invoice open:', err);
+    }
   };
 
   // Ensure invoices is always an array before filtering
@@ -608,10 +849,7 @@ return (
     <DashboardBackground />
     <div className="p-8 space-y-6 relative z-10">
       <InvoicesHeader
-        onCreateInvoice={() => {
-          setSelectedInvoiceForEdit(null); // Clear any previous edit data
-          setShowCreateModal(true);
-        }}
+        onCreateInvoice={handleOpenCreateInvoice}
         onRecordPayment={() => {
           if (selectedInvoices.length === 1) {
             const invoice = invoices.find(inv => inv.id === selectedInvoices[0]);
@@ -625,7 +863,7 @@ return (
           }
         }}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         hasSelectedInvoice={selectedInvoices.length === 1}
       />
 
@@ -633,15 +871,15 @@ return (
 
       <InvoicesSearchAndFilters
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchChange}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
         dateFilter={dateFilter}
-        onDateFilterChange={setDateFilter}
+        onDateFilterChange={handleDateFilterChange}
         clientFilter={clientFilter}
-        onClientFilterChange={setClientFilter}
+        onClientFilterChange={handleClientFilterChange}
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
       />
 
       {selectedInvoices.length > 0 && (
@@ -661,20 +899,13 @@ return (
         onSelectAll={handleSelectAll}
         sortColumn={sortField}
         sortDirection={sortDirection}
-        onSort={(field) => {
-          if (sortField === field) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-          } else {
-            setSortField(field);
-            setSortDirection('desc');
-          }
-        }}
+        onSort={handleSort}
         currentPage={currentPage}
         totalPages={totalPages}
         itemsPerPage={itemsPerPage}
         totalItems={sortedInvoices.length}
-        onPageChange={setCurrentPage}
-        onItemsPerPageChange={setItemsPerPage}
+        onPageChange={handlePageChange}
+        onItemsPerPageChange={handleItemsPerPageChange}
         onRecordPayment={handleRecordPayment}
         onDeleteInvoice={handleDeleteInvoice}
         onEditInvoice={handleEditInvoice}

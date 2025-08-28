@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VALID_STATUSES } from '@/constants/quotationStatuses';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface StatusChangeDropdownProps {
   currentStatus: string;
@@ -45,6 +46,7 @@ const StatusChangeDropdown: React.FC<StatusChangeDropdownProps> = ({
   size = 'md'
 }) => {
   const [open, setOpen] = useState(false);
+  const { t } = useLocalization();
 
   // Get status icon based on status
   const getStatusIcon = (status: string) => {
@@ -71,7 +73,8 @@ const StatusChangeDropdown: React.FC<StatusChangeDropdownProps> = ({
 
   // Get human-readable display status
   const getDisplayStatus = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    // Try to get localized status or fall back to capitalized status
+    return t(`quotations.statusLabels.${status}`, { defaultValue: status.charAt(0).toUpperCase() + status.slice(1) });
   };
 
   // Get status color based on status
@@ -134,9 +137,9 @@ const StatusChangeDropdown: React.FC<StatusChangeDropdownProps> = ({
       </PopoverTrigger>
       <PopoverContent className="p-0 w-52" align="start">
         <Command>
-          <CommandInput placeholder="Search status..." />
+          <CommandInput placeholder={t('quotations.searchStatus')} />
           <CommandList>
-            <CommandEmpty>No status found.</CommandEmpty>
+            <CommandEmpty>{t('quotations.noStatusFound')}</CommandEmpty>
             <CommandGroup>
               {VALID_STATUSES.map((status) => (
                 <CommandItem

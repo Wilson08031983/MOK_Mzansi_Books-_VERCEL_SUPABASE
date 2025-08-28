@@ -31,6 +31,7 @@ import PerformanceManagement from '@/components/hr/PerformanceManagement';
 import DisciplinaryManagement from '@/components/hr/DisciplinaryManagement';
 import EmployeeProfile from '@/components/hr/EmployeeProfile';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import { addNotification, getNotifications } from '@/services/notificationService';
 
 import { Employee, getAllEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
 import { syncTeamMembersToEmployees } from '@/services/teamEmployeeSyncService';
@@ -68,6 +69,186 @@ const HRManagement: React.FC = () => {
     openPositions: 5,
     turnoverRate: 0
   });
+
+  // Sample leave requests
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
+  {
+    id: 'LR003',
+    employeeId: employees[2]?.id || 'EMP003',
+    employeeNumber: employees[2]?.employeeNumber || 'LM0323003',
+    employeeName: `${employees[2]?.firstName || 'Lisa'} ${employees[2]?.surname || 'Mbatha'}`,
+    employeePosition: 'HR Specialist',
+    leaveType: LeaveTypes.FamilyResponsibility,
+    startDate: '2025-07-29',
+    endDate: '2025-07-29',
+    days: 1,
+    reason: 'Family matter',
+    status: 'pending',
+    requestDate: '2025-07-25'
+  },
+  {
+    id: 'LR001',
+    employeeId: employees[0]?.id || 'EMP001',
+    employeeNumber: employees[0]?.employeeNumber || 'SP0323001',
+    employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
+    employeePosition: 'Accountant',
+    leaveType: LeaveTypes.Annual,
+    startDate: '2025-08-10',
+    endDate: '2025-08-15',
+    days: 5,
+    reason: 'Family vacation',
+    status: 'approved',
+    requestDate: '2025-07-25'
+  },
+  {
+    id: 'LR004',
+    employeeId: employees[1]?.id || 'EMP002',
+    employeeNumber: employees[1]?.employeeNumber || 'JR0323002',
+    employeeName: `${employees[1]?.firstName || 'John'} ${employees[1]?.surname || 'Rodriguez'}`,
+    employeePosition: 'Developer',
+    leaveType: LeaveTypes.Maternity,
+    startDate: '2025-09-01',
+    endDate: '2025-12-31',
+    days: 86,
+    reason: 'Maternity Leave',
+    status: 'rejected',
+    requestDate: '2025-07-15',
+    rejectedReason: 'Please apply for paternity leave instead'
+  },
+  {
+    id: 'LR002',
+    employeeId: employees[1]?.id || 'EMP002',
+    employeeNumber: employees[1]?.employeeNumber || 'JR0323002',
+    employeeName: `${employees[1]?.firstName || 'John'} ${employees[1]?.surname || 'Rodriguez'}`,
+    employeePosition: 'Developer',
+    leaveType: LeaveTypes.Sick,
+    startDate: '2025-07-18',
+    endDate: '2025-07-19',
+    days: 2,
+    reason: 'Flu',
+    status: 'approved',
+    requestDate: '2025-07-17'
+  },
+  {
+    id: 'LR005',
+    employeeId: employees[3]?.id || 'EMP004',
+    employeeNumber: employees[3]?.employeeNumber || 'DM0323004',
+    employeeName: `${employees[3]?.firstName || 'David'} ${employees[3]?.surname || 'Mhlanga'}`,
+    employeePosition: 'Marketing Specialist',
+    leaveType: LeaveTypes.Religious,
+    startDate: '2025-07-30',
+    endDate: '2025-08-01',
+    days: 3,
+    reason: 'Personal matters',
+    status: 'rejected',
+    requestDate: '2025-07-05',
+    rejectedReason: 'Critical project deadline'
+  }
+  ]);
+
+  // Sample leave balances based on South African BCEA laws
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([
+    {
+      employeeId: employees[0]?.id || 'EMP001',
+      employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
+      department: 'Development',
+      // Standard leave types
+      annual: { total: 21, used: 21, remaining: 16, accrued: 21 },
+      sick: { total: 30, used: 2, remaining: 28 },
+      familyResponsibility: { total: 3, used: 1, remaining: 2 },
+      maternity: { total: 120, used: 0, remaining: 120 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 2, used: 0, remaining: 2 },  // Religious observance leave
+      study: { total: 5, used: 0, remaining: 5 },      // Study leave
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2023-01-01',
+      employmentLengthMonths: 18,
+      leaveAnniversaryDate: '2025-01-01'
+    },
+    {
+      employeeId: 'EMP002',
+      employeeName: 'Michael Johnson',
+      department: 'Design',
+      // Standard leave types
+      annual: { total: 21, used: 8, remaining: 13, accrued: 21 },
+      sick: { total: 30, used: 4, remaining: 26 },
+      familyResponsibility: { total: 3, used: 0, remaining: 3 },
+      maternity: { total: 0, used: 0, remaining: 0 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 0, used: 0, remaining: 0 },
+      study: { total: 3, used: 2, remaining: 1 },      // Study leave partially used
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2022-05-15',
+      employmentLengthMonths: 26,
+      leaveAnniversaryDate: '2025-05-15'
+    },
+    {
+      employeeId: 'EMP003',
+      employeeName: 'Lisa Williams',
+      department: 'Management',
+      // Standard leave types
+      annual: { total: 25, used: 12, remaining: 13, accrued: 25 },
+      sick: { total: 30, used: 3, remaining: 27 },
+      familyResponsibility: { total: 3, used: 2, remaining: 1 },
+      maternity: { total: 120, used: 0, remaining: 120 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 2, used: 1, remaining: 1 },  // Religious leave partially used
+      study: { total: 0, used: 0, remaining: 0 },
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2022-11-10',
+      employmentLengthMonths: 20,
+      leaveAnniversaryDate: '2025-11-10'
+    },
+    {
+      employeeId: 'EMP004',
+      employeeName: 'David Brown',
+      department: 'Finance',
+      // Standard leave types
+      annual: { total: 21, used: 3, remaining: 18, accrued: 21 },
+      sick: { total: 30, used: 1, remaining: 29 },
+      familyResponsibility: { total: 3, used: 0, remaining: 3 },
+      maternity: { total: 0, used: 0, remaining: 0 },
+      parental: { total: 10, used: 0, remaining: 10 },
+      // Additional leave types
+      adoption: { total: 0, used: 0, remaining: 0 },
+      commissioning: { total: 0, used: 0, remaining: 0 },
+      bereavement: { total: 0, used: 0, remaining: 0 },
+      religious: { total: 3, used: 0, remaining: 3 },  // Religious observance leave
+      study: { total: 2, used: 0, remaining: 2 },      // Study leave
+      unpaid: { days: 0 },
+      // Status trackers
+      onMaternityLeave: false,
+      jobReserved: false,
+      // Employment information
+      employmentStartDate: '2023-03-01',
+      employmentLengthMonths: 16,
+      leaveAnniversaryDate: '2025-03-01'
+    }
+  ]);
 
   // Update metrics when employees data changes
   useEffect(() => {
@@ -202,6 +383,115 @@ const HRManagement: React.FC = () => {
     setEmployees(storedEmployees);
   }, []);
 
+  // HR notifications listener and de-duplication
+  useEffect(() => {
+    const isDuplicate = (title: string, message: string, withinMinutes: number) => {
+      const notifications = getNotifications();
+      const now = Date.now();
+      const windowMs = withinMinutes * 60 * 1000;
+      return notifications.some(n => {
+        const ts = new Date(n.date).getTime();
+        return n.title === title && n.message === message && (now - ts) < windowMs;
+      });
+    };
+
+    const handler = (e: Event) => {
+      const event = e as CustomEvent;
+      const detail = event.detail || {};
+      if (detail?.entity !== 'employee') return;
+
+      // Always refresh employees on HR update
+      try {
+        const updatedEmployees = getAllEmployees();
+        setEmployees(updatedEmployees);
+      } catch {}
+
+      const emp = detail.employee;
+      const fullName = emp ? `${emp.firstName} ${emp.surname}` : 'Employee';
+      let title = 'HR Update';
+      let message = `${fullName} updated`;
+
+      switch (detail.action) {
+        case 'created':
+          title = 'New Employee Added';
+          message = `${fullName} (${emp?.position || 'Staff'}) joined. Employee No: ${emp?.employeeNumber}`;
+          break;
+        case 'updated':
+          title = 'Employee Updated';
+          message = `Profile updated for ${fullName}.`;
+          break;
+        case 'on-leave':
+          title = 'Employee On Leave';
+          message = `${fullName} is now on leave.`;
+          break;
+        case 'returned-from-leave':
+          title = 'Employee Returned From Leave';
+          message = `${fullName} has returned from leave.`;
+          break;
+        case 'terminated':
+          title = 'Employee Terminated';
+          message = `${fullName} is no longer working at the company.`;
+          break;
+        case 'deleted':
+          title = 'Employee Deleted';
+          message = `${fullName} profile has been deleted.`;
+          break;
+        case 'status-changed':
+          title = 'Employee Status Changed';
+          message = `${fullName} status changed to ${detail.newStatus}.`;
+          break;
+      }
+
+      if (!isDuplicate(title, message, 5)) {
+        addNotification({ title, message, type: 'system' });
+      }
+    };
+
+    window.addEventListener('hr-updated', handler as EventListener);
+    return () => window.removeEventListener('hr-updated', handler as EventListener);
+  }, []);
+
+  // Daily leave reminders: notify once per day while employee is on approved leave
+  useEffect(() => {
+    const isDuplicate = (title: string, message: string, withinMinutes: number) => {
+      const notifications = getNotifications();
+      const now = Date.now();
+      const windowMs = withinMinutes * 60 * 1000;
+      return notifications.some(n => {
+        const ts = new Date(n.date).getTime();
+        return n.title === title && n.message === message && (now - ts) < windowMs;
+      });
+    };
+
+    const checkLeaveReminders = () => {
+      const today = new Date();
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
+      // Approved leave requests covering today
+      leaveRequests
+        .filter(lr => lr.status === 'approved')
+        .forEach(lr => {
+          const start = new Date(lr.startDate);
+          const end = new Date(lr.endDate);
+          if (start <= endOfToday && end >= startOfToday) {
+            const remainingDays = Math.max(0, Math.ceil((end.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            const title = `Leave Reminder: ${lr.employeeName}`;
+            const message = `${lr.employeeName} is on ${lr.leaveType} leave (${lr.startDate} to ${lr.endDate}). ${remainingDays} day(s) remaining.`;
+            // De-dupe within 24 hours
+            if (!isDuplicate(title, message, 24 * 60)) {
+              addNotification({ title, message, type: 'system' });
+            }
+          }
+        });
+    };
+
+    // Run immediately and then periodically (hourly)
+    checkLeaveReminders();
+    const id = setInterval(checkLeaveReminders, 60 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [leaveRequests]);
+
   // Listen for custom event to switch to payroll tab
   useEffect(() => {
     const handleSwitchToPayroll = (event: CustomEvent) => {
@@ -216,81 +506,7 @@ const HRManagement: React.FC = () => {
     };
   }, []);
 
-  // Sample leave requests
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-  {
-    id: 'LR003',
-    employeeId: employees[2]?.id || 'EMP003',
-    employeeNumber: employees[2]?.employeeNumber || 'LM0323003',
-    employeeName: `${employees[2]?.firstName || 'Lisa'} ${employees[2]?.surname || 'Mbatha'}`,
-    employeePosition: 'HR Specialist',
-    leaveType: LeaveTypes.FamilyResponsibility,
-    startDate: '2025-07-29',
-    endDate: '2025-07-29',
-    days: 1,
-    reason: 'Family matter',
-    status: 'pending',
-    requestDate: '2025-07-25'
-  },
-  {
-    id: 'LR001',
-    employeeId: employees[0]?.id || 'EMP001',
-    employeeNumber: employees[0]?.employeeNumber || 'SP0323001',
-    employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
-    employeePosition: 'Accountant',
-    leaveType: LeaveTypes.Annual,
-    startDate: '2025-08-10',
-    endDate: '2025-08-15',
-    days: 5,
-    reason: 'Family vacation',
-    status: 'approved',
-    requestDate: '2025-07-25'
-  },
-  {
-    id: 'LR004',
-    employeeId: employees[1]?.id || 'EMP002',
-    employeeNumber: employees[1]?.employeeNumber || 'JR0323002',
-    employeeName: `${employees[1]?.firstName || 'John'} ${employees[1]?.surname || 'Rodriguez'}`,
-    employeePosition: 'Developer',
-    leaveType: LeaveTypes.Maternity,
-    startDate: '2025-09-01',
-    endDate: '2025-12-31',
-    days: 86,
-    reason: 'Maternity Leave',
-    status: 'rejected',
-    requestDate: '2025-07-15',
-    rejectedReason: 'Please apply for paternity leave instead'
-  },
-  {
-    id: 'LR002',
-    employeeId: employees[1]?.id || 'EMP002',
-    employeeNumber: employees[1]?.employeeNumber || 'JR0323002',
-    employeeName: `${employees[1]?.firstName || 'John'} ${employees[1]?.surname || 'Rodriguez'}`,
-    employeePosition: 'Developer',
-    leaveType: LeaveTypes.Sick,
-    startDate: '2025-07-18',
-    endDate: '2025-07-19',
-    days: 2,
-    reason: 'Flu',
-    status: 'approved',
-    requestDate: '2025-07-17'
-  },
-  {
-    id: 'LR005',
-    employeeId: employees[3]?.id || 'EMP004',
-    employeeNumber: employees[3]?.employeeNumber || 'DM0323004',
-    employeeName: `${employees[3]?.firstName || 'David'} ${employees[3]?.surname || 'Mhlanga'}`,
-    employeePosition: 'Marketing Specialist',
-    leaveType: LeaveTypes.Religious,
-    startDate: '2025-07-30',
-    endDate: '2025-08-01',
-    days: 3,
-    reason: 'Personal matters',
-    status: 'rejected',
-    requestDate: '2025-07-05',
-    rejectedReason: 'Critical project deadline'
-  }
-  ]);
+  
 
   // After employees load/change, drop any leave data that references non-existing employees
   useEffect(() => {
@@ -299,109 +515,7 @@ const HRManagement: React.FC = () => {
     setLeaveBalances(prev => prev.filter(item => ids.has(item.employeeId)));
   }, [employees]);
 
-  // Sample leave balances based on South African BCEA laws
-  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([
-    {
-      employeeId: employees[0]?.id || 'EMP001',
-      employeeName: `${employees[0]?.firstName || 'Sarah'} ${employees[0]?.surname || 'Parker'}`,
-      department: 'Development',
-      // Standard leave types
-      annual: { total: 21, used: 21, remaining: 16, accrued: 21 },
-      sick: { total: 30, used: 2, remaining: 28 },
-      familyResponsibility: { total: 3, used: 1, remaining: 2 },
-      maternity: { total: 120, used: 0, remaining: 120 },
-      parental: { total: 10, used: 0, remaining: 10 },
-      // Additional leave types
-      adoption: { total: 0, used: 0, remaining: 0 },
-      commissioning: { total: 0, used: 0, remaining: 0 },
-      bereavement: { total: 0, used: 0, remaining: 0 },
-      religious: { total: 2, used: 0, remaining: 2 },  // Religious observance leave
-      study: { total: 5, used: 0, remaining: 5 },      // Study leave
-      unpaid: { days: 0 },
-      // Status trackers
-      onMaternityLeave: false,
-      jobReserved: false,
-      // Employment information
-      employmentStartDate: '2023-01-01',
-      employmentLengthMonths: 18,
-      leaveAnniversaryDate: '2025-01-01'
-    },
-    {
-      employeeId: 'EMP002',
-      employeeName: 'Michael Johnson',
-      department: 'Design',
-      // Standard leave types
-      annual: { total: 21, used: 8, remaining: 13, accrued: 21 },
-      sick: { total: 30, used: 4, remaining: 26 },
-      familyResponsibility: { total: 3, used: 0, remaining: 3 },
-      maternity: { total: 0, used: 0, remaining: 0 },
-      parental: { total: 10, used: 0, remaining: 10 },
-      // Additional leave types
-      adoption: { total: 0, used: 0, remaining: 0 },
-      commissioning: { total: 0, used: 0, remaining: 0 },
-      bereavement: { total: 0, used: 0, remaining: 0 },
-      religious: { total: 0, used: 0, remaining: 0 },
-      study: { total: 3, used: 2, remaining: 1 },      // Study leave partially used
-      unpaid: { days: 0 },
-      // Status trackers
-      onMaternityLeave: false,
-      jobReserved: false,
-      // Employment information
-      employmentStartDate: '2022-05-15',
-      employmentLengthMonths: 26,
-      leaveAnniversaryDate: '2025-05-15'
-    },
-    {
-      employeeId: 'EMP003',
-      employeeName: 'Lisa Williams',
-      department: 'Management',
-      // Standard leave types
-      annual: { total: 25, used: 12, remaining: 13, accrued: 25 },
-      sick: { total: 30, used: 3, remaining: 27 },
-      familyResponsibility: { total: 3, used: 2, remaining: 1 },
-      maternity: { total: 120, used: 0, remaining: 120 },
-      parental: { total: 10, used: 0, remaining: 10 },
-      // Additional leave types
-      adoption: { total: 0, used: 0, remaining: 0 },
-      commissioning: { total: 0, used: 0, remaining: 0 },
-      bereavement: { total: 0, used: 0, remaining: 0 },
-      religious: { total: 2, used: 1, remaining: 1 },  // Religious leave partially used
-      study: { total: 0, used: 0, remaining: 0 },
-      unpaid: { days: 0 },
-      // Status trackers
-      onMaternityLeave: false,
-      jobReserved: false,
-      // Employment information
-      employmentStartDate: '2022-11-10',
-      employmentLengthMonths: 20,
-      leaveAnniversaryDate: '2025-11-10'
-    },
-    {
-      employeeId: 'EMP004',
-      employeeName: 'David Brown',
-      department: 'Finance',
-      // Standard leave types
-      annual: { total: 21, used: 3, remaining: 18, accrued: 21 },
-      sick: { total: 30, used: 1, remaining: 29 },
-      familyResponsibility: { total: 3, used: 0, remaining: 3 },
-      maternity: { total: 0, used: 0, remaining: 0 },
-      parental: { total: 10, used: 0, remaining: 10 },
-      // Additional leave types
-      adoption: { total: 0, used: 0, remaining: 0 },
-      commissioning: { total: 0, used: 0, remaining: 0 },
-      bereavement: { total: 0, used: 0, remaining: 0 },
-      religious: { total: 3, used: 0, remaining: 3 },  // Religious observance leave
-      study: { total: 2, used: 0, remaining: 2 },      // Study leave
-      unpaid: { days: 0 },
-      // Status trackers
-      onMaternityLeave: false,
-      jobReserved: false,
-      // Employment information
-      employmentStartDate: '2023-03-01',
-      employmentLengthMonths: 16,
-      leaveAnniversaryDate: '2025-03-01'
-    }
-  ]);
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-black p-6 relative">

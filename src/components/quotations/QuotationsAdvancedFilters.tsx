@@ -12,6 +12,7 @@ import {
   Filter,
   X
 } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface QuotationsAdvancedFiltersProps {
   filters: any;
@@ -28,6 +29,7 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
   salespersons,
   allTags
 }) => {
+  const { t } = useLocalization();
   const handleTagToggle = (tag: string) => {
     setFilters(prev => ({
       ...prev,
@@ -52,7 +54,7 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
       <CardHeader>
         <CardTitle className="text-lg font-sf-pro flex items-center">
           <Filter className="h-5 w-5 mr-2" />
-          Advanced Filters
+          {t('quotations.filters.title')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -61,7 +63,7 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
           <div className="space-y-3">
             <Label className="text-sm font-medium text-slate-700 flex items-center">
               <Calendar className="h-4 w-4 mr-2" />
-              Date Range
+              {t('quotations.filters.dateRange')}
             </Label>
             <div className="space-y-2">
               <select
@@ -69,19 +71,19 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
                 onChange={(e) => setFilters(prev => ({ ...prev, dateType: e.target.value }))}
                 className="w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro text-sm"
               >
-                <option value="created">Created Date</option>
-                <option value="expiry">Expiry Date</option>
-                <option value="modified">Last Modified</option>
+                <option value="created">{t('quotations.filters.dateType.created')}</option>
+                <option value="expiry">{t('quotations.filters.dateType.expiry')}</option>
+                <option value="modified">{t('quotations.filters.dateType.modified')}</option>
               </select>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="date"
-                  placeholder="Start Date"
+                  placeholder={t('quotations.filters.startDate')}
                   className="text-sm"
                 />
                 <Input
                   type="date"
-                  placeholder="End Date"
+                  placeholder={t('quotations.filters.endDate')}
                   className="text-sm"
                 />
               </div>
@@ -92,19 +94,19 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
           <div className="space-y-3">
             <Label className="text-sm font-medium text-slate-700 flex items-center">
               <DollarSign className="h-4 w-4 mr-2" />
-              Amount Range
+              {t('quotations.filters.amountRange')}
             </Label>
             <div className="grid grid-cols-2 gap-2">
               <Input
                 type="number"
-                placeholder="Min Amount"
+                placeholder={t('quotations.filters.minAmount')}
                 value={filters.amountMin}
                 onChange={(e) => setFilters(prev => ({ ...prev, amountMin: e.target.value }))}
                 className="text-sm"
               />
               <Input
                 type="number"
-                placeholder="Max Amount"
+                placeholder={t('quotations.filters.maxAmount')}
                 value={filters.amountMax}
                 onChange={(e) => setFilters(prev => ({ ...prev, amountMax: e.target.value }))}
                 className="text-sm"
@@ -116,14 +118,14 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
           <div className="space-y-3">
             <Label className="text-sm font-medium text-slate-700 flex items-center">
               <Users className="h-4 w-4 mr-2" />
-              Salesperson
+              {t('quotations.filters.salesperson')}
             </Label>
             <select
               value={filters.salesperson}
               onChange={(e) => setFilters(prev => ({ ...prev, salesperson: e.target.value }))}
               className="w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro text-sm"
             >
-              <option value="all">All Salespersons</option>
+              <option value="all">{t('quotations.filters.allSalespersons')}</option>
               {salespersons.map(person => (
                 <option key={person.id} value={person.id}>{person.name}</option>
               ))}
@@ -135,7 +137,7 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
         <div className="space-y-3">
           <Label className="text-sm font-medium text-slate-700 flex items-center">
             <Tag className="h-4 w-4 mr-2" />
-            Tags
+            {t('quotations.filters.tags')}
           </Label>
           <div className="flex flex-wrap gap-2">
             {allTags.map(tag => (
@@ -159,17 +161,17 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
 
         {/* Custom Fields */}
         <div className="space-y-3">
-          <Label className="text-sm font-medium text-slate-700">Custom Fields</Label>
+          <Label className="text-sm font-medium text-slate-700">{t('quotations.filters.customFields')}</Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="department" className="text-xs text-slate-600">Department</Label>
+              <Label htmlFor="department" className="text-xs text-slate-600">{t('quotations.filters.department')}</Label>
               <select
                 id="department"
                 value={filters.customFields.department || ''}
                 onChange={(e) => handleCustomFieldChange('department', e.target.value)}
                 className="w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro text-sm"
               >
-                <option value="">All Departments</option>
+                <option value="">{t('quotations.filters.allDepartments')}</option>
                 <option value="IT">IT</option>
                 <option value="Marketing">Marketing</option>
                 <option value="Public Sector">Public Sector</option>
@@ -177,17 +179,17 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
               </select>
             </div>
             <div>
-              <Label htmlFor="region" className="text-xs text-slate-600">Region</Label>
+              <Label htmlFor="region" className="text-xs text-slate-600">{t('quotations.filters.region')}</Label>
               <select
                 id="region"
                 value={filters.customFields.region || ''}
                 onChange={(e) => handleCustomFieldChange('region', e.target.value)}
                 className="w-full px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro text-sm"
               >
-                <option value="">All Regions</option>
-                <option value="Western Cape">Western Cape</option>
-                <option value="Gauteng">Gauteng</option>
-                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                <option value="">{t('quotations.filters.allRegions')}</option>
+                <option value="Western Cape">{t('quotations.filters.regions.westernCape')}</option>
+                <option value="Gauteng">{t('quotations.filters.regions.gauteng')}</option>
+                <option value="KwaZulu-Natal">{t('quotations.filters.regions.kwazuluNatal')}</option>
               </select>
             </div>
           </div>
@@ -196,7 +198,7 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
         {/* Filter Actions */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-200">
           <div className="text-sm text-slate-600">
-            Active filters will be applied to the quotations list
+            {t('quotations.filters.infoActiveApplied')}
           </div>
           <div className="flex items-center space-x-3">
             <Button
@@ -215,13 +217,13 @@ const QuotationsAdvancedFilters: React.FC<QuotationsAdvancedFiltersProps> = ({
               })}
               className="font-sf-pro"
             >
-              Reset Filters
+              {t('quotations.filters.reset')}
             </Button>
             <Button
               size="sm"
               className="bg-mokm-purple-600 hover:bg-mokm-purple-700 text-white font-sf-pro"
             >
-              Apply Filters
+              {t('quotations.filters.apply')}
             </Button>
           </div>
         </div>

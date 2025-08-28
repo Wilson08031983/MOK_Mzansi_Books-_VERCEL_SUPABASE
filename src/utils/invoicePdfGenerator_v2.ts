@@ -789,10 +789,14 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     const totalsX = pageWidth - margin - 80;
     const valuesX = pageWidth - margin - 5;
     
-    const subtotal = calculateSubtotal(invoice.items);
+    // Compute base subtotal from item amounts
+    const baseSubtotal = calculateSubtotal(invoice.items);
+    // Discount is the difference between base subtotal and stored (discounted) subtotal
+    const discountedSubtotal = typeof invoice.subtotal === 'number' ? invoice.subtotal : baseSubtotal;
+    const discountAmount = Math.max(0, baseSubtotal - discountedSubtotal);
     const vatRate = invoice.vatRate || 15;
-    const vatAmount = calculateVAT(subtotal, vatRate);
-    const total = calculateTotal(subtotal, vatAmount);
+    const vatAmount = calculateVAT(discountedSubtotal, vatRate);
+    const total = calculateTotal(discountedSubtotal, vatAmount);
     
     // If we're on a multi-page document and not on the last page, we need to add a new page
     if (totalPages > 1 && currentPage < totalPages) {
@@ -807,10 +811,16 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     doc.setFontSize(9); // Reduced from 10 to 9
     doc.setFont('helvetica', 'normal');
     
-    doc.text('Subtotal:', totalsX, yPos);
-    doc.text(formatCurrency(subtotal, 'ZAR'), valuesX, yPos, { align: 'right' });
+    doc.text('Items Subtotal:', totalsX, yPos);
+    doc.text(formatCurrency(baseSubtotal, 'ZAR'), valuesX, yPos, { align: 'right' });
     yPos += 6; // Reduced from 7 to 6
     
+    if (discountAmount > 0) {
+      doc.text('Client Discount:', totalsX, yPos);
+      doc.text(`- ${formatCurrency(discountAmount, 'ZAR')}`, valuesX, yPos, { align: 'right' });
+      yPos += 6;
+    }
+
     doc.text(`VAT (${vatRate}%):`, totalsX, yPos);
     doc.text(formatCurrency(vatAmount, 'ZAR'), valuesX, yPos, { align: 'right' });
     yPos += 6; // Reduced from 7 to 6
@@ -818,7 +828,8 @@ export const generateInvoicePdf = async (invoice: Invoice): Promise<void> => {
     doc.setFontSize(10); // Reduced from 12 to 10
     doc.setFont('helvetica', 'bold');
     doc.text('Total (ZAR):', totalsX, yPos);
-    doc.text(formatCurrency(total, 'ZAR'), valuesX, yPos, { align: 'right' });
+    // Prefer invoice.total if present (already discounted), fallback to computed
+    doc.text(formatCurrency(typeof invoice.total === 'number' ? invoice.total : total, 'ZAR'), valuesX, yPos, { align: 'right' });
     
     yPos += 15; // Reduced from 20 to 15
     

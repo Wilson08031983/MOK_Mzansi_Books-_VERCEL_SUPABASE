@@ -15,10 +15,13 @@ import {
   Shield 
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useLocalization } from '@/hooks/useLocalization';
+import { auditService } from '@/services/auditService';
 
 const BillingSubscriptionTab = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const { t, formatCurrency } = useLocalization();
 
   // Mock subscription data for demonstration
   const mockSubscription = {
@@ -35,7 +38,7 @@ const BillingSubscriptionTab = () => {
   // Format date from ISO string
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-ZA', {
+    return new Date(dateString).toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -46,17 +49,17 @@ const BillingSubscriptionTab = () => {
   const getStatusBadge = () => {
     switch (currentSubscription.status) {
       case 'trial':
-        return <Badge className="bg-emerald-500 hover:bg-emerald-600">Trial</Badge>;
+        return <Badge className="bg-emerald-500 hover:bg-emerald-600">{t('settings.billing.status.trial')}</Badge>;
       case 'active':
-        return <Badge className="bg-blue-500 hover:bg-blue-600">Active</Badge>;
+        return <Badge className="bg-blue-500 hover:bg-blue-600">{t('settings.billing.status.active')}</Badge>;
       case 'payment_failed':
-        return <Badge className="bg-amber-500 hover:bg-amber-600">Payment Issue</Badge>;
+        return <Badge className="bg-amber-500 hover:bg-amber-600">{t('settings.billing.status.paymentIssue')}</Badge>;
       case 'expired':
-        return <Badge className="bg-red-500 hover:bg-red-600">Expired</Badge>;
+        return <Badge className="bg-red-500 hover:bg-red-600">{t('settings.billing.status.expired')}</Badge>;
       case 'canceled':
-        return <Badge className="bg-gray-500 hover:bg-gray-600">Canceled</Badge>;
+        return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.status.canceled')}</Badge>;
       default:
-        return <Badge className="bg-gray-500 hover:bg-gray-600">Free</Badge>;
+        return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.tiers.free')}</Badge>;
     }
   };
 
@@ -64,15 +67,15 @@ const BillingSubscriptionTab = () => {
   const getTierBadge = () => {
     switch (currentSubscription.tier) {
       case 'free':
-        return <Badge variant="outline" className="border-gray-400 text-gray-600">Free</Badge>;
+        return <Badge variant="outline" className="border-gray-400 text-gray-600">{t('settings.billing.tiers.free')}</Badge>;
       case 'basic':
-        return <Badge variant="outline" className="border-blue-400 text-blue-600">Basic</Badge>;
+        return <Badge variant="outline" className="border-blue-400 text-blue-600">{t('settings.billing.tiers.basic')}</Badge>;
       case 'premium':
-        return <Badge variant="outline" className="border-purple-400 text-purple-600">Premium</Badge>;
+        return <Badge variant="outline" className="border-purple-400 text-purple-600">{t('settings.billing.tiers.premium')}</Badge>;
       case 'enterprise':
-        return <Badge variant="outline" className="border-amber-400 text-amber-600">Enterprise</Badge>;
+        return <Badge variant="outline" className="border-amber-400 text-amber-600">{t('settings.billing.tiers.enterprise')}</Badge>;
       default:
-        return <Badge variant="outline" className="border-gray-400 text-gray-600">Free</Badge>;
+        return <Badge variant="outline" className="border-gray-400 text-gray-600">{t('settings.billing.tiers.free')}</Badge>;
     }
   };
 
@@ -80,21 +83,21 @@ const BillingSubscriptionTab = () => {
   const paymentHistory = [
     {
       date: '2025-05-01',
-      amount: 'R299.00',
+      amount: 299,
       status: 'succeeded',
-      description: 'Monthly subscription - Premium'
+      description: t('settings.billing.planFeatureDescription', { tier: t('settings.billing.tiers.premium') })
     },
     {
       date: '2025-04-01',
-      amount: 'R299.00',
+      amount: 299,
       status: 'succeeded',
-      description: 'Monthly subscription - Premium'
+      description: t('settings.billing.planFeatureDescription', { tier: t('settings.billing.tiers.premium') })
     },
     {
       date: '2025-03-01',
-      amount: 'R299.00',
+      amount: 299,
       status: 'failed',
-      description: 'Monthly subscription - Premium'
+      description: t('settings.billing.planFeatureDescription', { tier: t('settings.billing.tiers.premium') })
     }
   ];
 
@@ -102,56 +105,56 @@ const BillingSubscriptionTab = () => {
   const plans = [
     {
       id: 'free',
-      name: 'Free',
-      price: 'R0',
-      description: 'Basic financial management tools',
+      name: t('settings.billing.tiers.free'),
+      price: `${formatCurrency(0)} / ${t('settings.billing.monthly')}`,
+      description: t('settings.billing.planDescriptions.free'),
       features: [
-        'Basic invoicing',
-        'Up to 5 clients',
-        'Up to 10 documents'
+        t('settings.billing.features.free.basicInvoicing'),
+        t('settings.billing.features.free.upToClients'),
+        t('settings.billing.features.free.upToDocuments')
       ],
       isCurrent: currentSubscription.tier === 'free'
     },
     {
       id: 'basic',
-      name: 'Basic',
-      price: 'R149/month',
-      description: 'Essential tools for small businesses',
+      name: t('settings.billing.tiers.basic'),
+      price: `${formatCurrency(149)} / ${t('settings.billing.monthly')}`,
+      description: t('settings.billing.planDescriptions.basic'),
       features: [
-        'Unlimited invoices',
-        'Up to 25 clients',
-        'Up to 100 documents',
-        'Export reports',
-        'Bulk invoicing'
+        t('settings.billing.features.basic.unlimitedInvoices'),
+        t('settings.billing.features.basic.upToClients'),
+        t('settings.billing.features.basic.upToDocuments'),
+        t('settings.billing.features.basic.exportReports'),
+        t('settings.billing.features.basic.bulkInvoicing')
       ],
       isCurrent: currentSubscription.tier === 'basic'
     },
     {
       id: 'premium',
-      name: 'Premium',
-      price: 'R299/month',
-      description: 'Advanced tools for growing businesses',
+      name: t('settings.billing.tiers.premium'),
+      price: `${formatCurrency(299)} / ${t('settings.billing.monthly')}`,
+      description: t('settings.billing.planDescriptions.premium'),
       features: [
-        'Everything in Basic',
-        'Unlimited clients',
-        'Unlimited documents',
-        'Advanced reporting',
-        'Custom branding',
-        'Team members (up to 3)'
+        t('settings.billing.features.premium.everythingInBasic'),
+        t('settings.billing.features.premium.unlimitedClients'),
+        t('settings.billing.features.premium.unlimitedDocuments'),
+        t('settings.billing.features.premium.advancedReporting'),
+        t('settings.billing.features.premium.customBranding'),
+        t('settings.billing.features.premium.teamMembersUpTo3')
       ],
       isCurrent: currentSubscription.tier === 'premium'
     },
     {
       id: 'enterprise',
-      name: 'Enterprise',
-      price: 'R599/month',
-      description: 'Complete solution for established businesses',
+      name: t('settings.billing.tiers.enterprise'),
+      price: `${formatCurrency(599)} / ${t('settings.billing.monthly')}`,
+      description: t('settings.billing.planDescriptions.enterprise'),
       features: [
-        'Everything in Premium',
-        'API access',
-        'Unlimited team members',
-        'Priority support',
-        'Custom integrations'
+        t('settings.billing.features.enterprise.everythingInPremium'),
+        t('settings.billing.features.enterprise.apiAccess'),
+        t('settings.billing.features.enterprise.unlimitedTeamMembers'),
+        t('settings.billing.features.enterprise.prioritySupport'),
+        t('settings.billing.features.enterprise.customIntegrations')
       ],
       isCurrent: currentSubscription.tier === 'enterprise'
     }
@@ -159,55 +162,91 @@ const BillingSubscriptionTab = () => {
 
   const handleUpgrade = (tier: string) => {
     toast({
-      title: "Plan upgrade requested",
-      description: `Upgrading to ${tier} plan...`,
+      title: t('settings.billing.toasts.upgradeRequestedTitle'),
+      description: t('settings.billing.toasts.upgradeRequestedDesc', { tier }),
     });
     setIsPaymentModalOpen(true);
+    try {
+      auditService.logAudit({
+        category: 'financial',
+        action: 'Subscription Upgrade Requested',
+        page: 'Settings',
+        section: 'Billing > Plans',
+        entityType: 'subscription',
+        changeType: 'update',
+        oldValues: { tier: currentSubscription.tier },
+        newValues: { tier },
+        description: `User requested upgrade to ${tier} plan`,
+      });
+    } catch {/* noop */}
   };
 
   const handleCancelSubscription = () => {
     toast({
-      title: "Subscription canceled",
-      description: "Your subscription has been canceled and will not renew.",
+      title: t('settings.billing.toasts.canceledTitle'),
+      description: t('settings.billing.toasts.canceledDesc'),
     });
+    try {
+      auditService.logAudit({
+        category: 'financial',
+        action: 'Subscription Cancellation Requested',
+        page: 'Settings',
+        section: 'Billing > Overview',
+        entityType: 'subscription',
+        changeType: 'delete',
+        oldValues: { status: currentSubscription.status, tier: currentSubscription.tier },
+        description: 'User requested to cancel the current subscription',
+      });
+    } catch {/* noop */}
   };
 
   const handleRetryPayment = () => {
     toast({
-      title: "Payment retry initiated",
-      description: "Please update your payment method.",
+      title: t('settings.billing.toasts.retryTitle'),
+      description: t('settings.billing.toasts.retryDesc'),
     });
     setIsPaymentModalOpen(true);
+    try {
+      auditService.logAudit({
+        category: 'financial',
+        action: 'Payment Method Update Requested',
+        page: 'Settings',
+        section: 'Billing > Overview',
+        entityType: 'payment_method',
+        changeType: 'update',
+        description: 'User initiated payment method update from payment issue banner',
+      });
+    } catch {/* noop */}
   };
 
   return (
     <div className="space-y-6">
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
+          <CardTitle className="flex items-center font-sf-pro text-slate-100">
             <CreditCard className="h-5 w-5 mr-2" />
-            Billing & Subscription
+            {t('settings.billing.title')}
           </CardTitle>
-          <CardDescription>
-            Manage your subscription plan and billing information
+          <CardDescription className="text-slate-400">
+            {t('settings.billing.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid grid-cols-3 w-full max-w-md">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="plans">Plans</TabsTrigger>
-              <TabsTrigger value="billing">Billing</TabsTrigger>
+              <TabsTrigger value="overview">{t('settings.billing.tabs.overview')}</TabsTrigger>
+              <TabsTrigger value="plans">{t('settings.billing.tabs.plans')}</TabsTrigger>
+              <TabsTrigger value="billing">{t('settings.billing.tabs.billing')}</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="space-y-6">
-              <Card>
+              <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle>Subscription Status</CardTitle>
-                      <CardDescription>Your current subscription details</CardDescription>
+                      <CardTitle className="text-slate-100">{t('settings.billing.subscriptionStatus')}</CardTitle>
+                      <CardDescription className="text-slate-400">{t('settings.billing.subscriptionDetails')}</CardDescription>
                     </div>
                     <div className="flex space-x-2">
                       {getStatusBadge()}
@@ -217,34 +256,34 @@ const BillingSubscriptionTab = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {currentSubscription.status === 'trial' && currentSubscription.trialDaysLeft && (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4 flex items-start">
-                      <Clock className="h-5 w-5 text-emerald-600 mr-3 mt-0.5" />
+                    <div className="rounded-md p-4 flex items-start bg-emerald-900/20 border border-emerald-800/40">
+                      <Clock className="h-5 w-5 text-emerald-300 mr-3 mt-0.5" />
                       <div>
-                        <h3 className="font-medium text-emerald-800">Trial Period</h3>
-                        <p className="text-emerald-700">
-                          You have <span className="font-semibold">{currentSubscription.trialDaysLeft} days</span> left in your trial.
+                        <h3 className="font-medium text-emerald-200">{t('settings.billing.trialPeriod')}</h3>
+                        <p className="text-emerald-300">
+                          {t('settings.billing.trialDaysLeft', { days: currentSubscription.trialDaysLeft })}
                           {currentSubscription.trialDaysLeft <= 3 && 
-                            " Your trial is ending soon. Upgrade to continue using premium features."}
+                            ` ${t('settings.billing.trialEndingSoon')}`}
                         </p>
                       </div>
                     </div>
                   )}
 
                   {currentSubscription.status === 'payment_failed' && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-4 flex items-start">
-                      <AlertTriangle className="h-5 w-5 text-amber-600 mr-3 mt-0.5" />
+                    <div className="rounded-md p-4 flex items-start bg-amber-900/20 border border-amber-800/40">
+                      <AlertTriangle className="h-5 w-5 text-amber-300 mr-3 mt-0.5" />
                       <div>
-                        <h3 className="font-medium text-amber-800">Payment Issue</h3>
-                        <p className="text-amber-700">
-                          Your last payment was declined. Please update your payment method to avoid limited access.
+                        <h3 className="font-medium text-amber-200">{t('settings.billing.paymentIssue')}</h3>
+                        <p className="text-amber-300">
+                          {t('settings.billing.paymentIssueDesc')}
                         </p>
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          className="mt-2"
+                          className="mt-2 border-white/10 text-slate-100 hover:bg-white/10"
                           onClick={handleRetryPayment}
                         >
-                          Update Payment Method
+                          {t('settings.billing.updatePaymentMethod')}
                         </Button>
                       </div>
                     </div>
@@ -252,28 +291,28 @@ const BillingSubscriptionTab = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Current Plan</h3>
-                      <p className="text-lg font-semibold capitalize">
-                        {currentSubscription.tier}
+                      <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.currentPlan')}</h3>
+                      <p className="text-lg font-semibold capitalize text-slate-100">
+                        {t(`settings.billing.tiers.${currentSubscription.tier}` as any)}
                       </p>
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Billing Cycle</h3>
-                      <p className="text-lg font-semibold">Monthly</p>
+                      <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.billingCycle')}</h3>
+                      <p className="text-lg font-semibold text-slate-100">{t('settings.billing.monthly')}</p>
                     </div>
 
                     {currentSubscription.startDate && (
                       <div>
-                        <h3 className="text-sm font-medium text-gray-500">Start Date</h3>
-                        <p className="text-lg font-semibold">{formatDate(currentSubscription.startDate)}</p>
+                        <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.startDate')}</h3>
+                        <p className="text-lg font-semibold text-slate-100">{formatDate(currentSubscription.startDate)}</p>
                       </div>
                     )}
 
                     {currentSubscription.currentPeriodEnd && (
                       <div>
-                        <h3 className="text-sm font-medium text-gray-500">Next Billing Date</h3>
-                        <p className="text-lg font-semibold">{formatDate(currentSubscription.currentPeriodEnd)}</p>
+                        <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.nextBillingDate')}</h3>
+                        <p className="text-lg font-semibold text-slate-100">{formatDate(currentSubscription.currentPeriodEnd)}</p>
                       </div>
                     )}
                   </div>
@@ -282,46 +321,46 @@ const BillingSubscriptionTab = () => {
                   {currentSubscription.status !== 'canceled' && (
                     <Button 
                       variant="outline" 
-                      className="text-red-600 border-red-300 hover:bg-red-50"
+                      className="text-red-300 border-red-800/40 hover:bg-red-900/20"
                       onClick={handleCancelSubscription}
                     >
                       <X className="h-4 w-4 mr-2" />
-                      Cancel Subscription
+                      {t('settings.billing.cancelSubscription')}
                     </Button>
                   )}
                   <Button onClick={() => setActiveTab('plans')}>
                     <ArrowRight className="h-4 w-4 mr-2" />
-                    View Available Plans
+                    {t('settings.billing.viewPlans')}
                   </Button>
                 </CardFooter>
               </Card>
 
-              <Card>
+              <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
-                  <CardTitle>Payment Method</CardTitle>
-                  <CardDescription>Manage your payment details</CardDescription>
+                  <CardTitle className="text-slate-100">{t('settings.billing.paymentMethod')}</CardTitle>
+                  <CardDescription className="text-slate-400">{t('settings.billing.managePayment')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {currentSubscription.tier !== 'free' ? (
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <div className="bg-gray-100 p-2 rounded-md mr-4">
-                          <CreditCard className="h-6 w-6 text-gray-700" />
+                        <div className="bg-slate-800/60 p-2 rounded-md mr-4 border border-white/10">
+                          <CreditCard className="h-6 w-6 text-slate-300" />
                         </div>
                         <div>
-                          <p className="font-medium">Visa ending in 4242</p>
-                          <p className="text-sm text-gray-500">Expires 12/25</p>
+                          <p className="font-medium text-slate-100">{t('settings.billing.cardMasked', { last4: '4242' })}</p>
+                          <p className="text-sm text-slate-400">{t('settings.billing.cardExpires', { expiry: '12/25' })}</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => setIsPaymentModalOpen(true)}>
-                        Update
+                      <Button variant="outline" size="sm" className="border-white/10 text-slate-100 hover:bg-white/10" onClick={() => { setIsPaymentModalOpen(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal from Payment Method card', }); } catch {/* noop */} }}>
+                        {t('settings.billing.update')}
                       </Button>
                     </div>
                   ) : (
                     <div className="text-center py-6">
-                      <p className="text-gray-500 mb-4">No payment method on file</p>
-                      <Button onClick={() => setIsPaymentModalOpen(true)}>
-                        Add Payment Method
+                      <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
+                      <Button onClick={() => { setIsPaymentModalOpen(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal to add a new payment method', }); } catch {/* noop */} }}>
+                        {t('settings.billing.addPaymentMethod')}
                       </Button>
                     </div>
                   )}
@@ -333,23 +372,23 @@ const BillingSubscriptionTab = () => {
             <TabsContent value="plans" className="space-y-6">
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {plans.map((plan) => (
-                  <Card key={plan.id} className={`relative ${plan.isCurrent ? 'border-mokm-orange-500 ring-2 ring-mokm-orange-200' : ''}`}>
+                  <Card key={plan.id} className={`relative glass bg-slate-900/40 border-white/10 ${plan.isCurrent ? 'border-mokm-orange-500 ring-2 ring-mokm-orange-200' : ''}`}>
                     {plan.isCurrent && (
                       <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-mokm-orange-500 text-white text-xs py-1 px-3 rounded-full">
-                        Current Plan
+                        {t('settings.billing.currentPlanBadge')}
                       </div>
                     )}
                     <CardHeader>
-                      <CardTitle>{plan.name}</CardTitle>
-                      <CardDescription className="text-lg font-bold">{plan.price}</CardDescription>
+                      <CardTitle className="text-slate-100">{plan.name}</CardTitle>
+                      <CardDescription className="text-lg font-bold text-slate-300">{plan.price}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm mb-4">{plan.description}</p>
+                      <p className="text-sm mb-4 text-slate-400">{plan.description}</p>
                       <ul className="space-y-2">
                         {plan.features.map((feature, index) => (
                           <li key={index} className="flex items-start">
-                            <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm">{feature}</span>
+                            <Check className="h-4 w-4 text-green-400 mr-2 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm text-slate-100">{feature}</span>
                           </li>
                         ))}
                       </ul>
@@ -360,7 +399,7 @@ const BillingSubscriptionTab = () => {
                         disabled={plan.isCurrent}
                         onClick={() => handleUpgrade(plan.id)}
                       >
-                        {plan.isCurrent ? 'Current Plan' : 'Select Plan'}
+                        {plan.isCurrent ? t('settings.billing.currentPlanBadge') : t('settings.billing.selectPlan')}
                       </Button>
                     </CardFooter>
                   </Card>
@@ -370,37 +409,37 @@ const BillingSubscriptionTab = () => {
 
             {/* Billing Tab */}
             <TabsContent value="billing" className="space-y-6">
-              <Card>
+              <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
-                  <CardTitle>Payment History</CardTitle>
-                  <CardDescription>View your recent payments</CardDescription>
+                  <CardTitle className="text-slate-100">{t('settings.billing.paymentHistory')}</CardTitle>
+                  <CardDescription className="text-slate-400">{t('settings.billing.viewRecentPayments')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-3 px-4 font-medium text-gray-500">Date</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-500">Description</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-500">Amount</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-500">Status</th>
+                        <tr className="border-b border-white/10">
+                          <th className="text-left py-3 px-4 font-medium text-slate-400">{t('settings.billing.table.date')}</th>
+                          <th className="text-left py-3 px-4 font-medium text-slate-400">{t('settings.billing.table.description')}</th>
+                          <th className="text-left py-3 px-4 font-medium text-slate-400">{t('settings.billing.table.amount')}</th>
+                          <th className="text-left py-3 px-4 font-medium text-slate-400">{t('settings.billing.table.status')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {paymentHistory.length > 0 ? (
                           paymentHistory.map((payment, index) => (
-                            <tr key={index} className="border-b last:border-0">
-                              <td className="py-3 px-4">{formatDate(payment.date)}</td>
-                              <td className="py-3 px-4">{payment.description}</td>
-                              <td className="py-3 px-4 font-medium">{payment.amount}</td>
+                            <tr key={index} className="border-b border-white/10 last:border-0">
+                              <td className="py-3 px-4 text-slate-100">{formatDate(payment.date)}</td>
+                              <td className="py-3 px-4 text-slate-100">{payment.description}</td>
+                              <td className="py-3 px-4 font-medium text-slate-100">{formatCurrency(payment.amount)}</td>
                               <td className="py-3 px-4">
                                 {payment.status === 'succeeded' ? (
-                                  <span className="inline-flex items-center text-green-600 text-sm">
-                                    <Check className="h-4 w-4 mr-1" /> Paid
+                                  <span className="inline-flex items-center text-green-400 text-sm">
+                                    <Check className="h-4 w-4 mr-1" /> {t('settings.billing.paid')}
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center text-red-600 text-sm">
-                                    <X className="h-4 w-4 mr-1" /> Failed
+                                  <span className="inline-flex items-center text-red-400 text-sm">
+                                    <X className="h-4 w-4 mr-1" /> {t('settings.billing.failed')}
                                   </span>
                                 )}
                               </td>
@@ -408,8 +447,8 @@ const BillingSubscriptionTab = () => {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={4} className="py-6 text-center text-gray-500">
-                              No payment history available
+                            <td colSpan={4} className="py-6 text-center text-slate-400">
+                              {t('settings.billing.noPaymentHistory')}
                             </td>
                           </tr>
                         )}
@@ -419,16 +458,16 @@ const BillingSubscriptionTab = () => {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
-                  <CardTitle>Billing Information</CardTitle>
-                  <CardDescription>Manage your billing details</CardDescription>
+                  <CardTitle className="text-slate-100">{t('settings.billing.billingInfo')}</CardTitle>
+                  <CardDescription className="text-slate-400">{t('settings.billing.manageBilling')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-medium mb-2">Company Information</h3>
-                      <address className="not-italic text-sm text-gray-600">
+                      <h3 className="font-medium mb-2 text-slate-100">{t('settings.billing.companyInfo')}</h3>
+                      <address className="not-italic text-sm text-slate-400">
                         <p>MOK Mzansi Books (Pty) Ltd</p>
                         <p>VAT: ZA123456789</p>
                         <p>123 Main Street</p>
@@ -437,14 +476,14 @@ const BillingSubscriptionTab = () => {
                       </address>
                     </div>
                     <div>
-                      <h3 className="font-medium mb-2">Billing Contact</h3>
-                      <div className="text-sm text-gray-600">
+                      <h3 className="font-medium mb-2 text-slate-100">{t('settings.billing.billingContact')}</h3>
+                      <div className="text-sm text-slate-400">
                         <p>Wilson Moabelo</p>
                         <p>admin@mokmzansibooks.co.za</p>
                         <p>+27 12 345 6789</p>
                       </div>
-                      <Button variant="outline" size="sm" className="mt-2">
-                        Update Contact
+                      <Button variant="outline" size="sm" className="mt-2 border-white/10 text-slate-100 hover:bg-white/10">
+                        {t('settings.billing.updateContact')}
                       </Button>
                     </div>
                   </div>
@@ -458,9 +497,9 @@ const BillingSubscriptionTab = () => {
       {/* Mock Payment Modal */}
       {isPaymentModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-slate-900/80 border border-white/10 rounded-lg p-6 max-w-md w-full mx-4 backdrop-blur-xl">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Update Payment Method</h2>
+              <h2 className="text-xl font-bold text-slate-100">{t('settings.billing.updatePaymentMethod')}</h2>
               <Button 
                 variant="ghost" 
                 size="sm"
@@ -472,42 +511,42 @@ const BillingSubscriptionTab = () => {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Card Number</label>
+                <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.cardNumber')}</label>
                 <input 
                   type="text" 
                   placeholder="4242 4242 4242 4242" 
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
                   defaultValue="4242 4242 4242 4242"
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                  <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.expiryDate')}</label>
                   <input 
                     type="text" 
                     placeholder="MM/YY" 
-                    className="w-full p-2 border rounded-md"
+                    className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
                     defaultValue="12/25"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">CVC</label>
+                  <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.cvc')}</label>
                   <input 
                     type="text" 
                     placeholder="123" 
-                    className="w-full p-2 border rounded-md"
+                    className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
                     defaultValue="123"
                   />
                 </div>
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Name on Card</label>
+                <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.nameOnCard')}</label>
                 <input 
                   type="text" 
                   placeholder="Wilson Moabelo" 
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
                   defaultValue="Wilson Moabelo"
                 />
               </div>
@@ -517,19 +556,30 @@ const BillingSubscriptionTab = () => {
                   className="w-full bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600" 
                   onClick={() => {
                     toast({
-                      title: "Payment method updated",
-                      description: "Your payment information has been saved securely.",
+                      title: t('settings.billing.toasts.paymentUpdatedTitle'),
+                      description: t('settings.billing.toasts.paymentUpdatedDesc'),
                     });
                     setIsPaymentModalOpen(false);
+                    try {
+                      auditService.logAudit({
+                        category: 'financial',
+                        action: 'Payment Method Updated',
+                        page: 'Settings',
+                        section: 'Billing > Payment Modal',
+                        entityType: 'payment_method',
+                        changeType: 'update',
+                        description: 'User saved/updated payment method in modal',
+                      });
+                    } catch {/* noop */}
                   }}
                 >
                   <Shield className="h-4 w-4 mr-2" />
-                  Save Payment Method
+                  {t('settings.billing.savePaymentMethod')}
                 </Button>
               </div>
               
-              <p className="text-xs text-gray-500 text-center">
-                Your payment information is securely processed and stored.
+              <p className="text-xs text-slate-400 text-center">
+                {t('settings.billing.paymentSecurityNote')}
               </p>
             </div>
           </div>

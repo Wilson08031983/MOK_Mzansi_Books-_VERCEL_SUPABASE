@@ -2,6 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, TrendingUp, Clock, AlertTriangle, DollarSign } from 'lucide-react';
+import { useLocalizationContext } from '@/contexts/LocalizationContext';
 
 interface Client {
   id: string;
@@ -21,36 +22,38 @@ interface ClientsStatsProps {
 }
 
 const ClientsStats: React.FC<ClientsStatsProps> = ({ clients }) => {
+  const { t, formatCurrency } = useLocalizationContext();
   const totalClients = clients.length;
   const activeClients = clients.filter(client => client.status === 'active').length;
   const inactiveClients = clients.filter(client => client.status === 'inactive').length;
   const overdueClients = clients.filter(client => client.status === 'overdue').length;
   const totalValue = clients.reduce((sum, client) => sum + client.totalValue, 0);
+  const totalValueDisplay = formatCurrency(totalValue);
 
   const stats = [
     {
-      title: 'Total Clients',
+      title: t('clients.totalClients'),
       value: totalClients,
       icon: Users,
       color: 'text-primary',
       bgColor: 'bg-primary/10'
     },
     {
-      title: 'Total Value',
-      value: `R${totalValue.toLocaleString()}`,
+      title: t('clients.totalValue'),
+      value: totalValueDisplay,
       icon: DollarSign,
       color: 'text-success',
       bgColor: 'bg-success/10'
     },
     {
-      title: 'Active Clients',
+      title: t('clients.activeClients'),
       value: activeClients,
       icon: TrendingUp,
       color: 'text-success',
       bgColor: 'bg-success/10'
     },
     {
-      title: 'Overdue Clients',
+      title: t('clients.overdueClients'),
       value: overdueClients,
       icon: AlertTriangle,
       color: 'text-destructive',

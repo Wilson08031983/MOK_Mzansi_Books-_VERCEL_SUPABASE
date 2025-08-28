@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocalization } from '@/hooks/useLocalization';
 import { 
   CheckCircle,
@@ -19,17 +19,20 @@ import QuotationsStats from '@/components/quotations/QuotationsStats';
 import QuotationsAdvancedFilters from '@/components/quotations/QuotationsAdvancedFilters';
 import QuotationsBulkActions from '@/components/quotations/QuotationsBulkActions';
 import QuotationsPagination from '@/components/quotations/QuotationsPagination';
-import { getQuotations, deleteQuotation, Quotation } from '@/services/quotationService';
+import { getQuotations, deleteQuotation, Quotation, checkAndUpdateExpiredQuotations, getQuotationStatus } from '@/services/quotationService';
+import { addNotification, getNotifications, NotificationItem } from '@/services/notificationService';
 import { toast } from 'sonner';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { activityService } from '@/services/activityService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 const Quotations = () => {
   const { t, formatCurrency, settings } = useLocalization();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const location = useLocation();
   const navigate = useNavigate();
+  const { logCreate, logUpdate, logDelete, logAudit, logNavigation, logSystem } = useAuditLogger();
 
   // Open create modal when navigated with state from Quick Actions
   useEffect(() => {
@@ -53,6 +56,18 @@ const Quotations = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // Refs for audit comparisons
+  const prevFiltersRef = useRef<typeof filters | null>(null);
+  const searchDebounceRef = useRef<number | null>(null);
+
+  // Navigation audit on mount
+  useEffect(() => {
+    try {
+      logNavigation('Main');
+    } catch (e) {
+      console.warn('Audit logging (navigate Quotations) failed:', e);
+    }
+  }, [logNavigation]);
   
   // Define a type for the saved filters
   interface SavedFilter {
@@ -82,6 +97,53 @@ const Quotations = () => {
     customFields: {}
   });
 
+  // Debounced search audit logging
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      try {
+        if (searchTerm && searchTerm.trim().length > 0) {
+          logSystem('Quotations', 'Search', { term: searchTerm });
+        } else {
+          logSystem('Quotations', 'Clear Search');
+        }
+      } catch (e) {
+        console.warn('Audit logging (search quotations) failed:', e);
+      }
+    }, 600);
+
+    return () => {
+      if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchTerm, logSystem]);
+
+  // Filters change diff audit logging
+  useEffect(() => {
+    if (!prevFiltersRef.current) {
+      prevFiltersRef.current = filters;
+      return;
+    }
+    const prev = prevFiltersRef.current;
+    const changed: Record<string, { old: unknown; next: unknown }> = {};
+    (Object.keys(filters) as Array<keyof typeof filters>).forEach((key) => {
+      const oldVal = prev[key];
+      const newVal = filters[key];
+      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+        changed[String(key)] = { old: oldVal, next: newVal };
+      }
+    });
+    if (Object.keys(changed).length > 0) {
+      try {
+        logSystem('Quotations', 'Filters Changed', { changed, nextFilters: filters });
+      } catch (e) {
+        console.warn('Audit logging (filters change) failed:', e);
+      }
+    }
+    prevFiltersRef.current = filters;
+  }, [filters, logSystem]);
+
   // Load quotations from localStorage using the quotationService
   const [quotations, setQuotations] = useState<Quotation[]>([]);
 
@@ -90,12 +152,13 @@ const Quotations = () => {
     document.title = `${t('quotations.title')} - MOK Mzansi Books`;
   }, [t]);
 
-  // Load quotations from localStorage
+  // Load quotations from localStorage with automatic expiry checking
   const loadQuotations = () => {
     try {
-      const loadedQuotations = getQuotations();
-      setQuotations(loadedQuotations);
-      return loadedQuotations;
+      // First check and update any expired quotations
+      const updatedQuotations = checkAndUpdateExpiredQuotations();
+      setQuotations(updatedQuotations);
+      return updatedQuotations;
     } catch (error) {
       console.error('Error loading quotations:', error);
       toast.error('Failed to load quotations');
@@ -114,11 +177,133 @@ const Quotations = () => {
     
     // Show feedback to user
     toast.success(t('common.success'));
+
+    // Audit
+    try {
+      logSystem('Quotations', 'Refresh');
+    } catch (e) {
+      console.warn('Audit logging (refresh quotations) failed:', e);
+    }
   };
 
-  // Load quotations on component mount
+  // Load quotations on component mount and set up periodic expiry checking
   useEffect(() => {
     loadQuotations();
+    
+    // Set up periodic checking for expired quotations (every 5 minutes)
+    const intervalId = setInterval(() => {
+      const updatedQuotations = checkAndUpdateExpiredQuotations();
+      setQuotations(updatedQuotations);
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    // Listen for quotations-updated to refresh + notify
+    const handleQuotationsUpdated = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent;
+        const detail = (e && e.detail) || {};
+        const action: string = detail.action || '';
+        const quotation: Quotation | undefined = detail.quotation;
+        const quotationId: string | undefined = detail.quotationId;
+        const number = quotation?.number || quotationId || 'Quotation';
+
+        // Refresh list quickly
+        const latest = checkAndUpdateExpiredQuotations();
+        setQuotations(latest);
+
+        // Compose notification
+        let title = '';
+        let message = '';
+        if (action === 'created') {
+          title = `Quotation Created: ${number}`;
+          message = `A new quotation was created for ${quotation?.client ?? 'a client'}.`;
+          // Audit log: quotation created
+          try {
+            logCreate('Quotation', String(number), quotation?.id || quotationId, quotation);
+          } catch (e) {
+            console.warn('Audit logging (quotation create) failed:', e);
+          }
+        } else if (action === 'updated') {
+          title = `Quotation Updated: ${number}`;
+          message = `Quotation details were updated${quotation?.client ? ` (${quotation.client})` : ''}.`;
+          // Audit log: quotation updated
+          try {
+            logUpdate('Quotation', String(number), quotation?.id || quotationId || 'unknown', undefined, quotation);
+          } catch (e) {
+            console.warn('Audit logging (quotation update) failed:', e);
+          }
+        } else if (action === 'deleted') {
+          title = `Quotation Deleted: ${number}`;
+          message = `A quotation was deleted${quotation?.client ? ` (${quotation.client})` : ''}.`;
+          // Audit log: quotation deleted
+          try {
+            logDelete('Quotation', String(number), quotationId || quotation?.id || 'unknown');
+          } catch (e) {
+            console.warn('Audit logging (quotation delete) failed:', e);
+          }
+        } else if (action === 'status-changed') {
+          const newStatus = detail.status || quotation?.status;
+          title = `Quotation Status: ${number}`;
+          message = `Status changed to ${String(newStatus).toUpperCase()}.`;
+          // Audit log: status changed
+          try {
+            const prevStatus = detail.prevStatus;
+            logAudit({
+              category: 'financial',
+              action: 'Quotation status changed',
+              entityType: 'Quotation',
+              entityId: quotation?.id || quotationId || 'unknown',
+              entityName: String(number),
+              changeType: 'update',
+              oldValues: { status: prevStatus },
+              newValues: { status: newStatus },
+              description: `Status changed from ${String(prevStatus).toUpperCase()} to ${String(newStatus).toUpperCase()} for quotation ${number}`,
+              metadata: { quotationId: quotation?.id || quotationId }
+            });
+          } catch (e) {
+            console.warn('Audit logging (quotation status change) failed:', e);
+          }
+        } else if (action === 'status-batch-updated') {
+          const count = detail.count || 0;
+          if (!count) return;
+          title = `Quotations Expired: ${count}`;
+          message = `${count} quotation(s) moved to Expired.`;
+          // Audit log: batch status changes (summary)
+          try {
+            logAudit({
+              category: 'financial',
+              action: 'Quotations batch status update',
+              changeType: 'update',
+              description: `${count} quotation(s) automatically moved to Expired`,
+              metadata: { count }
+            });
+          } catch (e) {
+            console.warn('Audit logging (quotation batch status) failed:', e);
+          }
+        } else {
+          return;
+        }
+
+        // De-duplicate within 5 minutes by same title+message and type 'invoice' or 'system'
+        const existing: NotificationItem[] = getNotifications();
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        const dup = existing.some(n => {
+          const ts = new Date(n.date).getTime();
+          return n.title === title && n.message === message && (n.type === 'invoice' || n.type === 'system') && !isNaN(ts) && ts >= fiveMinutesAgo;
+        });
+        if (!dup) {
+          addNotification({ title, message, type: 'invoice' });
+        }
+      } catch (err) {
+        console.warn('Failed handling quotations-updated event:', err);
+      }
+    };
+    window.addEventListener('quotations-updated', handleQuotationsUpdated as EventListener);
+    
+    // Cleanup on unmount
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('quotations-updated', handleQuotationsUpdated as EventListener);
+    };
   }, []);
 
   const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
@@ -129,6 +314,11 @@ const Quotations = () => {
     if (quotationToEdit) {
       setEditingQuotation(quotationToEdit);
       setIsCreateQuotationModalOpen(true);
+      try {
+        logSystem('Quotations', 'Open Edit Quotation Modal', { quotationId });
+      } catch (e) {
+        console.warn('Audit logging (open edit modal) failed:', e);
+      }
     } else {
       toast.error('Quotation not found');
     }
@@ -171,6 +361,12 @@ const Quotations = () => {
           client: quot?.client
         }
       );
+      // Audit service logging as well
+      try {
+        logDelete('Quotation', String(number), quotationId);
+      } catch (e) {
+        console.warn('Audit logging (quotation delete via audit service) failed:', e);
+      }
     } catch (logErr) {
       console.warn('Activity logging failed (quotation delete):', logErr);
     }
@@ -290,6 +486,12 @@ const Quotations = () => {
         ? prev.filter(id => id !== quotationId)
         : [...prev, quotationId]
     );
+    try {
+      const willSelect = !selectedQuotations.includes(quotationId);
+      logSystem('Quotations', willSelect ? 'Select Quotation' : 'Deselect Quotation', { quotationId });
+    } catch (e) {
+      console.warn('Audit logging (select quotation) failed:', e);
+    }
   };
 
   const handleSelectAll = () => {
@@ -297,6 +499,12 @@ const Quotations = () => {
       setSelectedQuotations([]);
     } else {
       setSelectedQuotations(paginatedQuotations.map(quotation => quotation.id));
+    }
+    try {
+      const selectingAll = !(selectedQuotations.length === paginatedQuotations.length);
+      logSystem('Quotations', selectingAll ? 'Select All' : 'Clear Selection', { pageCount: paginatedQuotations.length });
+    } catch (e) {
+      console.warn('Audit logging (select all) failed:', e);
     }
   };
 
@@ -306,6 +514,12 @@ const Quotations = () => {
     } else {
       setSortColumn(column);
       setSortDirection('asc');
+    }
+    try {
+      const nextDir = sortColumn === column ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc';
+      logSystem('Quotations', 'Sort Changed', { column, direction: nextDir });
+    } catch (e) {
+      console.warn('Audit logging (sort change) failed:', e);
     }
   };
 
@@ -329,6 +543,11 @@ const Quotations = () => {
       tags: [] as string[],
       customFields: {}
     });
+    try {
+      logSystem('Quotations', 'Clear Filters');
+    } catch (e) {
+      console.warn('Audit logging (clear filters) failed:', e);
+    }
   };
 
   const handleStatusFilter = (status: string) => {
@@ -337,6 +556,11 @@ const Quotations = () => {
       status: status
     }));
     toast.info(`Filtered by ${getDisplayStatus(status)} status`);
+    try {
+      logSystem('Quotations', 'Quick Status Filter', { status });
+    } catch (e) {
+      console.warn('Audit logging (status filter) failed:', e);
+    }
   };
 
   const handleSaveFilter = () => {
@@ -348,6 +572,11 @@ const Quotations = () => {
         filters: { ...filters },
         searchTerm
       }]);
+      try {
+        logSystem('Quotations', 'Save Filter', { name: filterName, filters });
+      } catch (e) {
+        console.warn('Audit logging (save filter) failed:', e);
+      }
     }
   };
 
@@ -369,14 +598,54 @@ const Quotations = () => {
   
   const allTags = Array.from(new Set(quotations.flatMap(q => q.tags || [])));
 
+  // Wrapper to log view mode change
+  const handleViewModeChange = (mode: 'table' | 'grid') => {
+    setViewMode(mode);
+    try {
+      logSystem('Quotations', 'Change View', { mode });
+    } catch (e) {
+      console.warn('Audit logging (view mode) failed:', e);
+    }
+  };
+
+  const handleOpenCreateQuotation = (open: boolean) => {
+    setIsCreateQuotationModalOpen(open);
+    if (open) {
+      try {
+        logSystem('Quotations', 'Open Create Quotation Modal');
+      } catch (e) {
+        console.warn('Audit logging (open create modal) failed:', e);
+      }
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    try {
+      logSystem('Quotations', 'Page Change', { page });
+    } catch (e) {
+      console.warn('Audit logging (page change) failed:', e);
+    }
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+    try {
+      logSystem('Quotations', 'Items Per Page Change', { itemsPerPage: newItemsPerPage });
+    } catch (e) {
+      console.warn('Audit logging (items per page) failed:', e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background relative">
       <DashboardBackground />
       <div className="p-8 space-y-6 relative z-10">
       <QuotationsHeader
         viewMode={viewMode}
-        setViewMode={setViewMode}
-        setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
+        setViewMode={handleViewModeChange}
+        setIsCreateQuotationModalOpen={handleOpenCreateQuotation}
         onRefresh={handleRefresh}
       />
 
@@ -388,7 +657,14 @@ const Quotations = () => {
         filters={filters}
         setFilters={setFilters}
         showAdvancedFilters={showAdvancedFilters}
-        setShowAdvancedFilters={setShowAdvancedFilters}
+        setShowAdvancedFilters={(show) => {
+          setShowAdvancedFilters(show);
+          try {
+            logSystem('Quotations', show ? 'Open Advanced Filters' : 'Close Advanced Filters');
+          } catch (e) {
+            console.warn('Audit logging (toggle advanced filters) failed:', e);
+          }
+        }}
         recentSearches={recentSearches}
         clients={clients}
         handleSearch={handleSearch}
@@ -430,7 +706,7 @@ const Quotations = () => {
         searchTerm={searchTerm}
         filters={filters}
         handleClearFilters={handleClearFilters}
-        setIsCreateQuotationModalOpen={setIsCreateQuotationModalOpen}
+        setIsCreateQuotationModalOpen={handleOpenCreateQuotation}
         onDeleteQuotation={handleDeleteQuotation}
         onEditQuotation={handleEditQuotation}
         onStatusFilter={handleStatusFilter}
@@ -443,11 +719,8 @@ const Quotations = () => {
           totalPages={totalPages}
           itemsPerPage={itemsPerPage}
           totalItems={sortedQuotations.length}
-          onPageChange={setCurrentPage}
-          onItemsPerPageChange={(newItemsPerPage) => {
-            setItemsPerPage(newItemsPerPage);
-            setCurrentPage(1);
-          }}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
           startIndex={startIndex}
           endIndex={Math.min(startIndex + itemsPerPage, sortedQuotations.length)}
         />
@@ -458,6 +731,11 @@ const Quotations = () => {
         onClose={() => {
           setEditingQuotation(null);
           setIsCreateQuotationModalOpen(false);
+          try {
+            logSystem('Quotations', 'Close Create/Edit Quotation Modal');
+          } catch (e) {
+            console.warn('Audit logging (close create/edit modal) failed:', e);
+          }
         }}
         onQuotationSaved={handleQuotationSaved}
         quotationToEdit={editingQuotation}

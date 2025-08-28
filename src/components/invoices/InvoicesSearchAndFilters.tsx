@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,26 +51,27 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
   onCreateInvoice
 }) => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const { t } = useLocalization();
 
   const statusOptions = [
-    { value: 'all', label: 'All Statuses' },
-    { value: 'draft', label: 'Draft' },
-    { value: 'sent', label: 'Sent' },
-    { value: 'viewed', label: 'Viewed' },
-    { value: 'partial', label: 'Partial' },
-    { value: 'paid', label: 'Paid' },
-    { value: 'overdue', label: 'Overdue' },
-    { value: 'cancelled', label: 'Cancelled' }
+    { value: 'all', label: t('invoices.filters.allStatuses') },
+    { value: 'draft', label: t('invoices.statusLabels.draft') },
+    { value: 'sent', label: t('invoices.statusLabels.sent') },
+    { value: 'viewed', label: t('invoices.statusLabels.viewed') },
+    { value: 'partial', label: t('invoices.statusLabels.partial') },
+    { value: 'paid', label: t('invoices.statusLabels.paid') },
+    { value: 'overdue', label: t('invoices.statusLabels.overdue') },
+    { value: 'cancelled', label: t('invoices.statusLabels.cancelled') }
   ];
 
   const dateOptions = [
-    { value: 'all', label: 'All Time' },
-    { value: 'thisMonth', label: 'This Month' },
-    { value: 'lastMonth', label: 'Last Month' },
-    { value: 'thisQuarter', label: 'This Quarter' },
-    { value: 'lastQuarter', label: 'Last Quarter' },
-    { value: 'thisYear', label: 'This Year' },
-    { value: 'overdue', label: 'Overdue' }
+    { value: 'all', label: t('invoices.filters.dateAllTime') },
+    { value: 'thisMonth', label: t('invoices.filters.dateThisMonth') },
+    { value: 'lastMonth', label: t('invoices.filters.dateLastMonth') },
+    { value: 'thisQuarter', label: t('invoices.filters.dateThisQuarter') },
+    { value: 'lastQuarter', label: t('invoices.filters.dateLastQuarter') },
+    { value: 'thisYear', label: t('invoices.filters.dateThisYear') },
+    { value: 'overdue', label: t('invoices.statusLabels.overdue') }
   ];
 
   const clearFilters = () => {
@@ -89,7 +91,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               type="text"
-              placeholder="Search invoices..."
+              placeholder={t('invoices.searchPlaceholder')}
               className="pl-10 w-full"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
@@ -104,7 +106,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
               className="h-10"
             >
               <List className="h-4 w-4 mr-2" />
-              Table
+              {t('invoices.tableView')}
             </Button>
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
@@ -113,7 +115,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
               className="h-10"
             >
               <Grid3X3 className="h-4 w-4 mr-2" />
-              Grid
+              {t('invoices.gridView')}
             </Button>
             <Button
               variant="outline"
@@ -122,7 +124,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
               className="h-10"
             >
               <Filter className="h-4 w-4 mr-2" />
-              Filters
+              {t('invoices.filters.label')}
               {showAdvancedFilters ? (
                 <ChevronDown className="ml-2 h-4 w-4" />
               ) : (
@@ -135,7 +137,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
                 onClick={onCreateInvoice}
                 className="h-10 ml-2"
               >
-                + New Invoice
+                + {t('invoices.newInvoiceButton')}
               </Button>
             )}
           </div>
@@ -145,7 +147,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
           <div className="pt-4 border-t border-slate-100">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700">Status</label>
+                <label className="block text-sm font-medium text-slate-700">{t('invoices.filters.status')}</label>
                 <div className="relative">
                   <select
                     value={statusFilter}
@@ -163,7 +165,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700">Date Range</label>
+                <label className="block text-sm font-medium text-slate-700">{t('invoices.filters.dateRange')}</label>
                 <div className="relative">
                   <select
                     value={dateFilter}
@@ -181,14 +183,14 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700">Client</label>
+                <label className="block text-sm font-medium text-slate-700">{t('invoices.client')}</label>
                 <div className="relative">
                   <select
                     value={clientFilter}
                     onChange={(e) => onClientFilterChange(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="all">All Clients</option>
+                    <option value="all">{t('invoices.allClients')}</option>
                     {clients.map((client) => (
                       <option key={client.id} value={client.id}>
                         {client.name}
@@ -209,7 +211,7 @@ const InvoicesSearchAndFilters: React.FC<InvoicesSearchAndFiltersProps> = ({
                   className="text-slate-500 hover:bg-slate-100"
                 >
                   <X className="h-4 w-4 mr-1" />
-                  Clear all filters
+                  {t('invoices.filters.clearAll')}
                 </Button>
               </div>
             )}

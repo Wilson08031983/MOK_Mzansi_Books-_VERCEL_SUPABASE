@@ -9,6 +9,8 @@ import { Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
 import { resetLocalAuth } from '@/services/resetLocalAuth';
 import { useLocalization } from '@/hooks/useLocalization';
+import { toast } from '@/hooks/use-toast';
+// 2FA logic removed
 
 const Login = () => {
   const navigate = useNavigate();
@@ -27,6 +29,7 @@ const Login = () => {
     
     try {
       await signIn(formData.email, formData.password);
+      // 2FA removed: proceed directly
       navigate('/welcome-back');
     } catch (error: unknown) {
       console.error(t('auth.login.loginError'), error);

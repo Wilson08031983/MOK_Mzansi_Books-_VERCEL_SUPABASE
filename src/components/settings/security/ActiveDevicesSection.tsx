@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Smartphone, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -21,11 +22,12 @@ const ActiveDevicesSection = ({
   activeDevices,
   onDeviceLogout
 }: ActiveDevicesSectionProps) => {
+  const { t } = useLocalization();
   return (
     <div className="pt-4 border-t">
       <h3 className="text-lg font-medium text-gray-900 flex items-center mb-4">
         <Smartphone className="h-5 w-5 mr-2 text-mokm-orange-500" />
-        Active Devices
+        {t('settings.security.activeDevices')}
       </h3>
       
       <div className="space-y-3">
@@ -40,7 +42,7 @@ const ActiveDevicesSection = ({
                   <span className="font-medium">{device.name}</span>
                   {device.current && (
                     <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">
-                      Current
+                      {t('settings.security.currentDevice')}
                     </span>
                   )}
                 </div>

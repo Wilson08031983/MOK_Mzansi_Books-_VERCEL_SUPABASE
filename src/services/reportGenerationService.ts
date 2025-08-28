@@ -90,7 +90,7 @@ class ReportGenerationService {
     const legacyExpenses = JSON.parse(localStorage.getItem('manual_expenses') || '[]');
     const categorizedExpenses = JSON.parse(localStorage.getItem('categorizedExpenses') || '[]');
     
-    let allExpenses = [...expenses, ...legacyExpenses, ...categorizedExpenses];
+    const allExpenses = [...expenses, ...legacyExpenses, ...categorizedExpenses];
     
     return allExpenses.filter(expense => {
       const expenseDate = new Date(expense.date);
@@ -117,7 +117,7 @@ class ReportGenerationService {
       client: payment.clientName
     }));
     
-    let allIncomes = [...incomes, ...paymentIncomes];
+    const allIncomes = [...incomes, ...paymentIncomes];
     
     return allIncomes.filter(income => {
       const incomeDate = new Date(income.date);
@@ -134,7 +134,7 @@ class ReportGenerationService {
     const taxReturns = JSON.parse(localStorage.getItem('mokm_business_tax_returns') || '[]');
     const manualTaxReturns = JSON.parse(localStorage.getItem('manualTaxReturns') || '[]');
     
-    let allTaxReturns = [...taxReturns, ...manualTaxReturns];
+    const allTaxReturns = [...taxReturns, ...manualTaxReturns];
     
     return allTaxReturns.filter(taxReturn => {
       const dueDate = new Date(taxReturn.dueDate || taxReturn.period);

@@ -14,6 +14,8 @@ import { localizationService } from '@/services/localizationService';
 import AuthModal from '../company/AuthModal';
 import { useTheme } from 'next-themes';
 import { applyFontSize } from '@/services/fontSizeService'
+import { Checkbox } from '@/components/ui/checkbox';
+import { auditService } from '@/services/auditService';
 
 const GeneralSettingsTab = () => {
   const { t, currentLanguage, settings, changeLanguage, updateSettings, getCurrencySymbol, getCurrencyDisplayName } = useLocalization();
@@ -26,7 +28,8 @@ const GeneralSettingsTab = () => {
     registrationNumber: 'REG123456789',
     vatNumber: 'VAT987654321',
     physicalAddress: '123 Business Street, Cape Town, 8001',
-    mailingAddress: 'PO Box 123, Cape Town, 8000'
+    mailingAddress: 'PO Box 123, Cape Town, 8000',
+    mailingSameAsPhysical: false,
   });
 
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
@@ -159,14 +162,26 @@ const GeneralSettingsTab = () => {
         setIsEditing(true);
         setIsAuthModalOpen(false);
         toast.success('Authentication successful. You can now edit company settings.');
+        // Log auth success and entering edit mode for General settings
+        try {
+          auditService.logAuth('Authentication Success', 'Admin authenticated to edit General settings');
+          auditService.logSettings('Entered Edit Mode', 'Settings', 'General');
+        } catch {}
         return true;
       } else {
         toast.error('Authentication failed. You do not have admin privileges.');
+        // Log auth failure
+        try {
+          auditService.logAuth('Authentication Failure', 'Failed attempt to authenticate for General settings');
+        } catch {}
         return false;
       }
     } catch (error) {
       console.error('Authentication error:', error);
       toast.error('An error occurred during authentication.');
+      try {
+        auditService.logAuth('Authentication Error', 'Error occurred during admin authentication for General settings');
+      } catch {}
       return false;
     }
   };
@@ -178,6 +193,16 @@ const GeneralSettingsTab = () => {
 
   const handleSave = async () => {
     try {
+      // Capture old values before saving
+      let oldCompanyInfo: any | undefined = undefined;
+      try {
+        const savedSettings = localStorage.getItem('generalSettings');
+        if (savedSettings) {
+          const parsed = JSON.parse(savedSettings);
+          oldCompanyInfo = parsed.companyInfo;
+        }
+      } catch {}
+
       const settings = {
         companyInfo,
         localization: {}, // Keep existing structure
@@ -190,7 +215,7 @@ const GeneralSettingsTab = () => {
       if (companyLogo) {
         // Load existing assets to preserve other assets
         const existingAssets = localStorage.getItem('companyAssets');
-        let assets = existingAssets ? JSON.parse(existingAssets) : {};
+        const assets = existingAssets ? JSON.parse(existingAssets) : {};
         
         // Update logo in the format expected by Company page
         assets.Logo = {
@@ -212,9 +237,16 @@ const GeneralSettingsTab = () => {
       
       setIsEditing(false);
       toast.success('Company settings saved and synchronized successfully!');
+      // Log save with before/after
+      try {
+        auditService.logSettings('Saved Company Settings', 'Settings', 'General', oldCompanyInfo || {}, companyInfo);
+      } catch {}
     } catch (error) {
       console.error('Error saving settings:', error);
       toast.error('Failed to save company settings.');
+      try {
+        auditService.logSettings('Save Company Settings Failed', 'Settings', 'General');
+      } catch {}
     }
   };
 
@@ -228,6 +260,9 @@ const GeneralSettingsTab = () => {
       }
     }
     setIsEditing(false);
+    try {
+      auditService.logSettings('Canceled Edit', 'Settings', 'General');
+    } catch {}
   };
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,6 +285,9 @@ const GeneralSettingsTab = () => {
         const result = e.target?.result as string;
         setCompanyLogo(result);
         toast.success('Logo uploaded successfully');
+        try {
+          auditService.logSettings('Uploaded Company Logo', 'Settings', 'General', undefined, { companyLogo: 'updated' });
+        } catch {}
       };
       reader.readAsDataURL(file);
     }
@@ -264,6 +302,10 @@ const GeneralSettingsTab = () => {
     });
     changeLanguage(language as any);
     showBanner(language, settings.timezone, settings.currency);
+    // Log language change
+    try {
+      auditService.logSettings('Changed Language', 'Settings', 'Localization', { language: currentLanguage }, { language });
+    } catch {}
   };
 
   const onTimezoneChange = (timezone: string) => {
@@ -274,6 +316,9 @@ const GeneralSettingsTab = () => {
     });
     updateSettings({ timezone });
     showBanner(currentLanguage, timezone, settings.currency);
+    try {
+      auditService.logSettings('Changed Timezone', 'Settings', 'Localization', { timezone: settings.timezone }, { timezone });
+    } catch {}
   };
 
   const onCurrencyChange = (currency: string) => {
@@ -285,6 +330,9 @@ const GeneralSettingsTab = () => {
     updateSettings({ currency });
     console.log("Localization: currency format changed — no FX conversion performed.");
     showBanner(currentLanguage, settings.timezone, currency);
+    try {
+      auditService.logSettings('Changed Currency', 'Settings', 'Localization', { currency: settings.currency }, { currency });
+    } catch {}
   };
 
   const showBanner = (language: string, timezone: string, currency: string) => {
@@ -317,12 +365,18 @@ const GeneralSettingsTab = () => {
       setBanner(null);
       setPreviousSettings(null);
       toast.success('Localization settings reverted');
+      try {
+        auditService.logSettings('Reverted Localization Settings', 'Settings', 'Localization');
+      } catch {}
     }
   };
 
   const handleManualRefresh = () => {
     // Force refresh the localization by re-initializing
     window.location.reload();
+    try {
+      auditService.logSettings('Manually Refreshed Localization', 'Settings', 'Localization');
+    } catch {}
   };
 
   // Localization settings are now managed by the localization service
@@ -390,12 +444,18 @@ const GeneralSettingsTab = () => {
     const mapped = value === 'auto' ? 'system' : value; // next-themes expects 'system'
     setTheme(mapped as 'light' | 'dark' | 'system');
     persistDisplaySettings({ theme: value });
+    try {
+      auditService.logSettings('Changed Theme', 'Settings', 'Display', { theme: displaySettings.theme }, { theme: value });
+    } catch {}
   };
 
   const handleFontSizeChange = (value: string) => {
     setDisplaySettings({ ...displaySettings, fontSize: value });
     applyFontSize(value as any);
     persistDisplaySettings({ fontSize: value });
+    try {
+      auditService.logSettings('Changed Font Size', 'Settings', 'Display', { fontSize: displaySettings.fontSize }, { fontSize: value });
+    } catch {}
   };
 
   return (
@@ -413,17 +473,17 @@ const GeneralSettingsTab = () => {
                 <>
                   <Button onClick={handleSave} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
                     <Save className="h-4 w-4 mr-1" />
-                    Save
+                    {t('common.save')}
                   </Button>
                   <Button onClick={handleCancel} variant="outline" size="sm">
                     <X className="h-4 w-4 mr-1" />
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                 </>
               ) : (
                 <Button onClick={handleStartEdit} variant="outline" size="sm">
                   <ShieldAlert className="h-4 w-4 mr-1" />
-                  Edit (Admin)
+                  {t('common.edit')} (Admin)
                 </Button>
               )}
             </div>
@@ -514,7 +574,7 @@ const GeneralSettingsTab = () => {
                     onClick={() => document.getElementById('logo-upload')?.click()}
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload Logo
+                    {t('common.upload')} {t('settings.companyLogo')}
                   </Button>
                 </>
               )}
@@ -527,18 +587,44 @@ const GeneralSettingsTab = () => {
               <Input
                 id="physicalAddress"
                 value={companyInfo.physicalAddress}
-                onChange={(e) => setCompanyInfo({...companyInfo, physicalAddress: e.target.value})}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCompanyInfo((prev) => ({
+                    ...prev,
+                    physicalAddress: value,
+                    ...(prev.mailingSameAsPhysical ? { mailingAddress: value } : {}),
+                  }));
+                }}
                 disabled={!isEditing}
                 placeholder="Full physical address with postal code"
               />
             </div>
             <div>
-              <Label htmlFor="mailingAddress">{t('settings.mailingAddress')}</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="mailingAddress">{t('settings.mailingAddress')}</Label>
+                {isEditing && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="sameAsPhysical"
+                      checked={companyInfo.mailingSameAsPhysical}
+                      onCheckedChange={(checked: boolean) => {
+                        setCompanyInfo((prev) => ({
+                          ...prev,
+                          mailingSameAsPhysical: !!checked,
+                          mailingAddress: checked ? prev.physicalAddress : prev.mailingAddress,
+                        }));
+                      }}
+                      className="data-[state=checked]:bg-mokm-purple-500"
+                    />
+                    <label htmlFor="sameAsPhysical" className="text-xs text-slate-400 cursor-pointer">Same as Physical</label>
+                  </div>
+                )}
+              </div>
               <Input
                 id="mailingAddress"
                 value={companyInfo.mailingAddress}
                 onChange={(e) => setCompanyInfo({...companyInfo, mailingAddress: e.target.value})}
-                disabled={!isEditing}
+                disabled={!isEditing || companyInfo.mailingSameAsPhysical}
                 placeholder="Mailing address if different from physical"
               />
             </div>
@@ -558,8 +644,8 @@ const GeneralSettingsTab = () => {
           <div className="mx-6 mt-2 mb-0 rounded-md border border-emerald-200/40 bg-emerald-50/60 dark:bg-emerald-500/10 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
             <span>{banner.message}</span>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={handleUndo}>Undo</Button>
-              <Button size="sm" variant="outline" onClick={handleManualRefresh}>Refresh</Button>
+              <Button size="sm" variant="outline" onClick={handleUndo}>{t('common.reset')}</Button>
+              <Button size="sm" variant="outline" onClick={handleManualRefresh}>{t('common.refresh')}</Button>
             </div>
           </div>
         )}
@@ -623,7 +709,7 @@ const GeneralSettingsTab = () => {
                 <option value="EUR">Euro (EUR)</option>
                 <option value="GBP">British Pound (GBP)</option>
               </select>
-              <div className="mt-2 text-xs text-muted-foreground bg-background px-2 py-1 rounded border">
+              <div className="hidden mt-2 text-xs text-muted-foreground bg-background px-2 py-1 rounded border">
                 💰 Current: {getCurrencySymbol()} {getCurrencyDisplayName()}
               </div>
             </div>
@@ -636,35 +722,35 @@ const GeneralSettingsTab = () => {
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Monitor className="h-5 w-5 mr-2" />
-            Display Settings
+            {t('settings.displaySettings')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="theme">Theme</Label>
+              <Label htmlFor="theme">{t('settings.theme')}</Label>
               <select
                 id="theme"
                 className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={displaySettings.theme}
                 onChange={(e) => handleThemeChange(e.target.value)}
               >
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="auto">Auto</option>
+                <option value="light">{t('settings.themeLight')}</option>
+                <option value="dark">{t('settings.themeDark')}</option>
+                <option value="auto">{t('settings.themeAuto')}</option>
               </select>
             </div>
             <div>
-              <Label htmlFor="fontSize">Font Size</Label>
+              <Label htmlFor="fontSize">{t('settings.fontSize')}</Label>
               <select
                 id="fontSize"
                 className="w-full p-2 border rounded-lg bg-background text-foreground"
                 value={displaySettings.fontSize}
                 onChange={(e) => handleFontSizeChange(e.target.value)}
               >
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
+                <option value="small">{t('settings.fontSmall')}</option>
+                <option value="medium">{t('settings.fontMedium')}</option>
+                <option value="large">{t('settings.fontLarge')}</option>
               </select>
             </div>
           </div>

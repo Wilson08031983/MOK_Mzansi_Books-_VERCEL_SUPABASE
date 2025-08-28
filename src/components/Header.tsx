@@ -10,7 +10,7 @@ const Header = () => {
   const location = useLocation();
 
   return (
-    <header className="fixed top-0 w-full bg-white/95 backdrop-blur-sm border-b border-gray-200 z-50 shadow-sm">
+    <header className="fixed top-0 w-full bg-slate-900/70 backdrop-blur-md border-b border-white/10 z-50 shadow-business">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -31,32 +31,32 @@ const Header = () => {
           <nav className="hidden md:flex items-center space-x-8">
             <Link 
               to="/features" 
-              className={`font-medium transition-colors hover:text-purple-600 ${
-                location.pathname === '/features' ? 'text-purple-600' : 'text-gray-700'
+              className={`font-medium transition-colors hover:text-slate-100 ${
+                location.pathname === '/features' ? 'text-white' : 'text-slate-300'
               }`}
             >
               Features
             </Link>
             <Link 
               to="/pricing" 
-              className={`font-medium transition-colors hover:text-purple-600 ${
-                location.pathname === '/pricing' ? 'text-purple-600' : 'text-gray-700'
+              className={`font-medium transition-colors hover:text-slate-100 ${
+                location.pathname === '/pricing' ? 'text-white' : 'text-slate-300'
               }`}
             >
               Pricing
             </Link>
             <Link 
               to="/demo" 
-              className={`font-medium transition-colors hover:text-purple-600 ${
-                location.pathname === '/demo' ? 'text-purple-600' : 'text-gray-700'
+              className={`font-medium transition-colors hover:text-slate-100 ${
+                location.pathname === '/demo' ? 'text-white' : 'text-slate-300'
               }`}
             >
               Demo
             </Link>
             <Link 
               to="/contact" 
-              className={`font-medium transition-colors hover:text-purple-600 ${
-                location.pathname === '/contact' ? 'text-purple-600' : 'text-gray-700'
+              className={`font-medium transition-colors hover:text-slate-100 ${
+                location.pathname === '/contact' ? 'text-white' : 'text-slate-300'
               }`}
             >
               Contact
@@ -67,9 +67,9 @@ const Header = () => {
           <div className="hidden md:flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-4">
-                <span className="text-sm font-bold text-gray-700">Welcome, {user.email}</span>
+                <span className="text-sm font-bold text-slate-300">Welcome, {user.email}</span>
                 <Link to="/dashboard">
-                  <Button size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                  <Button size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-business">
                     Dashboard
                   </Button>
                 </Link>
@@ -77,7 +77,7 @@ const Header = () => {
                   onClick={signOut} 
                   variant="outline" 
                   size="sm"
-                  className="hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                  className="border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-red-500/10 hover:text-slate-900 dark:hover:text-red-300 hover:border-slate-400/60 dark:hover:border-red-400/30"
                 >
                   Logout
                 </Button>
@@ -85,12 +85,12 @@ const Header = () => {
             ) : (
               <>
                 <Link to="/login">
-                  <Button variant="ghost" size="sm" className="hover:bg-purple-50 hover:text-purple-600">
+                  <Button variant="ghost" size="sm" className="text-slate-200 hover:bg-white/10 hover:text-white">
                     Login
                   </Button>
                 </Link>
                 <Link to="/signup">
-                  <Button size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                  <Button size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-business">
                     Get Started
                   </Button>
                 </Link>
@@ -115,40 +115,40 @@ const Header = () => {
       {/* Mobile Navigation */}
       {isMenuOpen && (
         <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-200 shadow-lg">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-slate-900/80 backdrop-blur-md border-t border-white/10 shadow-business">
             <Link 
               to="/features" 
-              className="block px-3 py-2 text-gray-700 hover:text-purple-600 font-medium transition-colors"
+              className="block px-3 py-2 text-slate-300 hover:text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Features
             </Link>
             <Link 
               to="/pricing" 
-              className="block px-3 py-2 text-gray-700 hover:text-purple-600 font-medium transition-colors"
+              className="block px-3 py-2 text-slate-300 hover:text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Pricing
             </Link>
             <Link 
               to="/demo" 
-              className="block px-3 py-2 text-gray-700 hover:text-purple-600 font-medium transition-colors"
+              className="block px-3 py-2 text-slate-300 hover:text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Demo
             </Link>
             <Link 
               to="/contact" 
-              className="block px-3 py-2 text-gray-700 hover:text-purple-600 font-medium transition-colors"
+              className="block px-3 py-2 text-slate-300 hover:text-white font-medium transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Contact
             </Link>
             {user ? (
               <div className="px-3 py-2 space-y-2">
-                <div className="text-sm font-bold text-gray-700">Welcome, {user.email}</div>
+                <div className="text-sm font-bold text-slate-300">Welcome, {user.email}</div>
                 <Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>
-                  <Button size="sm" className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                  <Button size="sm" className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-business">
                     Dashboard
                   </Button>
                 </Link>
@@ -156,7 +156,7 @@ const Header = () => {
                   onClick={() => { signOut(); setIsMenuOpen(false); }} 
                   variant="outline" 
                   size="sm"
-                  className="w-full hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                  className="w-full border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-red-500/10 hover:text-slate-900 dark:hover:text-red-300 hover:border-slate-400/60 dark:hover:border-red-400/30"
                 >
                   Logout
                 </Button>
@@ -164,12 +164,12 @@ const Header = () => {
             ) : (
               <div className="px-3 py-2 space-y-2">
                 <Link to="/login" onClick={() => setIsMenuOpen(false)}>
-                  <Button variant="ghost" size="sm" className="w-full hover:bg-purple-50 hover:text-purple-600">
+                  <Button variant="ghost" size="sm" className="w-full text-slate-200 hover:bg-white/10 hover:text-white">
                     Login
                   </Button>
                 </Link>
                 <Link to="/signup" onClick={() => setIsMenuOpen(false)}>
-                  <Button size="sm" className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                  <Button size="sm" className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-business">
                     Get Started
                   </Button>
                 </Link>

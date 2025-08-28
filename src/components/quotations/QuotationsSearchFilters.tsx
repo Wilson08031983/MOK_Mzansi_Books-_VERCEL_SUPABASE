@@ -7,6 +7,7 @@ import {
   Filter,
   Save
 } from 'lucide-react';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface FiltersType {
   status: string;
@@ -47,8 +48,9 @@ const QuotationsSearchFilters: React.FC<QuotationsSearchFiltersProps> = ({
   handleClearFilters,
   handleSaveFilter
 }) => {
+  const { t } = useLocalization();
   return (
-    <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+    <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business">
       <CardContent className="p-6">
         <div className="space-y-4">
           {/* Main Search Bar */}
@@ -57,10 +59,10 @@ const QuotationsSearchFilters: React.FC<QuotationsSearchFiltersProps> = ({
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search quotations by number, client, or reference"
+                placeholder={t('quotations.search.placeholder')}
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+                className="w-full pl-10 pr-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-black/20 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 transition-all duration-300 font-sf-pro placeholder-white/60"
               />
               {searchTerm && (
                 <button
@@ -76,21 +78,21 @@ const QuotationsSearchFilters: React.FC<QuotationsSearchFiltersProps> = ({
               <Button
                 variant="outline"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className={`border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300 ${
-                  showAdvancedFilters ? 'bg-mokm-purple-50 border-mokm-purple-300' : ''
+                className={`glass backdrop-blur-md bg-white/10 dark:bg-white/5 hover:bg-white/15 dark:hover:bg-white/10 border border-white/10 font-sf-pro rounded-xl transition-all duration-300 ${
+                  showAdvancedFilters ? 'ring-1 ring-mokm-purple-500/40' : ''
                 }`}
               >
                 <Filter className="h-4 w-4 mr-2" />
-                Advanced Filters
+                {t('quotations.search.advancedFilters')}
               </Button>
               
               <Button
                 variant="outline"
                 onClick={handleSaveFilter}
-                className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
+                className="glass backdrop-blur-md bg-white/10 dark:bg-white/5 hover:bg-white/15 dark:hover:bg-white/10 border border-white/10 font-sf-pro rounded-xl transition-all duration-300"
               >
                 <Save className="h-4 w-4 mr-2" />
-                Save Filter
+                {t('quotations.search.saveFilter')}
               </Button>
             </div>
           </div>
@@ -102,37 +104,37 @@ const QuotationsSearchFilters: React.FC<QuotationsSearchFiltersProps> = ({
               <select
                 value={filters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+                className="px-3 py-2 glass backdrop-blur-md bg-white/10 dark:bg-black/20 border border-white/10 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 transition-all duration-300 font-sf-pro"
               >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="sent">Sent</option>
-                <option value="viewed">Viewed</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="expired">Expired</option>
+                <option value="all">{t('quotations.search.status.all')}</option>
+                <option value="draft">{t('quotations.statusLabels.draft')}</option>
+                <option value="sent">{t('quotations.statusLabels.sent')}</option>
+                <option value="viewed">{t('quotations.statusLabels.viewed')}</option>
+                <option value="accepted">{t('quotations.statusLabels.accepted')}</option>
+                <option value="rejected">{t('quotations.statusLabels.rejected')}</option>
+                <option value="expired">{t('quotations.statusLabels.expired')}</option>
               </select>
             </div>
             
             <select
               value={filters.dateRange}
               onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
-              className="px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+              className="px-3 py-2 glass backdrop-blur-md bg-white/10 dark:bg-black/20 border border-white/10 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 transition-all duration-300 font-sf-pro"
             >
-              <option value="all">All Dates</option>
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-              <option value="quarter">This Quarter</option>
-              <option value="year">This Year</option>
+              <option value="all">{t('quotations.search.dates.all')}</option>
+              <option value="today">{t('quotations.search.dates.today')}</option>
+              <option value="week">{t('quotations.search.dates.week')}</option>
+              <option value="month">{t('quotations.search.dates.month')}</option>
+              <option value="quarter">{t('quotations.search.dates.quarter')}</option>
+              <option value="year">{t('quotations.search.dates.year')}</option>
             </select>
             
             <select
               value={filters.client}
               onChange={(e) => setFilters(prev => ({ ...prev, client: e.target.value }))}
-              className="px-3 py-2 glass backdrop-blur-sm bg-white/50 border border-white/20 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+              className="px-3 py-2 glass backdrop-blur-md bg-white/10 dark:bg-black/20 border border-white/10 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 transition-all duration-300 font-sf-pro"
             >
-              <option value="all">All Clients</option>
+              <option value="all">{t('quotations.search.allClients')}</option>
               {clients.map(client => (
                 <option key={client.id} value={client.id}>{client.name}</option>
               ))}
@@ -141,22 +143,22 @@ const QuotationsSearchFilters: React.FC<QuotationsSearchFiltersProps> = ({
             <Button
               variant="outline"
               onClick={handleClearFilters}
-              className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-lg transition-all duration-300"
+              className="glass backdrop-blur-md bg-white/10 dark:bg-white/5 hover:bg-white/15 dark:hover:bg-white/10 border border-white/10 font-sf-pro rounded-lg transition-all duration-300"
             >
-              Clear Filters
+              {t('quotations.search.clearFilters')}
             </Button>
           </div>
 
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
             <div className="flex items-center space-x-2">
-              <span className="text-sm text-slate-600 font-sf-pro">Recent:</span>
+              <span className="text-sm text-slate-600 font-sf-pro">{t('quotations.search.recent')}</span>
               <div className="flex flex-wrap gap-2">
                 {recentSearches.map((search, index) => (
                   <button
                     key={index}
                     onClick={() => setSearchTerm(search)}
-                    className="px-2 py-1 text-xs bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors font-sf-pro"
+                    className="px-2 py-1 text-xs glass backdrop-blur-md bg-white/10 dark:bg-white/5 text-white hover:bg-white/20 border border-white/10 rounded-md transition-colors font-sf-pro"
                   >
                     {search}
                   </button>
@@ -171,3 +173,4 @@ const QuotationsSearchFilters: React.FC<QuotationsSearchFiltersProps> = ({
 };
 
 export default QuotationsSearchFilters;
+

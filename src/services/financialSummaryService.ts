@@ -1,3 +1,5 @@
+import { localizationService } from './localizationService';
+
 export interface FinancialSummary {
   totalRevenue: number;
   totalExpenses: number;
@@ -62,12 +64,12 @@ class FinancialSummaryService {
       };
 
       console.log('✅ [FINANCIAL SUMMARY] Summary calculated:', {
-        totalRevenue: `R${totalRevenue.toLocaleString()}`,
-        totalExpenses: `R${totalExpenses.toLocaleString()}`,
-        netProfit: `R${netProfit.toLocaleString()}`,
-        outstanding: `R${outstanding.toLocaleString()}`,
+        totalRevenue: localizationService.formatCurrency(totalRevenue),
+        totalExpenses: localizationService.formatCurrency(totalExpenses),
+        netProfit: localizationService.formatCurrency(netProfit),
+        outstanding: localizationService.formatCurrency(outstanding),
         pendingPayments,
-        taxLiability: `R${taxLiability.toLocaleString()}`
+        taxLiability: localizationService.formatCurrency(taxLiability)
       });
 
       return summary;
@@ -271,7 +273,7 @@ class FinancialSummaryService {
    * Format currency for display
    */
   formatCurrency(amount: number): string {
-    return `R${Math.abs(amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+    return localizationService.formatCurrency(amount);
   }
 
   /**

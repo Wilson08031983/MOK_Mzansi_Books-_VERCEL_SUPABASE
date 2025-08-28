@@ -224,6 +224,65 @@ export const updateAllActiveProjectsWithAttendanceExpenses = (): void => {
 };
 
 /**
+ * Ensure projects have assignedEmployees by auto-assigning the manager if they are an Employee.
+ * Useful when users set a project manager but didn't explicitly assign them in team allocations.
+ * - If a project has no assignedEmployees, we try to match manager name to an existing Employee
+ *   and assign them at 100% allocation as 'Team Lead'.
+ */
+export const ensureAssignedEmployeesFromManager = (): void => {
+  try {
+    const projectsRaw = localStorage.getItem('projects');
+    if (!projectsRaw) return;
+
+    const projects: Project[] = JSON.parse(projectsRaw);
+    const employees: Employee[] = getAllEmployees();
+
+    let changed = false;
+    const updated = projects.map(project => {
+      if (!project.assignedEmployees || project.assignedEmployees.length === 0) {
+        const managerName = (project as any).manager as string | undefined;
+        if (managerName && employees.length > 0) {
+          // Match by full name (case-insensitive, trimmed)
+          const normalized = (s: string) => s.trim().toLowerCase();
+          const match = employees.find(e => normalized(`${e.firstName} ${e.surname}`) === normalized(managerName));
+          if (match) {
+            const pe: ProjectEmployee = {
+              employeeId: match.id,
+              employeeName: `${match.firstName} ${match.surname}`,
+              employeeNumber: match.employeeNumber,
+              position: match.position,
+              department: match.department,
+              monthlySalary: match.salary,
+              assignedDate: new Date().toISOString().split('T')[0],
+              role: 'Team Lead',
+              allocation: 100,
+            };
+            project.assignedEmployees = [pe];
+            if (!project.team) project.team = [];
+            if (!project.team.includes(pe.employeeName)) project.team.push(pe.employeeName);
+            // Update salary-related totals for completeness
+            try {
+              // Avoid importing circular services; compute minimal fields
+              const totalExpenses = (project.expenses_list || []).reduce((t, e) => t + e.amount, 0);
+              project.expenses = totalExpenses;
+            } catch (_) {}
+            changed = true;
+          }
+        }
+      }
+      return project;
+    });
+
+    if (changed) {
+      localStorage.setItem('projects', JSON.stringify(updated));
+      console.log('Auto-assigned managers as assigned employees where missing.');
+    }
+  } catch (err) {
+    console.error('ensureAssignedEmployeesFromManager failed:', err);
+  }
+};
+
+/**
  * Get summary of attendance pay expenses across all projects
  */
 export const getAttendancePayExpensesSummary = (): {

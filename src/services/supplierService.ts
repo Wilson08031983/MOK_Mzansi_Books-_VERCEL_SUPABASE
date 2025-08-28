@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { auditService } from '@/services/auditService';
 
 export interface Supplier {
   id: string;
@@ -73,6 +74,21 @@ export const addSupplier = (supplierData: Omit<Supplier, 'id' | 'createdAt' | 'u
   suppliers.push(newSupplier);
   saveSuppliers(suppliers);
   
+  // Audit log: supplier created
+  try {
+    auditService.logCRUD(
+      'Created Supplier',
+      'supplier',
+      newSupplier.id,
+      newSupplier.name,
+      'Inventory',
+      undefined,
+      newSupplier
+    );
+  } catch (e) {
+    console.error('Audit log failed for addSupplier:', e);
+  }
+  
   return newSupplier;
 };
 
@@ -85,6 +101,7 @@ export const updateSupplier = (id: string, supplierData: Partial<Omit<Supplier, 
   
   if (index === -1) return null;
   
+  const oldSupplier = { ...suppliers[index] };
   const updatedSupplier = {
     ...suppliers[index],
     ...supplierData,
@@ -94,6 +111,21 @@ export const updateSupplier = (id: string, supplierData: Partial<Omit<Supplier, 
   suppliers[index] = updatedSupplier;
   saveSuppliers(suppliers);
   
+  // Audit log: supplier updated
+  try {
+    auditService.logCRUD(
+      'Updated Supplier',
+      'supplier',
+      updatedSupplier.id,
+      updatedSupplier.name,
+      'Inventory',
+      oldSupplier,
+      updatedSupplier
+    );
+  } catch (e) {
+    console.error('Audit log failed for updateSupplier:', e);
+  }
+  
   return updatedSupplier;
 };
 
@@ -102,6 +134,7 @@ export const updateSupplier = (id: string, supplierData: Partial<Omit<Supplier, 
  */
 export const deleteSupplier = (id: string): boolean => {
   const suppliers = getAllSuppliers();
+  const toDelete = suppliers.find(sup => sup.id === id) || null;
   const filteredSuppliers = suppliers.filter(sup => sup.id !== id);
   
   if (filteredSuppliers.length === suppliers.length) {
@@ -109,6 +142,21 @@ export const deleteSupplier = (id: string): boolean => {
   }
   
   saveSuppliers(filteredSuppliers);
+  
+  // Audit log: supplier deleted
+  try {
+    auditService.logCRUD(
+      'Deleted Supplier',
+      'supplier',
+      id,
+      toDelete?.name || 'Unknown Supplier',
+      'Inventory',
+      toDelete || undefined,
+      undefined
+    );
+  } catch (e) {
+    console.error('Audit log failed for deleteSupplier:', e);
+  }
   return true;
 };
 

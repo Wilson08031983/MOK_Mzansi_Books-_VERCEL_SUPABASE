@@ -27,6 +27,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface InventoryItem {
   id: string;
@@ -53,29 +54,22 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
   onAction,
   showHistory = false 
 }) => {
+  const { formatCurrency, t } = useLocalization();
   const getStatusBadge = (status: string) => {
     switch(status) {
       case 'In Stock':
-        return <Badge className="bg-green-500">In Stock</Badge>;
+        return <Badge className="bg-green-500">{t('inventory.inStock')}</Badge>;
       case 'Low Stock':
-        return <Badge className="bg-amber-500">Low Stock</Badge>;
+        return <Badge className="bg-amber-500">{t('inventory.lowStock')}</Badge>;
       case 'Out of Stock':
-        return <Badge className="bg-red-500">Out of Stock</Badge>;
+        return <Badge className="bg-red-500">{t('inventory.outOfStock')}</Badge>;
       case 'Expired':
-        return <Badge variant="outline" className="text-red-500 border-red-200">Expired</Badge>;
+        return <Badge variant="outline" className="text-red-500 border-red-200">{t('inventory.expiredLabel')}</Badge>;
       case 'Damaged':
-        return <Badge variant="outline" className="text-amber-600 border-amber-200">Damaged</Badge>;
+        return <Badge variant="outline" className="text-amber-600 border-amber-200">{t('inventory.damaged')}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'currency',
-      currency: 'ZAR',
-      minimumFractionDigits: 2
-    }).format(value);
   };
 
   return (
@@ -83,15 +77,15 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Item ID</TableHead>
-            <TableHead>Item</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Stock</TableHead>
-            <TableHead>Price</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Location</TableHead>
-            {showHistory && <TableHead>Last Updated</TableHead>}
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead>{t('inventory.itemIdHeader')}</TableHead>
+            <TableHead>{t('inventory.item')}</TableHead>
+            <TableHead>{t('inventory.category')}</TableHead>
+            <TableHead>{t('inventory.stock')}</TableHead>
+            <TableHead>{t('inventory.price')}</TableHead>
+            <TableHead>{t('inventory.status')}</TableHead>
+            <TableHead>{t('inventory.location')}</TableHead>
+            {showHistory && <TableHead>{t('inventory.lastUpdated')}</TableHead>}
+            <TableHead className="text-right">{t('inventory.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -100,13 +94,13 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
               <TableCell colSpan={showHistory ? 9 : 8} className="text-center py-10">
                 <div className="flex flex-col items-center justify-center text-slate-500">
                   <PackageOpen className="h-12 w-12 mb-2" />
-                  <p className="text-lg font-semibold">No inventory items found</p>
-                  <p className="text-sm">Try adjusting your filters or add new stock</p>
+                  <p className="text-lg font-semibold">{t('inventory.noInventoryItemsFound')}</p>
+                  <p className="text-sm">{t('inventory.tryAdjustingFiltersOrAddNewStock')}</p>
                   <Button 
                     className="mt-4 bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 text-white"
                     onClick={() => onAction('new')}
                   >
-                    Add New Stock
+                    {t('inventory.newStock')}
                   </Button>
                 </div>
               </TableCell>
@@ -118,7 +112,7 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 <TableCell>
                   <div>
                     <div className="font-semibold">{item.name}</div>
-                    <div className="text-xs text-slate-500">Barcode: {item.barcode}</div>
+                    <div className="text-xs text-slate-500">{t('inventory.barcode')}: {item.barcode}</div>
                   </div>
                 </TableCell>
                 <TableCell>{item.category}</TableCell>
@@ -131,45 +125,45 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
+                        <span className="sr-only">{t('inventory.openMenu')}</span>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => onAction('update', item)}>
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        <span>Update Stock</span>
+                        <span>{t('inventory.updateStockLabel')}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onAction('edit', item)}>
                         <Pen className="mr-2 h-4 w-4" />
-                        <span>Edit Details</span>
+                        <span>{t('inventory.editDetails')}</span>
                       </DropdownMenuItem>
                       <Link to={`/invoices/new?item=${item.id}`}>
                         <DropdownMenuItem>
                           <FileText className="mr-2 h-4 w-4" />
-                          <span>Add to Invoice</span>
+                          <span>{t('inventory.addToInvoice')}</span>
                         </DropdownMenuItem>
                       </Link>
                       <Link to={`/quotations/new?item=${item.id}`}>
                         <DropdownMenuItem>
                           <Receipt className="mr-2 h-4 w-4" />
-                          <span>Add to Quotation</span>
+                          <span>{t('inventory.addToQuotation')}</span>
                         </DropdownMenuItem>
                       </Link>
                       <DropdownMenuItem onClick={() => onAction('history', item)}>
                         <Clock className="mr-2 h-4 w-4" />
-                        <span>View History</span>
+                        <span>{t('inventory.viewHistory')}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onAction('damage', item)}>
                         <AlertTriangle className="mr-2 h-4 w-4" />
-                        <span>Report Damage/Expired</span>
+                        <span>{t('inventory.reportDamageExpired')}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => onAction('delete', item)}
                         className="text-red-600 focus:text-red-600"
                       >
                         <Trash className="mr-2 h-4 w-4" />
-                        <span>Delete</span>
+                        <span>{t('inventory.delete')}</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

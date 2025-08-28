@@ -1,6 +1,6 @@
-import { getAdminPermissions, getDefaultPermissions, saveUserPermissions } from "./permissionService";
+import { getAdminPermissions, saveUserPermissions } from "./permissionService";
 import { v4 as uuidv4 } from 'uuid';
-import { safeLocalStorage, safeGet, safeString } from '@/utils/safeAccess';
+import { safeLocalStorage, safeString } from '@/utils/safeAccess';
 
 // Import the UserCredentials type from localAuthService
 export interface UserCredentials {
@@ -46,18 +46,9 @@ export const resetLocalAuth = () => {
   const wilsonId = wilsonAccount ? wilsonAccount.id : 'wilson-' + uuidv4();
   const wilsonPermissions = getAdminPermissions();
   
-  // Create regular user with basic permissions
-  const userId = 'user-' + Date.now();
-  const userPermissions = getDefaultPermissions();
-  // Add some basic permissions for regular user
-  userPermissions['Clients'] = { read: true, write: false };
-  userPermissions['Quotations'] = { read: true, write: false };
-  userPermissions['Invoices'] = { read: true, write: false };
-  
   // Store the permissions
   saveUserPermissions(adminId, adminPermissions);
   saveUserPermissions(wilsonId, wilsonPermissions);
-  saveUserPermissions(userId, userPermissions);
   
   // Store the user credentials
   const defaultCredentials = {
@@ -80,7 +71,7 @@ export const resetLocalAuth = () => {
   };
   
   window.localStorage.setItem('userCredentials', JSON.stringify(defaultCredentials));
-  console.log('Local authentication reset with admin and user accounts');
+  console.log('Local authentication reset with Admin and Wilson accounts');
 };
 
 // Export a function to run this from the browser

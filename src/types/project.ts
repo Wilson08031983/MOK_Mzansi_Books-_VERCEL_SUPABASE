@@ -6,6 +6,11 @@ export interface Task {
   startDate: string;
   endDate: string;
   completed: boolean;
+  // Optional proof of completion
+  proofImage?: string; // base64 data URL
+  proofImageType?: string; // MIME type, e.g., image/png
+  proofImageName?: string; // original file name
+  proofSnippet?: string; // short description / notes about the completed task
 }
 
 export interface Expense {
@@ -60,5 +65,7 @@ export interface Project {
   expenses_list?: Expense[]; // Detailed list of all expenses including attendance pay
   salaryExpenses?: number; // Calculated salary expenses for assigned employees
   totalProjectExpenses?: number; // Total expenses including salaries and other expenses
+  // Project type: 'timeline' projects have start/end dates and milestones; 'ongoing' are continuous entities like shops/markets
+  projectType?: 'timeline' | 'ongoing';
   [key: string]: unknown; // For dynamic property access
 }

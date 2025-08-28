@@ -47,7 +47,7 @@ const QuickActions = () => {
             <div className={`p-4 rounded-2xl bg-primary/10 group-hover:bg-primary/20 transition-all duration-300 group-hover:scale-110`}>
               <action.icon className="h-7 w-7 text-primary" />
             </div>
-            <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors font-sf-pro">
+            <span className="text-sm font-medium text-muted-foreground dark:text-slate-300 group-hover:text-foreground dark:group-hover:text-slate-100 transition-colors font-sf-pro">
               {action.title}
             </span>
           </div>

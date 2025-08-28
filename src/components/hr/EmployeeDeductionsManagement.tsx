@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { employeeDeductionsService, EmployeeDeduction, DeductionType, DEDUCTION_TYPES } from '@/services/employeeDeductionsService';
 import { getAllEmployees, Employee } from '@/services/employeeService';
-import { formatCurrency } from '@/lib/utils';
+import { useLocalization } from '@/hooks/useLocalization';
 import { saPayrollCalculatorService, SAPayrollCalculation } from '@/services/saPayrollCalculatorService';
 import { payrollCalculationService } from '@/services/payrollCalculationService';
 
@@ -37,6 +37,7 @@ interface EmployeeDeductionsManagementProps {
 }
 
 const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> = ({ onClose }) => {
+  const { formatCurrency } = useLocalization();
   const [deductions, setDeductions] = useState<EmployeeDeduction[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,9 +119,9 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
       const batchResult = saPayrollCalculatorService.calculateBatchPayroll(employeesWithAttendancePay);
       
       console.log('✅ PAYE/UIF calculations completed:');
-      console.log(`    Total PAYE: R${batchResult.totalPAYE.toFixed(2)}`);
-      console.log(`    Total UIF Employee: R${batchResult.totalUIFEmployee.toFixed(2)}`);
-      console.log(`    Total UIF Employer: R${batchResult.totalUIFEmployer.toFixed(2)}`);
+      console.log(`    Total PAYE: ${formatCurrency(batchResult.totalPAYE)}`);
+      console.log(`    Total UIF Employee: ${formatCurrency(batchResult.totalUIFEmployee)}`);
+      console.log(`    Total UIF Employer: ${formatCurrency(batchResult.totalUIFEmployer)}`);
 
       setPayeUifCalculations(batchResult.calculations);
       
@@ -447,19 +448,19 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
                   <div className="bg-gradient-to-r from-mokm-purple-50 to-mokm-blue-50 p-4 rounded-lg border border-mokm-purple-200">
                     <p className="text-sm font-medium text-mokm-purple-700">Total PAYE</p>
                     <p className="text-xl font-bold text-mokm-purple-900">
-                      R {payeUifCalculations.reduce((sum, calc) => sum + calc.paye, 0).toFixed(2)}
+                      {formatCurrency(payeUifCalculations.reduce((sum, calc) => sum + calc.paye, 0))}
                     </p>
                   </div>
                   <div className="bg-gradient-to-r from-mokm-blue-50 to-mokm-pink-50 p-4 rounded-lg border border-mokm-blue-200">
                     <p className="text-sm font-medium text-mokm-blue-700">Total UIF (Employee)</p>
                     <p className="text-xl font-bold text-mokm-blue-900">
-                      R {payeUifCalculations.reduce((sum, calc) => sum + calc.uifEmployee, 0).toFixed(2)}
+                      {formatCurrency(payeUifCalculations.reduce((sum, calc) => sum + calc.uifEmployee, 0))}
                     </p>
                   </div>
                   <div className="bg-gradient-to-r from-mokm-pink-50 to-mokm-purple-50 p-4 rounded-lg border border-mokm-pink-200">
                     <p className="text-sm font-medium text-mokm-pink-700">Total UIF (Employer)</p>
                     <p className="text-xl font-bold text-mokm-pink-900">
-                      R {payeUifCalculations.reduce((sum, calc) => sum + calc.uifEmployer, 0).toFixed(2)}
+                      {formatCurrency(payeUifCalculations.reduce((sum, calc) => sum + calc.uifEmployer, 0))}
                     </p>
                   </div>
                   <div className="bg-gradient-to-r from-slate-50 to-slate-100 p-4 rounded-lg border border-slate-200">
@@ -499,25 +500,25 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            <span className="font-medium text-slate-900">R {calc.attendancePay.toFixed(2)}</span>
+                            <span className="font-medium text-slate-900">{formatCurrency(calc.attendancePay)}</span>
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline" className="bg-mokm-purple-50 text-mokm-purple-700 border-mokm-purple-200">
-                              R {calc.paye.toFixed(2)}
+                              {formatCurrency(calc.paye)}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline" className="bg-mokm-blue-50 text-mokm-blue-700 border-mokm-blue-200">
-                              R {calc.uifEmployee.toFixed(2)}
+                              {formatCurrency(calc.uifEmployee)}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline" className="bg-mokm-pink-50 text-mokm-pink-700 border-mokm-pink-200">
-                              R {calc.uifEmployer.toFixed(2)}
+                              {formatCurrency(calc.uifEmployer)}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">
-                            <span className="font-medium text-green-700">R {calc.netPay.toFixed(2)}</span>
+                            <span className="font-medium text-green-700">{formatCurrency(calc.netPay)}</span>
                           </td>
                         </tr>
                       ))}
@@ -528,7 +529,7 @@ const EmployeeDeductionsManagement: React.FC<EmployeeDeductionsManagementProps> 
                 <div className="mt-4 p-3 bg-mokm-purple-50 rounded-lg border border-mokm-purple-200">
                   <p className="text-sm text-mokm-purple-800">
                     <strong>Note:</strong> PAYE and UIF calculations are based on Attendance Pay from Employee Payroll Calculations 
-                    and comply with South African tax regulations. UIF is capped at R177.12 per month per employee.
+                    and comply with South African tax regulations. UIF is capped at {formatCurrency(177.12)} per month per employee.
                   </p>
                 </div>
               </>

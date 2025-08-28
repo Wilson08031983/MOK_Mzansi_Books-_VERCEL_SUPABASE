@@ -65,7 +65,9 @@ const PASSWORD_HISTORY_KEY = 'passwordHistory';
 
 // Get security settings
 export const getSecuritySettings = (): SecuritySettings => {
-  return safeLocalStorage.getItem<SecuritySettings>(SECURITY_SETTINGS_KEY, defaultSecuritySettings);
+  const loaded = safeLocalStorage.getItem<SecuritySettings>(SECURITY_SETTINGS_KEY, defaultSecuritySettings);
+  // Force-disable 2FA globally
+  return { ...loaded, twoFactorEnabled: false };
 };
 
 // Save security settings
@@ -222,42 +224,23 @@ export const sendLoginNotification = async (userEmail: string, deviceInfo: Devic
 
 // Two-factor authentication helpers
 export const generateTwoFactorSecret = (): string => {
-  // Generate a simple 6-digit code for demo purposes
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  console.warn('[securityService] generateTwoFactorSecret is disabled.');
+  return '';
 };
 
-export const validateTwoFactorCode = (code: string, expectedCode: string): boolean => {
-  return code === expectedCode;
+export const validateTwoFactorCode = (_code: string, _expectedCode: string): boolean => {
+  console.warn('[securityService] validateTwoFactorCode is disabled.');
+  return true;
 };
 
 // Store 2FA code temporarily (in production, this would be more secure)
-export const storeTwoFactorCode = (email: string, code: string): void => {
-  try {
-    const codes = safeLocalStorage.getItem<Record<string, { code: string; expiry: number }>>('twoFactorCodes', {});
-    codes[email] = {
-      code,
-      expiry: Date.now() + (5 * 60 * 1000) // 5 minutes
-    };
-    safeLocalStorage.setItem('twoFactorCodes', codes);
-  } catch (error) {
-    console.error('Error storing 2FA code:', error);
-  }
+export const storeTwoFactorCode = (_email: string, _code: string): void => {
+  console.warn('[securityService] storeTwoFactorCode is disabled.');
 };
 
-export const getTwoFactorCode = (email: string): string | null => {
-  try {
-    const codes = safeLocalStorage.getItem<Record<string, { code: string; expiry: number }>>('twoFactorCodes', {});
-    const entry = codes[email];
-    
-    if (!entry || Date.now() > entry.expiry) {
-      return null;
-    }
-    
-    return entry.code;
-  } catch (error) {
-    console.error('Error getting 2FA code:', error);
-    return null;
-  }
+export const getTwoFactorCode = (_email: string): string | null => {
+  console.warn('[securityService] getTwoFactorCode is disabled.');
+  return null;
 };
 
 // Password history management

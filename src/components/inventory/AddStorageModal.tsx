@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { addStorageLocation } from '@/services/storageLocationService';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 interface AddStorageModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ const AddStorageModal: React.FC<AddStorageModalProps> = ({
   onSuccess
 }) => {
   const { toast } = useToast();
+  const { logCreate } = useAuditLogger();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -86,13 +88,20 @@ const AddStorageModal: React.FC<AddStorageModalProps> = ({
     
     try {
       const newStorage = addStorageLocation(formData);
-      
+
       toast({
         title: 'Storage Location Added',
         description: `${newStorage.name} has been added successfully.`,
         variant: 'default',
       });
-      
+
+      // Audit log: record storage location creation
+      try {
+        logCreate('storage', newStorage.name, newStorage.id, newStorage);
+      } catch (e) {
+        console.warn('Audit log (create storage) failed:', e);
+      }
+
       // Reset form
       setFormData({
         name: '',

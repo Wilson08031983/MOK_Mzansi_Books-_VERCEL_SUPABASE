@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import BusinessTaxCard, { BusinessTaxReturn } from './BusinessTaxCard';
 import AddReturnModal from './AddReturnModal';
+import { addNotification } from '@/services/notificationService';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 
 const BusinessTaxTab: React.FC = () => {
@@ -32,9 +34,11 @@ const BusinessTaxTab: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
+  const { logCreate, logUpdate, logDelete, logAudit, logFinancial } = useAuditLogger();
 
   // Local storage key for tax returns
   const STORAGE_KEY = 'mokm_business_tax_returns';
+  const NOTIFIED_OVERDUE_KEY = 'mokm_overdue_tax_notified_ids';
 
   // Load tax returns from localStorage on component mount
   useEffect(() => {
@@ -45,6 +49,39 @@ const BusinessTaxTab: React.FC = () => {
   useEffect(() => {
     filterTaxReturns();
   }, [taxReturns, searchTerm, statusFilter, typeFilter]);
+
+  // Detect overdue tax returns and notify once per return
+  useEffect(() => {
+    if (isLoading) return;
+
+    try {
+      const now = new Date();
+      const stored = localStorage.getItem(NOTIFIED_OVERDUE_KEY);
+      const notifiedIds: Record<string, boolean> = stored ? JSON.parse(stored) : {};
+
+      const overdueReturns = taxReturns.filter(tr => tr.status !== 'completed' && new Date(tr.dueDate) < now);
+
+      overdueReturns.forEach(tr => {
+        if (!notifiedIds[tr.id]) {
+          // First mark as notified and persist to avoid race conditions
+          notifiedIds[tr.id] = true;
+          try {
+            localStorage.setItem(NOTIFIED_OVERDUE_KEY, JSON.stringify(notifiedIds));
+          } catch {}
+
+          // Then push a system notification
+          const amountText = tr.amount ? ` Amount: R${tr.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}.` : '';
+          addNotification({
+            title: 'Overdue Tax Return',
+            message: `${tr.name} (due ${tr.dueDate}) is overdue.${amountText}`,
+            type: 'system'
+          });
+        }
+      });
+    } catch (e) {
+      console.error('Error checking/sending overdue notifications:', e);
+    }
+  }, [isLoading, taxReturns]);
 
   /**
    * Load tax returns from localStorage
@@ -205,14 +242,22 @@ const BusinessTaxTab: React.FC = () => {
     const updatedReturns = [...taxReturns, taxReturn];
     setTaxReturns(updatedReturns);
     saveTaxReturns(updatedReturns);
+    try {
+      logCreate('taxReturn', taxReturn.name, taxReturn.id, taxReturn);
+      if (taxReturn.amount) {
+        logFinancial('Created Tax Return', 'taxReturn', taxReturn.name, taxReturn.id, taxReturn.amount);
+      }
+    } catch {}
   };
 
   /**
    * Handle submitting a tax return
    */
   const handleSubmitTaxReturn = (id: string) => {
+    let original: BusinessTaxReturn | undefined;
     const updatedReturns = taxReturns.map(taxReturn => {
       if (taxReturn.id === id) {
+        original = taxReturn;
         return {
           ...taxReturn,
           status: 'submitted' as const,
@@ -224,6 +269,15 @@ const BusinessTaxTab: React.FC = () => {
     
     setTaxReturns(updatedReturns);
     saveTaxReturns(updatedReturns);
+    try {
+      const updated = updatedReturns.find(tr => tr.id === id);
+      if (updated) {
+        logUpdate('taxReturn', updated.name, updated.id, original, updated);
+        if (updated.amount) {
+          logFinancial('Submitted Tax Return', 'taxReturn', updated.name, updated.id, updated.amount);
+        }
+      }
+    } catch {}
   };
 
   /**
@@ -235,6 +289,18 @@ const BusinessTaxTab: React.FC = () => {
       // TODO: Implement view modal or navigation to detailed view
       console.log('Viewing tax return:', taxReturn);
       alert(`Viewing ${taxReturn.name}\n\nThis feature will open a detailed view of the tax return.`);
+      try {
+        logAudit({
+          category: 'financial',
+          action: 'Viewed Tax Return',
+          entityType: 'taxReturn',
+          entityId: taxReturn.id,
+          entityName: taxReturn.name,
+          changeType: 'read',
+          description: `Viewed tax return ${taxReturn.name}`,
+          metadata: { type: taxReturn.type, status: taxReturn.status }
+        });
+      } catch {}
     }
   };
 
@@ -247,6 +313,12 @@ const BusinessTaxTab: React.FC = () => {
       const updatedReturns = taxReturns.filter(tr => tr.id !== id);
       setTaxReturns(updatedReturns);
       saveTaxReturns(updatedReturns);
+      try {
+        logDelete('taxReturn', taxReturn.name, taxReturn.id);
+        if (taxReturn.amount) {
+          logFinancial('Deleted Tax Return', 'taxReturn', taxReturn.name, taxReturn.id, taxReturn.amount);
+        }
+      } catch {}
     }
   };
 
@@ -282,11 +354,11 @@ const BusinessTaxTab: React.FC = () => {
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro flex items-center gap-2">
             <Building2 className="h-6 w-6 text-mokm-orange-500" />
             Business Tax Returns
           </h2>
-          <p className="text-slate-600 mt-1">
+          <p className="text-slate-600 dark:text-slate-400 mt-1">
             Manage your South African business tax obligations and submissions
           </p>
         </div>
@@ -307,23 +379,23 @@ const BusinessTaxTab: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="glass backdrop-blur-xl bg-white/95 border-white/30">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Returns</p>
-                <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+                <p className="text-sm font-medium text-slate-300">Total Returns</p>
+                <p className="text-2xl font-bold text-slate-100">{stats.total}</p>
               </div>
               <FileText className="h-8 w-8 text-mokm-purple-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/95 border-white/30">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Pending</p>
+                <p className="text-sm font-medium text-slate-300">Pending</p>
                 <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
               </div>
               <Clock className="h-8 w-8 text-amber-500" />
@@ -331,11 +403,11 @@ const BusinessTaxTab: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/95 border-white/30">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Overdue</p>
+                <p className="text-sm font-medium text-slate-300">Overdue</p>
                 <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-red-500" />
@@ -343,11 +415,11 @@ const BusinessTaxTab: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/95 border-white/30">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Amount</p>
+                <p className="text-sm font-medium text-slate-300">Total Amount</p>
                 <p className="text-2xl font-bold text-green-600">
                   R{stats.totalAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
                 </p>
@@ -359,7 +431,7 @@ const BusinessTaxTab: React.FC = () => {
       </div>
 
       {/* Filters and Search */}
-      <Card className="glass backdrop-blur-xl bg-white/95 border-white/30">
+      <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search */}
@@ -369,13 +441,13 @@ const BusinessTaxTab: React.FC = () => {
                 placeholder="Search tax returns..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 border-slate-200 focus:border-mokm-purple-500"
+                className="pl-10 glass backdrop-blur-sm bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
               />
             </div>
 
             {/* Status Filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40 border-slate-200 focus:border-mokm-purple-500">
+              <SelectTrigger className="w-full sm:w-40 border-white/10 bg-slate-900/40 text-slate-100 focus:border-mokm-purple-500">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -390,7 +462,7 @@ const BusinessTaxTab: React.FC = () => {
 
             {/* Type Filter */}
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-48 border-slate-200 focus:border-mokm-purple-500">
+              <SelectTrigger className="w-full sm:w-48 border-white/10 bg-slate-900/40 text-slate-100 focus:border-mokm-purple-500">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -410,13 +482,13 @@ const BusinessTaxTab: React.FC = () => {
 
       {/* Tax Returns Grid */}
       {filteredReturns.length === 0 ? (
-        <Card className="glass backdrop-blur-xl bg-white/95 border-white/30">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10">
           <CardContent className="p-8 text-center">
             <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
+            <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
               {taxReturns.length === 0 ? 'No Tax Returns Yet' : 'No Matching Returns'}
             </h3>
-            <p className="text-slate-600 mb-4">
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
               {taxReturns.length === 0 
                 ? 'Get started by adding your first business tax return.'
                 : 'Try adjusting your search or filter criteria.'

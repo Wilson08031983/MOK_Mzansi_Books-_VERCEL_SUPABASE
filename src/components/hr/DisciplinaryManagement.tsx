@@ -153,12 +153,12 @@ const AddDisciplinaryActionForm: React.FC<AddDisciplinaryActionFormProps> = ({ e
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Employee Selection */}
         <div className="space-y-2">
-          <Label htmlFor="employee" className="font-sf-pro">Employee *</Label>
+          <Label htmlFor="employee" className="font-sf-pro text-slate-300">Employee *</Label>
           <Select value={formData.employeeId} onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select employee" />
+            <SelectTrigger className="bg-slate-900/40 border border-white/10 text-slate-100">
+              <SelectValue placeholder="Select employee" className="text-slate-100" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-900/80 border border-white/10 text-slate-100">
               {employees.map((employee) => (
                 <SelectItem key={employee.id} value={employee.id}>
                   {employee.firstName} {employee.surname} - {employee.position}
@@ -170,12 +170,12 @@ const AddDisciplinaryActionForm: React.FC<AddDisciplinaryActionFormProps> = ({ e
 
         {/* Action Type */}
         <div className="space-y-2">
-          <Label htmlFor="actionType" className="font-sf-pro">Action Type *</Label>
+          <Label htmlFor="actionType" className="font-sf-pro text-slate-300">Action Type *</Label>
           <Select value={formData.actionType} onValueChange={(value) => setFormData(prev => ({ ...prev, actionType: value as DisciplinaryAction['actionType'] }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select action type" />
+            <SelectTrigger className="bg-slate-900/40 border border-white/10 text-slate-100">
+              <SelectValue placeholder="Select action type" className="text-slate-100" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-900/80 border border-white/10 text-slate-100">
               <SelectItem value="verbal_warning">Verbal Warning</SelectItem>
               <SelectItem value="written_warning">Written Warning</SelectItem>
               <SelectItem value="final_warning">Final Warning</SelectItem>
@@ -187,24 +187,24 @@ const AddDisciplinaryActionForm: React.FC<AddDisciplinaryActionFormProps> = ({ e
 
         {/* Misconduct */}
         <div className="space-y-2">
-          <Label htmlFor="misconduct" className="font-sf-pro">Misconduct *</Label>
+          <Label htmlFor="misconduct" className="font-sf-pro text-slate-300">Misconduct *</Label>
           <Input
             id="misconduct"
             value={formData.misconduct}
             onChange={(e) => setFormData(prev => ({ ...prev, misconduct: e.target.value }))}
             placeholder="e.g., Tardiness, Insubordination"
-            className="font-sf-pro"
+            className="font-sf-pro bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
           />
         </div>
 
         {/* Severity */}
         <div className="space-y-2">
-          <Label htmlFor="severity" className="font-sf-pro">Severity *</Label>
+          <Label htmlFor="severity" className="font-sf-pro text-slate-300">Severity *</Label>
           <Select value={formData.severity} onValueChange={(value) => setFormData(prev => ({ ...prev, severity: value as 'minor' | 'serious' | 'gross' }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select severity" />
+            <SelectTrigger className="bg-slate-900/40 border border-white/10 text-slate-100">
+              <SelectValue placeholder="Select severity" className="text-slate-100" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-slate-900/80 border border-white/10 text-slate-100">
               <SelectItem value="minor">Minor</SelectItem>
               <SelectItem value="serious">Serious</SelectItem>
               <SelectItem value="gross">Gross</SelectItem>
@@ -214,39 +214,39 @@ const AddDisciplinaryActionForm: React.FC<AddDisciplinaryActionFormProps> = ({ e
 
         {/* Issued By */}
         <div className="space-y-2">
-          <Label htmlFor="issuedBy" className="font-sf-pro">Issued By</Label>
+          <Label htmlFor="issuedBy" className="font-sf-pro text-slate-300">Issued By</Label>
           <Input
             id="issuedBy"
             value={formData.issuedBy}
             onChange={(e) => setFormData(prev => ({ ...prev, issuedBy: e.target.value }))}
             placeholder="HR Manager"
-            className="font-sf-pro"
+            className="font-sf-pro bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
           />
         </div>
       </div>
 
       {/* Description */}
       <div className="space-y-2">
-        <Label htmlFor="description" className="font-sf-pro">Description</Label>
+        <Label htmlFor="description" className="font-sf-pro text-slate-300">Description</Label>
         <Textarea
           id="description"
           value={formData.description}
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="Detailed description of the incident..."
-          className="font-sf-pro"
+          className="font-sf-pro bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
           rows={3}
         />
       </div>
 
       {/* Notes */}
       <div className="space-y-2">
-        <Label htmlFor="notes" className="font-sf-pro">Additional Notes</Label>
+        <Label htmlFor="notes" className="font-sf-pro text-slate-300">Additional Notes</Label>
         <Textarea
           id="notes"
           value={formData.notes}
           onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
           placeholder="Any additional notes or follow-up actions..."
-          className="font-sf-pro"
+          className="font-sf-pro bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
           rows={2}
         />
       </div>
@@ -567,35 +567,37 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
   };
 
   const getActionTypeColor = (type: DisciplinaryAction['actionType']): string => {
+    // Theme-aware badge variants
     const colors = {
-      verbal_warning: 'bg-yellow-100 text-yellow-800',
-      written_warning: 'bg-orange-100 text-orange-800',
-      final_warning: 'bg-red-100 text-red-800',
-      suspension: 'bg-purple-100 text-purple-800',
-      dismissal: 'bg-gray-100 text-gray-800'
-    };
+      verbal_warning: 'bg-yellow-100 text-yellow-800 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800/40',
+      written_warning: 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+      final_warning: 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
+      suspension: 'bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
+      dismissal: 'bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-white/10'
+    } as const;
     return colors[type];
   };
 
   const getSeverityColor = (severity: 'minor' | 'serious' | 'gross'): string => {
+    // Theme-aware badge variants
     const colors = {
-      minor: 'bg-blue-100 text-blue-800',
-      serious: 'bg-orange-100 text-orange-800',
-      gross: 'bg-red-100 text-red-800'
-    };
+      minor: 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
+      serious: 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+      gross: 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40'
+    } as const;
     return colors[severity];
   };
 
   const getStatusIcon = (status: DisciplinaryAction['status']) => {
     switch (status) {
       case 'active':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
+        return <CheckCircle className="h-4 w-4 text-green-300" />;
       case 'expired':
-        return <Clock className="h-4 w-4 text-gray-600" />;
+        return <Clock className="h-4 w-4 text-gray-400" />;
       case 'appealed':
-        return <AlertCircle className="h-4 w-4 text-yellow-600" />;
+        return <AlertCircle className="h-4 w-4 text-yellow-300" />;
       case 'withdrawn':
-        return <XCircle className="h-4 w-4 text-red-600" />;
+        return <XCircle className="h-4 w-4 text-red-300" />;
       default:
         return null;
     }
@@ -657,8 +659,8 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Disciplinary Management</h2>
-          <p className="text-slate-600 font-sf-pro">Manage employee disciplinary actions according to South African labor law</p>
+          <h2 className="text-2xl font-bold font-sf-pro text-slate-800 dark:text-slate-100">Disciplinary Management</h2>
+          <p className="font-sf-pro text-slate-600 dark:text-slate-400">Manage employee disciplinary actions according to South African labor law</p>
         </div>
       </div>
 
@@ -674,50 +676,50 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
         <TabsContent value="overview" className="space-y-6">
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Active Warnings</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Active Warnings</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro text-yellow-600">
+                <div className="text-2xl font-bold font-sf-pro text-yellow-700 dark:text-yellow-300">
                   {getActiveWarnings().length}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Expiring Soon</CardTitle>
-                <Clock className="h-4 w-4 text-orange-600" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Expiring Soon</CardTitle>
+                <Clock className="h-4 w-4 text-orange-600 dark:text-orange-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro text-orange-600">
+                <div className="text-2xl font-bold font-sf-pro text-orange-700 dark:text-orange-300">
                   {getExpiringWarnings().length}
                 </div>
-                <p className="text-xs text-muted-foreground">Within 30 days</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Within 30 days</p>
               </CardContent>
             </Card>
 
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Total Actions</CardTitle>
-                <FileText className="h-4 w-4 text-blue-600" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Total Actions</CardTitle>
+                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro text-blue-600">
+                <div className="text-2xl font-bold font-sf-pro text-blue-700 dark:text-blue-300">
                   {disciplinaryActions.length}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Employees Affected</CardTitle>
-                <User className="h-4 w-4 text-purple-600" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Employees Affected</CardTitle>
+                <User className="h-4 w-4 text-purple-600 dark:text-purple-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro text-purple-600">
+                <div className="text-2xl font-bold font-sf-pro text-purple-700 dark:text-purple-300">
                   {new Set(disciplinaryActions.map(a => a.employeeId)).size}
                 </div>
               </CardContent>
@@ -725,27 +727,27 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
           </div>
 
           {/* Recent Actions */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Recent Disciplinary Actions</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Recent Disciplinary Actions</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="relative w-full overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="font-sf-pro">Employee</TableHead>
-                      <TableHead className="font-sf-pro">Action Type</TableHead>
-                      <TableHead className="font-sf-pro">Misconduct</TableHead>
-                      <TableHead className="font-sf-pro">Date</TableHead>
-                      <TableHead className="font-sf-pro">Status</TableHead>
-                      <TableHead className="font-sf-pro">Expires</TableHead>
+                      <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Employee</TableHead>
+                      <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Action Type</TableHead>
+                      <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Misconduct</TableHead>
+                      <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Date</TableHead>
+                      <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Status</TableHead>
+                      <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Expires</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {disciplinaryActions.slice(0, 10).map((action) => (
                       <TableRow key={action.id}>
-                        <TableCell className="font-medium font-sf-pro">
+                        <TableCell className="font-medium font-sf-pro text-slate-800 dark:text-slate-100">
                           {action.employeeName}
                         </TableCell>
                         <TableCell>
@@ -753,15 +755,15 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
                             {getActionTypeLabel(action.actionType)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-sf-pro">{action.misconduct}</TableCell>
-                        <TableCell className="font-sf-pro">{action.issueDate}</TableCell>
-                        <TableCell className="font-sf-pro">
+                        <TableCell className="font-sf-pro text-slate-700 dark:text-slate-300">{action.misconduct}</TableCell>
+                        <TableCell className="font-sf-pro text-slate-700 dark:text-slate-300">{action.issueDate}</TableCell>
+                        <TableCell className="font-sf-pro text-slate-700 dark:text-slate-300">
                           <div className="flex items-center space-x-1">
                             {getStatusIcon(action.status)}
                             <span className="capitalize">{action.status}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="font-sf-pro">{action.expiryDate}</TableCell>
+                        <TableCell className="font-sf-pro text-slate-700 dark:text-slate-300">{action.expiryDate}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -771,109 +773,11 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
           </Card>
         </TabsContent>
 
-        {/* Disciplinary Actions Tab */}
-        <TabsContent value="actions" className="space-y-6">
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-            <CardHeader>
-              <CardTitle className="font-sf-pro">All Disciplinary Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Filter Controls */}
-                <div className="flex flex-wrap gap-4">
-                  <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                    <SelectTrigger className="w-64">
-                      <SelectValue placeholder="Filter by employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Employees</SelectItem>
-                      {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={employee.id}>
-                          {employee.firstName} {employee.surname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Actions Table */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Action Type</TableHead>
-                      <TableHead>Misconduct</TableHead>
-                      <TableHead>Severity</TableHead>
-                      <TableHead>Issue Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {disciplinaryActions
-                      .filter(action => selectedEmployee === 'all' || selectedEmployee === '' || action.employeeId === selectedEmployee)
-                      .map((action) => (
-                        <TableRow key={action.id}>
-                          <TableCell className="font-sf-pro">{action.employeeName}</TableCell>
-                          <TableCell>
-                            <Badge className={getActionTypeColor(action.actionType)}>
-                              {getActionTypeLabel(action.actionType)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-sf-pro">{action.misconduct}</TableCell>
-                          <TableCell>
-                            <Badge className={getSeverityColor(action.severity)}>
-                              {action.severity}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-sf-pro">{new Date(action.issueDate).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {getStatusIcon(action.status)}
-                              <span className="font-sf-pro text-sm">{action.status}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleViewAction(action)}
-                                title="View Details"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleEditAction(action)}
-                                title="Edit Action"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-
-                {disciplinaryActions.length === 0 && (
-                  <div className="text-center py-8">
-                    <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 font-sf-pro">No disciplinary actions recorded yet.</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Add Action Tab */}
         <TabsContent value="add" className="space-y-6">
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Add Disciplinary Action</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Add Disciplinary Action</CardTitle>
             </CardHeader>
             <CardContent>
               <AddDisciplinaryActionForm 
@@ -890,20 +794,20 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
 
         {/* SA Labor Guidelines Tab */}
         <TabsContent value="guidelines" className="space-y-6">
-          <Card className="glass backdrop-blur-sm bg-blue-50/50 border border-blue-200/20 shadow-business">
+          <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro text-blue-800">South African Labor Law Guidelines</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-800 dark:text-slate-100">South African Labor Law Guidelines</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4 text-sm text-blue-700">
+              <div className="space-y-4 text-sm text-slate-700 dark:text-slate-300">
                 <div>
-                  <h4 className="font-bold font-sf-pro mb-2">Progressive Discipline</h4>
+                  <h4 className="font-bold font-sf-pro mb-2 text-slate-800 dark:text-slate-100">Progressive Discipline</h4>
                   <p className="font-sf-pro">Employers should generally follow progressive discipline: verbal warning → written warning → final warning → dismissal</p>
                 </div>
                 
                 <div>
-                  <h4 className="font-bold font-sf-pro mb-2">Warning Validity Periods</h4>
-                  <ul className="list-disc list-inside space-y-1 font-sf-pro">
+                  <h4 className="font-bold font-sf-pro mb-2 text-slate-800 dark:text-slate-100">Warning Validity Periods</h4>
+                  <ul className="list-disc list-inside space-y-1 font-sf-pro text-slate-700 dark:text-slate-300">
                     <li><strong>Verbal Warning:</strong> 3 months</li>
                     <li><strong>Written Warning:</strong> 6 months</li>
                     <li><strong>Final Warning:</strong> 12 months</li>
@@ -911,13 +815,13 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
                 </div>
 
                 <div>
-                  <h4 className="font-bold font-sf-pro mb-2">Serious Misconduct</h4>
+                  <h4 className="font-bold font-sf-pro mb-2 text-slate-800 dark:text-slate-100">Serious Misconduct</h4>
                   <p className="font-sf-pro">Theft, violence, fraud, or gross insubordination may warrant immediate dismissal without prior warnings</p>
                 </div>
 
                 <div>
-                  <h4 className="font-bold font-sf-pro mb-2">Key Principles</h4>
-                  <ul className="list-disc list-inside space-y-1 font-sf-pro">
+                  <h4 className="font-bold font-sf-pro mb-2 text-slate-800 dark:text-slate-100">Key Principles</h4>
+                  <ul className="list-disc list-inside space-y-1 font-sf-pro text-slate-700 dark:text-slate-300">
                     <li>No fixed number of warnings required</li>
                     <li>Consider severity and employee's record</li>
                     <li>Expired warnings can be aggravating factors</li>
@@ -929,22 +833,22 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
           </Card>
 
           {/* Misconduct Categories */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Misconduct Categories & Typical Actions</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Misconduct Categories & Typical Actions</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {misconductCategories.map((category) => (
-                  <div key={category.id} className="p-4 border rounded-lg">
+                  <div key={category.id} className="p-4 border border-slate-200 dark:border-white/10 rounded-lg bg-white dark:bg-slate-900/40">
                     <div className="flex items-center justify-between mb-2">
-                      <h5 className="font-bold font-sf-pro">{category.name}</h5>
+                      <h5 className="font-bold font-sf-pro text-slate-800 dark:text-slate-100">{category.name}</h5>
                       <Badge className={getSeverityColor(category.severity)}>
                         {category.severity}
                       </Badge>
                     </div>
-                    <p className="text-sm text-slate-600 font-sf-pro mb-2">{category.description}</p>
-                    <p className="text-xs text-slate-500 font-sf-pro">
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-sf-pro mb-2">{category.description}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 font-sf-pro">
                       <strong>Typical Action:</strong> {category.typicalAction}
                     </p>
                   </div>
@@ -957,19 +861,19 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
 
       {/* View Action Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl bg-white text-slate-800 border border-slate-200 dark:bg-slate-900/60 dark:text-slate-100 dark:border-white/10">
           <DialogHeader>
-            <DialogTitle className="font-sf-pro">Disciplinary Action Details</DialogTitle>
+            <DialogTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Disciplinary Action Details</DialogTitle>
           </DialogHeader>
           {viewingAction && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Employee</Label>
-                  <p className="font-sf-pro">{viewingAction.employeeName}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Employee</Label>
+                  <p className="font-sf-pro text-slate-800 dark:text-slate-100">{viewingAction.employeeName}</p>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Action Type</Label>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Action Type</Label>
                   <div className="mt-1">
                     <Badge className={getActionTypeColor(viewingAction.actionType)}>
                       {getActionTypeLabel(viewingAction.actionType)}
@@ -977,11 +881,11 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
                   </div>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Misconduct</Label>
-                  <p className="font-sf-pro">{viewingAction.misconduct}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Misconduct</Label>
+                  <p className="font-sf-pro text-slate-800 dark:text-slate-100">{viewingAction.misconduct}</p>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Severity</Label>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Severity</Label>
                   <div className="mt-1">
                     <Badge className={getSeverityColor(viewingAction.severity)}>
                       {viewingAction.severity}
@@ -989,20 +893,20 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
                   </div>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Issue Date</Label>
-                  <p className="font-sf-pro">{new Date(viewingAction.issueDate).toLocaleDateString()}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Issue Date</Label>
+                  <p className="font-sf-pro text-slate-800 dark:text-slate-100">{new Date(viewingAction.issueDate).toLocaleDateString()}</p>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Expiry Date</Label>
-                  <p className="font-sf-pro">{new Date(viewingAction.expiryDate).toLocaleDateString()}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Expiry Date</Label>
+                  <p className="font-sf-pro text-slate-800 dark:text-slate-100">{new Date(viewingAction.expiryDate).toLocaleDateString()}</p>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Issued By</Label>
-                  <p className="font-sf-pro">{viewingAction.issuedBy}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Issued By</Label>
+                  <p className="font-sf-pro text-slate-800 dark:text-slate-100">{viewingAction.issuedBy}</p>
                 </div>
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Status</Label>
-                  <div className="flex items-center gap-2 mt-1">
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Status</Label>
+                  <div className="flex items-center gap-2 mt-1 text-slate-800 dark:text-slate-100">
                     {getStatusIcon(viewingAction.status)}
                     <span className="font-sf-pro text-sm">{viewingAction.status}</span>
                   </div>
@@ -1010,24 +914,24 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
               </div>
               {viewingAction.description && (
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Description</Label>
-                  <p className="font-sf-pro mt-1 p-3 bg-gray-50 rounded-md">{viewingAction.description}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Description</Label>
+                  <p className="font-sf-pro mt-1 p-3 bg-white border border-slate-200 rounded-md text-slate-800 dark:bg-slate-900/40 dark:border-white/10 dark:text-slate-100">{viewingAction.description}</p>
                 </div>
               )}
               {viewingAction.notes && (
                 <div>
-                  <Label className="font-sf-pro text-sm font-medium">Notes</Label>
-                  <p className="font-sf-pro mt-1 p-3 bg-gray-50 rounded-md">{viewingAction.notes}</p>
+                  <Label className="font-sf-pro text-sm font-medium text-slate-700 dark:text-slate-300">Notes</Label>
+                  <p className="font-sf-pro mt-1 p-3 bg-white border border-slate-200 rounded-md text-slate-800 dark:bg-slate-900/40 dark:border-white/10 dark:text-slate-100">{viewingAction.notes}</p>
                 </div>
               )}
               {viewingAction.followUpRequired && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md dark:bg-amber-900/30 dark:border-amber-400/20">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <span className="font-sf-pro text-sm font-medium text-yellow-800">Follow-up Required</span>
+                    <AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                    <span className="font-sf-pro text-sm font-medium text-amber-800 dark:text-amber-200">Follow-up Required</span>
                   </div>
                   {viewingAction.followUpDate && (
-                    <p className="font-sf-pro text-sm text-yellow-700 mt-1">
+                    <p className="font-sf-pro text-sm text-amber-800 dark:text-amber-200 mt-1">
                       Follow-up Date: {new Date(viewingAction.followUpDate).toLocaleDateString()}
                     </p>
                   )}
@@ -1040,9 +944,9 @@ const DisciplinaryManagement: React.FC<DisciplinaryManagementProps> = ({ employe
 
       {/* Edit Action Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl bg-white text-slate-800 border border-slate-200 dark:bg-slate-900/60 dark:text-slate-100 dark:border-white/10">
           <DialogHeader>
-            <DialogTitle className="font-sf-pro">Edit Disciplinary Action</DialogTitle>
+            <DialogTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Edit Disciplinary Action</DialogTitle>
           </DialogHeader>
           {editingAction && (
             <EditDisciplinaryActionForm 

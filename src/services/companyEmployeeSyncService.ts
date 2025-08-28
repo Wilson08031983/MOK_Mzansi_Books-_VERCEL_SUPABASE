@@ -222,7 +222,8 @@ export const syncEmployeeToCompanyDetails = (employee: Employee): {
 
 // Get department based on position
 const getPositionDepartment = (position: string): string => {
-  const positionLower = position.toLowerCase();
+  // Guard against undefined/null positions
+  const positionLower = (position || '').toLowerCase();
   
   if (positionLower.includes('ceo') || positionLower.includes('chief executive')) {
     return 'Executive';
@@ -241,7 +242,8 @@ const getPositionDepartment = (position: string): string => {
 
 // Get salary based on position
 const getPositionSalary = (position: string): number => {
-  const positionLower = position.toLowerCase();
+  // Guard against undefined/null positions
+  const positionLower = (position || '').toLowerCase();
   
   if (positionLower.includes('ceo') || positionLower.includes('chief executive')) {
     return 150000;

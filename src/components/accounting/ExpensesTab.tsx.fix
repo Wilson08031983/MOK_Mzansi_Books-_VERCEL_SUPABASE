@@ -1,0 +1,14 @@
+#!/bin/bash
+# This script fixes specific JSX structure issues in ExpensesTab.tsx
+
+# Create a backup
+cp src/components/accounting/ExpensesTab.tsx src/components/accounting/ExpensesTab.tsx.bak
+
+# Fix specific line ranges using sed
+sed -i.tmp '2154s/filteredExpenses.length > 0 ? (/filteredExpenses.length > 0 ? (/' src/components/accounting/ExpensesTab.tsx
+sed -i.tmp '2670s/))$/))/' src/components/accounting/ExpensesTab.tsx
+sed -i.tmp '2688s/)}$/)}/' src/components/accounting/ExpensesTab.tsx
+sed -i.tmp '2689s/^              <\/tbody>/              <\/tbody>/' src/components/accounting/ExpensesTab.tsx
+
+# Make the file executable
+chmod +x src/components/accounting/ExpensesTab.tsx.fix

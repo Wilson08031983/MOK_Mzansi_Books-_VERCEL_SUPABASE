@@ -28,12 +28,14 @@ import {
   HeartOff
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLocalizationContext } from '@/contexts/LocalizationContext';
 import { reportsDataService } from '@/services/reportsDataService';
 import { pdfReportService } from '@/services/pdfReportService';
 import { reportGenerationService, ReportType } from '@/services/reportGenerationService';
 import { getNotificationSettings, saveNotificationSettings, type NotificationSettings } from '@/services/notificationService';
 import { safeLocalStorage } from '@/utils/safeAccess';
 import type { Report } from '@/pages/Reports';
+import { auditService } from '@/services/auditService';
 
 interface ReportSettings {
   autoGenerate: boolean;
@@ -96,6 +98,13 @@ const parseSizeToMB = (size: string): number => {
 };
 
 const ReportSettingsTab = () => {
+  const { t } = useLocalizationContext();
+  // i18n fallback helper for this component: use fallback if t(key) returns the key itself or an empty value
+  const tt = (key: string, fallback: string) => {
+    const v = t(key);
+    if (!v || v === key) return fallback;
+    return v;
+  };
   const [settings, setSettings] = useState<ReportSettings>(defaultReportSettings);
   const [reports, setReports] = useState<Report[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -132,7 +141,19 @@ const ReportSettingsTab = () => {
   const saveSettings = (newSettings: ReportSettings) => {
     setSettings(newSettings);
     safeLocalStorage.setItem('reportSettings', newSettings);
-    toast.success('Report settings saved successfully');
+    toast.success(t('common.success'));
+    try {
+      auditService.logAudit({
+        category: 'reports',
+        action: 'Report Settings Updated',
+        page: 'Settings',
+        section: 'Reports',
+        entityType: 'report_settings',
+        changeType: 'update',
+        newValues: newSettings,
+        description: 'User updated report settings',
+      });
+    } catch {/* noop */}
   };
 
   const loadReports = () => {
@@ -141,7 +162,7 @@ const ReportSettingsTab = () => {
       setReports(allReports);
     } catch (error) {
       console.error('Error loading reports:', error);
-      toast.error('Failed to load reports');
+      toast.error(t('common.error'));
     }
   };
 
@@ -170,20 +191,45 @@ const ReportSettingsTab = () => {
 
   const handleTestReportGeneration = async () => {
     if (!selectedTestReport) {
-      toast.error('Please select a report type to test');
+      toast.error(t('common.error'));
       return;
     }
 
     setIsGenerating(true);
     try {
       const reportData = await reportGenerationService.generateReport(selectedTestReport, testFilters);
-      toast.success(`Test report generated successfully: ${reportData.summary.totalRecords} records`);
+      toast.success(t('common.success'));
 
       // Refresh reports list
       loadReports();
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Generate Test Report',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'create',
+          description: `Generated test report: ${selectedTestReport}`,
+          metadata: { filters: testFilters }
+        });
+      } catch {/* noop */}
     } catch (error) {
       console.error('Error generating test report:', error);
-      toast.error('Failed to generate test report');
+      toast.error(t('common.error'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Generate Test Report Failed',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'read',
+          description: `Failed to generate test report: ${selectedTestReport}`,
+          metadata: { error: String(error) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     } finally {
       setIsGenerating(false);
     }
@@ -191,7 +237,7 @@ const ReportSettingsTab = () => {
 
   const handleTestDownload = async () => {
     if (!selectedTestReport) {
-      toast.error('Please select a report type to download');
+      toast.error(t('common.error'));
       return;
     }
 
@@ -199,10 +245,35 @@ const ReportSettingsTab = () => {
     try {
       const reportData = await reportGenerationService.generateReport(selectedTestReport, testFilters);
       await pdfReportService.downloadReport(reportData, selectedTestReport, testFilters);
-      toast.success('Test report downloaded successfully');
+      toast.success(t('common.success'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Download Test Report',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'export',
+          description: `Downloaded test report: ${selectedTestReport}`,
+          metadata: { filters: testFilters }
+        });
+      } catch {/* noop */}
     } catch (error) {
       console.error('Error downloading test report:', error);
-      toast.error('Failed to download test report');
+      toast.error(t('common.error'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Download Test Report Failed',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'read',
+          description: `Failed to download test report: ${selectedTestReport}`,
+          metadata: { error: String(error) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     } finally {
       setIsDownloading(false);
     }
@@ -214,10 +285,34 @@ const ReportSettingsTab = () => {
       localStorage.removeItem('mokReportsFavorites');
       setReports([]);
       calculateStorageInfo();
-      toast.success('Report cache cleared successfully');
+      toast.success(t('dataManagement.clearSuccessTitle'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Clear Reports Cache',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report_cache',
+          changeType: 'delete',
+          description: 'Cleared reports and favorites cache',
+        });
+      } catch {/* noop */}
     } catch (error) {
       console.error('Error clearing cache:', error);
-      toast.error('Failed to clear report cache');
+      toast.error(t('dataManagement.clearFailedTitle'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Clear Reports Cache Failed',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report_cache',
+          changeType: 'update',
+          description: 'Failed clearing reports cache',
+          metadata: { error: String(error) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     }
   };
 
@@ -225,10 +320,21 @@ const ReportSettingsTab = () => {
     try {
       reportsDataService.toggleFavorite(reportId);
       loadReports(); // Reload to reflect changes
-      toast.success('Favorite status updated');
+      toast.success(t('common.success'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Toggle Favorite Report',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'update',
+          description: `Toggled favorite for report ${reportId}`,
+        });
+      } catch {/* noop */}
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      toast.error('Failed to update favorite status');
+      toast.error(t('common.error'));
     }
   };
 
@@ -248,7 +354,19 @@ const ReportSettingsTab = () => {
     
     setNotificationSettings(updatedSettings);
     saveNotificationSettings(updatedSettings);
-    toast.success('Report schedule updated');
+    toast.success(t('common.success'));
+    try {
+      auditService.logAudit({
+        category: 'reports',
+        action: 'Report Schedule Updated',
+        page: 'Settings',
+        section: 'Reports',
+        entityType: 'report_schedule',
+        changeType: 'update',
+        description: `Updated schedule field ${field}`,
+        newValues: { [field]: value }
+      });
+    } catch {/* noop */}
   };
 
   const clearOldReports = () => {
@@ -267,10 +385,35 @@ const ReportSettingsTab = () => {
       
       calculateStorageInfo();
       loadReports();
-      toast.success(`Cleared reports older than ${settings.retentionDays} days`);
+      toast.success(t('common.success'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Clear Old Reports',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'delete',
+          description: `Cleared reports older than ${settings.retentionDays} days`,
+          metadata: { retentionDays: settings.retentionDays }
+        });
+      } catch {/* noop */}
     } catch (error) {
       console.error('Error clearing old reports:', error);
-      toast.error('Failed to clear old reports');
+      toast.error(t('common.error'));
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Clear Old Reports Failed',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report',
+          changeType: 'update',
+          description: 'Failed clearing old reports',
+          metadata: { error: String(error) },
+          severity: 'warning'
+        });
+      } catch {/* noop */}
     }
   };
 
@@ -294,20 +437,20 @@ const ReportSettingsTab = () => {
   return (
     <div className="space-y-6">
       {/* Report Generation Section */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <BarChart3 className="h-5 w-5 mr-2" />
-            Report Generation & Testing
+            {tt('settings.tabs.reports', 'Manage report configuration and behavior')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Test Report Type</Label>
+              <Label>{tt('common.reports', 'Reports')}</Label>
               <Select value={(selectedTestReport as string | undefined)} onValueChange={(value) => setSelectedTestReport(value as ReportType)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select report type to test" />
+                  <SelectValue placeholder={tt('common.select', 'Select')} />
                 </SelectTrigger>
                 <SelectContent>
                   {reportCategories.map((category) => (
@@ -323,12 +466,12 @@ const ReportSettingsTab = () => {
                 {isGenerating ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
+                    {t('common.loading')}
                   </>
                 ) : (
                   <>
                     <Play className="h-4 w-4 mr-2" />
-                    Generate Test
+                    {t('common.submit')}
                   </>
                 )}
               </Button>
@@ -336,12 +479,12 @@ const ReportSettingsTab = () => {
                 {isDownloading ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Downloading...
+                    {t('common.loading')}
                   </>
                 ) : (
                   <>
                     <Download className="h-4 w-4 mr-2" />
-                    Download
+                    {t('common.download')}
                   </>
                 )}
               </Button>
@@ -357,7 +500,7 @@ const ReportSettingsTab = () => {
               className="mb-3"
             >
               <Filter className="h-4 w-4 mr-2" />
-              Advanced Filters
+              {tt('common.filter', 'Filter')}
               {showAdvancedFilters ? (
                 <ChevronUp className="h-4 w-4 ml-2" />
               ) : (
@@ -366,46 +509,46 @@ const ReportSettingsTab = () => {
             </Button>
 
             {showAdvancedFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/10">
                 <div className="space-y-2">
-                  <Label>Date Range</Label>
+                  <Label>{t('invoices.date')}</Label>
                   <Select value={testFilters.dateRange} onValueChange={(value) => setTestFilters({ ...testFilters, dateRange: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="this-month">This Month</SelectItem>
-                      <SelectItem value="this-year">This Year</SelectItem>
-                      <SelectItem value="custom">Custom Range</SelectItem>
+                      <SelectItem value="all">{t('common.all')}</SelectItem>
+                      <SelectItem value="today">{t('dashboard.date')}</SelectItem>
+                      <SelectItem value="this-month">{t('dashboard.stats.totalRevenue')}</SelectItem>
+                      <SelectItem value="this-year">{t('dashboard.overview')}</SelectItem>
+                      <SelectItem value="custom">{t('common.custom')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Status</Label>
+                  <Label>{t('clients.status')}</Label>
                   <Select value={testFilters.status} onValueChange={(value) => setTestFilters({ ...testFilters, status: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="paid">Paid</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
+                      <SelectItem value="all">{t('clients.allStatus')}</SelectItem>
+                      <SelectItem value="paid">{t('billing.paid')}</SelectItem>
+                      <SelectItem value="pending">{t('clients.pending')}</SelectItem>
+                      <SelectItem value="overdue">{t('clients.overdue')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Category</Label>
+                  <Label>{t('inventory.category')}</Label>
                   <Select value={testFilters.category} onValueChange={(value) => setTestFilters({ ...testFilters, category: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
+                      <SelectItem value="all">{t('inventory.allCategories')}</SelectItem>
                       <SelectItem value="office">Office Supplies</SelectItem>
                       <SelectItem value="travel">Travel</SelectItem>
                       <SelectItem value="marketing">Marketing</SelectItem>
@@ -415,7 +558,7 @@ const ReportSettingsTab = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Amount Range (Min)</Label>
+                  <Label>{t('invoices.amount')}</Label>
                   <Input 
                     type="number" 
                     placeholder="0" 
@@ -425,7 +568,7 @@ const ReportSettingsTab = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Amount Range (Max)</Label>
+                  <Label>{t('invoices.amount')}</Label>
                   <Input 
                     type="number" 
                     placeholder="No limit" 
@@ -440,25 +583,23 @@ const ReportSettingsTab = () => {
                     onClick={() => setTestFilters(defaultTestFilters)}
                     className="w-full"
                   >
-                    Reset Filters
+                    {t('common.reset')}
                   </Button>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="text-sm text-gray-600">
-            Use the test functionality to verify report generation and download capabilities with sample data.
-          </div>
+          <div className="text-sm text-slate-400">{tt('settings.description', 'Configure how reports are generated, scheduled and stored')}</div>
         </CardContent>
       </Card>
 
       {/* Report Scheduling */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Calendar className="h-5 w-5 mr-2" />
-            Report Scheduling & Automation
+            {tt('notifications.reportSchedule', 'Report Schedule')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -466,8 +607,8 @@ const ReportSettingsTab = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium">Weekly Reports</Label>
-                  <p className="text-xs text-gray-600">Automatically send weekly financial summaries</p>
+                  <Label className="text-sm font-medium">{tt('notifications.weekly', 'Weekly')}</Label>
+                  <p className="text-xs text-slate-400">{tt('notifications.weekly', 'Weekly')}</p>
                 </div>
                 <Switch
                   checked={notificationSettings.email.weeklyReports}
@@ -477,8 +618,8 @@ const ReportSettingsTab = () => {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium">Monthly Reports</Label>
-                  <p className="text-xs text-gray-600">Automatically send monthly comprehensive reports</p>
+                  <Label className="text-sm font-medium">{tt('notifications.monthly', 'Monthly')}</Label>
+                  <p className="text-xs text-slate-400">{tt('notifications.monthly', 'Monthly')}</p>
                 </div>
                 <Switch
                   checked={notificationSettings.email.monthlyReports}
@@ -489,7 +630,7 @@ const ReportSettingsTab = () => {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Schedule Frequency</Label>
+                <Label className="text-sm font-medium">{tt('notifications.reportSchedule', 'Report schedule')}</Label>
                 <Select 
                   value={notificationSettings.frequency.reportSchedule} 
                   onValueChange={(value) => handleScheduleChange('reportSchedule', value)}
@@ -498,18 +639,18 @@ const ReportSettingsTab = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="daily">{tt('notifications.daily', 'Daily')}</SelectItem>
+                    <SelectItem value="weekly">{tt('notifications.weekly', 'Weekly')}</SelectItem>
+                    <SelectItem value="monthly">{tt('notifications.monthly', 'Monthly')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg">
-                <Mail className="h-4 w-4 text-blue-600" />
+              <div className="flex items-center space-x-2 p-3 rounded-lg bg-sky-950/30 border border-sky-500/20">
+                <Mail className="h-4 w-4 text-sky-300" />
                 <div className="text-xs">
-                  <div className="font-medium">Email: {notificationSettings.email.address}</div>
-                  <div className="text-gray-600">Configure in Notification Settings</div>
+                  <div className="font-medium text-slate-200">{tt('common.email', 'Email')}: {notificationSettings.email.address}</div>
+                  <div className="text-slate-400">{tt('notifications.emailAddress', 'Notification email address')}</div>
                 </div>
               </div>
             </div>
@@ -518,23 +659,23 @@ const ReportSettingsTab = () => {
       </Card>
 
       {/* Recent Reports */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Clock className="h-5 w-5 mr-2" />
-            Recent Reports ({recentReports.length})
+            {t('common.reports')} ({recentReports.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {recentReports.length > 0 ? (
             <div className="space-y-3">
               {recentReports.map((report) => (
-                <div key={report.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div key={report.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900/40 border border-white/10">
                   <div className="flex items-center space-x-3">
-                    <FileText className="h-4 w-4 text-gray-500" />
+                    <FileText className="h-4 w-4 text-slate-400" />
                     <div>
                       <div className="font-medium text-sm">{report.name}</div>
-                      <div className="text-xs text-gray-500">Last run: {report.lastRun} • Created by: {report.createdBy}</div>
+                      <div className="text-xs text-slate-400">Last run: {report.lastRun} • Created by: {report.createdBy}</div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -550,7 +691,7 @@ const ReportSettingsTab = () => {
                       {report.isFavorite ? (
                         <Heart className="h-4 w-4 text-red-500 fill-current" />
                       ) : (
-                        <HeartOff className="h-4 w-4 text-gray-400" />
+                        <HeartOff className="h-4 w-4 text-slate-400" />
                       )}
                     </Button>
                   </div>
@@ -558,10 +699,10 @@ const ReportSettingsTab = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <p>No recent reports available</p>
-              <p className="text-sm">Generate some test reports to see them here</p>
+            <div className="text-center py-8 text-slate-400">
+              <FileText className="h-12 w-12 mx-auto mb-3 text-slate-600" />
+              <p>{t('common.noData')}</p>
+              <p className="text-sm">{t('settings.description')}</p>
             </div>
           )}
         </CardContent>
@@ -569,18 +710,18 @@ const ReportSettingsTab = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Favorite Reports */}
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
           <CardHeader>
             <CardTitle className="flex items-center font-sf-pro">
               <Star className="h-5 w-5 mr-2" />
-              Favorite Reports ({favoriteReports.length})
+              {t('settings.tabs.reports')} ({favoriteReports.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             {favoriteReports.length > 0 ? (
               <div className="space-y-2">
                 {favoriteReports.map((report) => (
-                  <div key={report.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                  <div key={report.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900/40 border border-white/10">
                     <div className="flex items-center space-x-2">
                       <Star className="h-4 w-4 text-yellow-500 fill-current" />
                       <span className="text-sm font-medium">{report.name}</span>
@@ -594,59 +735,60 @@ const ReportSettingsTab = () => {
                         size="sm"
                         onClick={() => handleToggleFavorite(report.id)}
                         className="h-6 w-6 p-0"
+                        aria-label="unfavorite"
                       >
-                        <HeartOff className="h-3 w-3 text-gray-400" />
+                        <HeartOff className="h-3 w-3 text-slate-400" />
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-gray-500">
-                <Star className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                <p className="text-sm">No favorite reports yet</p>
+              <div className="text-center py-6 text-slate-400">
+                <Star className="h-8 w-8 mx-auto mb-2 text-slate-600" />
+                <p className="text-sm">{t('common.noData')}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Storage Management */}
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
           <CardHeader>
-            <CardTitle className="flex items-center font-sf-pro">
-              <HardDrive className="h-5 w-5 mr-2" />
-              Storage Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Used Storage</span>
-                <span>
-                  {storageInfo.used} / {storageInfo.total}
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+          <CardTitle className="flex items-center font-sf-pro">
+            <HardDrive className="h-5 w-5 mr-2" />
+            {tt('dataManagement.storageUsage', 'Storage usage')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>{tt('dataManagement.storageUsage', 'Storage usage')}</span>
+              <span>
+                {storageInfo.used} / {storageInfo.total}
+              </span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-mokm-orange-500 to-mokm-purple-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${storageInfo.percentage}%` }}
                 ></div>
               </div>
-            </div>
+          </div>
 
             <Separator />
 
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm">Total Reports</span>
+                <span className="text-sm">{t('common.reports')}</span>
                 <Badge variant="outline">{reports.length}</Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm">Recent Reports</span>
+                <span className="text-sm">{t('common.reports')}</span>
                 <Badge variant="outline">{recentReports.length}</Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm">Favorite Reports</span>
+                <span className="text-sm">{t('common.reports')}</span>
                 <Badge variant="outline">{favoriteReports.length}</Badge>
               </div>
             </div>
@@ -654,11 +796,11 @@ const ReportSettingsTab = () => {
             <div className="space-y-2">
               <Button onClick={handleClearReportCache} variant="outline" size="sm" className="w-full">
                 <Trash2 className="h-4 w-4 mr-2" />
-                Clear Report Cache
+                {tt('dataManagement.clearAllButton', 'Clear all')}
               </Button>
               <Button onClick={clearOldReports} variant="outline" size="sm" className="w-full">
                 <Clock className="h-4 w-4 mr-2" />
-                Clear Old Reports ({settings.retentionDays} days+)
+                {t('common.delete')} ({settings.retentionDays} {tt('common.days', 'days')}+)
               </Button>
             </div>
           </CardContent>
@@ -666,20 +808,18 @@ const ReportSettingsTab = () => {
       </div>
 
       {/* Report Settings */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
           <CardTitle className="flex items-center font-sf-pro">
             <Settings className="h-5 w-5 mr-2" />
-            General Report Settings
+            {t('settings.tabs.reports')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label htmlFor="auto-generate" className="text-sm font-medium">
-                  Auto-generate Reports
-                </Label>
+                <Label htmlFor="auto-generate" className="text-sm font-medium">{tt('common.automatic', 'Automatic')}</Label>
                 <Switch
                   id="auto-generate"
                   checked={settings.autoGenerate}
@@ -688,9 +828,7 @@ const ReportSettingsTab = () => {
               </div>
 
               <div className="flex items-center justify-between">
-                <Label htmlFor="email-reports" className="text-sm font-medium">
-                  Email Reports
-                </Label>
+                <Label htmlFor="email-reports" className="text-sm font-medium">{tt('notifications.emailNotifications', 'Email notifications')}</Label>
                 <Switch
                   id="email-reports"
                   checked={settings.emailReports}
@@ -699,9 +837,7 @@ const ReportSettingsTab = () => {
               </div>
 
               <div className="flex items-center justify-between">
-                <Label htmlFor="compression" className="text-sm font-medium">
-                  Enable Compression
-                </Label>
+                <Label htmlFor="compression" className="text-sm font-medium">{tt('mobile.backgroundSync', 'Background sync')}</Label>
                 <Switch
                   id="compression"
                   checked={settings.compressionEnabled}
@@ -712,7 +848,7 @@ const ReportSettingsTab = () => {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Report Retention (Days)</Label>
+                <Label className="text-sm font-medium">{tt('notifications.digestFrequency', 'Digest frequency')}</Label>
                 <Select value={settings.retentionDays.toString()} onValueChange={(value) => saveSettings({ ...settings, retentionDays: parseInt(value) })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -727,7 +863,7 @@ const ReportSettingsTab = () => {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Default Format</Label>
+                <Label className="text-sm font-medium">{tt('common.format', 'Format')}</Label>
                 <Select value={settings.defaultFormat} onValueChange={(value) => saveSettings({ ...settings, defaultFormat: value })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -741,7 +877,7 @@ const ReportSettingsTab = () => {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Max Storage Size</Label>
+                <Label className="text-sm font-medium">{tt('dataManagement.storageUsage', 'Storage usage')}</Label>
                 <Select value={settings.maxStorageSize} onValueChange={(value) => saveSettings({ ...settings, maxStorageSize: value })}>
                   <SelectTrigger>
                     <SelectValue />

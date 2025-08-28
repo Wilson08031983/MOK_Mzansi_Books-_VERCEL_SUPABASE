@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { Quotation } from '@/services/quotationService';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface QuotationItem {
   id: string;
@@ -46,6 +47,7 @@ interface PreviousStats {
 
 const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
   const [previousStats, setPreviousStats] = useState<PreviousStats | null>(null);
+  const { t, formatCurrency } = useLocalization();
   
   // Load previous stats from localStorage on component mount
   // Load previous stats and calculate new ones when quotations change
@@ -149,104 +151,104 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
 
   const stats = [
     {
-      title: 'Total Quotations',
+      title: t('quotations.stats.totalQuotations'),
       value: totalQuotations,
       icon: FileText,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       change: totalChange.value,
       changeType: totalChange.type,
-      description: 'All quotations created'
+      description: t('quotations.stats.desc.allCreated')
     },
     {
-      title: 'Total Value',
-      value: `R ${totalValue.toLocaleString()}`,
+      title: t('quotations.stats.totalValue'),
+      value: formatCurrency(totalValue),
       icon: DollarSign,
       color: 'text-success',
       bgColor: 'bg-success/10',
       change: valueChange.value,
       changeType: valueChange.type,
-      description: 'Combined quotation value'
+      description: t('quotations.stats.desc.combinedValue')
     },
     {
-      title: 'Conversion Rate',
+      title: t('quotations.stats.conversionRate'),
       value: `${conversionRate}%`,
       icon: Target,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       change: conversionChange.value,
       changeType: conversionChange.type,
-      description: 'Quotations to sales ratio'
+      description: t('quotations.stats.desc.toSalesRatio')
     },
     {
-      title: 'Average Value',
-      value: `R ${averageValue.toLocaleString()}`,
+      title: t('quotations.stats.averageValue'),
+      value: formatCurrency(averageValue),
       icon: BarChart3,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       change: avgValueChange.value,
       changeType: avgValueChange.type,
-      description: 'Average quotation amount'
+      description: t('quotations.stats.desc.avgAmount')
     },
     {
-      title: 'Accepted',
+      title: t('quotations.stats.accepted'),
       value: acceptedQuotations,
       icon: CheckCircle,
       color: 'text-success',
       bgColor: 'bg-success/10',
       change: acceptedChange.value,
       changeType: acceptedChange.type,
-      description: `R ${acceptedValue.toLocaleString()} total`
+      description: t('quotations.stats.desc.totalAmount', { amount: formatCurrency(acceptedValue) })
     },
     {
-      title: 'Sent',
+      title: t('quotations.stats.sent'),
       value: sentQuotations,
       icon: Send,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       change: sentChange.value,
       changeType: sentChange.type,
-      description: 'Sent to clients'
+      description: t('quotations.stats.desc.sentToClients')
     },
     {
-      title: 'Viewed',
+      title: t('quotations.stats.viewed'),
       value: viewedQuotations,
       icon: Eye,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       change: viewedChange.value,
       changeType: viewedChange.type,
-      description: 'Seen by clients'
+      description: t('quotations.stats.desc.seenByClients')
     },
     {
-      title: 'Draft',
+      title: t('quotations.stats.draft'),
       value: draftQuotations,
       icon: FileText,
       color: 'text-muted-foreground',
       bgColor: 'bg-muted',
       change: draftChange.value,
       changeType: draftChange.type,
-      description: 'Not yet sent'
+      description: t('quotations.stats.desc.notYetSent')
     },
     {
-      title: 'Expired',
+      title: t('quotations.stats.expired'),
       value: expiredQuotations,
       icon: AlertTriangle,
       color: 'text-destructive',
       bgColor: 'bg-destructive/10',
       change: expiredChange.value,
       changeType: expiredChange.type === 'positive' ? 'negative' : 'positive', // Invert for expired (fewer expirations is good)
-      description: 'Past expiry date'
+      description: t('quotations.stats.desc.pastExpiry')
     },
     {
-      title: 'Rejected',
+      title: t('quotations.stats.rejected'),
       value: rejectedQuotations,
       icon: XCircle,
       color: 'text-destructive',
       bgColor: 'bg-destructive/10',
       change: rejectedChange.value,
       changeType: rejectedChange.type === 'positive' ? 'negative' : 'positive', // Invert for rejected (fewer rejections is good)
-      description: 'Declined by clients'
+      description: t('quotations.stats.desc.declinedByClients')
     }
   ];
 

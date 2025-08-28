@@ -12,6 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Project } from '@/types/project';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface ProjectsListProps {
   projects: Project[];
@@ -28,6 +29,7 @@ const ProjectsList: React.FC<ProjectsListProps> = ({
   getStatusColor,
   getPriorityColor
 }) => {
+  const { t } = useLocalization();
   const handleSelectProject = (projectId: number) => {
     if (selectedProjects.includes(projectId)) {
       setSelectedProjects(selectedProjects.filter(id => id !== projectId));
@@ -160,7 +162,7 @@ const ProjectsList: React.FC<ProjectsListProps> = ({
           <div className="text-slate-400 mb-4">
             <Users className="h-12 w-12 mx-auto" />
           </div>
-          <p className="text-slate-600">No projects found</p>
+          <p className="text-slate-600">{t('projects.grid.empty')}</p>
         </div>
       )}
     </div>

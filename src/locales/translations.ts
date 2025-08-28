@@ -50,7 +50,8 @@ export const translations = {
         buttons: {
           filters: 'Filters',
           export: 'Export',
-          clearFilters: 'Clear Filters'
+          clearFilters: 'Clear Filters',
+          clearLog: 'Clear Log'
         },
         stats: {
           totalEntries: 'Total Entries',
@@ -114,6 +115,10 @@ export const translations = {
         pagination: {
           first: 'First',
           last: 'Last'
+        },
+        confirm: {
+          clearNow: 'Are you sure you want to clear the Activity Log? This cannot be undone.',
+          clearAfterExport: 'Do you want to clear the Activity Log now? This cannot be undone.'
         }
       },
       team: {
@@ -309,6 +314,19 @@ export const translations = {
         recent: 'Recent:',
         statusSearchPlaceholder: 'Search status...',
         noStatusFound: 'No status found.',
+        // Added for select dropdowns expecting these exact paths
+        status: {
+          all: 'All Status'
+        },
+        dates: {
+          all: 'All Dates',
+          today: 'Today',
+          week: 'This Week',
+          month: 'This Month',
+          quarter: 'This Quarter',
+          year: 'This Year'
+        },
+        allClients: 'All Clients',
         quick: {
           allStatus: 'All Status',
           allDates: 'All Dates',
@@ -602,6 +620,8 @@ export const translations = {
       addStorage: 'Add Storage',
       sales: 'Sales',
       searchByName: 'Search by name, ID, barcode, supplier, description...',
+      filterByCategory: 'Filter by Category',
+      filterByStatus: 'Filter by Status',
       allCategories: 'All Categories',
       allStatuses: 'All Statuses',
       generateReports: 'Generate Reports',
@@ -614,6 +634,7 @@ export const translations = {
       history: 'History',
       refresh: 'Refresh',
       loadingInventoryData: 'Loading inventory data...',
+      failedToLoadInventoryData: 'Failed to load inventory data',
       stockHistory: 'Stock History',
       noStockHistoryAvailable: 'No stock history available',
       date: 'Date',
@@ -643,7 +664,29 @@ export const translations = {
       refreshed: 'Refreshed',
       inventoryDataRefreshed: 'Inventory data has been refreshed from storage',
       stockUpdated: 'Stock Updated',
-      stockUpdatedSuccessfully: '{{itemName}} stock has been updated successfully.'
+      stockUpdatedSuccessfully: '{{itemName}} stock has been updated successfully.',
+      // Empty state
+      noInventoryItemsFound: 'No inventory items found',
+      tryAdjustingFiltersOrAddNewStock: 'Try adjusting filters or add new stock',
+      // Table headers and fields
+      itemIdHeader: 'Item ID',
+      item: 'Item',
+      stock: 'Stock',
+      location: 'Location',
+      lastUpdated: 'Last Updated',
+      barcode: 'Barcode',
+      // Status badges
+      inStock: 'In Stock',
+      outOfStock: 'Out of Stock',
+      expiredLabel: 'Expired',
+      // Menus and actions
+      openMenu: 'Open menu',
+      updateStockLabel: 'Update Stock',
+      editDetails: 'Edit Details',
+      addToInvoice: 'Add to Invoice',
+      addToQuotation: 'Add to Quotation',
+      viewHistory: 'View History',
+      reportDamageExpired: 'Report Damage/Expired'
     },
     // HR Management
     hr: {
@@ -1165,6 +1208,11 @@ export const translations = {
         testVibration: 'Test',
         disableFlip: 'Disable Image Flip',
         preventMirror: 'Prevent mirror effect',
+        // Scanner Test UI
+        testScannerTitle: 'Test Scanner',
+        startTestBtn: 'Start Test',
+        testScannerHint: 'Click "Start Test" to test the barcode scanner',
+        stopTestBtn: 'Stop Test',
         // Layout
         compactMode: 'Compact Mode',
         reducedSpacing: 'Reduced spacing for mobile',
@@ -1251,7 +1299,11 @@ export const translations = {
         clearSuccessTitle: 'All data cleared',
         clearSuccessDesc: 'All application data has been cleared',
         clearFailedTitle: 'Clear failed',
-        clearFailedDesc: 'Failed to clear data'
+        clearFailedDesc: 'Failed to clear data',
+        confirmDeleteKeyTitle: 'Delete this key?',
+        confirmDeleteKeyDesc: 'This action cannot be undone. The data stored under this key will be permanently removed.',
+        keysListTitle: 'Stored Keys',
+        noKeys: 'No keys found in local storage.'
       ,
         retentionTitle: 'Data Retention Policy',
         enableRetention: 'Enable Data Retention',

@@ -14,7 +14,7 @@ const DashboardSidebarOverlay: React.FC<DashboardSidebarOverlayProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden transition-all duration-300"
+      className="fixed inset-0 z-40 bg-black/40 backdrop-blur-md lg:hidden transition-all duration-300"
       onClick={() => setSidebarOpen(false)}
     ></div>
   );

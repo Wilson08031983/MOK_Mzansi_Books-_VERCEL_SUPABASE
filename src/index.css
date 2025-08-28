@@ -1,6 +1,6 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap');
+/* Prefer system Apple fonts; fall back to Inter. */
 
 @tailwind base;
 @tailwind components;
@@ -8,7 +8,12 @@
 
 /* Custom Font Family */
 .font-sf-pro {
-  font-family: 'SF Pro Display', 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* New York serif for headings/body where appropriate */
+.font-ny {
+  font-family: 'New York', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
 }
 
 /* Base styles for consistent typography */
@@ -19,7 +24,7 @@
   }
   
   body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     font-variation-settings: 'opsz' 32;
     -webkit-font-smoothing: antialiased;
@@ -97,19 +102,19 @@
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
   }
-  
+  /* Subtle Apple-like pulsation used by background balls */
+  .pulsate-soft {
+    animation: pulseSoft var(--pulse-duration, 8s) ease-in-out infinite;
+  }
   .animate-slide-up {
     animation: slideUp 0.3s ease-out;
   }
-  
   .animate-slide-down {
     animation: slideDown 0.3s ease-out;
   }
-  
   .animate-scale-in {
     animation: scaleIn 0.2s ease-out;
   }
-  
   .text-gradient {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     -webkit-background-clip: text;
@@ -158,6 +163,13 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* Soft scale + opacity pulse */
+@keyframes pulseSoft {
+  0% { transform: scale(1); opacity: 0.65; }
+  50% { transform: scale(1.06); opacity: 0.80; }
+  100% { transform: scale(1); opacity: 0.65; }
 }
 
 /* Custom shadows */
@@ -236,6 +248,45 @@
     border: 1px solid rgba(var(--glass-border));
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+  }
+  /* Apple Liquid Glass 2025: deeper blur, subtle inner/outer glow and border gradient */
+  .liquid-glass {
+    position: relative;
+    background: linear-gradient(
+        180deg,
+        rgba(var(--glass-background)) 0%,
+        rgba(var(--glass-background)) 60%,
+        rgba(var(--glass-background)) 100%
+      );
+    border: 1px solid rgba(var(--glass-border));
+    border-radius: 1rem; /* 2xl */
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    box-shadow:
+      0 10px 30px rgba(0,0,0,0.10),
+      inset 0 1px 0 rgba(255,255,255,0.25),
+      inset 0 -1px 0 rgba(255,255,255,0.08);
+  }
+  .liquid-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(600px 200px at 20% -10%, rgba(255,255,255,0.20), transparent 60%),
+      radial-gradient(500px 200px at 80% -10%, rgba(255,255,255,0.12), transparent 60%);
+    mix-blend-mode: screen;
+  }
+  .glow-hover {
+    transition: box-shadow 300ms ease, transform 300ms ease;
+  }
+  .glow-hover:hover {
+    box-shadow:
+      0 18px 50px -10px rgba(0,0,0,0.25),
+      0 0 0 1px rgba(148,163,184,0.25),
+      0 8px 20px rgba(99,102,241,0.15);
+    transform: translateY(-4px);
   }
 }
 

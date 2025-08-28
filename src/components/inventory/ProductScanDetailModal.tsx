@@ -21,6 +21,7 @@ import {
 import { getInvoices } from '@/services/invoiceService';
 import { getQuotations } from '@/services/quotationService';
 import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Invoice, InvoiceItem } from '@/types/invoice';
 
 // Helper function to get the status color
@@ -57,6 +58,7 @@ const ProductScanDetailModal: React.FC<ProductScanDetailModalProps> = ({
   isOpen,
   onClose
 }) => {
+  const { formatCurrency, getCurrencySymbol } = useLocalization();
   const [activeTab, setActiveTab] = useState('scan');
   const [manualBarcode, setManualBarcode] = useState('');
   const [showScanner, setShowScanner] = useState(false);
@@ -359,7 +361,7 @@ const ProductScanDetailModal: React.FC<ProductScanDetailModalProps> = ({
                       </div>
                       
                       <div className="font-medium">Price:</div>
-                      <div>R {product.price?.toFixed(2) || '0.00'}</div>
+                      <div>{typeof product.price === 'number' ? formatCurrency(product.price) : formatCurrency(0)}</div>
                       
                       <div className="font-medium">Status:</div>
                       <div>
@@ -440,7 +442,7 @@ const ProductScanDetailModal: React.FC<ProductScanDetailModalProps> = ({
                             <TableHead>Date</TableHead>
                             <TableHead>Client</TableHead>
                             <TableHead>Qty</TableHead>
-                            <TableHead>Amount (R)</TableHead>
+                            <TableHead>Amount ({getCurrencySymbol()})</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -459,7 +461,7 @@ const ProductScanDetailModal: React.FC<ProductScanDetailModalProps> = ({
                                 <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
                                 <TableCell>{entry.clientName}</TableCell>
                                 <TableCell>{entry.quantity}</TableCell>
-                                <TableCell>R {entry.amount.toFixed(2)}</TableCell>
+                                <TableCell>{formatCurrency(entry.amount)}</TableCell>
                               </TableRow>
                             ))
                           ) : (
@@ -481,7 +483,7 @@ const ProductScanDetailModal: React.FC<ProductScanDetailModalProps> = ({
                         </div>
                         <div>
                           <span className="font-medium">Total Value: </span>
-                          <span>R {totalSalesValue.toFixed(2)}</span>
+                          <span>{formatCurrency(totalSalesValue)}</span>
                         </div>
                       </div>
                     )}

@@ -37,11 +37,11 @@ const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
           className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Dashboard
+          {t('common.backToDashboard')}
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 font-sf-pro">Quotations</h1>
-          <p className="text-slate-600 font-sf-pro">Create, manage, and track your quotations</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 font-sf-pro">{t('quotations.title')}</h1>
+          <p className="text-slate-600 dark:text-slate-400 font-sf-pro">{t('quotations.description')}</p>
         </div>
       </div>
       
@@ -52,7 +52,7 @@ const QuotationsHeader: React.FC<QuotationsHeaderProps> = ({
           variant="outline"
           onClick={() => onRefresh ? onRefresh() : window.location.reload()}
           className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
-          title="Refresh data"
+          title={t('quotations.header.refresh')}
         >
           <RefreshCw className="h-4 w-4" />
         </Button>

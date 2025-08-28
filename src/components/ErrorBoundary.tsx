@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { localizationService } from '@/services/localizationService';
+import { AlertTriangle, RefreshCw, Home, ChevronLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -94,29 +95,29 @@ class ErrorBoundary extends Component<Props, State> {
       // Default error UI
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-md glass backdrop-blur-sm bg-slate-900/60 border border-white/10 shadow-business">
             <CardHeader className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-900/30 border border-red-800/40">
+                <AlertTriangle className="h-6 w-6 text-red-300" />
               </div>
-              <CardTitle className="text-xl font-semibold text-gray-900">
+              <CardTitle className="text-xl font-semibold text-slate-100">
                 Something went wrong
               </CardTitle>
-              <CardDescription className="text-gray-600">
+              <CardDescription className="text-slate-400">
                 We encountered an unexpected error. Don't worry, your data is safe.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {process.env.NODE_ENV === 'development' && this.state.error && (
-                <div className="rounded-md bg-red-50 p-3">
-                  <h4 className="text-sm font-medium text-red-800 mb-2">Error Details:</h4>
-                  <p className="text-xs text-red-700 font-mono break-all">
+                <div className="rounded-md bg-red-900/20 border border-red-800/40 p-3">
+                  <h4 className="text-sm font-medium text-red-300 mb-2">Error Details:</h4>
+                  <p className="text-xs text-red-300/90 font-mono break-all">
                     {this.state.error.message}
                   </p>
                   {this.state.errorInfo && (
                     <details className="mt-2">
-                      <summary className="text-xs text-red-700 cursor-pointer">Stack Trace</summary>
-                      <pre className="text-xs text-red-700 mt-1 whitespace-pre-wrap">
+                      <summary className="text-xs text-red-300/90 cursor-pointer">Stack Trace</summary>
+                      <pre className="text-xs text-red-300/90 mt-1 whitespace-pre-wrap">
                         {this.state.errorInfo.componentStack}
                       </pre>
                     </details>
@@ -126,7 +127,7 @@ class ErrorBoundary extends Component<Props, State> {
               <div className="flex space-x-3">
                 <Button
                   onClick={this.handleReset}
-                  className="flex-1"
+                  className="flex-1 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-slate-100"
                   variant="outline"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
@@ -134,11 +135,26 @@ class ErrorBoundary extends Component<Props, State> {
                 </Button>
                 <Button
                   onClick={this.handleGoHome}
-                  className="flex-1"
+                  className="flex-1 bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white"
                 >
                   <Home className="h-4 w-4 mr-2" />
                   Go Home
                 </Button>
+                <button
+                  onClick={() => (window.location.href = '/hr-management#training')}
+                  className="flex-1 justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 flex items-center gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Qualification</span>
+                </button>
+              </div>
+              <div className="pt-1">
+                <a
+                  href="/dashboard"
+                  className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium font-sf-pro text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-black/10 dark:focus:ring-white/20"
+                >
+                  <ChevronLeft className="mr-2 h-4 w-4" /> {localizationService.t('common.backToDashboard')}
+                </a>
               </div>
             </CardContent>
           </Card>

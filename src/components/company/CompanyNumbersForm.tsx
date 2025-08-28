@@ -1,6 +1,6 @@
-
 import React from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface NumbersData {
   regNumber: string;
@@ -18,6 +18,7 @@ interface CompanyNumbersFormProps {
 }
 
 const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNumbersFormProps) => {
+  const { t } = useLocalization();
   
   const handleCheckboxChange = (field: string) => (checked: boolean) => {
     if (field === 'vatNumberNotApplicable') {
@@ -31,7 +32,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">Registration Number</label>
+        <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">{t('company.forms.numbers.regNumberLabel')}</label>
         {isEditing ? (
           <input
             type="text"
@@ -45,7 +46,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
       </div>
       <div>
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-slate-300 font-sf-pro">VAT Number</label>
+          <label className="block text-sm font-medium text-slate-300 font-sf-pro">{t('company.forms.numbers.vatNumberLabel')}</label>
           {isEditing && (
             <div className="flex items-center space-x-2">
               <Checkbox 
@@ -54,7 +55,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
                 onCheckedChange={handleCheckboxChange('vatNumberNotApplicable')}
                 className="data-[state=checked]:bg-mokm-purple-500"
               />
-              <label htmlFor="vatNA" className="text-xs text-slate-400 cursor-pointer">Not Applicable</label>
+              <label htmlFor="vatNA" className="text-xs text-slate-400 cursor-pointer">{t('company.forms.common.notApplicable')}</label>
             </div>
           )}
         </div>
@@ -68,12 +69,12 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
           />
         ) : (
           <p className="px-4 py-3 bg-white/5 dark:bg-black/20 border border-white/10 rounded-xl font-sf-pro text-foreground">
-            {companyData.vatNumberNotApplicable ? 'Not Applicable' : companyData.vatNumber}
+            {companyData.vatNumberNotApplicable ? t('company.forms.common.notApplicable') : companyData.vatNumber}
           </p>
         )}
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">Tax Number</label>
+        <label className="block text-sm font-medium text-slate-300 mb-2 font-sf-pro">{t('company.forms.numbers.taxNumberLabel')}</label>
         {isEditing ? (
           <input
             type="text"
@@ -87,7 +88,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
       </div>
       <div>
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-slate-300 font-sf-pro">CSD Registration</label>
+          <label className="block text-sm font-medium text-slate-300 font-sf-pro">{t('company.forms.numbers.csdRegistrationLabel')}</label>
           {isEditing && (
             <div className="flex items-center space-x-2">
               <Checkbox 
@@ -96,7 +97,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
                 onCheckedChange={handleCheckboxChange('csdNumberNotApplicable')}
                 className="data-[state=checked]:bg-mokm-purple-500"
               />
-              <label htmlFor="csdNA" className="text-xs text-slate-400 cursor-pointer">Not Applicable</label>
+              <label htmlFor="csdNA" className="text-xs text-slate-400 cursor-pointer">{t('company.forms.common.notApplicable')}</label>
             </div>
           )}
         </div>
@@ -109,7 +110,7 @@ const CompanyNumbersForm = ({ companyData, isEditing, onInputChange }: CompanyNu
             className={`w-full px-4 py-3 glass backdrop-blur-md ${companyData.csdNumberNotApplicable ? 'bg-white/5 text-slate-500' : 'bg-white/10 dark:bg-black/30 text-foreground'} placeholder:text-slate-400 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro`}
           />
         ) : (
-          <p className="px-4 py-3 bg-white/5 dark:bg-black/20 border border-white/10 rounded-xl font-sf-pro text-foreground">{companyData.csdNumber || 'Not specified'}</p>
+          <p className="px-4 py-3 bg-white/5 dark:bg-black/20 border border-white/10 rounded-xl font-sf-pro text-foreground">{companyData.csdNumber || t('company.forms.common.notSpecified')}</p>
         )}
       </div>
     </div>

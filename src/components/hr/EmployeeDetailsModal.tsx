@@ -15,7 +15,7 @@ import {
   Home,
   Heart
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface Employee {
   id: string;
@@ -61,7 +61,7 @@ interface EmployeeDetailsModalProps {
 }
 
 const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onClose, employee }) => {
-  if (!employee) return null;
+  const { formatCurrency } = useLocalization();
 
   // Format date for display
   const formatDate = (dateString?: string) => {
@@ -85,11 +85,59 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
     return name.split(' ').map(n => n && n[0] || '').join('');
   };
 
+  // Company Bank Details fallback (from Company page)
+  // Reads localStorage 'companyBankDetails' which CompanyDetails.tsx writes on save
+  const companyBank = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem('companyBankDetails');
+      return raw ? JSON.parse(raw) as {
+        bankName?: string;
+        accountHolder?: string;
+        bankAccount?: string;
+        accountType?: string;
+        branchCode?: string;
+      } : null;
+    } catch {
+      return null;
+    }
+  }, [isOpen]);
+
+  // Guard after hooks: if no employee, don't render
+  if (!employee) return null;
+
+  // Decide if we should prefer company bank details (e.g., CEO/Owner)
+  const isOwnerLike = (() => {
+    const pos = (employee.position || '').toLowerCase();
+    return Boolean((employee as any).isCompanyOwner) || /\b(ceo|owner|founder|director|managing director)\b/.test(pos);
+  })();
+
+  // Resolve payment info: for owner-like roles prefer company details; otherwise employee-first then company fallback
+  const displayBankName = isOwnerLike
+    ? (companyBank?.bankName || employee.bankName)
+    : (employee.bankName || companyBank?.bankName);
+
+  const displayAccountNumber = isOwnerLike
+    ? (companyBank?.bankAccount || employee.accountNumber)
+    : (employee.accountNumber || companyBank?.bankAccount);
+
+  const displayBranchCode = isOwnerLike
+    ? (companyBank?.branchCode || employee.branchCode)
+    : (employee.branchCode || companyBank?.branchCode);
+
+  const displayAccountHolder = isOwnerLike
+    ? (companyBank?.accountHolder || employee.accountHolderName)
+    : (employee.accountHolderName || companyBank?.accountHolder);
+
+  // Optional: Account Type (primarily from company bank details)
+  const displayAccountType = isOwnerLike
+    ? (companyBank?.accountType)
+    : (companyBank?.accountType);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto glass backdrop-blur-sm bg-white/90 border border-white/20 shadow-business">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto glass backdrop-blur-sm bg-slate-900/60 border border-white/10 shadow-business font-sf-pro text-slate-100">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-slate-900 font-sf-pro flex items-center gap-3">
+          <DialogTitle className="text-2xl font-bold text-slate-100 font-sf-pro flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 text-white flex items-center justify-center font-medium font-sf-pro">
               {employee.avatar ? (
                 <img src={employee.avatar} alt={getFullName(employee)} className="h-10 w-10 rounded-full" />
@@ -105,16 +153,16 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-2">
               <span className={`px-2 py-1 text-xs rounded-full font-sf-pro ${
-                employee.status === 'active' ? 'bg-green-100 text-green-800' :
-                employee.status === 'on-leave' ? 'bg-blue-100 text-blue-800' :
-                employee.status === 'terminated' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
+                employee.status === 'active' ? 'bg-green-900/30 text-green-300 border border-green-800/40' :
+                employee.status === 'on-leave' ? 'bg-blue-900/30 text-blue-300 border border-blue-800/40' :
+                employee.status === 'terminated' ? 'bg-red-900/30 text-red-300 border border-red-800/40' :
+                'bg-slate-800/50 text-slate-300 border border-white/10'
               }`}>
                 {!employee.status ? 'Unknown' : 
                 employee.status === 'on-leave' ? 'On Leave' : 
                 employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
               </span>
-              <span className="text-sm text-slate-500 font-sf-pro">
+              <span className="text-sm text-slate-400 font-sf-pro">
                 Employee ID: {employee.employeeNumber || employee.id}
               </span>
             </div>
@@ -124,15 +172,15 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
             {/* Personal Information */}
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-medium text-slate-900 font-sf-pro mb-3 border-b border-slate-200 pb-2">
+                <h3 className="text-lg font-medium text-slate-100 font-sf-pro mb-3 border-b border-white/10 pb-2">
                   Personal Information
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-start">
                     <UserCircle className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Full Name</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Full Name</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.firstName || ''} {employee.surname || ''}
                       </div>
                     </div>
@@ -141,8 +189,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Mail className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Email</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Email</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.email || 'Not provided'}
                       </div>
                     </div>
@@ -151,8 +199,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Phone className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Phone</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Phone</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.phone || employee.contactNumber || 'Not provided'}
                       </div>
                     </div>
@@ -161,8 +209,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Calendar className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Date of Birth</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Date of Birth</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {formatDate(employee.dateOfBirth)}
                       </div>
                     </div>
@@ -171,8 +219,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Home className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Address</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Address</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.addressLine1 && <div>{employee.addressLine1}</div>}
                         {employee.addressLine2 && <div>{employee.addressLine2}</div>}
                         {employee.addressLine3 && <div>{employee.addressLine3}</div>}
@@ -186,15 +234,15 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
               </div>
 
               <div>
-                <h3 className="text-lg font-medium text-slate-900 font-sf-pro mb-3 border-b border-slate-200 pb-2">
+                <h3 className="text-lg font-medium text-slate-100 font-sf-pro mb-3 border-b border-white/10 pb-2">
                   Emergency Contact
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-start">
                     <Heart className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Next of Kin</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Next of Kin</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.kinName && employee.kinSurname ? 
                           `${employee.kinName} ${employee.kinSurname}` : 'Not provided'}
                         {employee.kinRelationship && ` (${employee.kinRelationship})`}
@@ -205,8 +253,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Phone className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Contact Number</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Contact Number</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.kinContactNumber || 'Not provided'}
                       </div>
                     </div>
@@ -218,15 +266,15 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
             {/* Employment Information */}
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-medium text-slate-900 font-sf-pro mb-3 border-b border-slate-200 pb-2">
+                <h3 className="text-lg font-medium text-slate-100 font-sf-pro mb-3 border-b border-white/10 pb-2">
                   Employment Information
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-start">
                     <Briefcase className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Position</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Position</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.position || 'Not assigned'}
                       </div>
                     </div>
@@ -235,8 +283,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Building className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Department</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Department</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.department || 'Not assigned'}
                       </div>
                     </div>
@@ -245,8 +293,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <MapPin className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Location</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Location</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.location || 'Not specified'}
                       </div>
                     </div>
@@ -255,8 +303,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Users className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Employment Type</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Employment Type</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {employee.employmentType || 'Not specified'}
                       </div>
                     </div>
@@ -265,8 +313,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Calendar className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Start Date</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Start Date</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {formatDate(employee.startDate)}
                       </div>
                     </div>
@@ -275,8 +323,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <Clock className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Shift Type</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
+                      <div className="text-xs text-slate-400 font-sf-pro">Shift Type</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
                         {[
                           employee.dayShift && 'Day Shift',
                           employee.nightShift && 'Night Shift',
@@ -289,23 +337,26 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
               </div>
 
               <div>
-                <h3 className="text-lg font-medium text-slate-900 font-sf-pro mb-3 border-b border-slate-200 pb-2">
+                <h3 className="text-lg font-medium text-slate-100 font-sf-pro mb-3 border-b border-white/10 pb-2">
                   Payment Information
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-start">
                     <CreditCard className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Bank Details</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
-                        {employee.bankName ? (
+                      <div className="text-xs text-slate-400 font-sf-pro">Bank Details</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
+                        {displayBankName || displayAccountNumber || displayBranchCode ? (
                           <>
-                            <div>{employee.bankName}</div>
-                            {employee.accountNumber && (
-                              <div>Account: {employee.accountNumber}</div>
+                            {displayBankName && <div>{displayBankName}</div>}
+                            {displayAccountNumber && (
+                              <div>Account: {displayAccountNumber}</div>
                             )}
-                            {employee.branchCode && (
-                              <div>Branch Code: {employee.branchCode}</div>
+                            {displayAccountType && (
+                              <div>Account Type: {displayAccountType}</div>
+                            )}
+                            {displayBranchCode && (
+                              <div>Branch Code: {displayBranchCode}</div>
                             )}
                           </>
                         ) : (
@@ -318,9 +369,9 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                   <div className="flex items-start">
                     <UserCircle className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                     <div>
-                      <div className="text-xs text-slate-500 font-sf-pro">Account Holder</div>
-                      <div className="text-sm text-slate-900 font-sf-pro">
-                        {employee.accountHolderName || 'Not provided'}
+                      <div className="text-xs text-slate-400 font-sf-pro">Account Holder</div>
+                      <div className="text-sm text-slate-300 font-sf-pro">
+                        {displayAccountHolder || 'Not provided'}
                       </div>
                     </div>
                   </div>
@@ -329,8 +380,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                     <div className="flex items-start">
                       <CreditCard className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                       <div>
-                        <div className="text-xs text-slate-500 font-sf-pro">Salary</div>
-                        <div className="text-sm text-slate-900 font-sf-pro">
+                        <div className="text-xs text-slate-400 font-sf-pro">Salary</div>
+                        <div className="text-sm text-slate-300 font-sf-pro">
                           {formatCurrency(employee.salary)} ({employee.paymentCycle || 'Not specified'})
                         </div>
                       </div>
@@ -341,8 +392,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
                     <div className="flex items-start">
                       <CreditCard className="h-5 w-5 text-slate-400 mr-3 mt-0.5" />
                       <div>
-                        <div className="text-xs text-slate-500 font-sf-pro">Tax Rate</div>
-                        <div className="text-sm text-slate-900 font-sf-pro">
+                        <div className="text-xs text-slate-400 font-sf-pro">Tax Rate</div>
+                        <div className="text-sm text-slate-300 font-sf-pro">
                           {employee.taxPercentage}%
                         </div>
                       </div>
@@ -354,7 +405,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
           </div>
         </div>
 
-        <div className="flex justify-end mt-6 pt-4 border-t border-slate-200">
+        <div className="flex justify-end mt-6 pt-4 border-t border-white/10">
           <Button onClick={onClose} className="font-sf-pro">
             Close
           </Button>

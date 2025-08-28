@@ -11,6 +11,8 @@ import {
   X,
   AlertCircle,
   User,
+  Users,
+  Briefcase,
   Download,
   Minus,
   Settings,
@@ -24,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { payrollCalculationService, PayrollCalculation, SalaryAdvance } from '@/services/payrollCalculationService';
 import { PayslipService } from '@/services/payslipService';
@@ -36,6 +39,11 @@ import PayrollTestRunner from '@/components/testing/PayrollTestRunner';
 
 import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 // Removed PAYE sync from Accounting feature
+import { useLocalization } from '@/hooks/useLocalization';
+import { localizationService } from '@/services/localizationService';
+import { getAttendancePayExpensesSummary, updateAllActiveProjectsWithAttendanceExpenses, ensureAssignedEmployeesFromManager } from '@/services/projectAttendanceExpenseService';
+import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
+import { Project } from '@/types/project';
 
 // Import salary calculation functions from AllowanceManagement
 interface MonthlyAttendance {
@@ -109,6 +117,204 @@ const UIF_CONSTANTS = {
 };
 
 const STANDARD_MONTHLY_HOURS = 173.33;
+
+// Project Expenses Tab (moved from AllowanceManagement) - top-level component
+const ProjectExpensesTab: React.FC = () => {
+  const { formatCurrency } = useLocalization();
+  const [projectExpensesSummary, setProjectExpensesSummary] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+
+  useEffect(() => {
+    loadProjectData();
+  }, []);
+
+  const loadProjectData = () => {
+    setIsLoadingProjects(true);
+    try {
+      const projectsRaw = localStorage.getItem('projects');
+      const loadedProjects: Project[] = projectsRaw ? JSON.parse(projectsRaw) : [];
+      setProjects(loadedProjects);
+
+      const summary = getAttendancePayExpensesSummary();
+      setProjectExpensesSummary(summary);
+    } catch (error) {
+      console.error('Error loading project data:', error);
+      toast.error('Failed to load project data');
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
+
+  const handleUpdateProjectExpenses = () => {
+    setIsLoadingProjects(true);
+    try {
+      ensureAssignedEmployeesFromManager();
+      updateAllActiveProjectsWithAttendanceExpenses();
+      ExpenseProjectSyncService.getInstance().updateAllProjectExpenses();
+      loadProjectData();
+      toast.success('Project expenses updated with attendance pay');
+    } catch (error) {
+      console.error('Error updating project expenses:', error);
+      toast.error('Failed to update project expenses');
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
+
+  if (isLoadingProjects) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-mokm-purple-600 mx-auto mb-2"></div>
+          <p className="text-sm text-slate-500">Loading project data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Active Projects</CardTitle>
+            <Briefcase className="h-4 w-4 text-slate-300" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-sf-pro text-slate-100">{projectExpensesSummary?.projectCount || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Assigned Employees</CardTitle>
+            <Users className="h-4 w-4 text-slate-300" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-sf-pro text-slate-100">{projectExpensesSummary?.employeeCount || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Total Attendance Expenses</CardTitle>
+            <TrendingUp className="h-4 w-4 text-slate-300" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-sf-pro text-green-300">
+              {formatCurrency(projectExpensesSummary?.totalAttendanceExpenses || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Update Expenses</CardTitle>
+            <Calculator className="h-4 w-4 text-slate-300" />
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={handleUpdateProjectExpenses}
+              disabled={isLoadingProjects}
+              className="w-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 text-white"
+            >
+              {isLoadingProjects ? 'Updating...' : 'Update Now'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Project Breakdown Table */}
+      <Card className="bg-white border border-slate-200 dark:glass dark:backdrop-blur-sm dark:bg-slate-900/40 dark:border-white/10 shadow-business">
+        <CardHeader>
+          <CardTitle className="font-sf-pro text-slate-900 dark:text-slate-100">Project Attendance Expenses Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {projectExpensesSummary?.breakdown && projectExpensesSummary.breakdown.length > 0 ? (
+            <div className="relative w-full overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Project Name</TableHead>
+                    <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Assigned Employees</TableHead>
+                    <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Monthly Attendance Pay</TableHead>
+                    <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projectExpensesSummary.breakdown.map((project: any, index: number) => {
+                    const projectData = projects.find(p => p.name === project.projectName);
+                    return (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium font-sf-pro text-slate-900 dark:text-slate-100">{project.projectName}</TableCell>
+                        <TableCell className="font-sf-pro text-slate-600 dark:text-slate-300">{project.employeeCount}</TableCell>
+                        <TableCell className="font-sf-pro text-green-700 dark:text-green-300">
+                          {formatCurrency(project.totalAttendancePay)}
+                        </TableCell>
+                        <TableCell className="font-sf-pro">
+                          <span className={`px-2 py-1 rounded-full text-xs border ${
+                            projectData?.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40' :
+                            projectData?.status === 'In Progress' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40' :
+                            projectData?.status === 'Planning' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800/40' :
+                            'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-white/10'
+                          }`}>
+                            {projectData?.status || 'Unknown'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Briefcase className="h-12 w-12 text-slate-400 dark:text-gray-400 mx-auto mb-4" />
+              <p className="font-sf-pro text-slate-700 dark:text-slate-300">No active projects with assigned employees found.</p>
+              <p className="text-sm font-sf-pro mt-2 text-slate-600 dark:text-slate-500">
+                Assign employees to projects in the Projects page to see attendance expenses here.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-3">
+                <Button 
+                  variant="outline"
+                  onClick={handleUpdateProjectExpenses}
+                  className="border-white/10"
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Information Card */}
+      <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
+        <CardHeader>
+          <CardTitle className="font-sf-pro text-slate-100">How Project Attendance Expenses Work</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 text-sm text-slate-300">
+            <p className="font-sf-pro">
+              <span className="text-blue-300 font-medium">Automatic Integration:</span> When employees are assigned to projects, their attendance pay automatically becomes part of the project expenses.
+            </p>
+            <p className="font-sf-pro">
+              <span className="text-blue-300 font-medium">Real-time Calculation:</span> Attendance pay is calculated based on regular hours, overtime (1.5x), and night shift allowances (10%).
+            </p>
+            <p className="font-sf-pro">
+              <span className="text-blue-300 font-medium">Project Allocation:</span> Only the percentage of attendance pay allocated to each project is included in expenses.
+            </p>
+            <p className="font-sf-pro">
+              <span className="text-blue-300 font-medium">Duration-based:</span> Expenses continue until the project is marked as 100% complete.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 // South African PAYE tax brackets for 2024/2025
 const SA_TAX_CONSTANTS = {
@@ -228,12 +434,12 @@ const getMonthlyAttendance = (employeeId: string): MonthlyAttendance => {
 const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendance, allowances: EmployeeAllowances): SalaryBreakdown => {
   console.log(`🔍 [calculateEmployeeSalary] Starting calculation for: ${employee.firstName} ${employee.surname}`);
   console.log(`🔍 [calculateEmployeeSalary] Employee ID: ${employee.id}`);
-  console.log(`🔍 [calculateEmployeeSalary] Employee Salary: R${employee.salary}`);
+  console.log(`🔍 [calculateEmployeeSalary] Employee Salary: ${localizationService.formatCurrency(employee.salary || 0)}`);
   
   const baseSalary = employee.salary || 0;
   const hourlyRate = baseSalary / STANDARD_MONTHLY_HOURS;
   
-  console.log(`🔍 [calculateEmployeeSalary] Base Salary: R${baseSalary}, Hourly Rate: R${hourlyRate.toFixed(2)}`);
+  console.log(`🔍 [calculateEmployeeSalary] Base Salary: ${localizationService.formatCurrency(baseSalary)}, Hourly Rate: ${localizationService.formatCurrency(Number(hourlyRate.toFixed(2)))}`);
   console.log(`🔍 [calculateEmployeeSalary] Attendance Hours:`, {
     regular: attendance.regularHours,
     overtime: attendance.overtimeHours,
@@ -272,7 +478,7 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   console.log(`Salary advance calculation for ${employee.firstName} ${employee.surname}:`);
   console.log(`  - All advances:`, payrollCalculationService.getSalaryAdvances(employee.id));
   console.log(`  - Approved advances:`, approvedAdvances);
-  console.log(`  - Total advance deduction: R${salaryAdvanceDeduction.toFixed(2)}`);
+  console.log(`  - Total advance deduction: ${localizationService.formatCurrency(Number(salaryAdvanceDeduction.toFixed(2)))}`);
   
   // Calculate employee deductions from Employee Deductions Management
   const deductionCalculation = employeeDeductionsService.calculateEmployeeDeductions(employee.id, grossSalary);
@@ -281,7 +487,7 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   // Calculate net salary (gross - tax - uif - salary advances - employee deductions)
   const netSalary = grossSalary - tax - uif.employeeContribution - salaryAdvanceDeduction - employeeDeductions;
   
-  console.log(`Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = R${attendancePay.toFixed(2)}, Advance Deduction = R${salaryAdvanceDeduction.toFixed(2)}, Employee Deductions = R${employeeDeductions.toFixed(2)}`);
+  console.log(`Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = ${localizationService.formatCurrency(Number(attendancePay.toFixed(2)))}, Advance Deduction = ${localizationService.formatCurrency(Number(salaryAdvanceDeduction.toFixed(2)))}, Employee Deductions = ${localizationService.formatCurrency(Number(employeeDeductions.toFixed(2)))}`);
   
   const finalCalculation = {
     employeeId: employee.id,
@@ -300,16 +506,17 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   console.log(`🎯 [calculateEmployeeSalary] FINAL RESULT for ${employee.firstName} ${employee.surname}:`, {
     employeeId: finalCalculation.employeeId,
     employeeName: finalCalculation.employeeName,
-    baseSalary: `R${finalCalculation.baseSalary.toFixed(2)}`,
-    attendancePay: `R${finalCalculation.attendancePay.toFixed(2)}`,
-    grossSalary: `R${finalCalculation.grossSalary.toFixed(2)}`,
-    netSalary: `R${finalCalculation.netSalary.toFixed(2)}`
+    baseSalary: localizationService.formatCurrency(Number(finalCalculation.baseSalary.toFixed(2))),
+    attendancePay: localizationService.formatCurrency(Number(finalCalculation.attendancePay.toFixed(2))),
+    grossSalary: localizationService.formatCurrency(Number(finalCalculation.grossSalary.toFixed(2))),
+    netSalary: localizationService.formatCurrency(Number(finalCalculation.netSalary.toFixed(2)))
   });
   
   return finalCalculation;
 };
 
 const PayrollManagement: React.FC = () => {
+  const { formatCurrency, getCurrencySymbol } = useLocalization();
   const [searchQuery, setSearchQuery] = useState('');
   const [periodFilter, setPeriodFilter] = useState<string>(new Date().toISOString().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -684,7 +891,6 @@ const PayrollManagement: React.FC = () => {
     
     // SYNC WITH EMPLOYEE DEDUCTIONS MANAGEMENT: Get PAYE and UIF from Employee Deductions calculations
     console.log('🔗 [PayrollManagement] Syncing PAYE/UIF from Employee Deductions Management for modal...');
-    
     let linkedPAYE = currentCalculation.tax;
     let linkedUIF = currentCalculation.uif.employeeContribution;
     
@@ -698,18 +904,17 @@ const PayrollManagement: React.FC = () => {
           calculation.employeeName,
           attendancePay
         );
-        
         linkedPAYE = employeeDeductionsResult.paye;
-        linkedUIF = employeeDeductionsResult.uif.employee;
-        
+        linkedUIF = employeeDeductionsResult.uifEmployee;
+
         console.log('✅ [PayrollManagement] Successfully synced PAYE/UIF from Employee Deductions Management:', {
           employeeId: calculation.employeeId,
           employeeName: calculation.employeeName,
-          attendancePay: `R${attendancePay.toFixed(2)}`,
-          originalPAYE: `R${currentCalculation.tax.toFixed(2)}`,
-          linkedPAYE: `R${linkedPAYE.toFixed(2)}`,
-          originalUIF: `R${currentCalculation.uif.employeeContribution.toFixed(2)}`,
-          linkedUIF: `R${linkedUIF.toFixed(2)}`,
+          attendancePay: localizationService.formatCurrency(Number(attendancePay.toFixed(2))),
+          originalPAYE: localizationService.formatCurrency(Number(currentCalculation.tax.toFixed(2))),
+          linkedPAYE: localizationService.formatCurrency(Number(linkedPAYE.toFixed(2))),
+          originalUIF: localizationService.formatCurrency(Number(currentCalculation.uif.employeeContribution.toFixed(2))),
+          linkedUIF: localizationService.formatCurrency(Number(linkedUIF.toFixed(2))),
           source: 'Employee Deductions Management (SA Payroll Calculator)'
         });
       } else {
@@ -754,8 +959,8 @@ const PayrollManagement: React.FC = () => {
     
     console.log('✅ [PayrollManagement] Payroll details modal data prepared with Employee Deductions sync:', {
       employeeName: detailedPayrollData.employeeName,
-      PAYE: `R${detailedPayrollData.deductions.tax.toFixed(2)}`,
-      UIF: `R${detailedPayrollData.deductions.uif.toFixed(2)}`,
+      PAYE: localizationService.formatCurrency(Number(detailedPayrollData.deductions.tax.toFixed(2))),
+      UIF: localizationService.formatCurrency(Number(detailedPayrollData.deductions.uif.toFixed(2))),
       source: 'Synced from Employee Deductions Management (SA Payroll Calculator)'
     });
     
@@ -865,16 +1070,17 @@ const PayrollManagement: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Payroll Management</h2>
-          <p className="text-slate-600 font-sf-pro">Calculate payroll with Time & Attendance integration</p>
+          <h2 className="text-2xl font-bold font-sf-pro text-slate-900 dark:text-slate-100">Payroll Management</h2>
+          <p className="font-sf-pro text-slate-600 dark:text-slate-400">Calculate payroll with Time & Attendance integration</p>
         </div>
         
       </div>
 
       <Tabs defaultValue="payroll" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="payroll">Payroll Calculations</TabsTrigger>
           <TabsTrigger value="advances">Salary Advances</TabsTrigger>
+          <TabsTrigger value="projects">Project Expenses</TabsTrigger>
         </TabsList>
         
         <TabsContent value="payroll" className="space-y-6">
@@ -890,23 +1096,23 @@ const PayrollManagement: React.FC = () => {
             
             <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="font-sf-pro">
+                <Button variant="outline" className="font-sf-pro dark:bg-black/30 dark:text-white dark:border-white/10">
                   <CreditCard className="h-4 w-4 mr-2" />
                   Salary Advance
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white">
                 <DialogHeader>
-                  <DialogTitle>Request Salary Advance</DialogTitle>
+                  <DialogTitle className="text-slate-900 dark:text-white">Request Salary Advance</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Employee</label>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Employee</label>
                     <Select value={advanceForm.employeeId} onValueChange={(value) => setAdvanceForm(prev => ({ ...prev, employeeId: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select employee" />
+                      <SelectTrigger className="bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white">
+                        <SelectValue placeholder="Select employee" className="text-slate-900 dark:text-white" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white">
                         {salaryData.map(calc => (
                           <SelectItem key={calc.employeeId} value={calc.employeeId}>
                             {calc.employeeName}
@@ -917,27 +1123,29 @@ const PayrollManagement: React.FC = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-2">Amount (R)</label>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Amount ({getCurrencySymbol()})</label>
                     <Input
                       type="number"
                       value={advanceForm.amount}
                       onChange={(e) => setAdvanceForm(prev => ({ ...prev, amount: e.target.value }))}
                       placeholder="Enter amount"
+                      className="bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-300"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-2">Reason</label>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Reason</label>
                     <Textarea
                       value={advanceForm.reason}
                       onChange={(e) => setAdvanceForm(prev => ({ ...prev, reason: e.target.value }))}
                       placeholder="Reason for salary advance"
+                      className="bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-300"
                     />
                   </div>
                   
                   <div className="flex gap-2 justify-end">
-                    <Button variant="outline" onClick={() => setShowAdvanceModal(false)}>Cancel</Button>
-                    <Button onClick={handleSalaryAdvanceRequest}>Submit Request</Button>
+                    <Button variant="outline" onClick={() => setShowAdvanceModal(false)} className="border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-black/30">Cancel</Button>
+                    <Button onClick={handleSalaryAdvanceRequest} className="bg-mokm-purple-600 dark:bg-mokm-purple-700 hover:bg-mokm-purple-700 dark:hover:bg-mokm-purple-800">Submit Request</Button>
                   </div>
                 </div>
               </DialogContent>
@@ -963,117 +1171,117 @@ const PayrollManagement: React.FC = () => {
       
       {/* Payroll Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600 font-sf-pro">Total Employees</p>
-                <p className="text-2xl font-bold text-slate-900 font-sf-pro">{payrollSummary.totalEmployees}</p>
+                <p className="text-sm font-medium font-sf-pro text-slate-600 dark:text-slate-400">Total Employees</p>
+                <p className="text-2xl font-bold font-sf-pro text-slate-900 dark:text-slate-100">{payrollSummary.totalEmployees}</p>
               </div>
-              <User className="h-8 w-8 text-mokm-blue-500" />
+              <User className="h-8 w-8 text-mokm-blue-400" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600 font-sf-pro">Gross Payroll</p>
-                <p className="text-2xl font-bold text-green-600 font-sf-pro">R {payrollSummary.totalGrossSalary.toLocaleString()}</p>
+                <p className="text-sm font-medium font-sf-pro text-slate-600 dark:text-slate-400">Gross Payroll</p>
+                <p className="text-2xl font-bold text-emerald-400 font-sf-pro">{formatCurrency(payrollSummary.totalGrossSalary)}</p>
               </div>
-              <TrendingUp className="h-8 w-8 text-green-500" />
+              <TrendingUp className="h-8 w-8 text-emerald-400" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600 font-sf-pro">Total Deductions</p>
-                <p className="text-2xl font-bold text-red-600 font-sf-pro">R {payrollSummary.totalDeductions.toLocaleString()}</p>
+                <p className="text-sm font-medium font-sf-pro text-slate-600 dark:text-slate-400">Total Deductions</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400 font-sf-pro">{formatCurrency(payrollSummary.totalDeductions)}</p>
               </div>
-              <AlertCircle className="h-8 w-8 text-red-500" />
+              <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600 font-sf-pro">Net Payroll</p>
-                <p className="text-2xl font-bold text-mokm-purple-600 font-sf-pro">R {payrollSummary.totalNetSalary.toLocaleString()}</p>
+                <p className="text-sm font-medium font-sf-pro text-slate-600 dark:text-slate-400">Net Payroll</p>
+                <p className="text-2xl font-bold text-mokm-purple-600 dark:text-mokm-purple-300 font-sf-pro">{formatCurrency(payrollSummary.totalNetSalary)}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-mokm-purple-500" />
+              <DollarSign className="h-8 w-8 text-mokm-purple-600 dark:text-mokm-purple-300" />
             </div>
           </CardContent>
         </Card>
       </div>
       
       {/* Hours Summary */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl">
         <CardHeader>
-          <CardTitle className="font-sf-pro flex items-center gap-2">
-            <Clock className="h-5 w-5" />
+          <CardTitle className="font-sf-pro flex items-center gap-2 text-slate-900 dark:text-slate-100">
+            <Clock className="h-5 w-5 text-slate-600 dark:text-slate-300" />
             Time & Attendance Summary
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-slate-900 font-sf-pro">{payrollSummary.totalRegularHours.toFixed(1)}</p>
-              <p className="text-sm text-slate-600 font-sf-pro">Regular Hours</p>
+              <p className="text-2xl font-bold font-sf-pro text-slate-900 dark:text-slate-100">{payrollSummary.totalRegularHours.toFixed(1)}</p>
+              <p className="text-sm font-sf-pro text-slate-600 dark:text-slate-400">Regular Hours</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-orange-600 font-sf-pro">{payrollSummary.totalOvertimeHours.toFixed(1)}</p>
-              <p className="text-sm text-slate-600 font-sf-pro">Overtime Hours</p>
+              <p className="text-2xl font-bold text-orange-300 font-sf-pro">{payrollSummary.totalOvertimeHours.toFixed(1)}</p>
+              <p className="text-sm font-sf-pro text-slate-600 dark:text-slate-400">Overtime Hours</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600 font-sf-pro">{payrollSummary.totalNightShiftHours.toFixed(1)}</p>
-              <p className="text-sm text-slate-600 font-sf-pro">Night Shift Hours</p>
+              <p className="text-2xl font-bold text-purple-300 font-sf-pro">{payrollSummary.totalNightShiftHours.toFixed(1)}</p>
+              <p className="text-sm font-sf-pro text-slate-600 dark:text-slate-400">Night Shift Hours</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600 font-sf-pro">{payrollSummary.totalLeaveHours.toFixed(1)}</p>
-              <p className="text-sm text-slate-600 font-sf-pro">Leave Hours</p>
+              <p className="text-2xl font-bold text-blue-300 font-sf-pro">{payrollSummary.totalLeaveHours.toFixed(1)}</p>
+              <p className="text-sm font-sf-pro text-slate-600 dark:text-slate-400">Leave Hours</p>
             </div>
           </div>
         </CardContent>
       </Card>
       
       {/* Employee Payroll Table */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business rounded-xl">
         <CardHeader>
-          <CardTitle className="font-sf-pro">Employee Payroll Calculations</CardTitle>
+          <CardTitle className="font-sf-pro text-slate-900 dark:text-slate-100">Employee Payroll Calculations</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-slate-400" />
               <Input
                 placeholder="Search employees..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64 font-sf-pro"
+                className="pl-10 w-64 font-sf-pro bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400"
               />
             </div>
             
             <Select value={periodFilter} onValueChange={setPeriodFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
+              <SelectTrigger className="w-40 bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100">
+                <SelectValue className="text-slate-900 dark:text-slate-100" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100">
                 <SelectItem value={new Date().toISOString().slice(0, 7)}>Current Month</SelectItem>
                 <SelectItem value={new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7)}>Last Month</SelectItem>
               </SelectContent>
             </Select>
             
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
+              <SelectTrigger className="w-32 bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100">
+                <SelectValue className="text-slate-900 dark:text-slate-100" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="glass backdrop-blur-md bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-slate-100">
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="calculated">Calculated</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
@@ -1085,23 +1293,23 @@ const PayrollManagement: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Employee</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Base Salary</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Hours</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Attendance Pay</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Allowances</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Gross Salary</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Salary Advance</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Employee Deductions</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Net Salary</th>
-                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Actions</th>
+                <tr className="border-b border-slate-200 dark:border-white/10">
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Employee</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Base Salary</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Hours</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Attendance Pay</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Allowances</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Gross Salary</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Salary Advance</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Employee Deductions</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Net Salary</th>
+                  <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700 dark:text-slate-300">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCalculations.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-8 text-slate-500 font-sf-pro">
+                    <td colSpan={10} className="text-center py-8 font-sf-pro text-slate-600 dark:text-slate-400">
                       {salaryData.length === 0 
                         ? "No payroll calculated yet. Click 'Calculate Payroll' to begin."
                         : "No employees match your search criteria."
@@ -1110,39 +1318,39 @@ const PayrollManagement: React.FC = () => {
                   </tr>
                 ) : (
                   filteredCalculations.map((calculation) => (
-                    <tr key={calculation.employeeId} className="border-b border-slate-100 hover:bg-slate-50/50">
+                    <tr key={calculation.employeeId} className="border-b border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
                       <td className="py-3 px-4">
                         <div>
-                          <p className="font-medium text-slate-900 font-sf-pro">{calculation.employeeName}</p>
-                          <p className="text-sm text-slate-500 font-sf-pro">{calculation.employeeId}</p>
+                          <p className="font-medium font-sf-pro text-slate-900 dark:text-slate-100">{calculation.employeeName}</p>
+                          <p className="text-sm font-sf-pro text-slate-600 dark:text-slate-400">{calculation.employeeId}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-sf-pro">R {calculation.baseSalary.toLocaleString()}</td>
+                      <td className="py-3 px-4 font-sf-pro text-slate-900 dark:text-slate-200">{formatCurrency(calculation.baseSalary)}</td>
                       <td className="py-3 px-4">
                         <div className="text-xs font-sf-pro space-y-0.5">
                           {(() => {
                             const attendance = getMonthlyAttendance(calculation.employeeId);
                             return (
                               <>
-                                <div className="leading-tight">Regular: {attendance.regularHours.toFixed(1)}h</div>
-                                <div className="text-orange-600 leading-tight">OT: {attendance.overtimeHours.toFixed(1)}h</div>
-                                <div className="text-purple-600 leading-tight">Night: {attendance.nightShiftHours.toFixed(1)}h</div>
-                                <div className="text-blue-600 leading-tight">Leave: 0.0h</div>
+                                <div className="leading-tight text-slate-700 dark:text-slate-300">Regular: {attendance.regularHours.toFixed(1)}h</div>
+                                <div className="leading-tight text-orange-600 dark:text-orange-300">OT: {attendance.overtimeHours.toFixed(1)}h</div>
+                                <div className="leading-tight text-purple-600 dark:text-purple-300">Night: {attendance.nightShiftHours.toFixed(1)}h</div>
+                                <div className="leading-tight text-blue-600 dark:text-blue-300">Leave: 0.0h</div>
                               </>
                             );
                           })()} 
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-sf-pro">R {calculation.attendancePay.toLocaleString()}</td>
-                      <td className="py-3 px-4 font-sf-pro">R {calculation.totalAllowances.toLocaleString()}</td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-green-600">R {calculation.grossSalary.toLocaleString()}</td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">
-                        {calculation.salaryAdvanceDeduction > 0 ? `-R ${calculation.salaryAdvanceDeduction.toLocaleString()}` : 'R 0'}
+                      <td className="py-3 px-4 font-sf-pro text-slate-900 dark:text-slate-200">{formatCurrency(calculation.attendancePay)}</td>
+                      <td className="py-3 px-4 font-sf-pro text-slate-900 dark:text-slate-200">{formatCurrency(calculation.totalAllowances)}</td>
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(calculation.grossSalary)}</td>
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600 dark:text-red-400">
+                        {calculation.salaryAdvanceDeduction > 0 ? `-${formatCurrency(calculation.salaryAdvanceDeduction)}` : formatCurrency(0)}
                       </td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600">
-                        -R {(calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction + calculation.employeeDeductions).toLocaleString()}
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-red-600 dark:text-red-400">
+                        {formatCurrency(-1 * (calculation.tax + calculation.uif.employeeContribution + calculation.salaryAdvanceDeduction + calculation.employeeDeductions))}
                       </td>
-                      <td className="py-3 px-4 font-sf-pro font-semibold text-mokm-purple-600">R {calculation.netSalary.toLocaleString()}</td>
+                      <td className="py-3 px-4 font-sf-pro font-semibold text-mokm-purple-600 dark:text-mokm-purple-300">{formatCurrency(calculation.netSalary)}</td>
                       <td className="py-3 px-4">
                         <div className="flex gap-2">
                           <Button
@@ -1181,7 +1389,7 @@ const PayrollManagement: React.FC = () => {
                               };
                               handleViewPayrollDetails(payrollCalc);
                             }}
-                            className="font-sf-pro"
+                            className="font-sf-pro border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10"
                             title="View Details"
                           >
                             <Eye className="h-4 w-4" />
@@ -1198,18 +1406,18 @@ const PayrollManagement: React.FC = () => {
                               handleDownloadPayslip(payrollCalc);
                             }}
                             disabled={downloadingPayslips.has(calculation.employeeId)}
-                            className="font-sf-pro text-mokm-purple-600 hover:text-mokm-purple-700 hover:bg-mokm-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="font-sf-pro border border-slate-300 text-mokm-purple-600 hover:bg-slate-50 dark:border-white/10 dark:text-mokm-purple-300 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                             title={downloadingPayslips.has(calculation.employeeId) ? "Generating payslip..." : "Download Payslip"}
                           >
                             {downloadingPayslips.has(calculation.employeeId) ? (
-                              <div className="animate-spin h-4 w-4 border-2 border-mokm-purple-600 border-t-transparent rounded-full" />
+                              <div className="animate-spin h-4 w-4 border-2 border-mokm-purple-600 dark:border-mokm-purple-300 border-t-transparent rounded-full" />
                             ) : (
                               <Download className="h-4 w-4" />
                             )}
                           </Button>
                           <Badge 
                             variant="secondary"
-                            className="font-sf-pro"
+                            className="font-sf-pro bg-slate-100 border border-slate-300 text-slate-700 dark:bg-white/10 dark:border-white/10 dark:text-slate-200"
                           >
                             calculated
                           </Badge>
@@ -1228,9 +1436,9 @@ const PayrollManagement: React.FC = () => {
 
       {/* Payroll Details Modal */}
       <Dialog open={showPayrollDetails} onOpenChange={setShowPayrollDetails}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-slate-900 font-sf-pro">
+            <DialogTitle className="text-2xl font-bold text-slate-100 font-sf-pro">
               Payroll Details - {selectedPayrollData?.employeeName}
             </DialogTitle>
           </DialogHeader>
@@ -1239,32 +1447,32 @@ const PayrollManagement: React.FC = () => {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Employee Information */}
-              <Card>
+              <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
                 <CardHeader>
-                  <CardTitle className="font-sf-pro">Employee Information</CardTitle>
+                  <CardTitle className="font-sf-pro text-slate-100">Employee Information</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Employee ID:</span>
-                    <span className="font-medium font-sf-pro">{selectedPayrollData.employeeId}</span>
+                    <span className="text-slate-400 font-sf-pro">Employee ID:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{selectedPayrollData.employeeId}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Name:</span>
-                    <span className="font-medium font-sf-pro">{selectedPayrollData.employeeName}</span>
+                    <span className="text-slate-400 font-sf-pro">Name:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{selectedPayrollData.employeeName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Base Salary:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.baseSalary?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Base Salary:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.baseSalary || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Period:</span>
-                    <span className="font-medium font-sf-pro">{selectedPayrollData.period}</span>
+                    <span className="text-slate-400 font-sf-pro">Period:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{selectedPayrollData.period}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Status:</span>
+                    <span className="text-slate-400 font-sf-pro">Status:</span>
                     <Badge 
                       variant={selectedPayrollData.status === 'paid' ? 'default' : 'secondary'}
-                      className="font-sf-pro"
+                      className="font-sf-pro bg-slate-100 border border-slate-300 text-slate-700 dark:bg-white/10 dark:border-white/10 dark:text-slate-200"
                     >
                       {selectedPayrollData.status}
                     </Badge>
@@ -1273,31 +1481,31 @@ const PayrollManagement: React.FC = () => {
               </Card>
 
               {/* Hours Breakdown */}
-              <Card>
+              <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
                 <CardHeader>
-                  <CardTitle className="font-sf-pro">Hours Breakdown</CardTitle>
+                  <CardTitle className="font-sf-pro text-slate-100">Hours Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Regular Hours:</span>
-                    <span className="font-medium font-sf-pro">{(selectedPayrollData.regularHours || 0).toFixed(1)}h</span>
+                    <span className="text-slate-400 font-sf-pro">Regular Hours:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{(selectedPayrollData.regularHours || 0).toFixed(1)}h</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-orange-600 font-sf-pro">Overtime Hours:</span>
-                    <span className="font-medium font-sf-pro">{(selectedPayrollData.overtimeHours || 0).toFixed(1)}h</span>
+                    <span className="text-orange-300 font-sf-pro">Overtime Hours:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{(selectedPayrollData.overtimeHours || 0).toFixed(1)}h</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-purple-600 font-sf-pro">Night Shift Hours:</span>
-                    <span className="font-medium font-sf-pro">{(selectedPayrollData.nightShiftHours || 0).toFixed(1)}h</span>
+                    <span className="text-purple-300 font-sf-pro">Night Shift Hours:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{(selectedPayrollData.nightShiftHours || 0).toFixed(1)}h</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-blue-600 font-sf-pro">Leave Hours:</span>
-                    <span className="font-medium font-sf-pro">{(selectedPayrollData.leaveHours || 0).toFixed(1)}h</span>
+                    <span className="text-blue-300 font-sf-pro">Leave Hours:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{(selectedPayrollData.leaveHours || 0).toFixed(1)}h</span>
                   </div>
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
-                      <span className="text-slate-900 font-sf-pro">Total Hours:</span>
-                      <span className="font-sf-pro">
+                      <span className="text-slate-100 font-sf-pro">Total Hours:</span>
+                      <span className="font-sf-pro text-slate-100">
                         {((selectedPayrollData.regularHours || 0) + (selectedPayrollData.overtimeHours || 0) + 
                           (selectedPayrollData.nightShiftHours || 0) + (selectedPayrollData.leaveHours || 0)).toFixed(1)}h
                       </span>
@@ -1307,74 +1515,74 @@ const PayrollManagement: React.FC = () => {
               </Card>
 
               {/* Earnings Breakdown */}
-              <Card>
+              <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
                 <CardHeader>
-                  <CardTitle className="font-sf-pro">Earnings Breakdown</CardTitle>
+                  <CardTitle className="font-sf-pro text-slate-100">Earnings Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Base Salary:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.baseSalary?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Base Salary:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.baseSalary || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Attendance Pay:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.attendancePay?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Attendance Pay:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.attendancePay || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Total Allowances:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.allowances?.totalAllowances?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Total Allowances:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.allowances?.totalAllowances || 0)}</span>
                   </div>
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
-                      <span className="text-green-600 font-sf-pro">Gross Salary:</span>
-                      <span className="text-green-600 font-sf-pro">R {selectedPayrollData.grossSalary?.toLocaleString() || '0'}</span>
+                      <span className="text-emerald-300 font-sf-pro">Gross Salary:</span>
+                      <span className="text-emerald-300 font-sf-pro">{formatCurrency(selectedPayrollData.grossSalary || 0)}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Deductions Breakdown */}
-              <Card>
+              <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
                 <CardHeader>
-                  <CardTitle className="font-sf-pro">Deductions Breakdown</CardTitle>
+                  <CardTitle className="font-sf-pro text-slate-100">Deductions Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro flex items-center gap-1">
+                    <span className="text-slate-400 font-sf-pro flex items-center gap-1">
                       PAYE:
-                      <span className="flex w-3 h-3 bg-green-100 rounded-full text-[8px] text-green-700 items-center justify-center" title="Synced from Employee Deductions Management (SA Payroll Calculator)">✓</span>
+                      <span className="flex w-3 h-3 bg-emerald-200/30 border border-emerald-300/30 rounded-full text-[8px] text-emerald-300 items-center justify-center" title="Synced from Employee Deductions Management (SA Payroll Calculator)">✓</span>
                     </span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.tax?.toLocaleString() || '0'}</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.deductions?.tax || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro flex items-center gap-1">
+                    <span className="text-slate-400 font-sf-pro flex items-center gap-1">
                       UIF:
-                      <span className="flex w-3 h-3 bg-green-100 rounded-full text-[8px] text-green-700 items-center justify-center" title="Synced from Employee Deductions Management (SA Payroll Calculator)">✓</span>
+                      <span className="flex w-3 h-3 bg-emerald-200/30 border border-emerald-300/30 rounded-full text-[8px] text-emerald-300 items-center justify-center" title="Synced from Employee Deductions Management (SA Payroll Calculator)">✓</span>
                     </span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.uif?.toLocaleString() || '0'}</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.deductions?.uif || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Medical Aid:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.medicalAid?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Medical Aid:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.deductions?.medicalAid || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Retirement Fund:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.retirementFund?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Retirement Fund:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.deductions?.retirementFund || 0)}</span>
                   </div>
                   {(selectedPayrollData.deductions?.salaryAdvance || 0) > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-red-600 font-sf-pro">Salary Advance:</span>
-                      <span className="text-red-600 font-medium font-sf-pro">R {selectedPayrollData.deductions?.salaryAdvance?.toLocaleString() || '0'}</span>
+                      <span className="text-red-400 font-sf-pro">Salary Advance:</span>
+                      <span className="text-red-400 font-medium font-sf-pro">{formatCurrency(selectedPayrollData.deductions?.salaryAdvance || 0)}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-slate-600 font-sf-pro">Other Deductions:</span>
-                    <span className="font-medium font-sf-pro">R {selectedPayrollData.deductions?.otherDeductions?.toLocaleString() || '0'}</span>
+                    <span className="text-slate-400 font-sf-pro">Other Deductions:</span>
+                    <span className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.deductions?.otherDeductions || 0)}</span>
                   </div>
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
-                      <span className="text-red-600 font-sf-pro">Total Deductions:</span>
-                      <span className="text-red-600 font-sf-pro">R {selectedPayrollData.deductions?.totalDeductions?.toLocaleString() || '0'}</span>
+                      <span className="text-red-400 font-sf-pro">Total Deductions:</span>
+                      <span className="text-red-400 font-sf-pro">{formatCurrency(selectedPayrollData.deductions?.totalDeductions || 0)}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1382,34 +1590,34 @@ const PayrollManagement: React.FC = () => {
 
               {/* Allowances Breakdown */}
               {(selectedPayrollData.allowances?.totalAllowances || 0) > 0 && (
-                <Card className="md:col-span-2">
+                <Card className="md:col-span-2 glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
                   <CardHeader>
-                    <CardTitle className="font-sf-pro">Allowances Breakdown</CardTitle>
+                    <CardTitle className="font-sf-pro text-slate-100">Allowances Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {(selectedPayrollData.allowances?.housingAllowance || 0) > 0 && (
                         <div className="text-center">
-                          <div className="text-sm text-slate-600 font-sf-pro">Housing</div>
-                          <div className="font-medium font-sf-pro">R {selectedPayrollData.allowances?.housingAllowance?.toLocaleString() || '0'}</div>
+                          <div className="text-sm text-slate-400 font-sf-pro">Housing</div>
+                          <div className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.allowances?.housingAllowance || 0)}</div>
                         </div>
                       )}
                       {(selectedPayrollData.allowances?.motorVehicleAllowance || 0) > 0 && (
                         <div className="text-center">
-                          <div className="text-sm text-slate-600 font-sf-pro">Motor Vehicle</div>
-                          <div className="font-medium font-sf-pro">R {selectedPayrollData.allowances?.motorVehicleAllowance?.toLocaleString() || '0'}</div>
+                          <div className="text-sm text-slate-400 font-sf-pro">Motor Vehicle</div>
+                          <div className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.allowances?.motorVehicleAllowance || 0)}</div>
                         </div>
                       )}
                       {(selectedPayrollData.allowances?.medicalAidAllowance || 0) > 0 && (
                         <div className="text-center">
-                          <div className="text-sm text-slate-600 font-sf-pro">Medical Aid</div>
-                          <div className="font-medium font-sf-pro">R {selectedPayrollData.allowances?.medicalAidAllowance?.toLocaleString() || '0'}</div>
+                          <div className="text-sm text-slate-400 font-sf-pro">Medical Aid</div>
+                          <div className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.allowances?.medicalAidAllowance || 0)}</div>
                         </div>
                       )}
                       {(selectedPayrollData.allowances?.otherAllowances || 0) > 0 && (
                         <div className="text-center">
-                          <div className="text-sm text-slate-600 font-sf-pro">Other</div>
-                          <div className="font-medium font-sf-pro">R {selectedPayrollData.allowances?.otherAllowances?.toLocaleString() || '0'}</div>
+                          <div className="text-sm text-slate-400 font-sf-pro">Other</div>
+                          <div className="font-medium font-sf-pro text-slate-100">{formatCurrency(selectedPayrollData.allowances?.otherAllowances || 0)}</div>
                         </div>
                       )}
                     </div>
@@ -1418,18 +1626,18 @@ const PayrollManagement: React.FC = () => {
               )}
 
               {/* Net Salary Summary */}
-              <Card className="md:col-span-2 bg-gradient-to-r from-purple-50 to-blue-50">
+              <Card className="md:col-span-2 glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 rounded-xl">
                 <CardContent className="p-6">
                   <div className="text-center">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2 font-sf-pro">Net Salary</h3>
-                    <div className="text-3xl font-bold text-purple-600 font-sf-pro">
-                      R {selectedPayrollData.netSalary?.toLocaleString() || '0'}
+                    <h3 className="text-lg font-semibold text-slate-100 mb-2 font-sf-pro">Net Salary</h3>
+                    <div className="text-3xl font-bold text-mokm-purple-300 font-sf-pro">
+                      {formatCurrency(selectedPayrollData.netSalary || 0)}
                     </div>
-                    <div className="text-sm text-slate-600 mt-2 font-sf-pro">
+                    <div className="text-sm text-slate-400 mt-2 font-sf-pro">
                       Base Salary + Attendance Pay + Allowances - Total Deductions
                     </div>
-                    <div className="text-sm text-slate-500 mt-1 font-sf-pro">
-                      R {selectedPayrollData.baseSalary?.toLocaleString() || '0'} + R {selectedPayrollData.attendancePay?.toLocaleString() || '0'} + R {selectedPayrollData.allowances?.totalAllowances?.toLocaleString() || '0'} - R {selectedPayrollData.deductions?.totalDeductions?.toLocaleString() || '0'}
+                    <div className="text-sm text-slate-400 mt-1 font-sf-pro">
+                      {`${formatCurrency(selectedPayrollData.baseSalary || 0)} + ${formatCurrency(selectedPayrollData.attendancePay || 0)} + ${formatCurrency(selectedPayrollData.allowances?.totalAllowances || 0)} - ${formatCurrency(selectedPayrollData.deductions?.totalDeductions || 0)}`}
                     </div>
                   </div>
                 </CardContent>
@@ -1459,34 +1667,39 @@ const PayrollManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
         </TabsContent>
+
+        <TabsContent value="projects" className="space-y-6">
+          <ProjectExpensesTab />
+        </TabsContent>
+
         
         <TabsContent value="advances" className="space-y-6">
           {/* Request New Salary Advance */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Request Salary Advance</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-100">Request Salary Advance</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-slate-600 font-sf-pro mb-4">Submit new salary advance requests for employees.</p>
+              <p className="text-slate-300 font-sf-pro mb-4">Submit new salary advance requests for employees.</p>
               <Dialog open={showAdvanceModal} onOpenChange={setShowAdvanceModal}>
                 <DialogTrigger asChild>
-                  <Button className="font-sf-pro">
+                  <Button className="font-sf-pro bg-slate-800/60 border border-white/10 text-slate-100 hover:bg-slate-800/80">
                     <CreditCard className="h-4 w-4 mr-2" />
                     New Salary Advance Request
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-md glass backdrop-blur-md bg-slate-900/60 border border-white/10 rounded-xl">
                   <DialogHeader>
-                    <DialogTitle>Request Salary Advance</DialogTitle>
+                    <DialogTitle className="text-slate-100">Request Salary Advance</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Employee</label>
+                      <label className="block text-sm font-medium mb-2 text-slate-300">Employee</label>
                       <Select value={advanceForm.employeeId} onValueChange={(value) => setAdvanceForm(prev => ({ ...prev, employeeId: value }))}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select employee" />
+                        <SelectTrigger className="bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400">
+                          <SelectValue placeholder="Select employee" className="text-slate-100" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-slate-900/80 border border-white/10 text-slate-100">
                           {salaryData.map(calc => (
                             <SelectItem key={calc.employeeId} value={calc.employeeId}>
                               {calc.employeeName}
@@ -1497,27 +1710,29 @@ const PayrollManagement: React.FC = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium mb-2">Amount (R)</label>
+                      <label className="block text-sm font-medium mb-2 text-slate-300">Amount (R)</label>
                       <Input
                         type="number"
                         value={advanceForm.amount}
                         onChange={(e) => setAdvanceForm(prev => ({ ...prev, amount: e.target.value }))}
                         placeholder="Enter amount"
+                        className="bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
                       />
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium mb-2">Reason</label>
+                      <label className="block text-sm font-medium mb-2 text-slate-300">Reason</label>
                       <Textarea
                         value={advanceForm.reason}
                         onChange={(e) => setAdvanceForm(prev => ({ ...prev, reason: e.target.value }))}
                         placeholder="Reason for salary advance"
+                        className="bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400"
                       />
                     </div>
                     
                     <div className="flex gap-2 justify-end">
-                      <Button variant="outline" onClick={() => setShowAdvanceModal(false)}>Cancel</Button>
-                      <Button onClick={handleSalaryAdvanceRequest}>Submit Request</Button>
+                      <Button variant="outline" onClick={() => setShowAdvanceModal(false)} className="border-white/15 text-slate-200 hover:bg-white/5">Cancel</Button>
+                      <Button onClick={handleSalaryAdvanceRequest} className="bg-slate-800/60 border border-white/10 text-slate-100 hover:bg-slate-800/80">Submit Request</Button>
                     </div>
                   </div>
                 </DialogContent>
@@ -1526,56 +1741,60 @@ const PayrollManagement: React.FC = () => {
           </Card>
 
           {/* Existing Salary Advances */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Salary Advance Management</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-100">Salary Advance Management</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200">
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Employee</th>
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Amount</th>
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Reason</th>
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Request Date</th>
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Deduction Period</th>
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Status</th>
-                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-700">Actions</th>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Employee</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Amount</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Reason</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Request Date</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Deduction Period</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Status</th>
+                      <th className="text-left py-3 px-4 font-sf-pro font-semibold text-slate-300">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {salaryAdvances.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-8 text-slate-500 font-sf-pro">
+                        <td colSpan={7} className="text-center py-8 text-slate-400 font-sf-pro">
                           No salary advances found. Click "New Salary Advance Request" to create one.
                         </td>
                       </tr>
                     ) : (
                       salaryAdvances.map((advance) => (
-                        <tr key={advance.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                        <tr key={advance.id} className="border-b border-white/5 hover:bg-white/5">
                           <td className="py-3 px-4">
                             <div>
-                              <p className="font-medium text-slate-900 font-sf-pro">{advance.employeeName}</p>
-                              <p className="text-sm text-slate-500 font-sf-pro">{advance.employeeId}</p>
+                              <p className="font-medium text-slate-100 font-sf-pro">{advance.employeeName}</p>
+                              <p className="text-sm text-slate-400 font-sf-pro">{advance.employeeId}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-sf-pro font-semibold text-green-600">
-                            R {advance.amount.toLocaleString()}
+                          <td className="py-3 px-4 font-sf-pro font-semibold text-emerald-400">
+                            {formatCurrency(advance.amount || 0)}
                           </td>
-                          <td className="py-3 px-4 font-sf-pro text-slate-600">
+                          <td className="py-3 px-4 font-sf-pro text-slate-300">
                             {advance.reason}
                           </td>
-                          <td className="py-3 px-4 font-sf-pro text-slate-600">
+                          <td className="py-3 px-4 font-sf-pro text-slate-300">
                             {new Date(advance.requestDate).toLocaleDateString()}
                           </td>
-                          <td className="py-3 px-4 font-sf-pro text-slate-600">
+                          <td className="py-3 px-4 font-sf-pro text-slate-300">
                             {advance.deductionPeriod}
                           </td>
                           <td className="py-3 px-4">
                             <Badge 
-                              variant={advance.status === 'approved' ? 'default' : advance.status === 'pending' ? 'secondary' : 'destructive'}
-                              className="font-sf-pro"
+                              variant={advance.status === 'approved' ? 'outline' : advance.status === 'pending' ? 'secondary' : 'destructive'}
+                              className={
+                                `font-sf-pro ${advance.status === 'approved' ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/30' : ''} ` +
+                                `${advance.status === 'pending' ? 'bg-slate-500/10 text-slate-300 border-white/10' : ''} ` +
+                                `${advance.status === 'rejected' ? 'bg-red-400/10 text-red-300 border-red-400/30' : ''}`
+                              }
                             >
                               {advance.status}
                             </Badge>
@@ -1587,7 +1806,7 @@ const PayrollManagement: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleApproveSalaryAdvance(advance.id)}
-                                  className="font-sf-pro text-green-600 border-green-600 hover:bg-green-50"
+                                  className="font-sf-pro text-emerald-300 border-emerald-400/30 hover:bg-emerald-400/10"
                                 >
                                   Approve
                                 </Button>
@@ -1597,13 +1816,13 @@ const PayrollManagement: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleRejectSalaryAdvance(advance.id)}
-                                  className="font-sf-pro text-red-600 border-red-600 hover:bg-red-50"
+                                  className="font-sf-pro text-red-300 border-red-400/30 hover:bg-red-400/10"
                                 >
                                   Reject
                                 </Button>
                               )}
                               {advance.status === 'approved' && (
-                                <Badge variant="outline" className="font-sf-pro text-green-600">
+                                <Badge variant="outline" className="font-sf-pro text-emerald-300 border-emerald-400/30">
                                   Deducted from Payroll
                                 </Badge>
                               )}

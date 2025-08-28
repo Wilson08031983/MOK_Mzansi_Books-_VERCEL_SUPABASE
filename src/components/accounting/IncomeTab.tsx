@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { 
   Search, 
   Plus, 
@@ -21,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 interface Income {
   id: string;
@@ -44,6 +46,8 @@ interface IncomeTabProps {
 }
 
 const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
+  const { formatCurrency } = useLocalization();
+  const { logUpdate, logAudit } = useAuditLogger();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -274,19 +278,34 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
   // Handle status change
   const handleStatusChange = (incomeId: string, newStatus: 'pending' | 'received' | 'overdue') => {
     setIncomes(prevIncomes => {
+      const oldIncome = prevIncomes.find(i => i.id === incomeId);
       const updatedIncomes = prevIncomes.map(income => 
         income.id === incomeId ? { ...income, status: newStatus } : income
       );
-      
+
       // Update localStorage for all non-payment data (including sample data)
       const storedIncomes = updatedIncomes.filter(income => 
         !income.id.startsWith('PAY-')
       );
       localStorage.setItem('incomes', JSON.stringify(storedIncomes));
-      
+
       // Dispatch event for real-time updates
       window.dispatchEvent(new CustomEvent('income-updated'));
-      
+
+      // Audit: status update
+      try {
+        const updated = updatedIncomes.find(i => i.id === incomeId);
+        if (oldIncome && updated) {
+          logUpdate(
+            'income',
+            updated.description || updated.id,
+            updated.id,
+            { status: oldIncome.status },
+            { status: updated.status }
+          );
+        }
+      } catch {}
+
       return updatedIncomes;
     });
   };
@@ -295,6 +314,18 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
   const handleEditIncome = (incomeId: string) => {
     const income = incomes.find(inc => inc.id === incomeId);
     if (income && onEditIncome) {
+      try {
+        logAudit({
+          category: 'financial',
+          action: 'Viewed Income Record',
+          entityType: 'income',
+          entityId: income.id,
+          entityName: income.description || income.id,
+          changeType: 'read',
+          description: `Opened income record ${income.description || income.id} for editing`,
+          metadata: { amount: income.amount, status: income.status }
+        });
+      } catch {}
       onEditIncome(income);
     }
   };
@@ -317,12 +348,12 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
     <div className="space-y-6">
       {/* Income Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Income</p>
-                <p className="text-2xl font-bold text-slate-900">R{totalIncome.toLocaleString()}</p>
+                <p className="text-sm font-medium text-slate-300">Total Income</p>
+                <p className="text-2xl font-bold text-slate-100">{formatCurrency(totalIncome)}</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center">
                 <TrendingUp className="h-5 w-5 text-white" />
@@ -331,12 +362,12 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Received</p>
-                <p className="text-2xl font-bold text-green-600">R{receivedIncome.toLocaleString()}</p>
+                <p className="text-sm font-medium text-slate-300">Received</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(receivedIncome)}</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center">
                 <FileCheck className="h-5 w-5 text-white" />
@@ -345,12 +376,12 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">R{pendingIncome.toLocaleString()}</p>
+                <p className="text-sm font-medium text-slate-300">Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">{formatCurrency(pendingIncome)}</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg flex items-center justify-center">
                 <Clock className="h-5 w-5 text-white" />
@@ -359,12 +390,12 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+        <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Overdue</p>
-                <p className="text-2xl font-bold text-red-600">R{overdueIncome.toLocaleString()}</p>
+                <p className="text-sm font-medium text-slate-300">Overdue</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(overdueIncome)}</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center">
                 <AlertCircle className="h-5 w-5 text-white" />
@@ -375,13 +406,24 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
       </div>
 
       {/* Income Management */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/40 border-white/10 shadow-business">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="text-xl font-semibold text-slate-900 font-sf-pro">Income Records</CardTitle>
+            <CardTitle className="text-xl font-semibold text-slate-100 font-sf-pro">Income Records</CardTitle>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button 
-                onClick={onAddIncome}
+                onClick={() => {
+                  try {
+                    logAudit({
+                      category: 'financial',
+                      action: 'Initiated Add Income',
+                      entityType: 'income',
+                      changeType: 'create',
+                      description: 'User initiated adding a new income record'
+                    });
+                  } catch {}
+                  onAddIncome && onAddIncome();
+                }}
                 className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 text-white hover:shadow-colored-lg transition-all duration-300"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -390,7 +432,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
               <Button 
                 variant="outline" 
                 onClick={() => setShowFilters(!showFilters)}
-                className="border-slate-200 hover:bg-slate-50"
+                className="border-white/10 text-slate-200 hover:bg-slate-900/60"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filters
@@ -408,19 +450,19 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
               placeholder="Search income records, clients, projects, or invoice numbers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 border-slate-200 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
+              className="pl-10 glass backdrop-blur-sm bg-slate-900/40 border border-white/10 text-slate-100 placeholder:text-slate-400 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
             />
           </div>
 
           {/* Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-lg glass backdrop-blur-sm bg-slate-900/30 border border-white/10">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
                 <select 
                   value={statusFilter} 
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
+                  className="w-full p-2 border border-white/10 rounded-md bg-slate-900/40 text-slate-100 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
                 >
                   <option value="all">All Statuses</option>
                   <option value="received">Received</option>
@@ -430,11 +472,11 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
                 <select 
                   value={categoryFilter} 
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
+                  className="w-full p-2 border border-white/10 rounded-md bg-slate-900/40 text-slate-100 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
                 >
                   <option value="all">All Categories</option>
                   {categories.map(category => (
@@ -444,11 +486,11 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Date Range</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Date Range</label>
                 <select 
                   value={dateRangeFilter} 
                   onChange={(e) => setDateRangeFilter(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
+                  className="w-full p-2 border border-white/10 rounded-md bg-slate-900/40 text-slate-100 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
                 >
                   <option value="all">All Time</option>
                   <option value="today">Today</option>
@@ -458,11 +500,11 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Sort By</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Sort By</label>
                 <select 
                   value={sortBy} 
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-md focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
+                  className="w-full p-2 border border-white/10 rounded-md bg-slate-900/40 text-slate-100 focus:border-mokm-purple-500 focus:ring-mokm-purple-500"
                 >
                   <option value="date">Date</option>
                   <option value="amount">Amount</option>
@@ -477,39 +519,39 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
           {/* Income Table */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left p-3 font-medium text-slate-700 cursor-pointer hover:text-mokm-purple-600" onClick={() => handleSort('date')}>
+              <thead className="bg-slate-900/30">
+                <tr className="border-b border-white/10">
+                  <th className="text-left p-3 font-medium text-slate-400 cursor-pointer hover:text-slate-200" onClick={() => handleSort('date')}>
                     Date {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-left p-3 font-medium text-slate-700 cursor-pointer hover:text-mokm-purple-600" onClick={() => handleSort('description')}>
+                  <th className="text-left p-3 font-medium text-slate-400 cursor-pointer hover:text-slate-200" onClick={() => handleSort('description')}>
                     Description {sortBy === 'description' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-left p-3 font-medium text-slate-700 cursor-pointer hover:text-mokm-purple-600" onClick={() => handleSort('amount')}>
+                  <th className="text-left p-3 font-medium text-slate-400 cursor-pointer hover:text-slate-200" onClick={() => handleSort('amount')}>
                     Amount {sortBy === 'amount' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-left p-3 font-medium text-slate-700 cursor-pointer hover:text-mokm-purple-600" onClick={() => handleSort('category')}>
+                  <th className="text-left p-3 font-medium text-slate-400 cursor-pointer hover:text-slate-200" onClick={() => handleSort('category')}>
                     Category {sortBy === 'category' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-left p-3 font-medium text-slate-700 cursor-pointer hover:text-mokm-purple-600" onClick={() => handleSort('status')}>
+                  <th className="text-left p-3 font-medium text-slate-400 cursor-pointer hover:text-slate-200" onClick={() => handleSort('status')}>
                     Status {sortBy === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className="text-left p-3 font-medium text-slate-700">Actions</th>
+                  <th className="text-left p-3 font-medium text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredIncomes.map((income) => (
                   <React.Fragment key={income.id}>
-                    <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                      <td className="p-3 text-slate-900">{new Date(income.date).toLocaleDateString()}</td>
+                    <tr className="border-b border-white/5 hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 text-slate-100">{new Date(income.date).toLocaleDateString()}</td>
                       <td className="p-3">
                         <div>
-                          <p className="font-medium text-slate-900">{income.description}</p>
-                          {income.client && <p className="text-sm text-slate-600">{income.client}</p>}
+                          <p className="font-medium text-slate-100">{income.description}</p>
+                          {income.client && <p className="text-sm text-slate-400">{income.client}</p>}
                         </div>
                       </td>
-                      <td className="p-3 font-semibold text-green-600">R{income.amount.toLocaleString()}</td>
-                      <td className="p-3 text-slate-700">{income.category}</td>
+                      <td className="p-3 font-semibold text-green-600">{formatCurrency(income.amount)}</td>
+                      <td className="p-3 text-slate-300">{income.category}</td>
                       <td className="p-3">
                         <select 
                           value={income.status}
@@ -527,7 +569,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
                             variant="ghost" 
                             size="sm" 
                             onClick={() => toggleIncomeDetails(income.id)}
-                            className="text-slate-600 hover:text-mokm-purple-600"
+                            className="text-slate-300 hover:text-slate-100"
                           >
                             {selectedIncome === income.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </Button>
@@ -535,7 +577,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
                             variant="ghost" 
                             size="sm" 
                             onClick={() => handleEditIncome(income.id)}
-                            className="text-slate-600 hover:text-mokm-purple-600"
+                            className="text-slate-300 hover:text-slate-100"
                             title="Edit Income Record"
                           >
                             <Edit className="h-4 w-4" />
@@ -548,25 +590,25 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
                     {selectedIncome === income.id && (
                       <tr>
                         <td colSpan={6} className="p-0">
-                          <div className="bg-slate-50 p-4 border-l-4 border-mokm-purple-500">
+                          <div className="bg-slate-900/30 p-4 border-l-4 border-mokm-purple-500">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               <div>
-                                <h4 className="font-medium text-slate-900 mb-2">Payment Details</h4>
-                                <p className="text-sm text-slate-600">Method: {income.paymentMethod}</p>
-                                {income.invoiceNumber && <p className="text-sm text-slate-600">Invoice: {income.invoiceNumber}</p>}
-                                {income.dueDate && <p className="text-sm text-slate-600">Due Date: {new Date(income.dueDate).toLocaleDateString()}</p>}
+                                <h4 className="font-medium text-slate-100 mb-2">Payment Details</h4>
+                                <p className="text-sm text-slate-400">Method: {income.paymentMethod}</p>
+                                {income.invoiceNumber && <p className="text-sm text-slate-400">Invoice: {income.invoiceNumber}</p>}
+                                {income.dueDate && <p className="text-sm text-slate-400">Due Date: {new Date(income.dueDate).toLocaleDateString()}</p>}
                               </div>
                               
                               {income.project && (
                                 <div>
-                                  <h4 className="font-medium text-slate-900 mb-2">Project Information</h4>
-                                  <p className="text-sm text-slate-600">Project: {income.project}</p>
-                                  {income.client && <p className="text-sm text-slate-600">Client: {income.client}</p>}
+                                  <h4 className="font-medium text-slate-100 mb-2">Project Information</h4>
+                                  <p className="text-sm text-slate-400">Project: {income.project}</p>
+                                  {income.client && <p className="text-sm text-slate-400">Client: {income.client}</p>}
                                 </div>
                               )}
                               
                               <div>
-                                <h4 className="font-medium text-slate-900 mb-2">Documentation</h4>
+                                <h4 className="font-medium text-slate-100 mb-2">Documentation</h4>
                                 <div className="flex items-center gap-2">
                                   {income.hasInvoice ? (
                                     <span className="flex items-center text-sm text-green-600">
@@ -585,8 +627,8 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
                             
                             {income.notes && (
                               <div className="mt-4">
-                                <h4 className="font-medium text-slate-900 mb-2">Notes</h4>
-                                <p className="text-sm text-slate-600 bg-white p-3 rounded border">{income.notes}</p>
+                                <h4 className="font-medium text-slate-100 mb-2">Notes</h4>
+                                <p className="text-sm text-slate-100 bg-slate-900/40 p-3 rounded border border-white/10">{income.notes}</p>
                               </div>
                             )}
                           </div>
@@ -601,7 +643,7 @@ const IncomeTab: React.FC<IncomeTabProps> = ({ onAddIncome, onEditIncome }) => {
             {filteredIncomes.length === 0 && (
               <div className="text-center py-8">
                 <DollarSign className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                <p className="text-slate-600">No income records found matching your criteria.</p>
+                <p className="text-slate-400">No income records found matching your criteria.</p>
               </div>
             )}
           </div>

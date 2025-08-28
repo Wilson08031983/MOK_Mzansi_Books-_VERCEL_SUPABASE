@@ -13,6 +13,7 @@ import AddIncomeModal from '@/components/accounting/AddIncomeModal';
 import EditIncomeModal from '@/components/accounting/EditIncomeModal';
 import { financialSummaryService, FinancialSummary } from '../services/financialSummaryService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import { addNotification } from '@/services/notificationService';
 
 const Accounting = () => {
   const { t, formatCurrency, getCurrencySymbol } = useLocalization();
@@ -57,6 +58,42 @@ const Accounting = () => {
     const interval = setInterval(loadFinancialSummary, 30000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  // On Accounting page load, detect overdue tax returns and send notifications once per return
+  useEffect(() => {
+    try {
+      const STORAGE_KEY = 'mokm_business_tax_returns';
+      const NOTIFIED_OVERDUE_KEY = 'mokm_overdue_tax_notified_ids';
+      const storedReturns = localStorage.getItem(STORAGE_KEY);
+      if (!storedReturns) return;
+      const taxReturns: Array<{ id: string; name: string; dueDate: string; status?: string; amount?: number }> = JSON.parse(storedReturns);
+      const now = new Date();
+      const idempotentMapRaw = localStorage.getItem(NOTIFIED_OVERDUE_KEY);
+      const notifiedIds: Record<string, boolean> = idempotentMapRaw ? JSON.parse(idempotentMapRaw) : {};
+
+      let changed = false;
+      taxReturns
+        .filter(tr => (tr.status !== 'completed') && new Date(tr.dueDate) < now)
+        .forEach(tr => {
+          if (!notifiedIds[tr.id]) {
+            const amountText = tr.amount ? ` Amount: R${tr.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}.` : '';
+            addNotification({
+              title: 'Overdue Tax Return',
+              message: `${tr.name} (due ${tr.dueDate}) is overdue.${amountText}`,
+              type: 'system'
+            });
+            notifiedIds[tr.id] = true;
+            changed = true;
+          }
+        });
+
+      if (changed) {
+        localStorage.setItem(NOTIFIED_OVERDUE_KEY, JSON.stringify(notifiedIds));
+      }
+    } catch (err) {
+      console.error('Failed to process overdue tax notifications on Accounting load:', err);
+    }
   }, []);
 
   // Handle navigation state (from other pages like HR or Dashboard Quick Actions)
@@ -330,11 +367,7 @@ const Accounting = () => {
             </TabsContent>
 
             <TabsContent value="tax">
-              <TaxTab 
-                selectedEmployee={selectedEmployee}
-                taxSubTab={taxSubTab}
-                onEmployeeChange={setSelectedEmployee}
-              />
+              <TaxTab />
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-6">

@@ -40,7 +40,13 @@ const QuotationItemsList: React.FC<QuotationItemsListProps> = ({
     let discountTotal = 0;
     
     items.forEach(item => {
-      const itemSubtotal = item.quantity * item.unitPrice;
+      let itemSubtotal = item.quantity * item.unitPrice;
+      // Apply markup if present
+      if (item.markupPercent && item.markupPercent > 0) {
+        const markupAmount = (itemSubtotal * item.markupPercent) / 100;
+        itemSubtotal += markupAmount;
+      }
+      
       const itemDiscount = item.discount || 0;
       const itemTax = item.taxRate ? (itemSubtotal * item.taxRate) / 100 : 0;
       

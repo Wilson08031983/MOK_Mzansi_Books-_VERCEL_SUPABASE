@@ -35,6 +35,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { getAllTeamMembers } from '@/services/localAuthService';
 import { activityService } from '@/services/activityService';
+import expenseStorageService from '@/services/expenseStorageService';
+import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
 
 // Using shared types from types/project.ts
 
@@ -66,6 +68,8 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
 }) => {
   // State for the project
   const [project, setProject] = useState<Project>({...initialProject});
+  // Sync service singleton
+  const syncService = ExpenseProjectSyncService.getInstance();
   
   const [expensesTotal, setExpensesTotal] = useState<number>(0);
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
@@ -186,6 +190,37 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
       console.warn('Activity logging failed (project update):', err);
     }
     
+    try {
+      // Final sync of all project expenses to shared storage before save
+      (updatedProject.expenseItems || []).forEach(exp => {
+        const existing = expenseStorageService.getExpenseById(exp.id);
+        const base = {
+          date: exp.date,
+          description: exp.type || 'Project Expense',
+          category: exp.type || 'Other',
+          amount: exp.amount,
+          transactionType: 'slip' as const,
+          projectId: updatedProject.id,
+          projectName: updatedProject.name,
+          projectCode: updatedProject.code,
+          status: 'pending' as const,
+          receipt: (exp as any).receipt,
+          notes: (exp as any).notes
+        };
+        if (existing) {
+          expenseStorageService.updateExpense(exp.id, base as any);
+        } else {
+          const created = expenseStorageService.createExpense(base as any);
+          // Ensure the project item uses canonical ID
+          exp.id = created.id;
+        }
+      });
+      // Update totals across projects
+      syncService.updateProjectExpenses(updatedProject.id);
+    } catch (e) {
+      console.warn('Expense sync on save encountered an issue:', e);
+    }
+
     onSave(updatedProject);
     onClose();
   };
@@ -226,10 +261,19 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
   const saveTaskTemplate = () => {
     if (!templateName.trim() || !project.tasks || project.tasks.length === 0) return;
     
+    // Strip proof fields from tasks when saving a template
+    const templateTasks = project.tasks.map(t => ({
+      id: t.id,
+      name: t.name,
+      startDate: t.startDate,
+      endDate: t.endDate,
+      completed: false
+    } as Task));
+
     const newTemplate: TaskTemplate = {
       id: Date.now().toString(),
       name: templateName,
-      tasks: [...project.tasks]
+      tasks: templateTasks
     };
     
     const updatedTemplates = [...taskTemplates, newTemplate];
@@ -246,10 +290,17 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
     if (template) {
       // Clone the tasks to ensure new IDs
       const clonedTasks = template.tasks.map(task => ({
-        ...task,
         id: Date.now() + Math.random().toString(),
-        completed: false // Reset completion status
-      }));
+        name: task.name,
+        startDate: task.startDate,
+        endDate: task.endDate,
+        completed: false,
+        // Ensure proof fields are cleared when loading template
+        proofImage: '',
+        proofImageType: '',
+        proofImageName: '',
+        proofSnippet: ''
+      } as Task));
       
       setProject(prev => ({...prev, tasks: clonedTasks}));
     }
@@ -258,20 +309,63 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
 
   // Expense functions
   const addExpense = () => {
-    const newExpense: Expense = {
+    // Create a placeholder project expense locally first
+    const placeholder: Expense = {
       id: Date.now().toString(),
       type: '',
       amount: 0,
       date: new Date().toISOString().split('T')[0]
     };
-    
-    setProject(prev => ({
-      ...prev,
-      expenseItems: [...(prev.expenseItems || []), newExpense]
-    }));
+
+    // Persist to shared manual expenses storage to get canonical ID
+    try {
+      const created = expenseStorageService.createExpense({
+        date: placeholder.date,
+        description: placeholder.type || 'Project Expense',
+        category: placeholder.type || 'Other',
+        amount: placeholder.amount,
+        transactionType: 'slip',
+        projectId: project.id,
+        projectName: project.name,
+        projectCode: project.code,
+        status: 'pending',
+        receipt: (placeholder as any).receipt || undefined,
+        notes: (placeholder as any).notes || undefined
+      } as any);
+
+      const projectExpense: Expense = {
+        ...placeholder,
+        id: created.id,
+      };
+
+      setProject(prev => ({
+        ...prev,
+        expenseItems: [...(prev.expenseItems || []), projectExpense]
+      }));
+
+      // Update project totals
+      syncService.updateProjectExpenses(project.id);
+    } catch (e) {
+      console.error('Failed to create shared expense for project:', e);
+      // Fallback to only local addition
+      setProject(prev => ({
+        ...prev,
+        expenseItems: [...(prev.expenseItems || []), placeholder]
+      }));
+    }
   };
 
   const removeExpense = (expenseId: string) => {
+    // Remove from shared storage if it exists there
+    try {
+      const deleted = expenseStorageService.deleteExpense(expenseId);
+      if (deleted) {
+        syncService.updateProjectExpenses(project.id);
+      }
+    } catch (e) {
+      console.warn('Could not delete shared expense (may not exist):', e);
+    }
+
     setProject(prev => ({
       ...prev,
       expenseItems: prev.expenseItems?.filter(expense => expense.id !== expenseId)
@@ -279,12 +373,65 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
   };
 
   const updateExpense = (expenseId: string, field: keyof Expense, value: string | number) => {
+    // Update local state immediately for UI responsiveness
     setProject(prev => ({
       ...prev,
       expenseItems: prev.expenseItems?.map(expense => 
         expense.id === expenseId ? {...expense, [field]: value} : expense
       )
     }));
+
+    // Persist/update to shared manual expenses storage
+    try {
+      const target = (project.expenseItems || []).find(e => e.id === expenseId);
+      const effective: any = target ? { ...target, [field]: value } : { [field]: value };
+
+      // Map project expense fields to StoredExpense update shape
+      const updates: any = {};
+      if (field === 'amount') updates.amount = Number(value) || 0;
+      if (field === 'date') updates.date = String(value);
+      if (field === 'type') {
+        updates.category = String(value) || 'Other';
+        updates.description = String(value) || 'Project Expense';
+      }
+      if (field === 'receipt') updates.receipt = value as string;
+      if (field === 'notes') updates.notes = value as string;
+
+      // Always ensure project linkage is set
+      updates.projectId = project.id;
+      updates.projectName = project.name;
+      updates.projectCode = project.code;
+
+      // If the expense exists, update it; otherwise create and replace ID in project state
+      const existing = expenseStorageService.getExpenseById(expenseId);
+      if (existing) {
+        expenseStorageService.updateExpense(expenseId, updates);
+      } else {
+        const created = expenseStorageService.createExpense({
+          date: effective.date || new Date().toISOString().split('T')[0],
+          description: effective.type || 'Project Expense',
+          category: effective.type || 'Other',
+          amount: typeof effective.amount === 'number' ? effective.amount : Number(effective.amount) || 0,
+          transactionType: 'slip',
+          projectId: project.id,
+          projectName: project.name,
+          projectCode: project.code,
+          status: 'pending',
+          receipt: effective.receipt,
+          notes: effective.notes
+        } as any);
+
+        // Replace local id with created.id so future updates map correctly
+        setProject(prev => ({
+          ...prev,
+          expenseItems: prev.expenseItems?.map(exp => exp.id === expenseId ? { ...exp, id: created.id } : exp)
+        }));
+      }
+
+      syncService.updateProjectExpenses(project.id);
+    } catch (e) {
+      console.error('Failed to sync project expense to shared storage:', e);
+    }
   };
   
   // State to track file upload loading state
@@ -374,6 +521,49 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
     updateExpense(expenseId, 'receipt', '');
     updateExpense(expenseId, 'receiptType', '');
     updateExpense(expenseId, 'receiptName', '');
+  };
+
+  // =====================
+  // Task proof upload API
+  // =====================
+  const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
+  const [taskUploadError, setTaskUploadError] = useState<string | null>(null);
+
+  const handleTaskProofUpload = (taskId: string, file: File) => {
+    setTaskUploadError(null);
+    setUploadingTaskId(taskId);
+
+    if (file.size > 8 * 1024 * 1024) { // 8MB limit for images
+      setTaskUploadError('Image exceeds 8MB limit');
+      setUploadingTaskId(null);
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setTaskUploadError('Only image files are allowed');
+      setUploadingTaskId(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      updateTask(taskId, 'proofImage', dataUrl);
+      updateTask(taskId, 'proofImageType', file.type);
+      updateTask(taskId, 'proofImageName', file.name);
+      setUploadingTaskId(null);
+    };
+    reader.onerror = () => {
+      setTaskUploadError('Failed to read image');
+      setUploadingTaskId(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleTaskProofDelete = (taskId: string) => {
+    updateTask(taskId, 'proofImage', '');
+    updateTask(taskId, 'proofImageType', '');
+    updateTask(taskId, 'proofImageName', '');
   };
 
   // Calculate time remaining for a task
@@ -632,7 +822,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
                             </Button>
                           </div>
                           
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-7">
                             <div className="md:col-span-2">
                               <Label htmlFor={`task-name-${task.id}`}>Task Name</Label>
                               <Input
@@ -679,6 +869,83 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({
                                   onCheckedChange={(checked) => updateTask(task.id, 'completed', Boolean(checked))}
                                 />
                                 <Label htmlFor={`task-completed-${task.id}`}>Mark as Complete</Label>
+                              </div>
+                            </div>
+
+                            {/* Proof upload + snippet */}
+                            <div className="md:col-span-2">
+                              <Label htmlFor={`task-proof-${task.id}`}>Proof of Completion</Label>
+                              <div className="mt-2 space-y-2">
+                                <input
+                                  id={`task-proof-${task.id}`}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                      handleTaskProofUpload(task.id, e.target.files[0]);
+                                    }
+                                  }}
+                                />
+                                {!task.proofImage ? (
+                                  <div className="flex items-center space-x-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => document.getElementById(`task-proof-${task.id}`)?.click()}
+                                      disabled={uploadingTaskId === task.id}
+                                    >
+                                      {uploadingTaskId === task.id ? (
+                                        <>
+                                          <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                                          Uploading...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Upload className="h-4 w-4 mr-2" /> Upload Image
+                                        </>
+                                      )}
+                                    </Button>
+                                    {taskUploadError && <span className="text-xs text-red-600">{taskUploadError}</span>}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-start space-x-3">
+                                    <img
+                                      src={task.proofImage}
+                                      alt={task.proofImageName || 'Task proof'}
+                                      className="h-16 w-16 object-cover rounded border"
+                                    />
+                                    <div className="flex-1 space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => document.getElementById(`task-proof-${task.id}`)?.click()}
+                                        >
+                                          <Upload className="h-4 w-4 mr-2" /> Replace
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleTaskProofDelete(task.id)}
+                                          title="Remove image"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <div>
+                                        <Label htmlFor={`task-proof-snippet-${task.id}`}>Snippet/Notes</Label>
+                                        <Textarea
+                                          id={`task-proof-snippet-${task.id}`}
+                                          rows={2}
+                                          placeholder="Add a short description of the completed work"
+                                          value={task.proofSnippet || ''}
+                                          onChange={(e) => updateTask(task.id, 'proofSnippet', e.target.value)}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -275,7 +275,7 @@ class UserLinkingService {
       const teamMembers = getAllTeamMembers();
       console.log('🔄 syncPrimaryUser: Current team members:', teamMembers.map(m => ({ id: m.id, email: m.email, fullName: m.fullName, role: m.role })));
       
-      let primaryTeamMember = teamMembers.find(member => 
+      const primaryTeamMember = teamMembers.find(member => 
         member.email.toLowerCase() === this.PRIMARY_USER_EMAIL.toLowerCase()
       );
       

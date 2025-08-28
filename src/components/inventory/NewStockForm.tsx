@@ -17,6 +17,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '
 import BarcodeScanner from './BarcodeScanner';
 import { playBeepSound } from '@/utils/audioUtils';
 import ImageUpload from './ImageUpload';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface NewStockFormProps {
   onClose: () => void;
@@ -24,6 +25,7 @@ interface NewStockFormProps {
 }
 
 const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '' }) => {
+  const { getCurrencySymbol } = useLocalization();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -377,7 +379,7 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             
             {/* Purchase Amount */}
             <div className="space-y-2">
-              <Label htmlFor="purchaseAmount">Purchase Amount (R)</Label>
+              <Label htmlFor="purchaseAmount">Purchase Amount ({getCurrencySymbol()})</Label>
               <Input
                 id="purchaseAmount"
                 name="purchaseAmount"
@@ -396,7 +398,7 @@ const NewStockForm: React.FC<NewStockFormProps> = ({ onClose, initialBarcode = '
             
             {/* Selling Price */}
             <div className="space-y-2">
-              <Label htmlFor="sellingPrice">Selling Price (R)</Label>
+              <Label htmlFor="sellingPrice">Selling Price ({getCurrencySymbol()})</Label>
               <Input
                 id="sellingPrice"
                 name="sellingPrice"

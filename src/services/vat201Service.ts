@@ -167,10 +167,10 @@ export const calculateVAT201 = (startDateStr: string, endDateStr: string): VAT20
   console.log(`- expenses: ${expensesStr ? expensesStr.substring(0, 100) + '...' : 'null'}`);
   console.log(`- manual_expenses: ${manualExpensesStr ? manualExpensesStr.substring(0, 100) + '...' : 'null'}`);
   
-  let allInvoices = invoicesStr ? JSON.parse(invoicesStr) : [];
-  let allIncomes = incomesStr ? JSON.parse(incomesStr) : [];
+  const allInvoices = invoicesStr ? JSON.parse(invoicesStr) : [];
+  const allIncomes = incomesStr ? JSON.parse(incomesStr) : [];
   let allExpenses = expensesStr ? JSON.parse(expensesStr) : [];
-  let manualExpenses = manualExpensesStr ? JSON.parse(manualExpensesStr) : [];
+  const manualExpenses = manualExpensesStr ? JSON.parse(manualExpensesStr) : [];
   
   // Combine both expense sources
   allExpenses = [...allExpenses, ...manualExpenses];

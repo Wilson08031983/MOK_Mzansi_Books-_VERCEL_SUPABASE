@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -122,6 +123,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
 }) => {
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const { t } = useLocalization();
 
   const handleDeleteClick = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -134,7 +136,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
       onDelete(invoiceToDelete);
       setShowDeleteDialog(false);
       setInvoiceToDelete(null);
-      toast.success('Invoice deleted successfully');
+      toast.success(t('invoices.toasts.deleted'));
     }
   };
 
@@ -151,7 +153,8 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
   };
 
   const formatStatus = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    const key = `invoices.statusLabels.${status.toLowerCase()}`;
+    return t(key);
   };
 
   const isAllSelected = invoices.length > 0 && selectedInvoices.length === invoices.length;
@@ -159,11 +162,11 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
 
   return (
     <>
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+      <Card className="bg-white dark:bg-black/30 border border-slate-200 dark:border-white/10 shadow-business">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-slate-200">
+              <thead className="border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-transparent">
                 <tr>
                   <th className="text-left p-4">
                     <Checkbox
@@ -175,61 +178,61 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                     />
                   </th>
                   <th 
-                    className="text-left p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    className="text-left p-4 font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('number')}
                   >
                     <div className="flex items-center gap-2">
-                      Invoice #
+                      {t('invoices.invoiceNumber')}
                       <SortIcon field="number" />
                     </div>
                   </th>
                   <th 
-                    className="text-left p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    className="text-left p-4 font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('client')}
                   >
                     <div className="flex items-center gap-2">
-                      Client
+                      {t('invoices.client')}
                       <SortIcon field="client" />
                     </div>
                   </th>
                   <th 
-                    className="text-right p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    className="text-right p-4 font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('date')}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      Date
+                      {t('invoices.date')}
                       <SortIcon field="date" />
                     </div>
                   </th>
                   <th 
-                    className="text-right p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    className="text-right p-4 font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('amount')}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      Amount
+                      {t('invoices.amount')}
                       <SortIcon field="amount" />
                     </div>
                   </th>
                   <th 
-                    className="text-right p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    className="text-right p-4 font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('vat')}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      VAT Amount
+                      {t('invoices.vatAmount')}
                       <SortIcon field="vat" />
                     </div>
                   </th>
                   <th 
-                    className="text-center p-4 font-medium text-slate-700 cursor-pointer hover:text-slate-900 font-sf-pro whitespace-nowrap"
+                    className="text-center p-4 font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer font-sf-pro whitespace-nowrap"
                     onClick={() => onSort('status')}
                   >
                     <div className="flex items-center justify-center gap-2">
-                      Status
+                      {t('invoices.status')}
                       <SortIcon field="status" />
                     </div>
                   </th>
                   <th className="w-10 p-4">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('invoices.actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -239,7 +242,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                   return (
                     <tr
                       key={invoice.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                      className="border-b border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors cursor-pointer"
                       onClick={() => onView(invoice)}
                     >
                       <td className="p-4">
@@ -250,20 +253,20 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                           className="border-slate-300"
                         />
                       </td>
-                      <td className="p-4 font-medium text-slate-900 font-sf-pro whitespace-nowrap">
+                      <td className="p-4 font-medium text-slate-900 dark:text-slate-100 font-sf-pro whitespace-nowrap">
                         {invoice.number}
                       </td>
-                      <td className="p-4 text-slate-700 font-sf-pro">
+                      <td className="p-4 text-slate-600 dark:text-slate-300 font-sf-pro">
                         {invoice.clientName}
                       </td>
-                      <td className="p-4 text-slate-700 text-right font-sf-pro whitespace-nowrap">
+                      <td className="p-4 text-slate-600 dark:text-slate-300 text-right font-sf-pro whitespace-nowrap">
                         {formatDate(invoice.date)}
                       </td>
-                      <td className="p-4 text-slate-900 font-medium text-right font-sf-pro whitespace-nowrap">
-                        {formatCurrency(invoice.amount, invoice.currency || 'ZAR')}
+                      <td className="p-4 text-slate-900 dark:text-slate-100 font-semibold text-right font-sf-pro whitespace-nowrap">
+                        {formatCurrency(invoice.amount)}
                       </td>
-                      <td className="p-4 text-slate-700 text-right font-sf-pro whitespace-nowrap">
-                        {formatCurrency(invoice.vatTotal || 0, invoice.currency || 'ZAR')}
+                      <td className="p-4 text-slate-600 dark:text-slate-300 text-right font-sf-pro whitespace-nowrap">
+                        {formatCurrency(invoice.vatTotal || 0)}
                       </td>
                       <td className="p-4">
                         <div className="flex justify-center">
@@ -286,7 +289,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <MoreHorizontal className="h-4 w-4 text-slate-500" />
-                                <span className="sr-only">Open menu</span>
+                                <span className="sr-only">{t('invoices.table.openMenu')}</span>
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
@@ -298,7 +301,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                                 className="cursor-pointer"
                               >
                                 <Eye className="mr-2 h-4 w-4" />
-                                View
+                                {t('invoices.actionLabels.view')}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={(e) => {
@@ -308,7 +311,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                                 className="cursor-pointer"
                               >
                                 <Edit className="mr-2 h-4 w-4" />
-                                Edit
+                                {t('invoices.actionLabels.edit')}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={(e) => {
@@ -318,7 +321,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                                 className="cursor-pointer"
                               >
                                 <Send className="mr-2 h-4 w-4" />
-                                Send
+                                {t('invoices.actionLabels.send')}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={(e) => {
@@ -328,7 +331,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                                 className="cursor-pointer"
                               >
                                 <Copy className="mr-2 h-4 w-4" />
-                                Duplicate
+                                {t('invoices.actionLabels.duplicate')}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={(e) => {
@@ -338,14 +341,14 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                                 className="cursor-pointer"
                               >
                                 <Download className="mr-2 h-4 w-4" />
-                                Record Payment
+                                {t('invoices.actionLabels.recordPayment')}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={(e) => handleDeleteClick(invoice.id, e)}
                                 className="cursor-pointer text-red-600 hover:!bg-red-50 hover:!text-red-700"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
+                                {t('invoices.actionLabels.delete')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -357,7 +360,7 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
                 {invoices.length === 0 && (
                   <tr>
                     <td colSpan={7} className="p-8 text-center text-slate-500">
-                      No invoices found. Create your first invoice to get started.
+                      {t('invoices.empty.noInvoices')} {t('invoices.empty.createFirst')}
                     </td>
                   </tr>
                 )}
@@ -371,18 +374,18 @@ export const InvoicesTable: React.FC<InvoicesTableProps> = ({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
+            <AlertDialogTitle>{t('invoices.dialogs.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this invoice? This action cannot be undone.
+              {t('invoices.dialogs.deleteDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelDelete}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={cancelDelete}>{t('invoices.dialogs.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDelete}
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete
+              {t('invoices.dialogs.confirmDelete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

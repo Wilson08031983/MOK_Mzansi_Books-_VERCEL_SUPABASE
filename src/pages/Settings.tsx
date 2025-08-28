@@ -10,9 +10,6 @@ import {
   Users, 
   // Cog, // removed unused icon
   Shield, 
-  Bell, 
-  Database,
-  Smartphone,
   CreditCard,
   HelpCircle,
   Info,
@@ -29,10 +26,10 @@ import UserManagementTab from '@/components/settings/UserManagementTab';
 // import SystemConfigurationTab from '@/components/settings/SystemConfigurationTab'; // removed unused import
 // Removed unused: DocumentManagementTab
 import SecuritySettingsTab from '@/components/settings/SecuritySettingsTab';
-import NotificationSettingsTab from '@/components/settings/NotificationSettingsTab';
+// import NotificationSettingsTab from '@/components/settings/NotificationSettingsTab'; // hidden tab, import removed
 // Removed unused: CustomizationTab
-import DataManagementTab from '@/components/settings/DataManagementTab';
-import MobileSettingsTab from '@/components/settings/MobileSettingsTab';
+// import DataManagementTab from '@/components/settings/DataManagementTab'; // Data tab hidden by request
+// import MobileSettingsTab from '@/components/settings/MobileSettingsTab'; // Mobile tab hidden by request
 import BillingSubscriptionTab from '@/components/settings/BillingSubscriptionTab';
 import HelpSupportTab from '@/components/settings/HelpSupportTab';
 import AboutTab from '@/components/settings/AboutTab';
@@ -43,6 +40,7 @@ import ReportSettingsTab from '@/components/settings/ReportSettingsTab';
 import DataSecurityTab from '@/components/settings/DataSecurityTab';
 import SystemMaintenanceTab from '@/components/settings/SystemMaintenanceTab';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import { auditService } from '@/services/auditService';
 
 const Settings = () => {
   const { t } = useLocalization();
@@ -55,9 +53,7 @@ const Settings = () => {
     { id: 'general', label: t('settings.tabs.general'), icon: SettingsIcon, component: GeneralSettingsTab },
     { id: 'users', label: t('settings.tabs.users'), icon: Users, component: UserManagementTab },
     { id: 'security', label: t('settings.tabs.security'), icon: Shield, component: SecuritySettingsTab },
-    { id: 'notifications', label: t('settings.tabs.notifications'), icon: Bell, component: NotificationSettingsTab },
-    { id: 'data', label: t('settings.tabs.data'), icon: Database, component: DataManagementTab },
-    { id: 'mobile', label: t('settings.tabs.mobile'), icon: Smartphone, component: MobileSettingsTab },
+    // { id: 'notifications', label: t('settings.tabs.notifications'), icon: Bell, component: NotificationSettingsTab }, // Hidden by request
     { id: 'billing', label: t('settings.tabs.billing'), icon: CreditCard, component: BillingSubscriptionTab },
     { id: 'help', label: t('settings.tabs.help'), icon: HelpCircle, component: HelpSupportTab },
     { id: 'about', label: t('settings.tabs.about'), icon: Info, component: AboutTab },
@@ -73,6 +69,11 @@ const Settings = () => {
     const tab = params.get('tab');
     if (tab && settingsTabs.some(t => t.id === tab)) {
       setActiveTab(tab as any);
+    } else if (tab === 'notifications' || tab === 'mobile' || tab === 'data') {
+      // Normalize deprecated/hidden tab to 'general'
+      setActiveTab('general');
+      params.set('tab', 'general');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
@@ -104,6 +105,11 @@ const Settings = () => {
     const params = new URLSearchParams(location.search);
     params.set('tab', tab);
     navigate({ pathname: location.pathname, search: params.toString(), hash: tab === 'users' ? location.hash : '' }, { replace: false });
+    try {
+      const cfg = settingsTabs.find(t => t.id === tab);
+      const section = cfg ? cfg.label : tab;
+      auditService.logNavigation('Settings', String(section));
+    } catch {}
   };
 
   return (

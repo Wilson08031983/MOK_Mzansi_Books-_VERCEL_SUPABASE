@@ -42,6 +42,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 
+import { useLocalization } from '@/hooks/useLocalization';
+
 import { Employee } from '@/services/employeeService';
 import {
   TimeEntry,
@@ -60,7 +62,6 @@ import { LeaveTypes } from './LeaveManagementTypes';
 import { 
   calculateTimeEntry, 
   formatHours, 
-  formatCurrency,
   type TimeCalculationResult 
 } from './AutomatedCalculations';
 import { isPublicHoliday, getPublicHolidayName } from './SouthAfricanHolidays';
@@ -70,6 +71,7 @@ interface TimeAttendanceProps {
 }
 
 const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
+  const { formatCurrency } = useLocalization();
   // State for active tab
   const [activeTab, setActiveTab] = useState('daily');
   
@@ -169,12 +171,14 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
   // Load data from localStorage on mount
   useEffect(() => {
     try {
+      let hadSavedTimeEntries = false;
       // Load time entries
       const savedTimeEntries = localStorage.getItem('timeEntries');
       if (savedTimeEntries) {
         const parsedEntries = JSON.parse(savedTimeEntries);
         setTimeEntries(parsedEntries);
         generateWeeklyTimesheets(parsedEntries);
+        hadSavedTimeEntries = true;
       }
       
       // Load attendance summaries (shared with AllowanceManagement)
@@ -197,8 +201,9 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       console.error('Failed to load data from localStorage:', error);
     }
     
-    // Initialize with sample data if no saved data and employees are available
-    if (employees.length > 0 && timeEntries.length === 0) {
+    // Initialize with sample data only if there are no saved entries and employees are available
+    const noSavedEntries = !localStorage.getItem('timeEntries');
+    if (employees.length > 0 && noSavedEntries) {
       generateSampleTimeEntries();
     }
   }, [employees]);
@@ -751,6 +756,12 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
+    // Persist approval
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save approved time entry to localStorage:', error);
+    }
     
     toast.success('Time entry approved successfully');
   };
@@ -768,6 +779,12 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
+    // Persist rejection
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save rejected time entry to localStorage:', error);
+    }
     
     toast.success('Time entry rejected successfully');
   };
@@ -801,6 +818,12 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
+    // Persist approval changes
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save approved timesheet to localStorage:', error);
+    }
     
     toast.success('Timesheet approved successfully');
   };
@@ -833,6 +856,12 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
     setTimeEntries(updatedEntries);
     generateWeeklyTimesheets(updatedEntries);
     generateAttendanceSummaries(updatedEntries);
+    // Persist rejection changes
+    try {
+      localStorage.setItem('timeEntries', JSON.stringify(updatedEntries));
+    } catch (error) {
+      console.error('Failed to save rejected timesheet to localStorage:', error);
+    }
     
     // Reset state
     setIsRejectModalOpen(false);
@@ -1730,7 +1759,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       
       {/* Add Time Entry Modal */}
       <Dialog open={isAddEntryModalOpen} onOpenChange={setIsAddEntryModalOpen}>
-        <DialogContent className="sm:max-w-[620px] max-w-[95vw] rounded-2xl shadow-md bg-white transition-opacity ease-in-out duration-300">
+        <DialogContent className="sm:max-w-[620px] max-w-[95vw] max-h-[85vh] overflow-y-auto rounded-2xl shadow-md bg-white transition-opacity ease-in-out duration-300">
           <DialogHeader className="space-y-2 pb-4">
             <DialogTitle className="text-sm md:text-base font-medium text-gray-800 flex items-center gap-2">
               <Clock className="h-5 w-5 text-mokm-blue-500" />
@@ -2040,7 +2069,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       {/* Edit Time Entry Modal */}
       {selectedEntry && (
         <Dialog open={isEditEntryModalOpen} onOpenChange={setIsEditEntryModalOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Time Entry</DialogTitle>
               <DialogDescription>
@@ -2228,7 +2257,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       {/* View Details Modal */}
       {selectedEntry && (
         <Dialog open={isViewDetailsModalOpen} onOpenChange={setIsViewDetailsModalOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Time Entry Details</DialogTitle>
               <DialogDescription>
@@ -2397,7 +2426,7 @@ const TimeAttendance: React.FC<TimeAttendanceProps> = ({ employees }) => {
       {/* Rejection Dialog */}
       {isRejectModalOpen && (
         <Dialog open={isRejectModalOpen} onOpenChange={setIsRejectModalOpen}>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Reject {selectedTimesheet ? 'Timesheet' : 'Time Entry'}</DialogTitle>
               <DialogDescription>

@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { Key } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -31,18 +32,19 @@ const PasswordSecuritySection = ({
   passwordComplexity,
   setPasswordComplexity
 }: PasswordSecuritySectionProps) => {
+  const { t } = useLocalization();
   return (
     <div>
       <h3 className="text-lg font-medium text-gray-900 flex items-center mb-4">
         <Key className="h-5 w-5 mr-2 text-mokm-orange-500" />
-        Password Security
+        {t('settings.security.passwordSecurity')}
       </h3>
       
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <Label className="font-medium">Require Strong Passwords</Label>
-            <p className="text-sm text-gray-500">Enforce password complexity requirements</p>
+            <Label className="font-medium">{t('settings.security.requireStrongPasswords')}</Label>
+            <p className="text-sm text-gray-500">{t('settings.security.enforcePasswordComplexity')}</p>
           </div>
           <Switch
             checked={securitySettings.requireStrongPasswords}
@@ -54,7 +56,7 @@ const PasswordSecuritySection = ({
         
         {securitySettings.requireStrongPasswords && (
           <div className="pl-6 border-l-2 border-gray-100 space-y-3">
-            <Label className="text-sm font-medium">Password Requirements:</Label>
+            <Label className="text-sm font-medium">{t('settings.security.requirementsTitle')}</Label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -64,9 +66,7 @@ const PasswordSecuritySection = ({
                     setPasswordComplexity({...passwordComplexity, minLength: checked ? 8 : 4})
                   }
                 />
-                <Label htmlFor="min-length" className="text-sm">
-                  Minimum 8 characters
-                </Label>
+                <Label htmlFor="min-length" className="text-sm">{t('settings.security.min8')}</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -76,9 +76,7 @@ const PasswordSecuritySection = ({
                     setPasswordComplexity({...passwordComplexity, requireUppercase: !!checked})
                   }
                 />
-                <Label htmlFor="uppercase" className="text-sm">
-                  Uppercase letters (A-Z)
-                </Label>
+                <Label htmlFor="uppercase" className="text-sm">{t('settings.security.uppercase')}</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -88,9 +86,7 @@ const PasswordSecuritySection = ({
                     setPasswordComplexity({...passwordComplexity, requireLowercase: !!checked})
                   }
                 />
-                <Label htmlFor="lowercase" className="text-sm">
-                  Lowercase letters (a-z)
-                </Label>
+                <Label htmlFor="lowercase" className="text-sm">{t('settings.security.lowercase')}</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -100,9 +96,7 @@ const PasswordSecuritySection = ({
                     setPasswordComplexity({...passwordComplexity, requireNumbers: !!checked})
                   }
                 />
-                <Label htmlFor="numbers" className="text-sm">
-                  Numbers (0-9)
-                </Label>
+                <Label htmlFor="numbers" className="text-sm">{t('settings.security.numbers')}</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -112,31 +106,27 @@ const PasswordSecuritySection = ({
                     setPasswordComplexity({...passwordComplexity, requireSpecialChars: !!checked})
                   }
                 />
-                <Label htmlFor="special" className="text-sm">
-                  Special characters (!@#$%^&*)
-                </Label>
+                <Label htmlFor="special" className="text-sm">{t('settings.security.specialChars')}</Label>
               </div>
             </div>
           </div>
         )}
         
         <div className="space-y-2">
-          <Label htmlFor="password-expiry">Password Expiry (Days)</Label>
+          <Label htmlFor="password-expiry">{t('settings.security.expiryDaysLabel')}</Label>
           <select
             id="password-expiry"
             value={securitySettings.passwordExpiryDays}
             onChange={(e) => setSecuritySettings({...securitySettings, passwordExpiryDays: parseInt(e.target.value)})}
             className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            <option value="30">30 days</option>
-            <option value="60">60 days</option>
-            <option value="90">90 days</option>
-            <option value="180">180 days</option>
-            <option value="365">365 days</option>
+            <option value="30">{t('settings.security.expiry30')}</option>
+            <option value="60">{t('settings.security.expiry60')}</option>
+            <option value="90">{t('settings.security.expiry90')}</option>
+            <option value="180">{t('settings.security.expiry180')}</option>
+            <option value="365">{t('settings.security.expiry365')}</option>
           </select>
-          <p className="text-xs text-gray-500">
-            Users will be required to change their password after this period
-          </p>
+          <p className="text-xs text-gray-500">{t('settings.security.expiryHelp')}</p>
         </div>
       </div>
     </div>

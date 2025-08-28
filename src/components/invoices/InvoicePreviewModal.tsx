@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { generateInvoicePdf } from '@/utils/invoicePdfGenerator_v2';
 import { Invoice } from '@/types/invoice';
 import { invoiceStyles } from './invoiceStyles';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface LineItem {
   id: string;
@@ -89,6 +90,7 @@ const InvoicePreviewModal = ({ open, onClose, data }: InvoicePreviewModalProps):
   
   // Track PDF download loading state
   const [isDownloading, setIsDownloading] = useState(false);
+  const { formatCurrency, getCurrencySymbol } = useLocalization();
   
   /**
    * FINALIZED INVOICE PDF DOWNLOAD FUNCTIONALITY - DO NOT MODIFY
@@ -207,15 +209,9 @@ const InvoicePreviewModal = ({ open, onClose, data }: InvoicePreviewModalProps):
   };
 
   // No need for calculate functions as we use data properties directly
-
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'decimal',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
-  };
+  // Compute base subtotal and discount amount for display
+  const computedBaseSubtotal = (data.items || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+  const computedDiscountAmount = Math.max(0, computedBaseSubtotal - (data.subtotal || 0));
 
   // Get client name
   const getClientName = () => {
@@ -338,9 +334,9 @@ const InvoicePreviewModal = ({ open, onClose, data }: InvoicePreviewModalProps):
               <th className="border border-gray-200 p-2 w-[5%]">#</th>
               <th className="border border-gray-200 p-2 w-[45%]">Description</th>
               <th className="border border-gray-200 p-2 w-[10%]">Qty</th>
-              <th className="border border-gray-200 p-2 w-[10%]">Rate (R)</th>
+              <th className="border border-gray-200 p-2 w-[10%]">Rate ({getCurrencySymbol()})</th>
               <th className="border border-gray-200 p-2 w-[10%]">Discount</th>
-              <th className="border border-gray-200 p-2 w-[20%]">Amount (R)</th>
+              <th className="border border-gray-200 p-2 w-[20%]">Amount ({getCurrencySymbol()})</th>
             </tr>
           </thead>
           <tbody>
@@ -362,9 +358,12 @@ const InvoicePreviewModal = ({ open, onClose, data }: InvoicePreviewModalProps):
           <>
             {/* Totals */}
             <div className="mt-6 text-right text-sm invoice-section">
-              <p><strong>Subtotal:</strong> R {formatCurrency(data.subtotal)}</p>
-              <p><strong>VAT ({data.vatRate}%):</strong> R {formatCurrency(data.vatTotal)}</p>
-              <p className="text-lg font-bold"><strong>Total:</strong> R {formatCurrency(data.grandTotal)}</p>
+              <p><strong>Items Subtotal:</strong> {formatCurrency(computedBaseSubtotal)}</p>
+              {computedDiscountAmount > 0 && (
+                <p><strong>Client Discount:</strong> <span className="text-red-600">- {formatCurrency(computedDiscountAmount)}</span></p>
+              )}
+              <p><strong>VAT ({data.vatRate}%):</strong> {formatCurrency(data.vatTotal)}</p>
+              <p className="text-lg font-bold"><strong>Total:</strong> {formatCurrency(data.grandTotal)}</p>
             </div>
             
             {/* Footer with terms and notes */}

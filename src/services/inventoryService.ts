@@ -1,8 +1,18 @@
 import { v4 as uuidv4 } from 'uuid';
 import { InventoryItem, StockHistoryEntry, calculateStockStatus } from '@/types/inventory';
+import { auditService } from '@/services/auditService';
 
 const INVENTORY_STORAGE_KEY = 'inventoryItems';
 const STOCK_HISTORY_STORAGE_KEY = 'stockHistory';
+
+// Internal helper to safely dispatch browser events
+const dispatchInventoryEvent = (detail: any) => {
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('inventory-updated', { detail }));
+    }
+  } catch {}
+};
 
 // Get all inventory items from localStorage
 export const getAllInventoryItems = (): InventoryItem[] => {
@@ -65,6 +75,30 @@ export const addInventoryItem = (item: Omit<InventoryItem, 'id' | 'lastUpdated' 
     performedBy: 'Current User'
   });
   
+  // Audit: inventory item created
+  try {
+    auditService.logCRUD(
+      'Created Inventory Item',
+      'inventoryItem',
+      newItem.id,
+      newItem.name,
+      'Inventory',
+      undefined,
+      newItem
+    );
+  } catch (e) {
+    console.error('Audit log failed for addInventoryItem:', e);
+  }
+
+  // Notify listeners
+  dispatchInventoryEvent({ entity: 'item', action: 'created', item: newItem });
+  if (newItem.status === 'Low Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'low-stock', item: newItem });
+  }
+  if (newItem.status === 'Out of Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'out-of-stock', item: newItem });
+  }
+
   return newItem;
 };
 
@@ -89,6 +123,24 @@ export const updateInventoryItem = (id: string, updates: Partial<InventoryItem>)
       notes: updates.notes || `Stock level adjusted from ${originalItem.stockLevel} to ${updates.stockLevel}`,
       performedBy: 'Current User'
     });
+    // Audit: stock level adjusted/received
+    try {
+      auditService.logAudit({
+        category: 'crud',
+        action: changeAmount > 0 ? 'Received Stock' : 'Adjusted Stock',
+        page: 'Inventory',
+        entityType: 'inventoryItem',
+        entityId: id,
+        entityName: originalItem.name,
+        changeType: 'update',
+        oldValues: { stockLevel: originalItem.stockLevel },
+        newValues: { stockLevel: updates.stockLevel },
+        description: `${changeAmount > 0 ? 'Received' : 'Adjusted'} ${Math.abs(changeAmount)} units for ${originalItem.name}`,
+        metadata: { changeAmount }
+      });
+    } catch (e) {
+      console.error('Audit log failed for stock adjustment in updateInventoryItem:', e);
+    }
   }
   
   // Update the item
@@ -105,12 +157,37 @@ export const updateInventoryItem = (id: string, updates: Partial<InventoryItem>)
   updatedItems[itemIndex] = updatedItem;
   
   saveInventoryItems(updatedItems);
+  
+  // Audit: inventory item updated (general)
+  try {
+    auditService.logCRUD(
+      'Updated Inventory Item',
+      'inventoryItem',
+      updatedItem.id,
+      updatedItem.name,
+      'Inventory',
+      originalItem,
+      updatedItem
+    );
+  } catch (e) {
+    console.error('Audit log failed for updateInventoryItem:', e);
+  }
+  // Notify listeners about generic update
+  dispatchInventoryEvent({ entity: 'item', action: 'updated', item: updatedItem });
+  // Also notify when status crosses thresholds
+  if (updatedItem.status === 'Low Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'low-stock', item: updatedItem });
+  }
+  if (updatedItem.status === 'Out of Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'out-of-stock', item: updatedItem });
+  }
   return updatedItem;
 };
 
 // Delete an inventory item
 export const deleteInventoryItem = (id: string): boolean => {
   const items = getAllInventoryItems();
+  const toDelete = items.find(item => item.id === id) || null;
   const filteredItems = items.filter(item => item.id !== id);
   
   if (filteredItems.length === items.length) {
@@ -118,6 +195,22 @@ export const deleteInventoryItem = (id: string): boolean => {
   }
   
   saveInventoryItems(filteredItems);
+  // Audit: inventory item deleted
+  try {
+    auditService.logCRUD(
+      'Deleted Inventory Item',
+      'inventoryItem',
+      id,
+      toDelete?.name || 'Unknown Item',
+      'Inventory',
+      toDelete || undefined,
+      undefined
+    );
+  } catch (e) {
+    console.error('Audit log failed for deleteInventoryItem:', e);
+  }
+  // Notify listeners
+  dispatchInventoryEvent({ entity: 'item', action: 'deleted', itemId: id });
   return true;
 };
 
@@ -165,6 +258,33 @@ export const markItemAsDamaged = (id: string, quantity: number, reason: string, 
     performedBy: 'Current User'
   });
   
+  // Audit: item marked as damaged
+  try {
+    auditService.logAudit({
+      category: 'crud',
+      action: 'Marked Item as Damaged',
+      page: 'Inventory',
+      entityType: 'inventoryItem',
+      entityId: id,
+      entityName: item.name,
+      changeType: 'update',
+      oldValues: { stockLevel: item.stockLevel },
+      newValues: { stockLevel: updatedItem.stockLevel },
+      description: `Marked ${quantity} units of ${item.name} as damaged. Reason: ${reason}.`,
+      metadata: { quantity, reason, notes, actionTaken, location }
+    });
+  } catch (e) {
+    console.error('Audit log failed for markItemAsDamaged:', e);
+  }
+  // Notify listeners
+  dispatchInventoryEvent({ entity: 'item', action: 'damaged', item: updatedItem, quantity, reason });
+  if (updatedItem.status === 'Low Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'low-stock', item: updatedItem });
+  }
+  if (updatedItem.status === 'Out of Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'out-of-stock', item: updatedItem });
+  }
+  
   return updatedItem;
 };
 
@@ -211,6 +331,33 @@ export const markItemAsExpired = (id: string, quantity: number, reason: string, 
     notes: `${reason}${notes ? `: ${notes}` : ''} (Action: ${actionTaken}, Location: ${location || 'Not specified'})`,
     performedBy: 'Current User'
   });
+  
+  // Audit: item marked as expired
+  try {
+    auditService.logAudit({
+      category: 'crud',
+      action: 'Marked Item as Expired',
+      page: 'Inventory',
+      entityType: 'inventoryItem',
+      entityId: id,
+      entityName: item.name,
+      changeType: 'update',
+      oldValues: { stockLevel: item.stockLevel },
+      newValues: { stockLevel: updatedItem.stockLevel },
+      description: `Marked ${quantity} units of ${item.name} as expired. Reason: ${reason}.`,
+      metadata: { quantity, reason, notes, actionTaken, location }
+    });
+  } catch (e) {
+    console.error('Audit log failed for markItemAsExpired:', e);
+  }
+  // Notify listeners
+  dispatchInventoryEvent({ entity: 'item', action: 'expired', item: updatedItem, quantity, reason });
+  if (updatedItem.status === 'Low Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'low-stock', item: updatedItem });
+  }
+  if (updatedItem.status === 'Out of Stock') {
+    dispatchInventoryEvent({ entity: 'item', action: 'out-of-stock', item: updatedItem });
+  }
   
   return updatedItem;
 };

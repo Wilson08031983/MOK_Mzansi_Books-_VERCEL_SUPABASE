@@ -104,7 +104,7 @@ const ManagePermissionsModal: React.FC<ManagePermissionsModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="glass backdrop-blur-xl bg-white/95 border-white/20 shadow-business-lg max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-slate-900 font-sf-pro text-2xl flex items-center">
+          <DialogTitle className="text-slate-900 dark:text-slate-100 font-sf-pro text-2xl flex items-center">
             <LockOpen className="mr-2 h-5 w-5 text-mokm-purple-500" />
             Manage Permissions for {userEmail}
           </DialogTitle>
@@ -113,7 +113,7 @@ const ManagePermissionsModal: React.FC<ManagePermissionsModalProps> = ({
         <div className="py-4">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <p className="text-slate-600 font-sf-pro">
+              <p className="text-slate-600 dark:text-slate-300 font-sf-pro">
                 User has <span className="font-medium">{userRole}</span> role.
                 {isAdminRole(userRole) && (
                   <span className="ml-2 text-mokm-orange-600 flex items-center gap-1 text-sm">
@@ -122,7 +122,7 @@ const ManagePermissionsModal: React.FC<ManagePermissionsModalProps> = ({
                 )}
               </p>
               {!isAdminRole(userRole) && (
-                <p className="text-slate-500 text-sm mt-1">
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
                   Configure which pages this user can access and edit.
                 </p>
               )}
@@ -130,10 +130,10 @@ const ManagePermissionsModal: React.FC<ManagePermissionsModalProps> = ({
             
             {!isAdminRole(userRole) && (
               <div className="flex gap-3">
-                <div className="flex items-center text-slate-600 text-sm">
+                <div className="flex items-center text-slate-600 dark:text-slate-400 text-sm">
                   <Eye className="h-4 w-4 mr-1" /> Read Access
                 </div>
-                <div className="flex items-center text-slate-600 text-sm">
+                <div className="flex items-center text-slate-600 dark:text-slate-400 text-sm">
                   <Edit2 className="h-4 w-4 mr-1" /> Write Access
                 </div>
               </div>
@@ -150,7 +150,7 @@ const ManagePermissionsModal: React.FC<ManagePermissionsModalProps> = ({
           ) : (
             <div className="space-y-4">
               <div className="glass backdrop-blur-sm bg-white/30 border border-white/10 rounded-xl shadow-sm p-4">
-                <p className="text-sm text-slate-500 font-sf-pro mb-2">
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-sf-pro mb-2">
                   <AlertCircle className="inline h-4 w-4 mr-1" />
                   Dashboard is always accessible to all users
                 </p>
@@ -165,7 +165,7 @@ const ManagePermissionsModal: React.FC<ManagePermissionsModalProps> = ({
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center">
                         <page.icon className="h-5 w-5 mr-2 text-mokm-purple-600" />
-                        <span className="font-medium text-slate-800">{page.name}</span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{page.name}</span>
                       </div>
                     </div>
 

@@ -1,5 +1,20 @@
 export type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'partial' | 'paid' | 'overdue' | 'cancelled';
 
+// Centralized list of valid invoice statuses and a guard
+export const VALID_INVOICE_STATUSES: readonly InvoiceStatus[] = [
+  'draft',
+  'sent',
+  'viewed',
+  'partial',
+  'paid',
+  'overdue',
+  'cancelled',
+] as const;
+
+export const isValidInvoiceStatus = (value: unknown): value is InvoiceStatus => {
+  return typeof value === 'string' && (VALID_INVOICE_STATUSES as readonly string[]).includes(value);
+};
+
 export interface InvoiceItem {
   id: string;
   itemNo: number;
@@ -73,7 +88,8 @@ export interface Invoice {
 }
 
 // For form inputs and API payloads
-export type InvoiceInput = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt' | 'balance'> & {
+// Note: omit 'items' from Invoice to avoid intersection type on items
+export type InvoiceInput = Omit<Invoice, 'id' | 'createdAt' | 'updatedAt' | 'balance' | 'items'> & {
   client: string; // Client ID for API
   items: Array<Omit<InvoiceItem, 'id' | 'amount' | 'taxAmount'>>;
 };

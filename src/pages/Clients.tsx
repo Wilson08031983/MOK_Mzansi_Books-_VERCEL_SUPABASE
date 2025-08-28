@@ -34,7 +34,9 @@ import ClientsStats from '@/components/clients/ClientsStats';
 import { getClientOutstandingBalance } from '@/services/invoiceService';
 import HelpCentre from '@/components/HelpCentre';
 import { Client, getClients, initializeClients } from '@/services/clientService';
+import { addNotification, getNotifications, NotificationItem } from '@/services/notificationService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 // Define interfaces for invoice and payment data from localStorage
 interface InvoiceData {
@@ -97,6 +99,7 @@ const Clients = () => {
   const location = useLocation();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
+  const { logCreate, logUpdate, logDelete, logNavigation, logSystem } = useAuditLogger();
 
   // Open add client modal when navigated with state from Quick Actions
   useEffect(() => {
@@ -111,6 +114,16 @@ const Clients = () => {
   useEffect(() => {
     document.title = `${t('clients.title')} - MOK Mzansi Books`;
   }, [t]);
+  
+  // Log navigation to Clients page on mount
+  useEffect(() => {
+    try {
+      logNavigation('Main');
+    } catch (e) {
+      console.warn('Audit logging (navigation) failed:', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [clients, setClients] = useState<ClientDisplay[]>([]);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
@@ -123,6 +136,34 @@ const Clients = () => {
     clientType: 'all',
     dateRange: 'all'
   });
+  const previousFiltersRef = useRef({ status: 'all', clientType: 'all', dateRange: 'all' });
+
+  // Debounced search logging
+  const searchDebounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    // Only log meaningful searches and clears; avoid spamming on mount
+    searchDebounceRef.current = window.setTimeout(() => {
+      try {
+        logSystem(
+          'Search Clients',
+          searchTerm ? `Searched for "${searchTerm}"` : 'Cleared client search',
+          { searchTerm }
+        );
+      } catch (e) {
+        console.warn('Audit logging (search) failed:', e);
+      }
+    }, 600);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
 
   useEffect(() => {
     // Load clients from localStorage on component mount
@@ -240,11 +281,107 @@ const Clients = () => {
     window.addEventListener('payments-updated', handleDataUpdate);
     window.addEventListener('income-updated', handleDataUpdate);
     
+    // Listen for client CRUD updates to refresh and create notifications
+    const handleClientsUpdated = (evt: Event) => {
+      try {
+        const e = evt as CustomEvent;
+        const detail = (e && e.detail) || {};
+        const action: string = detail.action || '';
+        const client = detail.client || null;
+        const clientId: string | undefined = detail.clientId;
+        const clientsDeleted: any[] = detail.clients || [];
+
+        // Refresh list
+        loadClientsFromStorage();
+
+        // Build notification title/message
+        let title = '';
+        let message = '';
+        if (action === 'created' && client) {
+          const name = client.contactPerson || client.companyName || 'Client';
+          title = `Client Added: ${name}`;
+          message = `A new client was added${client.companyName ? ` (${client.companyName})` : ''}.`;
+          // Audit log: client created
+          try {
+            logCreate('Client', name, client.id || clientId, client);
+          } catch (e) {
+            console.warn('Audit logging (create) failed:', e);
+          }
+        } else if (action === 'updated' && client) {
+          const name = client.contactPerson || client.companyName || 'Client';
+          title = `Client Updated: ${name}`;
+          message = `Client details were updated${client.companyName ? ` (${client.companyName})` : ''}.`;
+          // Audit log: client updated
+          try {
+            logUpdate('Client', name, client.id || clientId || 'unknown', undefined, client);
+          } catch (e) {
+            console.warn('Audit logging (update) failed:', e);
+          }
+        } else if (action === 'deleted') {
+          const name = (client && (client.contactPerson || client.companyName)) || clientId || 'Client';
+          title = `Client Deleted: ${name}`;
+          message = `A client was deleted.`;
+          // Audit log: single client deleted
+          try {
+            const delId = (client && client.id) || clientId || 'unknown';
+            logDelete('Client', typeof name === 'string' ? name : 'Client', delId);
+          } catch (e) {
+            console.warn('Audit logging (delete) failed:', e);
+          }
+        } else if (action === 'deleted-multiple' && Array.isArray(clientsDeleted) && clientsDeleted.length > 0) {
+          title = `Clients Deleted: ${clientsDeleted.length}`;
+          const names = clientsDeleted
+            .map((c: any) => c?.contactPerson || c?.companyName)
+            .filter(Boolean)
+            .slice(0, 3)
+            .join(', ');
+          message = names ? `Deleted: ${names}${clientsDeleted.length > 3 ? '…' : ''}` : 'Multiple clients were deleted.';
+          // Audit log: multiple clients deleted
+          try {
+            clientsDeleted.forEach((c: any) => {
+              const delName = c?.contactPerson || c?.companyName || 'Client';
+              const delId = c?.id || 'unknown';
+              logDelete('Client', delName, delId);
+            });
+          } catch (e) {
+            console.warn('Audit logging (delete-multiple) failed:', e);
+          }
+        } else {
+          return; // Unknown action
+        }
+
+        // De-duplicate within last 5 minutes based on same title+message+type
+        const existing: NotificationItem[] = getNotifications();
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        const hasRecentDuplicate = existing.some(n => {
+          const ts = new Date(n.date).getTime();
+          return (
+            n.title === title &&
+            n.message === message &&
+            (n.type === 'client' || n.type === 'system') &&
+            !isNaN(ts) && ts >= fiveMinutesAgo
+          );
+        });
+
+        if (!hasRecentDuplicate) {
+          addNotification({
+            title,
+            message,
+            type: 'client'
+          });
+        }
+      } catch (err) {
+        console.warn('Failed handling clients-updated event:', err);
+      }
+    };
+    window.addEventListener('clients-updated', handleClientsUpdated as EventListener);
+    
     // Cleanup event listeners on component unmount
     return () => {
       window.removeEventListener('invoices-updated', handleDataUpdate);
       window.removeEventListener('payments-updated', handleDataUpdate);
       window.removeEventListener('income-updated', handleDataUpdate);
+      window.removeEventListener('clients-updated', handleClientsUpdated as EventListener);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -479,6 +616,12 @@ const Clients = () => {
     loadClientsFromStorage();
     // Restore scroll position after data is loaded and rendered
     setTimeout(restoreScrollPosition, 50);
+    // Audit log: refresh
+    try {
+      logSystem('Refresh Clients', 'Refreshed clients list');
+    } catch (e) {
+      console.warn('Audit logging (refresh) failed:', e);
+    }
   };
 
   // Get status icon and color for a client
@@ -551,6 +694,61 @@ const Clients = () => {
       clientType: 'all',
       dateRange: 'all'
     });
+    previousFiltersRef.current = { status: 'all', clientType: 'all', dateRange: 'all' };
+    try {
+      logSystem('Clear Filters', 'Cleared all client filters');
+    } catch (e) {
+      console.warn('Audit logging (clear filters) failed:', e);
+    }
+  };
+
+  // Filter change handler with audit logging
+  const handleFilterUpdate = (key: 'status' | 'clientType' | 'dateRange', value: string) => {
+    setFilters(prev => {
+      const oldFilters = { ...prev };
+      const newFilters = { ...prev, [key]: value } as typeof prev;
+      try {
+        logSystem('Filter Clients', `Changed ${key} filter`, {
+          old: { [key]: oldFilters[key as keyof typeof oldFilters] },
+          new: { [key]: value },
+          all: newFilters
+        });
+      } catch (e) {
+        console.warn('Audit logging (filter change) failed:', e);
+      }
+      previousFiltersRef.current = newFilters as any;
+      return newFilters;
+    });
+  };
+
+  // View mode change with audit logging
+  const handleViewModeChange = (mode: 'table' | 'grid') => {
+    setViewMode(mode);
+    try {
+      logSystem('Change View', `Switched to ${mode} view`, { viewMode: mode });
+    } catch (e) {
+      console.warn('Audit logging (view mode) failed:', e);
+    }
+  };
+
+  // Open Add Client modal with audit logging
+  const handleOpenAddClient = () => {
+    setIsAddClientModalOpen(true);
+    try {
+      logSystem('Open Modal', 'Opened Add Client modal');
+    } catch (e) {
+      console.warn('Audit logging (open add client) failed:', e);
+    }
+  };
+
+  // Clear search button
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    try {
+      logSystem('Search Clients', 'Cleared client search', { searchTerm: '' });
+    } catch (e) {
+      console.warn('Audit logging (clear search) failed:', e);
+    }
   };
 
   return (
@@ -595,7 +793,7 @@ const Clients = () => {
             <Button
               variant={viewMode === 'table' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('table')}
+              onClick={() => handleViewModeChange('table')}
               className="rounded-lg"
             >
               <List className="h-4 w-4" />
@@ -603,7 +801,7 @@ const Clients = () => {
             <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('grid')}
+              onClick={() => handleViewModeChange('grid')}
               className="rounded-lg"
             >
               <Grid3X3 className="h-4 w-4" />
@@ -615,7 +813,7 @@ const Clients = () => {
           </div>
           
           <Button
-            onClick={() => setIsAddClientModalOpen(true)}
+            onClick={handleOpenAddClient}
             className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -643,7 +841,7 @@ const Clients = () => {
               />
               {searchTerm && (
                 <button
-                  onClick={() => setSearchTerm('')}
+                  onClick={handleClearSearch}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 hover:text-slate-600"
                 >
                   ×
@@ -657,7 +855,7 @@ const Clients = () => {
                 <Filter className="h-4 w-4 text-slate-500" />
                 <select
                   value={filters.status}
-                  onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                  onChange={(e) => handleFilterUpdate('status', e.target.value)}
                   className="px-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 font-sf-pro"
                 >
                   <option value="all">{t('clients.allStatus')}</option>
@@ -672,7 +870,7 @@ const Clients = () => {
               
               <select
                 value={filters.clientType}
-                onChange={(e) => setFilters(prev => ({ ...prev, clientType: e.target.value }))}
+                onChange={(e) => handleFilterUpdate('clientType', e.target.value)}
                 className="px-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/40 focus:border-mokm-purple-500/40 hover:bg-white/15 dark:hover:bg-white/10 transition-all duration-300 font-sf-pro"
               >
                 <option value="all">{t('clients.allTypes')}</option>

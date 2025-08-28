@@ -23,7 +23,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onAddTaskClick }) => {
     <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 dark:border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span className="text-slate-900 dark:text-slate-100 font-sf-pro">{t('notifications.taskReminders')}</span>
+          <span className="text-slate-900 dark:text-slate-100 font-sf-pro">{t('settings.notifications.taskReminders')}</span>
           <Button
             variant="ghost"
             size="sm"
@@ -41,7 +41,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onAddTaskClick }) => {
           <div className="text-center py-12">
             <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500 dark:text-slate-300 font-sf-pro text-lg">{t('common.noData')}</p>
-            <p className="text-sm text-slate-400 dark:text-slate-400 mt-2 font-sf-pro">{t('notifications.upcomingTaskNotifications')}</p>
+            <p className="text-sm text-slate-400 dark:text-slate-400 mt-2 font-sf-pro">{t('settings.notifications.upcomingTaskNotifications')}</p>
           </div>
         ) : (
           <div className="space-y-4">

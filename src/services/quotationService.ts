@@ -388,15 +388,36 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
         date: createdDate,
         lastModified: now 
       };
+      // Dispatch event for update
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('quotations-updated', {
+            detail: { action: 'updated', quotation: quotations[index] }
+          }));
+        }
+      } catch (e) {
+        console.warn('quotations-updated dispatch failed (update):', e);
+      }
     } else {
       // Add new quotation with created date and generated number
-      quotations.push({
+      const created = {
         ...safeQuotation,
         id: safeQuotation.id || Date.now().toString(),
         number: quotationNumber, // Ensure new quotation has a number
         date: now.split('T')[0], // Set creation date (YYYY-MM-DD)
         lastModified: now
-      });
+      } as Quotation;
+      quotations.push(created);
+      // Dispatch event for create
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('quotations-updated', {
+            detail: { action: 'created', quotation: created }
+          }));
+        }
+      } catch (e) {
+        console.warn('quotations-updated dispatch failed (create):', e);
+      }
     }
     
     safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, quotations);
@@ -415,10 +436,21 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
 export const deleteQuotation = (id: string): Quotation[] => {
   try {
     const quotations = getQuotations();
+    const toDelete = quotations.find(q => q.id === id);
     const safeId = safeString(id);
     const updatedQuotations = quotations.filter(quotation => quotation.id !== safeId);
     
     safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedQuotations);
+    // Dispatch event for delete
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('quotations-updated', {
+          detail: { action: 'deleted', quotationId: id, quotation: toDelete }
+        }));
+      }
+    } catch (e) {
+      console.warn('quotations-updated dispatch failed (delete):', e);
+    }
     return updatedQuotations;
   } catch (error) {
     console.error('Error deleting quotation:', error);
@@ -509,12 +541,130 @@ export function updateQuotationStatus(id: string, status: string | QuotationStat
       statusChange
     ];
     
+    const prevStatus = quotations[index].status;
     quotations[index] = updatedQuotation;
     safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, quotations);
+    // Dispatch event for status change
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('quotations-updated', {
+          detail: { action: 'status-changed', quotation: updatedQuotation, prevStatus, status: validStatus }
+        }));
+      }
+    } catch (e) {
+      console.warn('quotations-updated dispatch failed (status):', e);
+    }
     
     return quotations;
   } catch (error) {
     console.error('Error updating quotation status:', error);
     throw error;
   }
+}
+
+/**
+ * Check and update expired quotations automatically
+ * @returns updated quotations array
+ */
+export function checkAndUpdateExpiredQuotations(): Quotation[] {
+  try {
+    const quotations = getQuotations();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day for comparison
+    
+    let hasUpdates = false;
+    
+    const updatedQuotations = quotations.map(quotation => {
+      // Only check quotations that are not already expired, cancelled, accepted, or rejected
+      if (['expired', 'cancelled', 'accepted', 'rejected'].includes(quotation.status)) {
+        return quotation;
+      }
+      
+      // Check if quotation has an expiry date and it has passed
+      if (quotation.expiryDate) {
+        const expiryDate = new Date(quotation.expiryDate);
+        expiryDate.setHours(0, 0, 0, 0); // Set to start of day for comparison
+        
+        if (expiryDate < today) {
+          hasUpdates = true;
+          const now = new Date().toISOString();
+          
+          return {
+            ...quotation,
+            status: 'expired' as QuotationStatus,
+            expiredAt: now,
+            lastModified: now,
+            revisionHistory: [
+              ...(quotation.revisionHistory || []),
+              {
+                date: now,
+                changes: ['Status automatically changed to expired (expiry date passed)'],
+                userId: 'system',
+                userName: 'System'
+              }
+            ]
+          };
+        }
+      }
+      
+      return quotation;
+    });
+    
+    if (hasUpdates) {
+      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedQuotations);
+      // Dispatch batch event for automatic expiry updates
+      try {
+        if (typeof window !== 'undefined') {
+          const changed = quotations
+            .map((q, i) => ({ before: q, after: updatedQuotations[i] }))
+            .filter(pair => pair.before.status !== pair.after.status);
+          window.dispatchEvent(new CustomEvent('quotations-updated', {
+            detail: { action: 'status-batch-updated', count: changed.length }
+          }));
+        }
+      } catch (e) {
+        console.warn('quotations-updated dispatch failed (batch status):', e);
+      }
+    }
+    
+    return updatedQuotations;
+  } catch (error) {
+    console.error('Error checking expired quotations:', error);
+    return getQuotations();
+  }
+}
+
+/**
+ * Mark quotation as sent
+ * @param id quotation ID
+ * @returns updated quotations array
+ */
+export function markQuotationAsSent(id: string): Quotation[] {
+  return updateQuotationStatus(id, 'sent');
+}
+
+/**
+ * Get quotation status with automatic expiry check
+ * @param quotation quotation object
+ * @returns current status (may be updated to expired)
+ */
+export function getQuotationStatus(quotation: Quotation): QuotationStatus {
+  // If already expired, cancelled, accepted, or rejected, return as is
+  if (['expired', 'cancelled', 'accepted', 'rejected'].includes(quotation.status)) {
+    return quotation.status;
+  }
+  
+  // Check if quotation should be expired
+  if (quotation.expiryDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiryDate = new Date(quotation.expiryDate);
+    expiryDate.setHours(0, 0, 0, 0);
+    
+    if (expiryDate < today) {
+      return 'expired';
+    }
+  }
+  
+  return quotation.status;
 }

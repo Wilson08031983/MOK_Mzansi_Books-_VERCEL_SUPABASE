@@ -17,7 +17,7 @@ import { PERMISSION_PAGES, UserPermissions, isAdminRole, getAdminPermissions, ge
 interface InviteMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onInviteSuccess?: () => void;
+  onInviteSuccess?: (payload: { email: string; role: string }) => void;
 }
 
 const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberModalProps) => {
@@ -166,7 +166,7 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
       setSuccess(true);
       
       // Call success callback if provided
-      if (onInviteSuccess) onInviteSuccess();
+      if (onInviteSuccess) onInviteSuccess({ email: inviteEmail, role: selectedRole });
       
     } catch (error) {
       console.error('Error inviting team member:', error);
@@ -301,19 +301,19 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
             
             {/* Page Permissions Section - Only shown for non-admin roles */}
             {showPermissions && (
-              <div className="space-y-4 mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="space-y-4 mt-4 p-4 bg-slate-50 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-900">Page Permissions</h3>
-                  <div className="flex items-center space-x-4 text-xs text-slate-600">
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">Page Permissions</h3>
+                  <div className="flex items-center space-x-4 text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex items-center space-x-1">
-                      <div className="w-4 h-4 rounded bg-slate-200 flex items-center justify-center">
-                        <Eye className="h-3 w-3 text-slate-600" />
+                      <div className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <Eye className="h-3 w-3 text-slate-600 dark:text-slate-300" />
                       </div>
                       <span>View</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <div className="w-4 h-4 rounded bg-slate-200 flex items-center justify-center">
-                        <Edit2 className="h-3 w-3 text-slate-600" />
+                      <div className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <Edit2 className="h-3 w-3 text-slate-600 dark:text-slate-300" />
                       </div>
                       <span>Edit</span>
                     </div>
@@ -324,21 +324,21 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
                   {PERMISSION_PAGES.map((page) => {
                     const pageIcon = (() => {
                       switch(page) {
-                        case 'My Company': return <LucideFileText className="h-4 w-4 text-slate-600" />;
-                        case 'Clients': return <Users className="h-4 w-4 text-slate-600" />;
-                        case 'Quotations': return <ClipboardList className="h-4 w-4 text-slate-600" />;
-                        case 'Invoices': return <Receipt className="h-4 w-4 text-slate-600" />;
-                        case 'Projects': return <Briefcase className="h-4 w-4 text-slate-600" />;
-                        case 'Inventory': return <Package className="h-4 w-4 text-slate-600" />;
-                        case 'HR Management': return <UserCog className="h-4 w-4 text-slate-600" />;
-                        case 'Accounting': return <ShoppingBag className="h-4 w-4 text-slate-600" />;
-                        case 'Reports': return <BarChart3 className="h-4 w-4 text-slate-600" />;
-                        default: return <LucideFileText className="h-4 w-4 text-slate-600" />;
+                        case 'My Company': return <LucideFileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Clients': return <Users className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Quotations': return <ClipboardList className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Invoices': return <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Projects': return <Briefcase className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Inventory': return <Package className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'HR Management': return <UserCog className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Accounting': return <ShoppingBag className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        case 'Reports': return <BarChart3 className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
+                        default: return <LucideFileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />;
                       }
                     })();
                     
                     return (
-                      <li key={page} className="flex items-center justify-between py-2 px-3 hover:bg-slate-100 rounded-md">
+                      <li key={page} className="flex items-center justify-between py-2 px-3 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md">
                         <div className="flex items-center space-x-2">
                           {pageIcon}
                           <span>{page}</span>
@@ -388,7 +388,7 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
                   })}
                 </ul>
                 
-                <div className="pt-2 border-t border-slate-200 text-xs text-slate-600">
+                <div className="pt-2 border-t border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-400">
                   <p><span className="font-semibold">Note:</span> All users automatically have access to the Dashboard page.</p>
                   <p className="mt-1"><span className="font-semibold">❌ Restricted:</span> Non-admin users cannot access Settings or the Admin Panel.</p>
                 </div>

@@ -31,7 +31,7 @@ function calculateHoursWorked(clockIn: string, clockOut: string): number {
   const [inHour, inMinute] = clockIn.split(':').map(Number);
   const [outHour, outMinute] = clockOut.split(':').map(Number);
   
-  let inTime = inHour + inMinute / 60;
+  const inTime = inHour + inMinute / 60;
   let outTime = outHour + outMinute / 60;
   
   // Handle overnight shifts

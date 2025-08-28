@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { 
   CheckCircle2,
   Clock,
@@ -59,6 +60,7 @@ const InvoicesContent: React.FC<InvoicesContentProps> = ({
   onUpdateStatus = () => {},
   onView
 }) => {
+  const { t } = useLocalization();
   // Get status icon with proper typing
   const getStatusIcon = (status: string) => {
     if (!status) return <FileText className="h-4 w-4 text-gray-500" />;
@@ -108,8 +110,9 @@ const InvoicesContent: React.FC<InvoicesContentProps> = ({
   
   // Helper function to get display status text
   const getDisplayStatus = (status?: string) => {
-    if (!status) return 'Draft';
-    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    if (!status) return t('invoices.statusLabels.draft');
+    const key = `invoices.statusLabels.${status.toLowerCase()}`;
+    return t(key);
   };
   return (
     <div className="space-y-4 relative pb-10">

@@ -254,8 +254,13 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
     }
   };
 
+  // Handle save and send quotation
+  const saveAndSendQuotationHandler = async () => {
+    await saveQuotationHandler(false, true); // Save and mark as sent
+  };
+
   // Handle save quotation
-  const saveQuotationHandler = async (isDraft: boolean = false) => {
+  const saveQuotationHandler = async (isDraft: boolean = false, markAsSent: boolean = false) => {
     if (!selectedClient) {
       toast.error('Please select a client');
       return;
@@ -314,7 +319,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
         expiryDate: normalizeDateStr(formData.expiryDate) || '',
         amount: total,
         currency: formData.currency,
-        status: isDraft ? 'draft' : 'saved',
+        status: isDraft ? 'draft' : (markAsSent ? 'sent' : 'saved'),
         salesperson: salespersonName,
         salespersonId: user?.id || 'unknown',
         project: formData.project || '',
@@ -375,7 +380,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
         console.warn('Activity logging failed (quotation save):', logErr);
       }
       
-      toast.success(`Quotation ${isDraft ? 'saved as draft' : 'saved'} successfully!`);
+      toast.success(`Quotation ${isDraft ? 'saved as draft' : (markAsSent ? 'sent' : 'saved')} successfully!`);
       onClose();
     } catch (err) {
       console.error('Error saving quotation:', err);
@@ -890,7 +895,7 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
               <Button
                 type="button"
                 className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro"
-                onClick={() => saveQuotationHandler(false)}
+                onClick={saveAndSendQuotationHandler}
                 disabled={isSaving || !selectedClient || lineItems.length === 0}
               >
                 {isSaving ? (

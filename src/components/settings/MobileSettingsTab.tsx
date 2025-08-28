@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,13 +22,13 @@ import {
   VolumeX,
   RefreshCw,
   Zap,
-  Layout,
   Tablet
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { setItem, getItem } from '@/services/localStorageService';
 import { getDefaultConfig, type ScannerConfig } from '@/services/barcodeScannerService';
+import { useLocalization } from '@/hooks/useLocalization';
 
 // Types for mobile settings
 interface MobileSettings {
@@ -106,11 +106,43 @@ const MobileSettingsTab = () => {
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const installEventRef = useRef<any>(null);
+  const { t } = useLocalization();
+  const [testingScanner, setTestingScanner] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  // Generate a unique ID for each scanner instance to prevent DOM conflicts
+  const scannerContainerId = useRef(`test-scanner-preview-${Math.random().toString(36).substring(2, 15)}`);
+  
+  // Keep track of component mount state to prevent async operations after unmount
+  const isMounted = useRef(true);
 
   // Load settings on mount
   useEffect(() => {
     const savedSettings = getItem<MobileSettings>('mobileSettings', DEFAULT_MOBILE_SETTINGS);
     setSettings(savedSettings);
+  }, []);
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      // Execute cleanup synchronously to ensure it happens before component is fully unmounted
+      (async () => {
+        try {
+          if (scannerRef.current) {
+            // @ts-ignore isScanning is not in types but exists
+            if (scannerRef.current.isScanning) {
+              await scannerRef.current.stop();
+            }
+            await scannerRef.current.clear();
+          }
+        } catch (e) {
+          console.warn('Error during unmount cleanup', e);
+        } finally {
+          scannerRef.current = null;
+        }
+      })();
+    };
   }, []);
 
   // Detect device capabilities and permissions
@@ -195,14 +227,14 @@ const MobileSettingsTab = () => {
       setCameraPermission('granted');
       stream.getTracks().forEach(track => track.stop());
       toast({
-        title: 'Camera Access Granted',
-        description: 'You can now use the barcode scanner',
+        title: t('settings.mobile.toasts.cameraGrantedTitle'),
+        description: t('settings.mobile.toasts.cameraGrantedDesc'),
       });
     } catch (error) {
       setCameraPermission('denied');
       toast({
-        title: 'Camera Access Denied',
-        description: 'Please enable camera access in your browser settings',
+        title: t('settings.mobile.toasts.cameraDeniedTitle'),
+        description: t('settings.mobile.toasts.cameraDeniedDesc'),
         variant: 'destructive',
       });
     }
@@ -215,8 +247,8 @@ const MobileSettingsTab = () => {
       setNotificationPermission(permission);
       if (permission === 'granted') {
         toast({
-          title: 'Notifications Enabled',
-          description: 'You will receive mobile notifications',
+          title: t('settings.mobile.toasts.notificationsEnabledTitle'),
+          description: t('settings.mobile.receiveMobileNotifications'),
         });
       }
     }
@@ -227,13 +259,13 @@ const MobileSettingsTab = () => {
     if ('vibrate' in navigator) {
       navigator.vibrate([100, 50, 100]);
       toast({
-        title: 'Vibration Test',
-        description: 'Did you feel the vibration?',
+        title: t('settings.mobile.toasts.vibrationTestTitle'),
+        description: t('settings.mobile.toasts.vibrationTestDesc'),
       });
     } else {
       toast({
-        title: 'Vibration Not Supported',
-        description: 'Your device does not support vibration',
+        title: t('settings.mobile.toasts.vibrationNotSupportedTitle'),
+        description: t('settings.mobile.toasts.vibrationNotSupportedDesc'),
         variant: 'destructive',
       });
     }
@@ -245,8 +277,8 @@ const MobileSettingsTab = () => {
       const result = await installPromptEvent.prompt();
       if (result.outcome === 'accepted') {
         toast({
-          title: 'App Installed',
-          description: 'MOK Mzansi Books has been added to your home screen',
+          title: t('settings.mobile.toasts.appInstalledTitle'),
+          description: t('settings.mobile.toasts.appInstalledDesc'),
         });
         setIsInstallable(false);
         setInstallPromptEvent(null);
@@ -271,16 +303,31 @@ const MobileSettingsTab = () => {
       try {
         await navigator.clipboard.writeText(window.location.origin);
         toast({
-          title: 'Link Copied',
-          description: 'App link copied to clipboard',
+          title: t('settings.mobile.toasts.linkCopiedTitle'),
+          description: t('settings.mobile.toasts.linkCopiedDesc'),
         });
       } catch (error) {
         toast({
-          title: 'Share Not Supported',
-          description: 'Web Share API not available on this device',
+          title: t('settings.mobile.toasts.shareNotSupportedTitle'),
+          description: t('settings.mobile.toasts.shareNotSupportedDesc'),
           variant: 'destructive',
         });
       }
+    }
+  };
+
+  const permissionLabel = (p: string) => {
+    switch (p) {
+      case 'granted':
+        return t('settings.mobile.permissionGranted');
+      case 'denied':
+        return t('settings.mobile.permissionDenied');
+      case 'prompt':
+      case 'default':
+        return t('settings.mobile.permissionPrompt');
+      case 'unknown':
+      default:
+        return t('settings.mobile.permissionUnknown');
     }
   };
 
@@ -312,58 +359,220 @@ const MobileSettingsTab = () => {
     }
   }, [settings.layout.compactMode, settings.layout.largeButtons, settings.accessibility.highContrast, settings.accessibility.reducedMotion]);
 
+  // Map preferred camera to constraints/device selection
+  const getCameraConfig = () => {
+    const pref = settings.scanner.preferredCamera;
+    if (pref === 'environment' || pref === 'user') {
+      return { facingMode: pref } as any;
+    }
+    // assume deviceId from Html5Qrcode.getCameras()
+    return { deviceId: { exact: pref } } as any;
+  };
+
+  const getScannerConfig = (): any => {
+    return {
+      fps: settings.scanner.fps,
+      qrbox: settings.scanner.qrboxSize,
+      aspectRatio: settings.scanner.aspectRatio,
+      disableFlip: settings.scanner.disableFlip,
+    };
+  };
+
+  /**
+   * Safely cleans up the scanner instance with multiple fallback mechanisms
+   * to prevent DOM errors related to node removal
+   */
+  const safeCleanupScanner = useCallback(async () => {
+    if (!scannerRef.current) return;
+
+    try {
+      // First try the standard approach
+      try {
+        // @ts-ignore isScanning is not in types but exists
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+      } catch (e) {
+        console.warn('Error stopping scanner:', e);
+      }
+
+      try {
+        await scannerRef.current.clear();
+      } catch (e) {
+        console.warn('Error clearing scanner:', e);
+        
+        // If the standard clear fails, try additional DOM cleanup as a fallback
+        try {
+          const container = document.getElementById(scannerContainerId.current);
+          if (container) {
+            // Force DOM cleanup by replacing the entire container with a clone
+            const parent = container.parentNode;
+            if (parent) {
+              // Create a clean replacement
+              const replacement = container.cloneNode(false) as HTMLElement;
+              replacement.id = scannerContainerId.current;
+              
+              // Replace the problematic node entirely
+              parent.replaceChild(replacement, container);
+              
+              // Add placeholder text back if needed
+              if (isMounted.current && !testingScanner) {
+                const span = document.createElement('span');
+                span.className = 'text-slate-400';
+                span.textContent = t('settings.mobile.testScannerHint') || 'Press Start Test';
+                replacement.appendChild(span);
+              }
+            } else {
+              // Fallback to innerHTML clearing if parent isn't available
+              container.innerHTML = '';
+            }
+          }
+        } catch (innerE) {
+          console.warn('Fallback DOM cleanup failed:', innerE);
+        }
+      }
+    } finally {
+      // Always reset the scanner ref to avoid stale references
+      scannerRef.current = null;
+    }
+  }, [t, testingScanner]);
+
+  const startTestScanner = useCallback(async () => {
+    if (!isMounted.current) return;
+    setScannerError(null);
+    
+    try {
+      // First, ensure any existing scanner is properly cleaned up
+      await safeCleanupScanner();
+      
+      // Verify the container exists and is ready
+      const container = document.getElementById(scannerContainerId.current);
+      if (!container) {
+        throw new Error('Scanner preview container not found');
+      }
+      
+      // Force container to be empty
+      container.innerHTML = '';
+      
+      // Create a new scanner instance with the element ID
+      scannerRef.current = new Html5Qrcode(scannerContainerId.current, /* verbose= */ false);
+      
+      // Update UI state before starting the scanner
+      if (isMounted.current) setTestingScanner(true);
+      
+      // Start the scanner with the current settings
+      await scannerRef.current.start(
+        getCameraConfig(),
+        getScannerConfig(),
+        (decodedText: string, _decodedResult: any) => {
+          if (!isMounted.current) return;
+          
+          // On success: feedback
+          if (settings.scanner.beepEnabled) {
+            try {
+              const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+              if (AudioContext) {
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.type = 'sine'; osc.frequency.value = 1800; gain.gain.value = 0.3;
+                osc.start(); setTimeout(() => osc.stop(), 120);
+              }
+            } catch {}
+          }
+          if (settings.scanner.vibrationEnabled && 'vibrate' in navigator) {
+            navigator.vibrate([60, 40, 60]);
+          }
+          toast({
+            title: t('settings.mobile.toasts.scannerDetectedTitle'),
+            description: decodedText,
+          });
+          // stop after first detection for test
+          stopTestScanner();
+        },
+        (errorMessage: string) => {
+          // scan failure callbacks are noisy; keep quiet during preview
+        }
+      );
+    } catch (e: any) {
+      console.error('Failed to start test scanner', e);
+      if (isMounted.current) {
+        setScannerError(e?.message || String(e));
+        setTestingScanner(false);
+      }
+      toast({
+        title: t('settings.mobile.toasts.scannerStartFailedTitle'),
+        description: e?.message || String(e),
+        variant: 'destructive',
+      });
+    }
+  }, [safeCleanupScanner, settings, getCameraConfig, getScannerConfig, toast, t]);
+
+  const stopTestScanner = useCallback(async () => {
+    if (!isMounted.current) return;
+    
+    try {
+      await safeCleanupScanner();
+    } finally {
+      if (isMounted.current) {
+        setTestingScanner(false);
+      }
+    }
+  }, [safeCleanupScanner]);
+
   return (
     <div className="space-y-6">
       {/* Device Info */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
+          <CardTitle className="flex items-center font-sf-pro text-slate-100">
             <Smartphone className="h-5 w-5 mr-2" />
-            Device Information
+            {t('settings.mobile.deviceInfoTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <Label className="text-xs text-slate-500">Device Type</Label>
-              <p className="font-medium">{isMobile ? 'Mobile' : 'Desktop'}</p>
+              <Label className="text-xs text-slate-400">{t('settings.mobile.deviceType')}</Label>
+              <p className="font-medium">{isMobile ? t('settings.mobile.deviceTypeMobile') : t('settings.mobile.deviceTypeDesktop')}</p>
             </div>
             <div>
-              <Label className="text-xs text-slate-500">Touch Support</Label>
-              <p className="font-medium">{deviceInfo.isTouchDevice ? 'Yes' : 'No'}</p>
+              <Label className="text-xs text-slate-400">{t('settings.mobile.touchSupport')}</Label>
+              <p className="font-medium">{deviceInfo.isTouchDevice ? t('settings.mobile.yes') : t('settings.mobile.no')}</p>
             </div>
             <div>
-              <Label className="text-xs text-slate-500">Screen Size</Label>
+              <Label className="text-xs text-slate-400">{t('settings.mobile.screenSize')}</Label>
               <p className="font-medium">{deviceInfo.screenSize}</p>
             </div>
             <div>
-              <Label className="text-xs text-slate-500">PWA Mode</Label>
-              <p className="font-medium">{deviceInfo.isStandalone ? 'Installed' : 'Browser'}</p>
+              <Label className="text-xs text-slate-400">{t('settings.mobile.pwaMode')}</Label>
+              <p className="font-medium">{deviceInfo.isStandalone ? t('settings.mobile.pwaInstalled') : t('settings.mobile.pwaBrowser')}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Scanner Settings */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
+          <CardTitle className="flex items-center font-sf-pro text-slate-100">
             <Scan className="h-5 w-5 mr-2" />
-            Barcode Scanner Settings
+            {t('settings.mobile.scannerTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-base font-medium">Camera Permission</Label>
-              <p className="text-sm text-gray-600">Required for barcode scanning</p>
+              <Label className="text-base font-medium text-slate-100">{t('settings.mobile.cameraPermission')}</Label>
+              <p className="text-sm text-slate-400">{t('settings.mobile.cameraRequired')}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-sm ${cameraPermission === 'granted' ? 'text-green-600' : 'text-red-600'}`}>
-                {cameraPermission}
+                {permissionLabel(cameraPermission)}
               </span>
               {cameraPermission !== 'granted' && (
-                <Button size="sm" onClick={requestCameraPermission}>Grant Access</Button>
+                <Button size="sm" onClick={requestCameraPermission}>{t('settings.mobile.grantAccessBtn')}</Button>
               )}
             </div>
           </div>
@@ -372,7 +581,7 @@ const MobileSettingsTab = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="fps">Frames Per Second</Label>
+              <Label htmlFor="fps">{t('settings.mobile.fps')}</Label>
               <Select 
                 value={settings.scanner.fps.toString()} 
                 onValueChange={(value) => updateSettings('scanner', 'fps', parseInt(value))}
@@ -381,16 +590,16 @@ const MobileSettingsTab = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5">5 FPS (Power Saving)</SelectItem>
-                  <SelectItem value="10">10 FPS (Balanced)</SelectItem>
-                  <SelectItem value="15">15 FPS (Fast)</SelectItem>
-                  <SelectItem value="30">30 FPS (High Performance)</SelectItem>
+                  <SelectItem value="5">{t('settings.mobile.fps5Label')}</SelectItem>
+                  <SelectItem value="10">{t('settings.mobile.fps10Label')}</SelectItem>
+                  <SelectItem value="15">{t('settings.mobile.fps15Label')}</SelectItem>
+                  <SelectItem value="30">{t('settings.mobile.fps30Label')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="qrboxSize">Scan Area Size</Label>
+              <Label htmlFor="qrboxSize">{t('settings.mobile.scanAreaSize')}</Label>
               <Select 
                 value={settings.scanner.qrboxSize.toString()} 
                 onValueChange={(value) => updateSettings('scanner', 'qrboxSize', parseInt(value))}
@@ -399,16 +608,16 @@ const MobileSettingsTab = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="150">Small (150px)</SelectItem>
-                  <SelectItem value="200">Medium (200px)</SelectItem>
-                  <SelectItem value="250">Large (250px)</SelectItem>
-                  <SelectItem value="300">Extra Large (300px)</SelectItem>
+                  <SelectItem value="150">{t('settings.mobile.small150')}</SelectItem>
+                  <SelectItem value="200">{t('settings.mobile.medium200')}</SelectItem>
+                  <SelectItem value="250">{t('settings.mobile.large250')}</SelectItem>
+                  <SelectItem value="300">{t('settings.mobile.xlarge300')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="preferredCamera">Preferred Camera</Label>
+              <Label htmlFor="preferredCamera">{t('settings.mobile.preferredCamera')}</Label>
               <Select 
                 value={settings.scanner.preferredCamera} 
                 onValueChange={(value) => updateSettings('scanner', 'preferredCamera', value)}
@@ -417,11 +626,11 @@ const MobileSettingsTab = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="environment">Rear Camera</SelectItem>
-                  <SelectItem value="user">Front Camera</SelectItem>
+                  <SelectItem value="environment">{t('settings.mobile.rearCamera')}</SelectItem>
+                  <SelectItem value="user">{t('settings.mobile.frontCamera')}</SelectItem>
                   {availableCameras.map((camera) => (
                     <SelectItem key={camera.id} value={camera.id}>
-                      {camera.label || `Camera ${camera.id}`}
+                      {camera.label || t('settings.mobile.cameraId', { id: camera.id })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -429,7 +638,7 @@ const MobileSettingsTab = () => {
             </div>
 
             <div>
-              <Label htmlFor="aspectRatio">Aspect Ratio</Label>
+              <Label htmlFor="aspectRatio">{t('settings.mobile.aspectRatio')}</Label>
               <Select 
                 value={settings.scanner.aspectRatio.toString()} 
                 onValueChange={(value) => updateSettings('scanner', 'aspectRatio', parseFloat(value))}
@@ -438,9 +647,9 @@ const MobileSettingsTab = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1.0">Square (1:1)</SelectItem>
-                  <SelectItem value="1.33">Standard (4:3)</SelectItem>
-                  <SelectItem value="1.78">Widescreen (16:9)</SelectItem>
+                  <SelectItem value="1.0">{t('settings.mobile.square')}</SelectItem>
+                  <SelectItem value="1.33">{t('settings.mobile.standard43')}</SelectItem>
+                  <SelectItem value="1.78">{t('settings.mobile.widescreen169')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -449,8 +658,8 @@ const MobileSettingsTab = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Scan Beep Sound</Label>
-                <p className="text-sm text-gray-600">Audio feedback on scan</p>
+                <Label className="text-slate-100">{t('settings.mobile.scanBeep')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.audioFeedback')}</p>
               </div>
               <Switch
                 checked={settings.scanner.beepEnabled}
@@ -460,8 +669,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Vibration Feedback</Label>
-                <p className="text-sm text-gray-600">Haptic feedback on scan</p>
+                <Label className="text-slate-100">{t('settings.mobile.vibrationFeedback')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.hapticFeedbackDesc')}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
@@ -476,8 +685,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Disable Image Flip</Label>
-                <p className="text-sm text-gray-600">Prevent mirror effect</p>
+                <Label className="text-slate-100">{t('settings.mobile.disableFlip')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.preventMirror')}</p>
               </div>
               <Switch
                 checked={settings.scanner.disableFlip}
@@ -485,80 +694,55 @@ const MobileSettingsTab = () => {
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <Separator />
 
-      {/* Layout & UI Settings */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
-        <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
-            <Layout className="h-5 w-5 mr-2" />
-            Layout & Interface
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Compact Mode</Label>
-                <p className="text-sm text-gray-600">Reduced spacing for mobile</p>
+          <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Camera className="h-5 w-5 text-slate-300" />
+                <Label className="text-base text-slate-100">{t('settings.mobile.testScannerTitle')}</Label>
               </div>
-              <Switch
-                checked={settings.layout.compactMode}
-                onCheckedChange={(checked) => updateSettings('layout', 'compactMode', checked)}
-              />
+              <div className="flex items-center gap-2">
+                {!testingScanner ? (
+                  <Button size="sm" onClick={startTestScanner} className="bg-blue-600 hover:bg-blue-700">
+                    <Scan className="h-4 w-4 mr-1" /> {t('settings.mobile.startTestBtn')}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="destructive" onClick={stopTestScanner}>
+                    <RefreshCw className="h-4 w-4 mr-1" /> {t('settings.mobile.stopTestBtn')}
+                  </Button>
+                )}
+              </div>
             </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Large Touch Buttons</Label>
-                <p className="text-sm text-gray-600">Bigger buttons for touch</p>
-              </div>
-              <Switch
-                checked={settings.layout.largeButtons}
-                onCheckedChange={(checked) => updateSettings('layout', 'largeButtons', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Optimize for Touch</Label>
-                <p className="text-sm text-gray-600">Touch-friendly interactions</p>
-              </div>
-              <Switch
-                checked={settings.layout.optimizeTouch}
-                onCheckedChange={(checked) => updateSettings('layout', 'optimizeTouch', checked)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Auto-hide Sidebar</Label>
-                <p className="text-sm text-gray-600">More screen space</p>
-              </div>
-              <Switch
-                checked={settings.layout.hideSidebar}
-                onCheckedChange={(checked) => updateSettings('layout', 'hideSidebar', checked)}
-              />
+            {scannerError && (
+              <p className="text-sm text-red-400 mb-3">{scannerError}</p>
+            )}
+            {/* Scanner container - remounted completely when scanner state changes to prevent DOM issues */}
+            <div key={testingScanner ? 'active-scanner' : 'inactive-scanner'} 
+                 id={scannerContainerId.current} 
+                 className="w-full h-64 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center text-slate-400">
+              {!testingScanner && <span>{t('settings.mobile.testScannerHint')}</span>}
             </div>
           </div>
         </CardContent>
       </Card>
 
+      
+
       {/* Accessibility Settings */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
+          <CardTitle className="flex items-center font-sf-pro text-slate-100">
             <Settings className="h-5 w-5 mr-2" />
-            Accessibility
+            {t('settings.mobile.accessibilityTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Haptic Feedback</Label>
-                <p className="text-sm text-gray-600">System vibrations</p>
+                <Label className="text-slate-100">{t('settings.mobile.hapticFeedback')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.systemVibrations')}</p>
               </div>
               <Switch
                 checked={settings.accessibility.hapticFeedback}
@@ -568,8 +752,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>High Contrast Mode</Label>
-                <p className="text-sm text-gray-600">Better visibility</p>
+                <Label className="text-slate-100">{t('settings.mobile.highContrastMode')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.betterVisibility')}</p>
               </div>
               <Switch
                 checked={settings.accessibility.highContrast}
@@ -579,8 +763,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Reduced Motion</Label>
-                <p className="text-sm text-gray-600">Minimize animations</p>
+                <Label className="text-slate-100">{t('settings.mobile.reducedMotion')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.minimizeAnimations')}</p>
               </div>
               <Switch
                 checked={settings.accessibility.reducedMotion}
@@ -590,8 +774,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Voice Assistance</Label>
-                <p className="text-sm text-gray-600">Screen reader support</p>
+                <Label className="text-slate-100">{t('settings.mobile.voiceAssistance')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.screenReaderSupport')}</p>
               </div>
               <Switch
                 checked={settings.accessibility.voiceAssistance}
@@ -603,36 +787,36 @@ const MobileSettingsTab = () => {
       </Card>
 
       {/* PWA & Installation */}
-      <Card className="glass backdrop-blur-xl bg-white/80 border-white/20 shadow-business">
+      <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="flex items-center font-sf-pro">
+          <CardTitle className="flex items-center font-sf-pro text-slate-100">
             <Download className="h-5 w-5 mr-2" />
-            Progressive Web App
+            {t('settings.mobile.pwaTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {isInstallable && (
-              <div className="rounded-xl border bg-blue-50/70 p-4">
+              <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Download className="h-5 w-5 text-blue-700" />
-                  <Label className="text-base text-blue-800">Install App</Label>
+                  <Download className="h-5 w-5 text-slate-300" />
+                  <Label className="text-base text-slate-100">{t('settings.mobile.installApp')}</Label>
                 </div>
-                <p className="text-sm text-blue-700 mb-3">Add MOK Mzansi Books to your home screen for quick access.</p>
+                <p className="text-sm text-slate-400 mb-3">{t('settings.mobile.installDesc')}</p>
                 <Button onClick={installPWA} className="bg-blue-600 hover:bg-blue-700">
-                  Install Now
+                  {t('settings.mobile.installNow')}
                 </Button>
               </div>
             )}
 
-            <div className="rounded-xl border bg-green-50/70 p-4">
+            <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Share className="h-5 w-5 text-green-700" />
-                <Label className="text-base text-green-800">Share App</Label>
+                <Share className="h-5 w-5 text-slate-300" />
+                <Label className="text-base text-slate-100">{t('settings.mobile.shareApp')}</Label>
               </div>
-              <p className="text-sm text-green-700 mb-3">Share MOK Mzansi Books with colleagues and friends.</p>
-              <Button onClick={shareApp} variant="outline" className="border-green-200 text-green-700 hover:bg-green-100">
-                Share App
+              <p className="text-sm text-slate-400 mb-3">{t('settings.mobile.shareDesc')}</p>
+              <Button onClick={shareApp} variant="outline" className="border-white/10 text-slate-100 hover:bg-white/10">
+                {t('settings.mobile.shareButton')}
               </Button>
             </div>
           </div>
@@ -642,8 +826,8 @@ const MobileSettingsTab = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Auto Install Prompt</Label>
-                <p className="text-sm text-gray-600">Suggest app installation</p>
+                <Label>{t('settings.mobile.autoInstallPrompt')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.suggestInstall')}</p>
               </div>
               <Switch
                 checked={settings.pwa.autoPrompt}
@@ -653,8 +837,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Offline Mode</Label>
-                <p className="text-sm text-gray-600">Work without internet</p>
+                <Label>{t('settings.mobile.offlineMode')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.workOffline')}</p>
               </div>
               <Switch
                 checked={settings.pwa.offlineMode}
@@ -664,8 +848,8 @@ const MobileSettingsTab = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <Label>Background Sync</Label>
-                <p className="text-sm text-gray-600">Sync when online</p>
+                <Label>{t('settings.mobile.backgroundSync')}</Label>
+                <p className="text-sm text-slate-400">{t('settings.mobile.syncWhenOnline')}</p>
               </div>
               <Switch
                 checked={settings.pwa.backgroundSync}
@@ -676,15 +860,15 @@ const MobileSettingsTab = () => {
 
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-base font-medium">Push Notifications</Label>
-              <p className="text-sm text-gray-600">Receive mobile notifications</p>
+              <Label className="text-base font-medium">{t('settings.mobile.pushNotifications')}</Label>
+              <p className="text-sm text-slate-400">{t('settings.mobile.receiveMobileNotifications')}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-sm ${notificationPermission === 'granted' ? 'text-green-600' : 'text-red-600'}`}>
-                {notificationPermission}
+                {permissionLabel(notificationPermission)}
               </span>
               {notificationPermission !== 'granted' && (
-                <Button size="sm" onClick={requestNotificationPermission}>Enable</Button>
+                <Button size="sm" onClick={requestNotificationPermission}>{t('settings.mobile.enableBtn')}</Button>
               )}
             </div>
           </div>

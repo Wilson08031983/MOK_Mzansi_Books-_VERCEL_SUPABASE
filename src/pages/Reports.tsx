@@ -12,6 +12,7 @@ import {
   BarChart,
   Calendar,
   ArrowLeft,
+  ChevronLeft,
   Grid,
   List,
   Download,
@@ -331,10 +332,12 @@ const Reports = () => {
                 Access, generate, and customize business reports
               </p>
             </div>
-            <Link to="/dashboard">
-              <Button variant="outline" className="flex items-center gap-2 hover:bg-slate-100 shadow-business hover:shadow-business-lg transition-all duration-300">
-                <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-              </Button>
+            <Link 
+              to="/dashboard"
+              className="inline-flex items-center mb-6 px-4 py-2 text-sm font-medium text-slate-700 bg-white rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition-colors hover:text-mokm-purple-600 animate-fade-in"
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Back to Dashboard
             </Link>
           </div>
         </div>

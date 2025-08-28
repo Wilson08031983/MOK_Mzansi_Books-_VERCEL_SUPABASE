@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useLocalizationContext } from '@/contexts/LocalizationContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
@@ -48,6 +49,7 @@ const ClientsGrid = ({
   getStatusIcon,
   getStatusColor
 }: ClientsGridProps) => {
+  const { formatCurrency } = useLocalizationContext();
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-ZA', {
       year: 'numeric',
@@ -134,7 +136,7 @@ const ClientsGrid = ({
               <div className="flex items-center justify-between pt-3 border-t border-white/20">
                 <div>
                   <p className="text-xs text-slate-500 font-sf-pro">Total Value</p>
-                  <p className="font-semibold text-slate-900 font-sf-pro">R{client.totalValue.toLocaleString()}</p>
+                  <p className="font-semibold text-slate-900 font-sf-pro">{formatCurrency(client.totalValue)}</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   {getStatusIcon(client.status)}

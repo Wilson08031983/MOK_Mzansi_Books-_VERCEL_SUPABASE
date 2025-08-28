@@ -1,6 +1,6 @@
 import { Project, ProjectEmployee, Expense } from '@/types/project';
 import { Employee, getAllEmployees } from '@/services/employeeService';
-import payrollCalculationService, { PayrollCalculation } from '@/services/payrollCalculationService';
+import payrollCalculationService from '@/services/payrollCalculationService';
 import ExpenseProjectSyncService from '@/services/expenseProjectSyncService';
 
 /**
@@ -303,23 +303,31 @@ class PayrollExpenseIntegrationService {
             console.warn(`Employee ${assignedEmployee.employeeId} (${assignedEmployee.employeeName}) not found`);
             continue;
           }
+          // Prefer cached payroll for this period (reflects Accounting PAYE/UIF updates) and fallback to live calculation
+          const cachedNetSalary = this.getCachedNetSalaryForEmployeePeriod(employee.id, period);
+          const netSalary =
+            cachedNetSalary !== null
+              ? cachedNetSalary
+              : this.payrollService.calculateEmployeePayroll(employee, period).netSalary;
+          console.log(
+            `Payroll for ${employee.firstName} ${employee.surname}: Net Salary R${netSalary.toFixed(2)} ` +
+              (cachedNetSalary !== null ? '(from cache)' : '(fresh calc)')
+          );
 
-          // Calculate employee's payroll for the period
-          const payrollCalculation = this.payrollService.calculateEmployeePayroll(employee, period);
-          console.log(`Payroll for ${employee.firstName} ${employee.surname}: Net Salary R${payrollCalculation.netSalary.toFixed(2)}`);
-          
           // Calculate allocated amount based on project allocation percentage
           const allocationFactor = (assignedEmployee.allocation || 100) / 100;
-          const allocatedSalary = payrollCalculation.netSalary * allocationFactor * proRationFactor;
-          
-          console.log(`Allocated salary: R${payrollCalculation.netSalary.toFixed(2)} × ${allocationFactor} × ${proRationFactor.toFixed(3)} = R${allocatedSalary.toFixed(2)}`);
+          const allocatedSalary = netSalary * allocationFactor * proRationFactor;
+
+          console.log(
+            `Allocated salary: R${netSalary.toFixed(2)} × ${allocationFactor} × ${proRationFactor.toFixed(3)} = R${allocatedSalary.toFixed(2)}`
+          );
 
           if (allocatedSalary > 0) {
             // Create expense entry for this employee's salary allocation
             const expenseEntry = await this.createSalaryExpenseEntry(
               project,
               assignedEmployee,
-              payrollCalculation,
+              netSalary,
               allocatedSalary,
               period
             );
@@ -327,7 +335,7 @@ class PayrollExpenseIntegrationService {
             projectSalaryExpense.teamMembers.push({
               employeeId: assignedEmployee.employeeId,
               employeeName: assignedEmployee.employeeName,
-              netSalary: payrollCalculation.netSalary,
+              netSalary: netSalary,
               allocation: assignedEmployee.allocation || 100,
               allocatedAmount: allocatedSalary
             });
@@ -365,7 +373,7 @@ class PayrollExpenseIntegrationService {
   private async createSalaryExpenseEntry(
     project: Project,
     assignedEmployee: ProjectEmployee,
-    payrollCalculation: PayrollCalculation,
+    netSalary: number,
     allocatedAmount: number,
     period: string
   ): Promise<any> {
@@ -393,7 +401,7 @@ class PayrollExpenseIntegrationService {
       submittedBy: 'Payroll Integration System',
       submittedDate: new Date().toISOString().split('T')[0],
       notes: `Automated salary expense - ${assignedEmployee.allocation}% allocation\n` +
-             `Net Salary: R${payrollCalculation.netSalary.toFixed(2)}\n` +
+             `Net Salary: R${netSalary.toFixed(2)}\n` +
              `Allocated Amount: R${allocatedAmount.toFixed(2)}\n` +
              `Period: ${monthName} ${year}`,
       source: 'payroll_system' as const,
@@ -550,6 +558,37 @@ class PayrollExpenseIntegrationService {
       return employees.find(emp => emp.id === employeeId) || null;
     } catch (error) {
       console.error('Error getting employee by ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Attempt to read cached payroll net salary for a given employee and period.
+   * Checks `payroll_calculations_YYYY-MM` first, then falls back to `payrollCalculations`.
+   * Returns null if not found or malformed.
+   */
+  private getCachedNetSalaryForEmployeePeriod(employeeId: string, period: string): number | null {
+    try {
+      const periodKey = `payroll_calculations_${period}`;
+      let raw = localStorage.getItem(periodKey);
+      if (!raw) {
+        raw = localStorage.getItem('payrollCalculations');
+      }
+      if (!raw) return null;
+
+      const records: any[] = JSON.parse(raw);
+      if (!Array.isArray(records)) return null;
+
+      // Prefer exact period match if available; otherwise accept any record for the employee
+      const rec = records.find(
+        (r: any) => r && r.employeeId === employeeId && (r.period ? r.period === period : true)
+      );
+      if (!rec) return null;
+      const net = rec.netSalary;
+      if (typeof net !== 'number' || isNaN(net)) return null;
+      return net;
+    } catch (e) {
+      console.warn('PayrollExpenseIntegration: Failed to read cached payroll; will fallback to calc', e);
       return null;
     }
   }

@@ -60,39 +60,86 @@ export const calculateProjectSpeedScore = (employeeId: string): number => {
 
     if (employeeProjects.length === 0) return 50; // Default score if no projects
 
-    let totalSpeedScore = 0;
-    let completedProjects = 0;
+    let weightedScoreSum = 0;
+    let weightTotal = 0;
+
+    const employeeName = getEmployeeName(employeeId);
 
     employeeProjects.forEach(project => {
-      if (project.status === 'Completed') {
-        const startDate = new Date(project.startDate);
-        const endDate = new Date(project.endDate);
-        const plannedDuration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-        
-        // Use actual completion date vs planned end date for real calculation
-        // For completed projects, use endDate as completion date (projects don't have separate completionDate)
-        const completionDate = endDate;
-        const actualDuration = Math.ceil((completionDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-        
-        // Calculate speed score: faster completion = higher score
-        let speedScore = 75; // Base score for completion
-        
-        if (actualDuration <= plannedDuration) {
-          // Completed on time or early
-          const efficiencyRatio = plannedDuration / actualDuration;
-          speedScore = Math.min(100, 75 + ((efficiencyRatio - 1) * 25));
+      // Compute planned duration
+      const hasTimeline = !!project.startDate && !!project.endDate;
+      const startDate = project.startDate ? new Date(project.startDate) : null;
+      const endDate = project.endDate ? new Date(project.endDate) : null;
+      const today = new Date();
+
+      let projectSpeedComponent = 50; // neutral baseline per project
+
+      if (hasTimeline && startDate && endDate) {
+        const plannedDuration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+        if (project.status === 'Completed') {
+          // Use project planned vs actual duration (no explicit completionDate, use endDate)
+          const completionDate = endDate;
+          const actualDuration = Math.max(1, Math.ceil((completionDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+          if (actualDuration <= plannedDuration) {
+            const efficiencyRatio = plannedDuration / actualDuration; // >= 1 when early/on time
+            projectSpeedComponent = Math.min(100, 75 + ((efficiencyRatio - 1) * 25));
+          } else {
+            const delayRatio = actualDuration / plannedDuration; // > 1 when late
+            projectSpeedComponent = Math.max(30, 75 - ((delayRatio - 1) * 30));
+          }
         } else {
-          // Completed late
-          const delayRatio = actualDuration / plannedDuration;
-          speedScore = Math.max(30, 75 - ((delayRatio - 1) * 30));
+          // In-flight projects: evaluate schedule adherence using progress vs expected by today
+          // Expected progress = elapsedDays / plannedDuration (clamped 0..1)
+          const elapsedMs = Math.min(Math.max(today.getTime() - startDate.getTime(), 0), Math.max(endDate.getTime() - startDate.getTime(), 0));
+          const elapsedDays = Math.ceil(elapsedMs / (1000 * 60 * 60 * 24));
+          const expectedProgress = Math.max(0, Math.min(1, elapsedDays / plannedDuration));
+          const actualProgress = Math.max(0, Math.min(1, (project.progress || 0) / 100));
+          const adherence = actualProgress - expectedProgress; // positive if ahead of schedule
+
+          // Map adherence (-1..1 approx) to score around 75 baseline
+          projectSpeedComponent = 75 + (adherence * 50); // +/- 50 swing at extremes
+          projectSpeedComponent = Math.min(100, Math.max(30, projectSpeedComponent));
         }
-        
-        totalSpeedScore += speedScore;
-        completedProjects++;
       }
+
+      // Task-level signal: completion vs expected from tasks (if available)
+      if (Array.isArray(project.tasks) && project.tasks.length > 0 && hasTimeline && startDate && endDate) {
+        const totalTasks = project.tasks.length;
+        const completedTasks = project.tasks.filter(t => t.completed).length;
+        const tasksCompletionRatio = completedTasks / totalTasks;
+
+        // Expected completion by today mirrors expectedProgress
+        const plannedDuration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+        const elapsedMs = Math.min(Math.max(today.getTime() - startDate.getTime(), 0), Math.max(endDate.getTime() - startDate.getTime(), 0));
+        const elapsedDays = Math.ceil(elapsedMs / (1000 * 60 * 60 * 24));
+        const expectedTasksRatio = Math.max(0, Math.min(1, elapsedDays / plannedDuration));
+
+        const tasksAdherence = tasksCompletionRatio - expectedTasksRatio;
+        // Blend into project component with modest weight (20%) to avoid double counting
+        const tasksInfluence = 75 + (tasksAdherence * 50); // centered at 75
+        projectSpeedComponent = (projectSpeedComponent * 0.8) + (Math.min(100, Math.max(30, tasksInfluence)) * 0.2);
+      }
+
+      // Role and allocation weighting for this employee within the project
+      const assignment = project.assignedEmployees?.find(emp => emp.employeeId === employeeId);
+      const isManager = project.manager && employeeName && project.manager.trim().toLowerCase() === employeeName.trim().toLowerCase();
+      const isLeadByRole = typeof assignment?.role === 'string' && /lead|leader|manager|supervisor/i.test(assignment.role);
+      const roleWeight = isManager || isLeadByRole ? 1.15 : 1.0; // team leaders/managers have higher influence
+
+      // Allocation weight scales contribution from 0.5 (very low allocation) to 1.0 (100%)
+      const allocationPct = typeof assignment?.allocation === 'number' ? Math.max(0, Math.min(100, assignment.allocation)) : 100;
+      const allocationWeight = 0.5 + (allocationPct / 200); // 0.5..1.0
+
+      const combinedWeight = roleWeight * allocationWeight;
+
+      weightedScoreSum += projectSpeedComponent * combinedWeight;
+      weightTotal += combinedWeight;
     });
 
-    return completedProjects > 0 ? Math.round(totalSpeedScore / completedProjects) : 50;
+    const finalScore = weightTotal > 0 ? Math.round(weightedScoreSum / weightTotal) : 50;
+    return Math.min(100, Math.max(1, finalScore));
   } catch (error) {
     console.error('Error calculating project speed score:', error);
     return 50;

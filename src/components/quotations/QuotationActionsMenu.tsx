@@ -89,6 +89,7 @@ import { Invoice } from '@/types/invoice';
 // Import the PDF generator and QuotationPreviewModal
 import { generateQuotationPdf, Quotation } from '@/utils/quotationPdfGenerator';
 import QuotationPreviewModal from '@/components/quotation/QuotationPreviewModal';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 
 // Helper function to format address from client data
 const formatAddress = (client: Partial<Client>, isShipping = false): string => {
@@ -146,6 +147,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
   // Cast quotation to ExtendedQuotation to handle additional fields
   const quotation = rawQuotation as ExtendedQuotation;
   const { t } = useLocalization();
+  const { logDocument, logSystem } = useAuditLogger();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -155,6 +157,11 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
   const [companyData, setCompanyData] = useState<CompanyDetails | null>(null);
 
   const handleView = () => {
+    try {
+      logDocument('Quotation', 'View', { id: quotation.id, number: quotation.number });
+    } catch (e) {
+      console.warn('Audit logging (view quotation) failed:', e);
+    }
     // Using temporary variables to prepare data
     let tempClientData: ExtendedClient | null = null;
     let tempCompanyData: CompanyDetails = {};
@@ -311,6 +318,11 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
   };
 
   const handleEdit = () => {
+    try {
+      logDocument('Quotation', 'Open Edit', { id: quotation.id, number: quotation.number });
+    } catch (e) {
+      console.warn('Audit logging (open edit) failed:', e);
+    }
     if (onEdit) {
       onEdit(quotation.id);
     } else {
@@ -335,6 +347,15 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       // Trigger parent refresh to update the UI state without full page reload
       if (onRefresh) {
         onRefresh();
+      }
+      try {
+        logDocument('Quotation', 'Send', {
+          id: quotation.id,
+          number: quotation.number,
+          email: (quotation as ExtendedQuotation & { clientEmail?: string }).clientEmail || ''
+        });
+      } catch (e) {
+        console.warn('Audit logging (send quotation) failed:', e);
       }
     } catch (error) {
       console.error('Error marking quotation as sent:', error);
@@ -361,6 +382,11 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       await generateQuotationPdf(pdfQuotation as Quotation);
       
       // Success is handled by the PDF generator
+      try {
+        logDocument('Quotation', 'Download PDF', { id: quotation.id, number: quotation.number });
+      } catch (e) {
+        console.warn('Audit logging (download quotation pdf) failed:', e);
+      }
     } catch (error) {
       console.error('Error generating quotation PDF:', error);
       toast.error(t('quotations.toasts.pdfFailed'));
@@ -374,6 +400,11 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
   };
 
   const confirmDelete = () => {
+    try {
+      logDocument('Quotation', 'Delete Confirmed', { id: quotation.id, number: quotation.number });
+    } catch (e) {
+      console.warn('Audit logging (delete confirmed) failed:', e);
+    }
     onDelete(quotation.id);
     toast.success(t('quotations.toasts.deleted'));
     setIsDeleteDialogOpen(false);
@@ -465,6 +496,11 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       
       // Show success message
       toast.success(t('quotations.toasts.convertedToInvoice'));
+      try {
+        logDocument('Quotation', 'Convert To Invoice', { id: quotation.id, number: quotation.number, invoiceNumber });
+      } catch (e) {
+        console.warn('Audit logging (convert to invoice) failed:', e);
+      }
     } catch (error) {
       console.error('Error converting quotation to invoice:', error);
       toast.error(t('quotations.toasts.convertFailed'));

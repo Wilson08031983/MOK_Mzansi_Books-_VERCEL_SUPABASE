@@ -51,6 +51,7 @@ import ocrVATExtractionService from '../../services/ocrVATExtractionService';
 import vatCalculationService from '../../services/vatCalculationService';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocalization } from '@/hooks/useLocalization';
 
 
 interface Expense {
@@ -88,6 +89,7 @@ interface ExpensesTabProps {
 
 const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'current-company-id', initialCategoryFilter }) => {
   const { user } = useAuth();
+  const { formatCurrency, getCurrencySymbol } = useLocalization();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>(initialCategoryFilter ?? 'all');
@@ -837,11 +839,11 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
             
             if (amountsMatch) {
               toast.success('Receipt processed successfully!', {
-                description: `Amount matches: R${receiptResult.extractedAmount.toFixed(2)}${receiptResult.vatAmount ? ` (VAT: R${receiptResult.vatAmount.toFixed(2)})` : ''}`
+                description: `Amount matches: ${formatCurrency(receiptResult.extractedAmount)}${receiptResult.vatAmount ? ` (VAT: ${formatCurrency(receiptResult.vatAmount)})` : ''}`
               });
             } else {
               toast.warning('Receipt uploaded - amount mismatch detected', {
-                description: `Extracted: R${receiptResult.extractedAmount.toFixed(2)}, Expected: R${currentExpense?.amount.toFixed(2) || '0.00'}`
+                description: `Extracted: ${formatCurrency(receiptResult.extractedAmount)}, Expected: ${formatCurrency(currentExpense?.amount ?? 0)}`
               });
             }
           } else if (receiptResult.status === 'manual_verification_required') {
@@ -988,7 +990,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         setVerificationData(null);
         
         toast.success('Receipt verification completed!', {
-          description: `Verified amount: R${updatedData.extractedAmount.toFixed(2)}${updatedData.extractedVAT ? ` (VAT: R${updatedData.extractedVAT.toFixed(2)})` : ''}`
+          description: `Verified amount: ${formatCurrency(updatedData.extractedAmount)}${updatedData.extractedVAT ? ` (VAT: ${formatCurrency(updatedData.extractedVAT)})` : ''}`
         });
       }
     } catch (error) {
@@ -1764,7 +1766,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
         <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
           <CardContent className="p-4">
             <div className="text-sm text-slate-600 font-sf-pro">Total Expenses (Filtered)</div>
-            <div className="text-xl font-bold mt-1 font-sf-pro">R{totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-xl font-bold mt-1 font-sf-pro">{formatCurrency(totalExpenses)}</div>
             <div className="mt-2 text-sm text-slate-600">
               <div className="flex items-center space-x-1">
                 <Receipt className="h-4 w-4" />
@@ -2184,17 +2186,17 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                           <>
                             <td className="py-3 px-4 text-right">
                               <div className="text-sm font-medium text-slate-900 font-sf-pro">
-                                {expense.debit ? `R${expense.debit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                {expense.debit ? formatCurrency(expense.debit) : '-'}
                               </div>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <div className="text-sm font-medium text-mokm-green-600 font-sf-pro">
-                                {expense.credit ? `R${expense.credit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                {expense.credit ? formatCurrency(expense.credit) : '-'}
                               </div>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <div className="text-sm font-medium text-slate-700 font-sf-pro">
-                                {expense.balance ? `R${expense.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                {expense.balance ? formatCurrency(expense.balance) : '-'}
                               </div>
                             </td>
                           </>
@@ -2305,7 +2307,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                         </td>
                         {viewMode === 'expense' && (
                           <td className="py-3 px-4 text-right">
-                            <div className="text-sm font-medium text-slate-900 font-sf-pro">R{expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <div className="text-sm font-medium text-slate-900 font-sf-pro">{formatCurrency(expense.amount)}</div>
                           </td>
                         )}
                         <td className="py-3 px-4 text-center">
@@ -2481,7 +2483,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                                       </select>
                                       {expense.projectId && (
                                         <div className="text-xs text-slate-500 mt-1">
-                                          Budget: R{projects.find(p => p.id === expense.projectId)?.budget?.toLocaleString() || 'N/A'}
+                                          Budget: {projects.find(p => p.id === expense.projectId)?.budget !== undefined ? formatCurrency(projects.find(p => p.id === expense.projectId)!.budget!) : 'N/A'}
                                         </div>
                                       )}
                                     </div>
@@ -2774,7 +2776,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                             </div>
                           </td>
                           <td className="p-3 text-sm font-medium">
-                            R{Math.abs(transaction.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {formatCurrency(Math.abs(transaction.amount))}
                           </td>
                           <td className="p-3">
                             <Badge variant={transaction.type === 'debit' ? 'destructive' : 'default'}>
@@ -2857,7 +2859,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium text-sm">Amount:</span>
-                  <span className="text-sm font-medium">R{expenseToDelete.amount.toFixed(2)}</span>
+                  <span className="text-sm font-medium">{formatCurrency(expenseToDelete.amount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium text-sm">Date:</span>
@@ -3023,7 +3025,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Amount (R)
+                          Amount ({getCurrencySymbol()})
                         </label>
                         <Input
                           type="number"
@@ -3039,7 +3041,7 @@ const ExpensesTab: React.FC<ExpensesTabProps> = ({ onAddExpense, companyId = 'cu
                       
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">
-                          VAT Amount (R)
+                          VAT Amount ({getCurrencySymbol()})
                         </label>
                         <Input
                           type="number"

@@ -6,6 +6,8 @@
  * Based on the Html5Qrcode library.
  */
 
+import { auditService } from './auditService';
+
 // Types for barcode scanner
 export interface ScannerConfig {
   fps: number;
@@ -146,15 +148,41 @@ export const playBeepSound = (): void => {
  * @param code The scanned barcode
  * @param format The barcode format
  */
-export const addScannedCode = (code: string, format: string): void => {
-  const scanResult: ScanResult = {
+export const addScannedCode = (code: string, format: string, context: string = 'inventory'): void => {
+  const result: ScanResult = {
     code,
     format,
     timestamp: new Date()
   };
   
-  scannedCodes.push(scanResult);
-  console.log('Added scanned code to history:', scanResult);
+  scannedCodes.push(result);
+  
+  // Keep only the last 100 scans
+  if (scannedCodes.length > 100) {
+    scannedCodes.shift();
+  }
+
+  // Log the barcode scan to audit log
+  try {
+    auditService.logAudit({
+      category: 'inventory',
+      action: 'Barcode Scanned',
+      page: 'Inventory',
+      section: 'Barcode Scanner',
+      entityType: 'barcode',
+      entityId: code,
+      changeType: 'read',
+      description: `Scanned ${format} barcode: ${code}`,
+      metadata: {
+        format,
+        context,
+        timestamp: result.timestamp.toISOString()
+      },
+      severity: 'low'
+    });
+  } catch (e) {
+    console.error('Failed to log barcode scan:', e);
+  }
 };
 
 /**

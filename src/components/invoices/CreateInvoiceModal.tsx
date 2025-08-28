@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { X, Plus, Trash2, Loader2, Save, ChevronDown, ChevronUp, Eye } from 'lucide-react';
-import { generateInvoiceNumber } from '@/services/invoiceService';
+import { generateInvoiceNumber, applyClientDiscountToTotals, canProceedWithCredit } from '@/services/invoiceService';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { Link } from 'react-router-dom';
@@ -38,6 +38,9 @@ interface Client {
   shippingPostal?: string;
   shippingCountry?: string;
   sameAsBilling?: boolean;
+  // Optional finance fields stored with clients in localStorage
+  creditLimit?: string; // numeric string
+  discountRate?: string; // percentage string
 }
 
 interface CreateInvoiceModalProps {
@@ -66,6 +69,7 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
   const [items, setItems] = useState<LineItem[]>([]);
   const [nextItemNo, setNextItemNo] = useState(1);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [clientFinance, setClientFinance] = useState<{ discountRate: number; creditLimit: number }>({ discountRate: 0, creditLimit: 0 });
 
   // Define addItem with useCallback to avoid dependency issues
   const addItem = useCallback(() => {
@@ -118,6 +122,10 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
       if (selectedClient) {
         // Auto-populate client data if needed
         console.log('Selected client:', selectedClient);
+        // Extract finance fields
+        const dRate = Number((selectedClient as any).discountRate) || 0;
+        const cLimit = Number((selectedClient as any).creditLimit) || 0;
+        setClientFinance({ discountRate: dRate, creditLimit: cLimit });
       }
     }
   }, [clients]);
@@ -242,6 +250,10 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
 
   // Calculate totals for display
   const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
+  // Apply client-level discount to computed subtotal before VAT
+  const discounted = useMemo(() => {
+    return applyClientDiscountToTotals(subtotal, formData.vatRate, clientFinance.discountRate);
+  }, [subtotal, formData.vatRate, clientFinance.discountRate]);
 
   // Handle preview invoice
   const handlePreviewInvoice = () => {
@@ -282,10 +294,12 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
         ...item,
         quantity: Number(item.quantity) || 0
       })),
-      subtotal: subtotal,
+      subtotal: discounted.discountedSubtotal,
       vatRate: Number(formData.vatRate) || 15,
-      vatTotal: vatAmount,
-      grandTotal: total,
+      vatTotal: discounted.vatTotal,
+      grandTotal: discounted.total,
+      clientDiscountRate: clientFinance.discountRate,
+      clientDiscountAmount: discounted.discountAmount,
       notes: formData.notes,
       terms: formData.terms,
       currency: 'ZAR',
@@ -331,10 +345,19 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
         return;
       }
       
-      // Calculate totals for the current items
-      const { subtotal, vatAmount, total } = calculateTotals(items, formData.vatRate);
+      // Calculate totals for the current items with client discount
+      const baseTotals = calculateTotals(items, formData.vatRate);
+      const discountedTotals = applyClientDiscountToTotals(baseTotals.subtotal, formData.vatRate, clientFinance.discountRate);
       
       const clientName = selectedClient?.companyName || `${selectedClient?.firstName} ${selectedClient?.lastName}`.trim() || 'Unknown Client';
+
+      // Enforce credit limit if configured
+      const creditCheck = canProceedWithCredit(formData.clientId, discountedTotals.total, clientFinance.creditLimit);
+      if (!creditCheck.allowed) {
+        toast.error(`Credit limit exceeded. Outstanding: R ${creditCheck.outstanding.toFixed(2)}. Remaining credit: R ${creditCheck.remaining.toFixed(2)}. Invoice total: R ${discountedTotals.total.toFixed(2)}.`);
+        setIsLoading(false);
+        return;
+      }
       
       // Prepare invoice data according to the Invoice type
       const invoiceData: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -346,12 +369,12 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
         date: formData.invoiceDate,
         invoiceDate: formData.invoiceDate,
         dueDate: formData.dueDate || '',
-        amount: total,
-        subtotal,
-        vatTotal: vatAmount,
-        total,
+        amount: discountedTotals.total,
+        subtotal: discountedTotals.discountedSubtotal,
+        vatTotal: discountedTotals.vatTotal,
+        total: discountedTotals.total,
         paidAmount: 0,
-        balance: total,
+        balance: discountedTotals.total,
         status: 'draft',
         currency: 'ZAR',
         vatRate: Number(formData.vatRate) || 15,
@@ -726,7 +749,14 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
               <div className="grid grid-cols-2 gap-2">
                 <div className="text-right text-slate-600 font-sf-pro">Subtotal:</div>
                 <div className="text-right font-medium font-sf-pro">R {subtotal.toFixed(2)}</div>
-                
+
+                {clientFinance.discountRate > 0 && (
+                  <>
+                    <div className="text-right text-slate-600 font-sf-pro">Client Discount ({clientFinance.discountRate}%):</div>
+                    <div className="text-right font-medium text-red-600 font-sf-pro">- R {discounted.discountAmount.toFixed(2)}</div>
+                  </>
+                )}
+
                 <div className="text-right text-slate-600 font-sf-pro">VAT ({formData.vatRate}%):</div>
                 <div className="text-right font-medium font-sf-pro">
                   <Input
@@ -737,12 +767,12 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
                     onChange={(e) => setFormData({...formData, vatRate: Number(e.target.value)})}
                     className="w-24 inline-block text-right font-sf-pro"
                   />
-                  <span className="ml-2">R {vatAmount.toFixed(2)}</span>
+                  <span className="ml-2">R {discounted.vatTotal.toFixed(2)}</span>
                 </div>
                 
                 <div className="text-right text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200 font-sf-pro">Total (ZAR):</div>
                 <div className="text-right text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200 font-sf-pro">
-                  R {total.toFixed(2)}
+                  R {discounted.total.toFixed(2)}
                 </div>
               </div>
             </div>

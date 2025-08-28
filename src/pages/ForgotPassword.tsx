@@ -21,29 +21,48 @@ const ForgotPassword = () => {
     setLoading(true);
     
     try {
-      // Generate a reset token (for local development only)
-      const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      // Store the token in localStorage (in production this would be in the database)
-      const resetRequests = JSON.parse(localStorage.getItem('passwordResetRequests') || '{}');
-      resetRequests[email] = {
-        token: resetToken,
-        expires: Date.now() + 3600000, // 1 hour expiry
-      };
-      localStorage.setItem('passwordResetRequests', JSON.stringify(resetRequests));
-      
-      // Send password reset email
-      const result = await sendPasswordResetEmail({
-        to: email,
-        subject: t('auth.forgotPassword.resetTitle'),
-        resetToken,
-      });
-      
-      if (result) {
-        setSubmitted(true);
-      } else {
-        throw new Error(t('auth.forgotPassword.failedToSend'));
+      // Check if a user exists for this email in our local mock store
+      const mockUsers: Array<{ email: string; firstName?: string }> = JSON.parse(localStorage.getItem('mockUsers') || '[]');
+      const user = mockUsers.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+
+      // Always show the same outcome to avoid user enumeration
+      // Only generate/store token and send email if the user exists locally
+      if (user) {
+        // Read existing reset requests
+        const resetRequests = JSON.parse(localStorage.getItem('passwordResetRequests') || '{}');
+        const existing = resetRequests[email];
+
+        // Reuse existing unexpired token to rate limit repeated requests
+        const now = Date.now();
+        const tokenToUse = existing && existing.expires > now
+          ? existing.token
+          : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+        // Store/refresh the reset request (1 hour expiry) with metadata
+        resetRequests[email] = {
+          token: tokenToUse,
+          expires: now + 3600000,
+          createdAt: existing?.createdAt || now,
+          lastRequestedAt: now,
+        };
+        localStorage.setItem('passwordResetRequests', JSON.stringify(resetRequests));
+
+        // Attempt to send password reset email (mock/real based on env)
+        const result = await sendPasswordResetEmail({
+          to: email,
+          subject: t('auth.forgotPassword.resetTitle'),
+          resetToken: tokenToUse,
+          firstName: user.firstName,
+        });
+
+        if (!result) {
+          // Log but continue to avoid leaking information
+          console.error('Failed to send password reset email');
+        }
       }
+
+      // Show success regardless of whether the user exists
+      setSubmitted(true);
     } catch (error) {
       console.error(t('auth.forgotPassword.resetError'), error);
       setError(t('auth.forgotPassword.generalError'));

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocalization } from '@/hooks/useLocalization';
 import { useAuth } from '@/hooks/useAuthHook';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,13 +21,17 @@ import CompanyAssetsUpload from './CompanyAssetsUpload';
 
 const CompanyDetails = () => {
   const { user } = useAuth();
-  const { logSettings, logAuth, logSystem, logUpdate } = useAuditLogger();
+  const { t } = useLocalization();
+  const { logSettings, logAuth, logSystem, logUpdate, logNavigation } = useAuditLogger();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   
   // Initialize local auth system on component mount
   useEffect(() => {
+    // Log viewing the Company Details tab
+    try { logNavigation('Company Details'); } catch {}
+
     // Reset the auth state first, then initialize with new credentials
     
     // Initialize company details for sync
@@ -374,7 +379,7 @@ const CompanyDetails = () => {
       {/* Company Information */}
       <Card className="glass backdrop-blur-md bg-white/10 dark:bg-black/30 border border-white/10 shadow-business hover:shadow-business-lg transition-all duration-300">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-foreground font-sf-pro text-xl">Company Information</CardTitle>
+          <CardTitle className="text-foreground font-sf-pro text-xl">{t('company.information')}</CardTitle>
           {!isEditing ? (
             <div className="flex space-x-2">
               {/* Sync to HR button hidden as auto-sync is triggered on Save */}
@@ -383,7 +388,7 @@ const CompanyDetails = () => {
                 className="bg-gradient-to-r from-mokm-orange-500 to-mokm-pink-500 hover:from-mokm-orange-600 hover:to-mokm-pink-600 text-white font-sf-pro rounded-xl shadow-colored hover:shadow-colored-lg transition-all duration-300"
               >
                 <ShieldAlert className="h-4 w-4 mr-2" />
-                Edit
+                {t('company.edit')}
               </Button>
 
             </div>
@@ -394,7 +399,7 @@ const CompanyDetails = () => {
                 className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-sf-pro rounded-xl transition-all duration-300"
               >
                 <Save className="h-4 w-4 mr-2" />
-                Save
+                {t('company.save')}
               </Button>
               <Button
                 onClick={handleCancel}
@@ -402,7 +407,7 @@ const CompanyDetails = () => {
                 className="border-slate-300 hover:bg-slate-50 font-sf-pro rounded-xl transition-all duration-300"
               >
                 <X className="h-4 w-4 mr-2" />
-                Cancel
+                {t('company.cancel')}
               </Button>
             </div>
           )}

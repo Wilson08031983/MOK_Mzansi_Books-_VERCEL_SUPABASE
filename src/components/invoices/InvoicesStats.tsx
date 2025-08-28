@@ -9,6 +9,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { Invoice, getInvoiceStats } from '@/services/invoiceService';
+import { useLocalization } from '@/hooks/useLocalization';
 
 interface InvoicesStatsProps {
   invoices: Invoice[];
@@ -16,15 +17,7 @@ interface InvoicesStatsProps {
 
 const InvoicesStats: React.FC<InvoicesStatsProps> = ({ invoices }) => {
   const stats = getInvoiceStats();
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'currency',
-      currency: 'ZAR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  const { formatCurrency } = useLocalization();
 
   const statsData = [
     {

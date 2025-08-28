@@ -68,6 +68,44 @@ const SidebarProvider = React.forwardRef<
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
 
+    // Check hideSidebar setting on initialization
+    React.useEffect(() => {
+      try {
+        const appSettings = localStorage.getItem('app.settings');
+        if (appSettings && isMobile) {
+          const settings = JSON.parse(appSettings);
+          const hideSidebar = settings?.layout?.hideSidebar;
+          
+          // If hideSidebar is true on mobile, ensure sidebar is closed
+          if (hideSidebar === true) {
+            setOpenMobile(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error reading sidebar settings:', error);
+      }
+      
+      // Listen for changes to hideSidebar setting
+      const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === 'app.settings' && event.newValue && isMobile) {
+          try {
+            const settings = JSON.parse(event.newValue);
+            const hideSidebar = settings?.layout?.hideSidebar;
+            
+            // Only auto-hide on mobile devices
+            if (hideSidebar === true) {
+              setOpenMobile(false);
+            }
+          } catch (error) {
+            console.error('Error parsing storage change:', error);
+          }
+        }
+      };
+      
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
+    }, [isMobile])
+
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
     const [_open, _setOpen] = React.useState(defaultOpen)
@@ -89,10 +127,28 @@ const SidebarProvider = React.forwardRef<
 
     // Helper to toggle the sidebar.
     const toggleSidebar = React.useCallback(() => {
-      return isMobile
-        ? setOpenMobile((open) => !open)
-        : setOpen((open) => !open)
-    }, [isMobile, setOpen, setOpenMobile])
+      if (isMobile) {
+        // Check if hideSidebar is enabled before toggling
+        try {
+          const appSettings = localStorage.getItem('app.settings');
+          if (appSettings) {
+            const settings = JSON.parse(appSettings);
+            const hideSidebar = settings?.layout?.hideSidebar;
+            
+            // If hideSidebar is true, don't allow opening the sidebar
+            if (hideSidebar === true && !openMobile) {
+              return; // Don't toggle if hideSidebar is enabled and sidebar is closed
+            }
+          }
+        } catch (error) {
+          console.error('Error reading sidebar settings when toggling:', error);
+        }
+        
+        return setOpenMobile((open) => !open);
+      } else {
+        return setOpen((open) => !open);
+      }
+    }, [isMobile, setOpen, setOpenMobile, openMobile])
 
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {

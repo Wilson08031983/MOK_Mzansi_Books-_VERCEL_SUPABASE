@@ -19,9 +19,14 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
   onRemoveItem,
   canRemove
 }) => {
-  // Calculate item total based on quantity, unit price, tax, and discount
+  // Calculate item total based on quantity, unit price, markup, tax, and discount
   const calculateItemTotal = (currentItem: LocalQuotationItem) => {
-    const subtotal = currentItem.quantity * currentItem.unitPrice;
+    let subtotal = currentItem.quantity * currentItem.unitPrice;
+    // Apply markup if present
+    if (currentItem.markupPercent && currentItem.markupPercent > 0) {
+      const markupAmount = (subtotal * currentItem.markupPercent) / 100;
+      subtotal += markupAmount;
+    }
     const discount = currentItem.discount || 0;
     const taxRate = currentItem.taxRate || 0;
     const taxAmount = (subtotal * taxRate) / 100;
@@ -49,7 +54,7 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
     onUpdateItem(item.id, field, value);
     
     // If any of the price-affecting fields change, update the amount
-    if (['quantity', 'unitPrice', 'taxRate', 'discount'].includes(field)) {
+    if (['quantity', 'unitPrice', 'markupPercent', 'taxRate', 'discount'].includes(field)) {
       const updatedItem = { ...item, [field]: value };
       const newAmount = calculateItemTotal(updatedItem);
       if (Math.abs(newAmount - (item.amount || 0)) > 0.01) { // Avoid floating point precision issues
@@ -115,6 +120,21 @@ const QuotationItemForm: React.FC<QuotationItemFormProps> = ({
             value={item.unitPrice}
             onChange={(e) => handleFieldUpdate('unitPrice', e.target.value)}
             required
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1 font-sf-pro">
+            Markup (%)
+          </label>
+          <input
+            type="number"
+            min="0"
+            max="1000"
+            step="0.01"
+            value={item.markupPercent || ''}
+            onChange={(e) => handleFieldUpdate('markupPercent', e.target.value)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
           />
         </div>

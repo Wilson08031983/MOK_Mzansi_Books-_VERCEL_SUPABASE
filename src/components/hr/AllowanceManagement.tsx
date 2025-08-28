@@ -6,13 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatCurrency } from '@/lib/utils';
+import { useLocalization } from '@/hooks/useLocalization';
 import { DollarSign, Calculator, Users, PiggyBank, Car, Home, Heart, Shield, Edit, Save, Clock, Briefcase, TrendingUp } from 'lucide-react';
 import { Employee } from '@/services/employeeService';
 import { TimeEntry } from '@/components/hr/TimeAttendanceTypes';
 import { toast } from 'sonner';
-import { getAttendancePayExpensesSummary, updateAllActiveProjectsWithAttendanceExpenses, calculateProjectAttendanceExpenses } from '@/services/projectAttendanceExpenseService';
-import { Project } from '@/types/project';
+// Removed Project Expenses tab from Allowance; moved to Payroll
+import { localizationService } from '@/services/localizationService';
 
 // Types
 interface MonthlyAttendance {
@@ -145,7 +145,11 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
   const uif = calculateUIF(grossSalary);
   const netSalary = grossSalary - tax - uif.employeeContribution;
   
-  console.log(`Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = R${attendancePay.toFixed(2)}`);
+  console.log(
+    `Salary for ${employee.firstName} ${employee.surname}: Attendance Pay = ${localizationService.formatCurrency(
+      attendancePay
+    )}`
+  );
   
   return {
     employeeId: employee.id,
@@ -161,202 +165,14 @@ const calculateEmployeeSalary = (employee: Employee, attendance: MonthlyAttendan
 };
 
 // Project Expenses Tab Component
-interface ProjectExpensesTabProps {
-  employees: Employee[];
-}
-
-const ProjectExpensesTab: React.FC<ProjectExpensesTabProps> = ({ employees }) => {
-  const [projectExpensesSummary, setProjectExpensesSummary] = useState<any>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    loadProjectData();
-  }, []);
-
-  const loadProjectData = () => {
-    setIsLoading(true);
-    try {
-      // Load projects from localStorage
-      const projectsRaw = localStorage.getItem('projects');
-      const loadedProjects: Project[] = projectsRaw ? JSON.parse(projectsRaw) : [];
-      setProjects(loadedProjects);
-
-      // Get attendance pay expenses summary
-      const summary = getAttendancePayExpensesSummary();
-      setProjectExpensesSummary(summary);
-    } catch (error) {
-      console.error('Error loading project data:', error);
-      toast.error('Failed to load project data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUpdateProjectExpenses = () => {
-    setIsLoading(true);
-    try {
-      updateAllActiveProjectsWithAttendanceExpenses();
-      loadProjectData(); // Reload data
-      toast.success('Project expenses updated with attendance pay');
-    } catch (error) {
-      console.error('Error updating project expenses:', error);
-      toast.error('Failed to update project expenses');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-mokm-purple-600 mx-auto mb-2"></div>
-          <p className="text-sm text-slate-500">Loading project data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Active Projects</CardTitle>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-sf-pro">{projectExpensesSummary?.projectCount || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Assigned Employees</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-sf-pro">{projectExpensesSummary?.employeeCount || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Total Attendance Expenses</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-sf-pro text-green-600">
-              {formatCurrency(projectExpensesSummary?.totalAttendanceExpenses || 0)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Update Expenses</CardTitle>
-            <Calculator className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <Button 
-              onClick={handleUpdateProjectExpenses}
-              disabled={isLoading}
-              className="w-full bg-gradient-to-r from-mokm-purple-500 to-mokm-blue-500 hover:from-mokm-purple-600 hover:to-mokm-blue-600 text-white"
-            >
-              {isLoading ? 'Updating...' : 'Update Now'}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Project Breakdown Table */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
-        <CardHeader>
-          <CardTitle className="font-sf-pro">Project Attendance Expenses Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {projectExpensesSummary?.breakdown && projectExpensesSummary.breakdown.length > 0 ? (
-            <div className="relative w-full overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-sf-pro">Project Name</TableHead>
-                    <TableHead className="font-sf-pro">Assigned Employees</TableHead>
-                    <TableHead className="font-sf-pro">Monthly Attendance Pay</TableHead>
-                    <TableHead className="font-sf-pro">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projectExpensesSummary.breakdown.map((project: any, index: number) => {
-                    const projectData = projects.find(p => p.name === project.projectName);
-                    return (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium font-sf-pro">{project.projectName}</TableCell>
-                        <TableCell className="font-sf-pro">{project.employeeCount}</TableCell>
-                        <TableCell className="font-sf-pro text-green-600">
-                          {formatCurrency(project.totalAttendancePay)}
-                        </TableCell>
-                        <TableCell className="font-sf-pro">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            projectData?.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                            projectData?.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                            projectData?.status === 'Planning' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {projectData?.status || 'Unknown'}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Briefcase className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500 font-sf-pro">No active projects with assigned employees found.</p>
-              <p className="text-sm text-slate-400 font-sf-pro mt-2">
-                Assign employees to projects in the Projects page to see attendance expenses here.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Information Card */}
-      <Card className="glass backdrop-blur-sm bg-blue-50/50 border border-blue-200/20 shadow-business">
-        <CardHeader>
-          <CardTitle className="font-sf-pro text-blue-800">How Project Attendance Expenses Work</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3 text-sm text-blue-700">
-            <p className="font-sf-pro">
-              <strong>Automatic Integration:</strong> When employees are assigned to projects, their attendance pay automatically becomes part of the project expenses.
-            </p>
-            <p className="font-sf-pro">
-              <strong>Real-time Calculation:</strong> Attendance pay is calculated based on regular hours, overtime (1.5x), and night shift allowances (10%).
-            </p>
-            <p className="font-sf-pro">
-              <strong>Project Allocation:</strong> Only the percentage of attendance pay allocated to each project is included in expenses.
-            </p>
-            <p className="font-sf-pro">
-              <strong>Duration-based:</strong> Expenses continue until the project is marked as 100% complete.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
+// Project Expenses UI moved to PayrollManagement
 
 const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) => {
+  const { formatCurrency, getCurrencySymbol } = useLocalization();
   const [salaryData, setSalaryData] = useState<SalaryBreakdown[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'individual' | 'uif' | 'projects'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'individual' | 'uif'>('overview');
   const [editingAllowances, setEditingAllowances] = useState<string | null>(null);
   const [tempAllowances, setTempAllowances] = useState<EmployeeAllowances>({
     thirteenthMonthBonus: 0,
@@ -567,8 +383,8 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Allowance Management</h2>
-          <p className="text-slate-600 font-sf-pro">
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 font-sf-pro">Allowance Management</h2>
+          <p className="text-slate-600 dark:text-slate-400 font-sf-pro">
             Calculate final salaries with Time & Attendance integration and South African allowances
           </p>
         </div>
@@ -619,83 +435,82 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="individual">Individual Breakdown</TabsTrigger>
-          <TabsTrigger value="projects">Project Expenses</TabsTrigger>
           <TabsTrigger value="uif">UIF Information</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Total Employees</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Total Employees</CardTitle>
+                <Users className="h-4 w-4 text-slate-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro">{salaryData.length}</div>
+                <div className="text-2xl font-bold font-sf-pro text-slate-100">{salaryData.length}</div>
               </CardContent>
             </Card>
 
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Total Payroll Cost</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Total Payroll Cost</CardTitle>
+                <DollarSign className="h-4 w-4 text-slate-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro">{formatCurrency(getTotalPayrollCost())}</div>
-                <p className="text-xs text-muted-foreground font-sf-pro">Monthly gross salaries</p>
+                <div className="text-2xl font-bold font-sf-pro text-slate-100">{formatCurrency(getTotalPayrollCost())}</div>
+                <p className="text-xs text-slate-400 font-sf-pro">Monthly gross salaries</p>
               </CardContent>
             </Card>
 
-            <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+            <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium font-sf-pro">Total UIF</CardTitle>
-                <Shield className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium font-sf-pro text-slate-100">Total UIF</CardTitle>
+                <Shield className="h-4 w-4 text-slate-300" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold font-sf-pro">{formatCurrency(getTotalUIFContributions().total)}</div>
-                <p className="text-xs text-muted-foreground font-sf-pro">Employee + Employer contributions</p>
+                <div className="text-2xl font-bold font-sf-pro text-slate-100">{formatCurrency(getTotalUIFContributions().total)}</div>
+                <p className="text-xs text-slate-400 font-sf-pro">Employee + Employer contributions</p>
               </CardContent>
             </Card>
           </div>
 
           {/* Employee Salary Overview Table */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Employee Salary Overview</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-100">Employee Salary Overview</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="font-sf-pro">Employee</TableHead>
-                    <TableHead className="font-sf-pro">Base Salary</TableHead>
-                    <TableHead className="font-sf-pro">Attendance Pay</TableHead>
-                    <TableHead className="font-sf-pro">Allowances</TableHead>
-                    <TableHead className="font-sf-pro">Gross Salary</TableHead>
-                    <TableHead className="font-sf-pro">Net Salary</TableHead>
-                    <TableHead className="font-sf-pro">Actions</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Employee</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Base Salary</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Attendance Pay</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Allowances</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Gross Salary</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Net Salary</TableHead>
+                    <TableHead className="font-sf-pro text-slate-300">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salaryData.map((data) => (
                     <TableRow key={data.employeeId}>
-                      <TableCell className="font-medium font-sf-pro">{data.employeeName}</TableCell>
-                      <TableCell className="font-sf-pro">{formatCurrency(data.baseSalary)}</TableCell>
-                      <TableCell className="font-sf-pro">{formatCurrency(data.attendancePay)}</TableCell>
-                      <TableCell className="font-sf-pro">{formatCurrency(data.totalAllowances)}</TableCell>
-                      <TableCell className="font-sf-pro font-medium">{formatCurrency(data.grossSalary)}</TableCell>
-                      <TableCell className="font-sf-pro font-medium text-green-600">{formatCurrency(data.netSalary)}</TableCell>
+                      <TableCell className="font-medium font-sf-pro text-slate-100">{data.employeeName}</TableCell>
+                      <TableCell className="font-sf-pro text-slate-300">{formatCurrency(data.baseSalary)}</TableCell>
+                      <TableCell className="font-sf-pro text-slate-300">{formatCurrency(data.attendancePay)}</TableCell>
+                      <TableCell className="font-sf-pro text-slate-300">{formatCurrency(data.totalAllowances)}</TableCell>
+                      <TableCell className="font-sf-pro font-medium text-slate-100">{formatCurrency(data.grossSalary)}</TableCell>
+                      <TableCell className="font-sf-pro font-medium text-green-300">{formatCurrency(data.netSalary)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEditAllowances(data.employeeId)}
-                            className="font-sf-pro hover:bg-mokm-purple-50 hover:text-mokm-purple-600 hover:border-mokm-purple-200"
+                            className="font-sf-pro border-white/10 hover:bg-slate-800/40 hover:text-slate-100"
                           >
                             <Edit className="h-4 w-4 mr-1" />
                             Edit
@@ -712,13 +527,13 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
 
         <TabsContent value="individual" className="space-y-6">
           {/* Employee Selection */}
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">Select Employee</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-100">Select Employee</CardTitle>
             </CardHeader>
             <CardContent>
               <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full bg-slate-800/60 text-slate-100 border border-white/10">
                   <SelectValue placeholder="Select an employee" />
                 </SelectTrigger>
                 <SelectContent>
@@ -739,40 +554,40 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
           {getSelectedEmployeeData() && (
             <>
               {/* Allowances Configuration */}
-              <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+              <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
                 <CardHeader>
-                  <CardTitle className="font-sf-pro flex items-center gap-2">
-                    <PiggyBank className="h-5 w-5" />
+                  <CardTitle className="font-sf-pro flex items-center gap-2 text-slate-100">
+                    <PiggyBank className="h-5 w-5 text-slate-300" />
                     South African Allowances
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label className="font-sf-pro">13th Month Bonus (Annual)</Label>
+                      <Label className="font-sf-pro text-slate-300">13th Month Bonus (Annual)</Label>
                       <Input
                         type="number"
                         value={editingAllowances === selectedEmployeeId ? tempAllowances.thirteenthMonthBonus : 0}
                         onChange={(e) => setTempAllowances(prev => ({ ...prev, thirteenthMonthBonus: parseFloat(e.target.value) || 0 }))}
                         disabled={editingAllowances !== selectedEmployeeId}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/60 text-slate-100 border border-white/10"
                       />
                     </div>
 
                     <div>
-                      <Label className="font-sf-pro">Retirement Plan</Label>
+                      <Label className="font-sf-pro text-slate-300">Retirement Plan</Label>
                       <Input
                         type="number"
                         value={editingAllowances === selectedEmployeeId ? tempAllowances.retirementPlan : 0}
                         onChange={(e) => setTempAllowances(prev => ({ ...prev, retirementPlan: parseFloat(e.target.value) || 0 }))}
                         disabled={editingAllowances !== selectedEmployeeId}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/60 text-slate-100 border border-white/10"
                       />
                     </div>
 
                     <div>
-                      <Label className="font-sf-pro flex items-center gap-2">
-                        <Home className="h-4 w-4" />
+                      <Label className="font-sf-pro flex items-center gap-2 text-slate-300">
+                        <Home className="h-4 w-4 text-slate-300" />
                         Housing Allowance
                       </Label>
                       <Input
@@ -780,13 +595,13 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
                         value={editingAllowances === selectedEmployeeId ? tempAllowances.housingAllowance : 0}
                         onChange={(e) => setTempAllowances(prev => ({ ...prev, housingAllowance: parseFloat(e.target.value) || 0 }))}
                         disabled={editingAllowances !== selectedEmployeeId}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/60 text-slate-100 border border-white/10"
                       />
                     </div>
 
                     <div>
-                      <Label className="font-sf-pro flex items-center gap-2">
-                        <Car className="h-4 w-4" />
+                      <Label className="font-sf-pro flex items-center gap-2 text-slate-300">
+                        <Car className="h-4 w-4 text-slate-300" />
                         Motor Vehicle Allowance
                       </Label>
                       <Input
@@ -794,13 +609,13 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
                         value={editingAllowances === selectedEmployeeId ? tempAllowances.motorVehicleAllowance : 0}
                         onChange={(e) => setTempAllowances(prev => ({ ...prev, motorVehicleAllowance: parseFloat(e.target.value) || 0 }))}
                         disabled={editingAllowances !== selectedEmployeeId}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/60 text-slate-100 border border-white/10"
                       />
                     </div>
 
                     <div>
-                      <Label className="font-sf-pro flex items-center gap-2">
-                        <Heart className="h-4 w-4" />
+                      <Label className="font-sf-pro flex items-center gap-2 text-slate-300">
+                        <Heart className="h-4 w-4 text-slate-300" />
                         Medical Aid Allowance
                       </Label>
                       <Input
@@ -808,18 +623,18 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
                         value={editingAllowances === selectedEmployeeId ? tempAllowances.medicalAidAllowance : 0}
                         onChange={(e) => setTempAllowances(prev => ({ ...prev, medicalAidAllowance: parseFloat(e.target.value) || 0 }))}
                         disabled={editingAllowances !== selectedEmployeeId}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/60 text-slate-100 border border-white/10"
                       />
                     </div>
 
                     <div>
-                      <Label className="font-sf-pro">Other Allowances</Label>
+                      <Label className="font-sf-pro text-slate-300">Other Allowances</Label>
                       <Input
                         type="number"
                         value={editingAllowances === selectedEmployeeId ? tempAllowances.otherAllowances : 0}
                         onChange={(e) => setTempAllowances(prev => ({ ...prev, otherAllowances: parseFloat(e.target.value) || 0 }))}
                         disabled={editingAllowances !== selectedEmployeeId}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/60 text-slate-100 border border-white/10"
                       />
                     </div>
                   </div>
@@ -837,7 +652,7 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
                         <Button
                           variant="outline"
                           onClick={() => setEditingAllowances(null)}
-                          className="font-sf-pro"
+                          className="font-sf-pro bg-white text-slate-700 border-slate-300 hover:bg-slate-50 dark:bg-transparent dark:text-slate-100 dark:border-white/10 dark:hover:bg-slate-800/40"
                         >
                           Cancel
                         </Button>
@@ -846,7 +661,7 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
                       <Button
                         onClick={() => handleEditAllowances(selectedEmployeeId)}
                         variant="outline"
-                        className="font-sf-pro"
+                        className="font-sf-pro bg-white text-slate-700 border-slate-300 hover:bg-slate-50 dark:bg-transparent dark:text-slate-100 dark:border-white/10 dark:hover:bg-slate-800/40"
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Allowances
@@ -857,40 +672,40 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
               </Card>
 
               {/* Salary Breakdown */}
-              <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+              <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
                 <CardHeader>
-                  <CardTitle className="font-sf-pro flex items-center gap-2">
-                    <Calculator className="h-5 w-5" />
+                  <CardTitle className="font-sf-pro flex items-center gap-2 text-slate-100">
+                    <Calculator className="h-5 w-5 text-slate-300" />
                     Salary Breakdown
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="font-sf-pro">Base Salary:</span>
-                      <span className="font-sf-pro">{formatCurrency(getSelectedEmployeeData()!.baseSalary)}</span>
+                      <span className="font-sf-pro text-slate-300">Base Salary:</span>
+                      <span className="font-sf-pro text-slate-100">{formatCurrency(getSelectedEmployeeData()!.baseSalary)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="font-sf-pro">Attendance Pay:</span>
-                      <span className="font-sf-pro">{formatCurrency(getSelectedEmployeeData()!.attendancePay)}</span>
+                      <span className="font-sf-pro text-slate-300">Attendance Pay:</span>
+                      <span className="font-sf-pro text-slate-100">{formatCurrency(getSelectedEmployeeData()!.attendancePay)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="font-sf-pro">Total Allowances:</span>
-                      <span className="font-sf-pro">{formatCurrency(getSelectedEmployeeData()!.totalAllowances)}</span>
+                      <span className="font-sf-pro text-slate-300">Total Allowances:</span>
+                      <span className="font-sf-pro text-slate-100">{formatCurrency(getSelectedEmployeeData()!.totalAllowances)}</span>
                     </div>
-                    <div className="flex justify-between font-medium border-t pt-2">
-                      <span className="font-sf-pro">Gross Salary:</span>
-                      <span className="font-sf-pro">{formatCurrency(getSelectedEmployeeData()!.grossSalary)}</span>
+                    <div className="flex justify-between font-medium border-t pt-2 border-white/10">
+                      <span className="font-sf-pro text-slate-300">Gross Salary:</span>
+                      <span className="font-sf-pro text-slate-100">{formatCurrency(getSelectedEmployeeData()!.grossSalary)}</span>
                     </div>
-                    <div className="flex justify-between text-red-600">
+                    <div className="flex justify-between text-red-300">
                       <span className="font-sf-pro">Tax ({employees.find(e => e.id === selectedEmployeeId)?.taxPercentage || 0}%):</span>
                       <span className="font-sf-pro">-{formatCurrency(getSelectedEmployeeData()!.tax)}</span>
                     </div>
-                    <div className="flex justify-between text-red-600">
+                    <div className="flex justify-between text-red-300">
                       <span className="font-sf-pro">UIF (Employee):</span>
                       <span className="font-sf-pro">-{formatCurrency(getSelectedEmployeeData()!.uif.employeeContribution)}</span>
                     </div>
-                    <div className="flex justify-between font-bold text-green-600 border-t pt-2">
+                    <div className="flex justify-between font-bold text-green-300 border-t pt-2 border-white/10">
                       <span className="font-sf-pro">Net Salary:</span>
                       <span className="font-sf-pro">{formatCurrency(getSelectedEmployeeData()!.netSalary)}</span>
                     </div>
@@ -901,29 +716,27 @@ const AllowanceManagement: React.FC<AllowanceManagementProps> = ({ employees }) 
           )}
         </TabsContent>
 
-        <TabsContent value="projects" className="space-y-6">
-          <ProjectExpensesTab employees={employees} />
-        </TabsContent>
+        
 
         <TabsContent value="uif" className="space-y-6">
-          <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+          <Card className="glass backdrop-blur-sm bg-slate-900/40 border border-white/10 shadow-business">
             <CardHeader>
-              <CardTitle className="font-sf-pro">UIF Information (2025)</CardTitle>
+              <CardTitle className="font-sf-pro text-slate-100">UIF Information (2025)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="text-center">
-                    <div className="text-sm text-slate-500 font-sf-pro">UIF Rate</div>
-                    <div className="text-lg font-bold font-sf-pro">1% Employee + 1% Employer</div>
+                    <div className="text-sm text-slate-400 font-sf-pro">UIF Rate</div>
+                    <div className="text-lg font-bold font-sf-pro text-slate-100">1% Employee + 1% Employer</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-sm text-slate-500 font-sf-pro">Maximum Salary Cap</div>
-                    <div className="text-lg font-bold font-sf-pro">{formatCurrency(UIF_CONSTANTS.MONTHLY_SALARY_CAP)} per month</div>
+                    <div className="text-sm text-slate-400 font-sf-pro">Maximum Salary Cap</div>
+                    <div className="text-lg font-bold font-sf-pro text-slate-100">{formatCurrency(UIF_CONSTANTS.MONTHLY_SALARY_CAP)} per month</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-sm text-slate-500 font-sf-pro">Maximum Contribution</div>
-                    <div className="text-lg font-bold font-sf-pro">{formatCurrency(UIF_CONSTANTS.MAX_MONTHLY_CONTRIBUTION)} per party</div>
+                    <div className="text-sm text-slate-400 font-sf-pro">Maximum Contribution</div>
+                    <div className="text-lg font-bold font-sf-pro text-slate-100">{formatCurrency(UIF_CONSTANTS.MAX_MONTHLY_CONTRIBUTION)} per party</div>
                   </div>
                 </div>
               </div>

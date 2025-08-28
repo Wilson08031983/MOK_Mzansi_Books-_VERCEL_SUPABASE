@@ -20,6 +20,20 @@ const PerformanceManagement: React.FC<PerformanceManagementProps> = ({ employees
     loadPerformanceData();
   }, [employees]);
 
+  // Auto-refresh when qualifications change in Training tab
+  useEffect(() => {
+    const handler = () => loadPerformanceData();
+    window.addEventListener('employeeQualificationsUpdated', handler);
+    return () => window.removeEventListener('employeeQualificationsUpdated', handler);
+  }, []);
+
+  // Auto-refresh when projects are created/edited
+  useEffect(() => {
+    const projectsHandler = () => loadPerformanceData();
+    window.addEventListener('projectsUpdated', projectsHandler);
+    return () => window.removeEventListener('projectsUpdated', projectsHandler);
+  }, []);
+
   const loadPerformanceData = () => {
     setIsLoading(true);
     try {
@@ -34,11 +48,13 @@ const PerformanceManagement: React.FC<PerformanceManagementProps> = ({ employees
   };
 
   const getPerformanceColor = (score: number): string => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 80) return 'text-blue-600';
-    if (score >= 70) return 'text-yellow-600';
-    if (score >= 60) return 'text-orange-600';
-    return 'text-red-600';
+    // Theme-aware tints for better contrast
+    // Light: darker hues; Dark: soft tints
+    if (score >= 90) return 'text-green-700 dark:text-green-300';
+    if (score >= 80) return 'text-blue-700 dark:text-blue-300';
+    if (score >= 70) return 'text-yellow-700 dark:text-yellow-300';
+    if (score >= 60) return 'text-orange-700 dark:text-orange-300';
+    return 'text-red-700 dark:text-red-300';
   };
 
   const getPerformanceLabel = (score: number): string => {
@@ -69,8 +85,8 @@ const PerformanceManagement: React.FC<PerformanceManagementProps> = ({ employees
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-sf-pro">Performance Management</h2>
-          <p className="text-slate-600 font-sf-pro">Employee performance evaluation (1-100 scoring system)</p>
+          <h2 className="text-2xl font-bold font-sf-pro text-slate-800 dark:text-slate-100">Performance Management</h2>
+          <p className="font-sf-pro text-slate-600 dark:text-slate-400">Employee performance evaluation (1-100 scoring system)</p>
         </div>
         <Button 
           onClick={loadPerformanceData}
@@ -84,85 +100,85 @@ const PerformanceManagement: React.FC<PerformanceManagementProps> = ({ employees
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Total Employees</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Total Employees</CardTitle>
+            <Users className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-sf-pro">{performances.length}</div>
+            <div className="text-2xl font-bold font-sf-pro text-slate-800 dark:text-slate-100">{performances.length}</div>
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Average Performance</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Average Performance</CardTitle>
+            <Target className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold font-sf-pro ${getPerformanceColor(averageOverall)}`}>
               {averageOverall}/100
             </div>
-            <p className="text-xs text-muted-foreground">{getPerformanceLabel(averageOverall)}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">{getPerformanceLabel(averageOverall)}</p>
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Top Performers</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Top Performers</CardTitle>
+            <Trophy className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-sf-pro text-green-600">
+            <div className="text-2xl font-bold font-sf-pro text-green-700 dark:text-green-300">
               {performances.filter(p => p.metrics.overall >= 90).length}
             </div>
-            <p className="text-xs text-muted-foreground">Excellent (90+)</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">Excellent (90+)</p>
           </CardContent>
         </Card>
 
-        <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+        <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium font-sf-pro">Need Development</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium font-sf-pro text-slate-800 dark:text-slate-100">Need Development</CardTitle>
+            <TrendingUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-sf-pro text-orange-600">
+            <div className="text-2xl font-bold font-sf-pro text-orange-700 dark:text-orange-300">
               {performances.filter(p => p.metrics.overall < 70).length}
             </div>
-            <p className="text-xs text-muted-foreground">Below 70</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">Below 70</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Performance Table */}
-      <Card className="glass backdrop-blur-sm bg-white/50 border border-white/20 shadow-business">
+      <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="font-sf-pro">Employee Performance Scores</CardTitle>
+          <CardTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Employee Performance Scores</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="relative w-full overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="font-sf-pro">Employee</TableHead>
-                  <TableHead className="font-sf-pro">Position</TableHead>
-                  <TableHead className="font-sf-pro">Overall Score</TableHead>
-                  <TableHead className="font-sf-pro">Project Speed</TableHead>
-                  <TableHead className="font-sf-pro">Cost Savings</TableHead>
-                  <TableHead className="font-sf-pro">Attendance</TableHead>
-                  <TableHead className="font-sf-pro">Training</TableHead>
-                  <TableHead className="font-sf-pro">Behavior</TableHead>
-                  <TableHead className="font-sf-pro">Promotions</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Employee</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Position</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Overall Score</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Project Speed</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Cost Savings</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Attendance</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Training</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Behavior</TableHead>
+                  <TableHead className="font-sf-pro text-slate-700 dark:text-slate-300">Promotions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {performances.map((performance) => (
                   <TableRow key={performance.employeeId}>
-                    <TableCell className="font-medium font-sf-pro">
+                    <TableCell className="font-medium font-sf-pro text-slate-800 dark:text-slate-100">
                       {performance.employeeName}
                     </TableCell>
-                    <TableCell className="font-sf-pro">{performance.position}</TableCell>
-                    <TableCell className="font-sf-pro">
+                    <TableCell className="font-sf-pro text-slate-800 dark:text-slate-100">{performance.position}</TableCell>
+                    <TableCell className="font-sf-pro text-slate-800 dark:text-slate-100">
                       <div className="flex items-center space-x-2">
                         <span className={`font-bold ${getPerformanceColor(performance.metrics.overall)}`}>
                           {performance.metrics.overall}
@@ -197,21 +213,21 @@ const PerformanceManagement: React.FC<PerformanceManagementProps> = ({ employees
       </Card>
 
       {/* Performance Metrics Info */}
-      <Card className="glass backdrop-blur-sm bg-blue-50/50 border border-blue-200/20 shadow-business">
+      <Card className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 shadow-business">
         <CardHeader>
-          <CardTitle className="font-sf-pro text-blue-800">Performance Scoring System (1-100)</CardTitle>
+          <CardTitle className="font-sf-pro text-slate-800 dark:text-slate-100">Performance Scoring System (1-100)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700 dark:text-slate-300">
             <div>
-              <p className="font-sf-pro"><strong>Project Speed:</strong> How efficiently projects are completed vs planned timeline</p>
-              <p className="font-sf-pro"><strong>Cost Savings:</strong> Budget management and cost control on projects</p>
-              <p className="font-sf-pro"><strong>Attendance:</strong> Time & attendance reliability and punctuality</p>
+              <p className="font-sf-pro"><strong className="text-slate-800 dark:text-slate-200">Project Speed:</strong> How efficiently projects are completed vs planned timeline</p>
+              <p className="font-sf-pro"><strong className="text-slate-800 dark:text-slate-200">Cost Savings:</strong> Budget management and cost control on projects</p>
+              <p className="font-sf-pro"><strong className="text-slate-800 dark:text-slate-200">Attendance:</strong> Time & attendance reliability and punctuality</p>
             </div>
             <div>
-              <p className="font-sf-pro"><strong>Training:</strong> Professional development and skill enhancement</p>
-              <p className="font-sf-pro"><strong>Behavior:</strong> Professional conduct, teamwork, and collaboration</p>
-              <p className="font-sf-pro"><strong>Promotions:</strong> Career progression and achievements</p>
+              <p className="font-sf-pro"><strong className="text-slate-800 dark:text-slate-200">Training:</strong> Professional development and skill enhancement</p>
+              <p className="font-sf-pro"><strong className="text-slate-800 dark:text-slate-200">Behavior:</strong> Professional conduct, teamwork, and collaboration</p>
+              <p className="font-sf-pro"><strong className="text-slate-800 dark:text-slate-200">Promotions:</strong> Career progression and achievements</p>
             </div>
           </div>
         </CardContent>
