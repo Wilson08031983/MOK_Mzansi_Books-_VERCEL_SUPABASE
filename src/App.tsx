@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@/contexts/LocalizationContext";
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import ProUpgradePage from './pages/ProUpgrade';
 import { AuthProviderSelector } from "@/hooks/useAuthProvider";
 import { ensureWilsonHasCEOAccess, initializeDefaultUsers, updatePrimaryUserInTeamMembers } from "@/services/localAuthService";
 import { teamEmployeeSyncService } from "@/services/teamEmployeeSyncService";

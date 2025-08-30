@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocalization } from '@/hooks/useLocalization';
 import { Link } from 'react-router-dom';
+import { useLowStockNotifications } from '@/hooks/useLowStockNotifications';
+import LowStockAlert from '@/components/inventory/LowStockAlert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -134,6 +136,9 @@ const Inventory = () => {
   // Filter out any empty values from STOCK_STATUS
   const [statuses] = useState<string[]>(Object.values(STOCK_STATUS).filter(status => !!status));
   
+  // Low stock notifications
+  const { lowStockItems, checkLowStock } = useLowStockNotifications();
+
   // Define loadInventoryData with useCallback to avoid dependency issues
   const loadInventoryData = useCallback((forceRefresh = false) => {
     try {
@@ -183,6 +188,9 @@ const Inventory = () => {
         
         // Load actual data
         loadInventoryData();
+        
+        // Check for low stock items
+        await checkLowStock();
       } catch (error) {
         toast({
           title: t('inventory.error'),
@@ -194,6 +202,11 @@ const Inventory = () => {
     };
     
     initData();
+    
+    // Set up interval to check for low stock every 30 minutes
+    const intervalId = setInterval(checkLowStock, 30 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
   }, [loadInventoryData, toast]);
 
   // Refresh data when forms close or when any modal is closed
@@ -501,8 +514,7 @@ const Inventory = () => {
     return expiryDate <= thirtyDaysFromNow && expiryDate >= today;
   });
   
-  // For low stock tab
-  const lowStockItems = filteredInventory.filter(item => item.status === STOCK_STATUS.LOW_STOCK);
+  // For low stock tab - using existing lowStockItems variable
   
   // For damaged tab
   const damagedItems = filteredInventory.filter(item => item.status === STOCK_STATUS.DAMAGED);

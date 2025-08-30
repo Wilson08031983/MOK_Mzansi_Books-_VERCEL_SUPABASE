@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Templates Preview - MOK Mzansi Books</title>
+    <style>
+        :root {
+            --bg: #F9FAFB;
+            --card-bg: rgba(255, 255, 255, 0.72);
+            --card-border: rgba(255, 255, 255, 0.45);
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --border: #E5E7EB;
+            --hover: #F3F4F6;
+            --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --radius-xl: 16px;
+            --grad-primary: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #EC4899 100%);
+            --grad-accent: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+            --grad-header: linear-gradient(135deg, rgba(59,130,246,0.9) 0%, rgba(139,92,246,0.9) 50%, rgba(236,72,153,0.9) 100%);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Segoe UI, Roboto, Inter, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            margin: 0;
+            padding: 24px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+        }
+        .preview-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: transparent;
+            border-radius: var(--radius-xl);
+            box-shadow: none;
+            overflow: hidden;
+        }
+        .preview-header {
+            background: var(--grad-primary);
+            color: white;
+            padding: 28px;
+            text-align: center;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+        }
+        .preview-header h1 {
+            margin: 0 0 6px 0;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .preview-header p {
+            margin: 0;
+            color: rgba(255,255,255,0.9);
+        }
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 24px;
+            padding: 24px 0;
+        }
+        .template-preview {
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            background: var(--card-bg);
+            -webkit-backdrop-filter: saturate(160%) blur(18px);
+            backdrop-filter: saturate(160%) blur(18px);
+            box-shadow: var(--shadow-md);
+        }
+        .template-title {
+            position: relative;
+            background: rgba(255,255,255,0.55);
+            padding: 14px 18px 12px 18px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .template-title::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--grad-primary);
+        }
+        .template-content {
+            padding: 0;
+            height: 600px;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.5);
+        }
+        .email-container {
+            font-family: inherit;
+            line-height: 1.6;
+            color: var(--text-primary);
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: transparent;
+        }
+        .email-wrapper {
+            background: var(--card-bg);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            -webkit-backdrop-filter: saturate(160%) blur(14px);
+            backdrop-filter: saturate(160%) blur(14px);
+            box-shadow: var(--shadow-md);
+        }
+        .email-header {
+            background: var(--grad-header);
+            padding: 36px 24px;
+            text-align: center;
+            color: white;
+            box-shadow: inset 0 -1px 0 rgba(255,255,255,0.2);
+        }
+        .email-logo {
+            max-width: 180px;
+            margin-bottom: 14px;
+            height: auto;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
+        }
+        .email-content {
+            padding: 28px;
+        }
+        .email-footer {
+            background: rgba(255,255,255,0.6);
+            padding: 18px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+        }
+        .email-signature {
+            margin-top: 28px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+        }
+        .email-signature img {
+            max-width: 160px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.12));
+        }
+        .email-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: var(--grad-primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 9999px;
+            font-weight: 600;
+            margin: 18px 0;
+            box-shadow: 0 6px 20px rgba(139,92,246,0.35);
+            transition: transform 0.12s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+            will-change: transform;
+        }
+        .email-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 28px rgba(139,92,246,0.45);
+            opacity: 0.95;
+        }
+        .email-button:active {
+            transform: translateY(0);
+        }
+        .email-button--accent {
+            background: var(--grad-accent);
+            box-shadow: 0 6px 18px rgba(239,68,68,0.35);
+        }
+        .status-indicators {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 18px 0 0 0;
+            flex-wrap: wrap;
+        }
+        .status-item {
+            padding: 8px 14px;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 12px;
+            border: 1px solid var(--card-border);
+            background: rgba(255,255,255,0.55);
+            color: var(--text-secondary);
+            -webkit-backdrop-filter: saturate(160%) blur(10px);
+            backdrop-filter: saturate(160%) blur(10px);
+        }
+        .status-pass {
+            background: linear-gradient(180deg, rgba(16,185,129,0.15), rgba(16,185,129,0.10));
+            color: #065F46;
+            border-color: rgba(16,185,129,0.35);
+        }
+        .status-fail {
+            background: linear-gradient(180deg, rgba(239,68,68,0.15), rgba(239,68,68,0.10));
+            color: #7F1D1D;
+            border-color: rgba(239,68,68,0.35);
+        }
+        a { color: #3B82F6; }
+        a:hover { color: #2563EB; }
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <div class="preview-header">
+            <h1>MOK Mzansi Books - Email Templates Preview</h1>
+            <p>Verification of logo, signature, and responsive design implementation</p>
+            <div class="status-indicators">
+                <div class="status-item status-pass">✓ Company Logo</div>
+                <div class="status-item status-pass">✓ Digital Signature</div>
+                <div class="status-item status-pass">✓ Responsive Design</div>
+                <div class="status-item status-pass">✓ Base Template</div>
+            </div>
+        </div>
+
+        <div class="templates-grid">
+            <!-- Welcome Email Template -->
+            <div class="template-preview">
+                <div class="template-title">Welcome Email Template</div>
+                <div class="template-content">
+                    <div class="email-container">
+                        <div class="email-wrapper">
+                            <div class="email-header">
+                                <img src="public/mokmzansi-logo.PNG" alt="MOK Mzansi Books" class="email-logo" onerror="this.src='public/mokmzansi-logo.PNG'" />
+                                <h1>Welcome to MOK Mzansi Books</h1>
+                            </div>
+                            
+                            <div class="email-content">
+                                <p>Dear John Doe,</p>
+                                
+                                <p>Welcome to <strong>MOK Mzansi Books</strong>! We're thrilled to have you on board and can't wait to help you streamline your business operations.</p>
+                                
+                                <p>With MOK Mzansi Books, you'll be able to:</p>
+                                <ul style="margin-left: 20px; padding-left: 0;">
+                                    <li>• Manage your finances with our comprehensive accounting tools</li>
+                                    <li>• Track inventory in real-time</li>
+                                    <li>• Generate professional invoices and quotations</li>
+                                    <li>• Monitor business performance with detailed reports</li>
+                                    <li>• And much more!</li>
+                                </ul>
+
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="#" class="email-button">Get Started</a>
+                                </div>
+
+                                <p>If you have any questions or need assistance, our support team is here to help. You can reach us at <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a> or call us at <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>.</p>
+                                
+                                <p>Once again, welcome to the MOK Mzansi Books family!</p>
+                                
+                                <p>Warm regards,</p>
+                                
+                                <div class="email-signature">
+                                    <img src="public/developer-signature.png" alt="Wilson Mokgethwa Moabelo" onerror="this.style.display='none'" />
+                                    <p>
+                                        <strong>Wilson Mokgethwa Moabelo</strong><br />
+                                        Founder & CEO<br />
+                                        MOK Mzansi Books
+                                    </p>
+                                    <p>
+                                        <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a><br />
+                                        <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>
+                                    </p>
+                                    <p>
+                                        81 Monokane Street<br />
+                                        Atterigeville x17<br />
+                                        Pretoria, Gauteng 0006
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="email-footer">
+                                <p>© 2025 MOK Mzansi Books. All rights reserved.</p>
+                                <p>
+                                    <a href="https://mokmzansibooks.com" style="color: #4f46e5; text-decoration: none;">Website</a> | 
+                                    <a href="/privacy" style="color: #4f46e5; text-decoration: none;">Privacy Policy</a> |
+                                <a href="/terms" style="color: #4f46e5; text-decoration: none;">Terms of Service</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice Email Template -->
+            <div class="template-preview">
+                <div class="template-title">Invoice Email Template</div>
+                <div class="template-content">
+                    <div class="email-container">
+                        <div class="email-wrapper">
+                            <div class="email-header">
+                                <img src="public/mokmzansi-logo.PNG" alt="MOK Mzansi Books" class="email-logo" onerror="this.src='public/mokmzansi-logo.PNG'" />
+                                <h1>Invoice #INV-2025-001</h1>
+                            </div>
+                            
+                            <div class="email-content">
+                                <p>Dear ABC Company,</p>
+                                
+                                <p>Thank you for your business! Please find your invoice details below:</p>
+                                
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                                    <h3 style="margin: 0 0 10px 0; color: #333;">Invoice Details</h3>
+                                    <p style="margin: 5px 0;"><strong>Invoice Number:</strong> INV-2025-001</p>
+                                    <p style="margin: 5px 0;"><strong>Invoice Date:</strong> January 28, 2025</p>
+                                    <p style="margin: 5px 0;"><strong>Due Date:</strong> February 28, 2025</p>
+                                    <p style="margin: 5px 0;"><strong>Amount Due:</strong> R 5,750.00</p>
+                                </div>
+
+                                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                                    <thead>
+                                        <tr style="background: #f1f5f9;">
+                                            <th style="padding: 12px; text-align: left; border: 1px solid #e2e8f0;">Description</th>
+                                            <th style="padding: 12px; text-align: center; border: 1px solid #e2e8f0;">Qty</th>
+                                            <th style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="padding: 12px; border: 1px solid #e2e8f0;">Business Consulting Services</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #e2e8f0;">1</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">R 5,000.00</td>
+                                        </tr>
+                                        <tr style="background: #f8f9fa;">
+                                            <td colspan="2" style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">Subtotal:</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">R 5,000.00</td>
+                                        </tr>
+                                        <tr style="background: #f8f9fa;">
+                                            <td colspan="2" style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">VAT (15%):</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">R 750.00</td>
+                                        </tr>
+                                        <tr style="background: #4f46e5; color: white;">
+                                            <td colspan="2" style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">Total:</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">R 5,750.00</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="#" class="email-button">View Invoice</a>
+                                </div>
+
+                                <p style="font-size: 14px; color: #666;">
+                                    This email was sent to ABC Company. If you believe you received this in error, 
+                                    please contact us at support@mokmzansibooks.com
+                                </p>
+                                
+                                <div class="email-signature">
+                                    <img src="public/developer-signature.png" alt="Wilson Mokgethwa Moabelo" onerror="this.style.display='none'" />
+                                    <p>
+                                        <strong>Wilson Mokgethwa Moabelo</strong><br />
+                                        Founder & CEO<br />
+                                        MOK Mzansi Books
+                                    </p>
+                                    <p>
+                                        <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a><br />
+                                        <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>
+                                    </p>
+                                    <p>
+                                        81 Monokane Street<br />
+                                        Atterigeville x17<br />
+                                        Pretoria, Gauteng 0006
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="email-footer">
+                                <p>© 2025 MOK Mzansi Books. All rights reserved.</p>
+                                <p>
+                                    <a href="https://mokmzansibooks.com" style="color: #4f46e5; text-decoration: none;">Website</a> | 
+                                    <a href="/privacy" style="color: #4f46e5; text-decoration: none;">Privacy Policy</a> |
+                                <a href="/terms" style="color: #4f46e5; text-decoration: none;">Terms of Service</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quotation Email Template -->
+            <div class="template-preview">
+                <div class="template-title">Quotation Email Template</div>
+                <div class="template-content">
+                    <div class="email-container">
+                        <div class="email-wrapper">
+                            <div class="email-header">
+                                <img src="public/mokmzansi-logo.PNG" alt="MOK Mzansi Books" class="email-logo" onerror="this.src='public/mokmzansi-logo.PNG'" />
+                                <h1>Quotation #QUO-2025-001</h1>
+                            </div>
+                            
+                            <div class="email-content">
+                                <p>Dear XYZ Corporation,</p>
+                                
+                                <p>Thank you for your interest in our services. Please find your quotation details below:</p>
+                                
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                                    <h3 style="margin: 0 0 10px 0; color: #333;">Quotation Details</h3>
+                                    <p style="margin: 5px 0;"><strong>Quotation Number:</strong> QUO-2025-001</p>
+                                    <p style="margin: 5px 0;"><strong>Quotation Date:</strong> January 28, 2025</p>
+                                    <p style="margin: 5px 0;"><strong>Valid Until:</strong> February 28, 2025</p>
+                                    <p style="margin: 5px 0;"><strong>Total Amount:</strong> R 12,650.00</p>
+                                </div>
+
+                                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                                    <thead>
+                                        <tr style="background: #f1f5f9;">
+                                            <th style="padding: 12px; text-align: left; border: 1px solid #e2e8f0;">Description</th>
+                                            <th style="padding: 12px; text-align: center; border: 1px solid #e2e8f0;">Qty</th>
+                                            <th style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">Unit Price</th>
+                                            <th style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="padding: 12px; border: 1px solid #e2e8f0;">Software Development</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #e2e8f0;">1</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">R 10,000.00</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">R 10,000.00</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 12px; border: 1px solid #e2e8f0;">Training Sessions</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #e2e8f0;">2</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">R 500.00</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0;">R 1,000.00</td>
+                                        </tr>
+                                        <tr style="background: #f8f9fa;">
+                                            <td colspan="3" style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">Subtotal:</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">R 11,000.00</td>
+                                        </tr>
+                                        <tr style="background: #f8f9fa;">
+                                            <td colspan="3" style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">VAT (15%):</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">R 1,650.00</td>
+                                        </tr>
+                                        <tr style="background: #4f46e5; color: white;">
+                                            <td colspan="3" style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">Total:</td>
+                                            <td style="padding: 12px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">R 12,650.00</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="#" class="email-button">View Quotation Online</a>
+                                </div>
+
+                                <p style="font-size: 14px; color: #666;">
+                                    This quotation is valid until February 28, 2025. Please contact us if you have any questions.
+                                </p>
+                                
+                                <div class="email-signature">
+                                    <img src="public/developer-signature.png" alt="Wilson Mokgethwa Moabelo" onerror="this.style.display='none'" />
+                                    <p>
+                                        <strong>Wilson Mokgethwa Moabelo</strong><br />
+                                        Founder & CEO<br />
+                                        MOK Mzansi Books
+                                    </p>
+                                    <p>
+                                        <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a><br />
+                                        <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>
+                                    </p>
+                                    <p>
+                                        81 Monokane Street<br />
+                                        Atterigeville x17<br />
+                                        Pretoria, Gauteng 0006
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="email-footer">
+                                <p>© 2025 MOK Mzansi Books. All rights reserved.</p>
+                                <p>
+                                    <a href="https://mokmzansibooks.com" style="color: #4f46e5; text-decoration: none;">Website</a> | 
+                                    <a href="/privacy" style="color: #4f46e5; text-decoration: none;">Privacy Policy</a> |
+                                <a href="/terms" style="color: #4f46e5; text-decoration: none;">Terms of Service</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Low Stock Email Template -->
+            <div class="template-preview">
+                <div class="template-title">Low Stock Alert Email Template</div>
+                <div class="template-content">
+                    <div class="email-container">
+                        <div class="email-wrapper">
+                            <div class="email-header">
+                                <img src="public/mokmzansi-logo.PNG" alt="MOK Mzansi Books" class="email-logo" onerror="this.src='public/mokmzansi-logo.PNG'" />
+                                <h1>⚠️ Low Stock Alert</h1>
+                            </div>
+                            
+                            <div class="email-content">
+                                <p><strong>Attention Required:</strong> The following items are running low in stock and need immediate attention:</p>
+                                
+                                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                                    <thead>
+                                        <tr style="background: #fef3c7;">
+                                            <th style="padding: 12px; text-align: left; border: 1px solid #fbbf24;">Product</th>
+                                            <th style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">Current Stock</th>
+                                            <th style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">Minimum Level</th>
+                                            <th style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="padding: 12px; border: 1px solid #fbbf24;">Office Supplies - Pens</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">3</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">10</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #fbbf24; color: #dc2626; font-weight: bold;">Critical</td>
+                                        </tr>
+                                        <tr style="background: #fef3c7;">
+                                            <td style="padding: 12px; border: 1px solid #fbbf24;">Printer Paper A4</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">8</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #fbbf24;">15</td>
+                                            <td style="padding: 12px; text-align: center; border: 1px solid #fbbf24; color: #f59e0b; font-weight: bold;">Low</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
+                                    <p style="margin: 0; color: #991b1b; font-weight: bold;">Action Required:</p>
+                                    <p style="margin: 5px 0 0 0; color: #991b1b;">Please reorder these items to avoid stockouts and potential business disruption.</p>
+                                </div>
+
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="#" class="email-button">View Inventory</a>
+                                </div>
+
+                                <p style="font-size: 14px; color: #666;">
+                                    This is an automated notification from your inventory management system. 
+                                    Please take appropriate action to maintain optimal stock levels.
+                                </p>
+                                
+                                <div class="email-signature">
+                                    <img src="public/developer-signature.png" alt="Wilson Mokgethwa Moabelo" onerror="this.style.display='none'" />
+                                    <p>
+                                        <strong>Wilson Mokgethwa Moabelo</strong><br />
+                                        Founder & CEO<br />
+                                        MOK Mzansi Books
+                                    </p>
+                                    <p>
+                                        <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a><br />
+                                        <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>
+                                    </p>
+                                    <p>
+                                        81 Monokane Street<br />
+                                        Atterigeville x17<br />
+                                        Pretoria, Gauteng 0006
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="email-footer">
+                                <p>© 2025 MOK Mzansi Books. All rights reserved.</p>
+                                <p>
+                                    <a href="https://mokmzansibooks.com" style="color: #4f46e5; text-decoration: none;">Website</a> | 
+                                    <a href="/privacy" style="color: #4f46e5; text-decoration: none;">Privacy Policy</a> |
+                                <a href="/terms" style="color: #4f46e5; text-decoration: none;">Terms of Service</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Birthday Email Template -->
+            <div class="template-preview">
+                <div class="template-title">Birthday Email Template</div>
+                <div class="template-content">
+                    <div class="email-container">
+                        <div class="email-wrapper">
+                            <div class="email-header">
+                                <img src="public/mokmzansi-logo.PNG" alt="MOK Mzansi Books" class="email-logo" onerror="this.src='public/mokmzansi-logo.PNG'" />
+                                <h1>Happy Birthday! 🎉</h1>
+                            </div>
+                            
+                            <div class="email-content">
+                                <div style="text-align: center; margin: 20px 0;">
+                                    <h2 style="color: #10b981; font-size: 28px; margin: 0;">Happy Birthday, Sarah! 🎂</h2>
+                                    <p style="color: #059669; font-size: 18px; margin: 10px 0;">Wishing you an amazing 30th birthday!</p>
+                                </div>
+                                
+                                <p>On behalf of everyone at MOK Mzansi Books, we want to wish you a fantastic birthday 
+                                filled with joy, laughter, and all the things that make you happy!</p>
+                                
+                                <div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; text-align: center; border-radius: 0 8px 8px 0;">
+                                    <p style="margin: 0; font-style: italic; font-size: 18px; color: #059669;">
+                                        "May your special day be as wonderful as you are!"
+                                    </p>
+                                </div>
+                                
+                                <p>Thank you for being an invaluable part of our team. We appreciate all that you do!</p>
+                                
+                                <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f0fdf4; border-radius: 8px;">
+                                    <p style="margin: 0; font-size: 16px; color: #059669;">🎈 Have a wonderful celebration! 🎈</p>
+                                </div>
+                                
+                                <div class="email-signature">
+                                    <img src="public/developer-signature.png" alt="Wilson Mokgethwa Moabelo" onerror="this.style.display='none'" />
+                                    <p>
+                                        <strong>Wilson Mokgethwa Moabelo</strong><br />
+                                        Founder & CEO<br />
+                                        MOK Mzansi Books
+                                    </p>
+                                    <p>
+                                        <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a><br />
+                                        <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>
+                                    </p>
+                                    <p>
+                                        81 Monokane Street<br />
+                                        Atterigeville x17<br />
+                                        Pretoria, Gauteng 0006
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="email-footer">
+                                <p>© 2025 MOK Mzansi Books. All rights reserved.</p>
+                                <p>
+                                    <a href="https://mokmzansibooks.com" style="color: #4f46e5; text-decoration: none;">Website</a> | 
+                                    <a href="/privacy" style="color: #4f46e5; text-decoration: none;">Privacy Policy</a> |
+                                <a href="/terms" style="color: #4f46e5; text-decoration: none;">Terms of Service</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team Invitation Email Template -->
+            <div class="template-preview">
+                <div class="template-title">Team Invitation Email Template</div>
+                <div class="template-content">
+                    <div class="email-container">
+                        <div class="email-wrapper" data-template="team-invitation">
+                            <div class="email-header">
+                                <img src="public/mokmzansi-logo.PNG" alt="MOK Mzansi Books" class="email-logo" onerror="this.src='public/mokmzansi-logo.PNG'" />
+                                <h1>You're Invited to Join Our Team</h1>
+                            </div>
+
+                            <div class="email-content">
+                                <p>Hi Jane Doe,</p>
+
+                                <p><strong>Wilson Mokgethwa Moabelo</strong> has invited you to join <strong>MOK Mzansi Books</strong> as <strong>Manager</strong>.</p>
+
+                                <p>To get started, please accept the invitation below:</p>
+
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="#" class="email-button">Accept Invitation</a>
+                                </div>
+
+                                <p style="font-size: 14px; color: #666;">
+                                    This invitation link will expire in 7 days for security purposes. If the button above does not work, copy and paste this URL into your browser:
+                                </p>
+                                <p style="word-break: break-all; color: #4f46e5; font-size: 14px;">https://mokmzansibooks.com/invite/accept/EXAMPLE-TOKEN-12345</p>
+
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                                    <p style="margin: 0; font-size: 14px; color: #555;">
+                                        If you did not expect this invitation, you can safely ignore this email.
+                                    </p>
+                                </div>
+
+                                <div class="email-signature">
+                                    <img src="public/developer-signature.png" alt="Wilson Mokgethwa Moabelo" onerror="this.style.display='none'" />
+                                    <p>
+                                        <strong>Wilson Mokgethwa Moabelo</strong><br />
+                                        Founder & CEO<br />
+                                        MOK Mzansi Books
+                                    </p>
+                                    <p>
+                                        <a href="mailto:support@mokmzansibooks.com" style="color: #4f46e5;">support@mokmzansibooks.com</a><br />
+                                        <a href="tel:+27645504029" style="color: #4f46e5;">+27 64 550 4029</a>
+                                    </p>
+                                    <p>
+                                        81 Monokane Street<br />
+                                        Atterigeville x17<br />
+                                        Pretoria, Gauteng 0006
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="email-footer">
+                                <p>© 2025 MOK Mzansi Books. All rights reserved.</p>
+                                <p>
+                                    <a href="https://mokmzansibooks.com" style="color: #4f46e5; text-decoration: none;">Website</a> | 
+                                    <a href="/privacy" style="color: #4f46e5; text-decoration: none;">Privacy Policy</a> |
+                                <a href="/terms" style="color: #4f46e5; text-decoration: none;">Terms of Service</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div style="padding: 20px; background: #f8f9fa; border-top: 1px solid #dee2e6;">
+            <h3>Verification Summary</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="background: #d4edda; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745;">
+                    <strong style="color: #155724;">✓ Logo Implementation</strong>
+                    <p style="margin: 5px 0 0 0; color: #155724; font-size: 14px;">All templates include the company logo in the header with fallback SVG placeholder.</p>
+                </div>
+                <div style="background: #d4edda; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745;">
+                    <strong style="color: #155724;">✓ Digital Signature</strong>
+                    <p style="margin: 5px 0 0 0; color: #155724; font-size: 14px;">Authorized signature with contact details and company information included.</p>
+                </div>
+                <div style="background: #d4edda; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745;">
+                    <strong style="color: #155724;">✓ Responsive Design</strong>
+                    <p style="margin: 5px 0 0 0; color: #155724; font-size: 14px;">Templates use inline CSS and responsive layout principles for cross-client compatibility.</p>
+                </div>
+                <div style="background: #d4edda; padding: 15px; border-radius: 6px; border-left: 4px solid #28a745;">
+                    <strong style="color: #155724;">✓ BaseEmailTemplate</strong>
+                    <p style="margin: 5px 0 0 0; color: #155724; font-size: 14px;">All templates properly extend BaseEmailTemplate for consistent branding.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+// Bridge to pull company data from the app origin (8082) and mirror into this origin (5501)
+(function bridgeCompanyData(){
+  try {
+    var appOrigin = 'http://localhost:8082';
+    if (window.__companyBridgeInitialized) return;
+    window.__companyBridgeInitialized = true;
+    function setLocal(key, val){ try { if (val) localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+    var iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = appOrigin + '/storage-proxy.html?origin=' + encodeURIComponent(location.origin);
+    document.body.appendChild(iframe);
+    window.addEventListener('message', function(ev){
+      if (!ev.origin || ev.origin !== appOrigin) return;
+      var data = ev.data || {};
+      if (data.type === 'companyData'){
+        setLocal('companyDetails', data.companyDetails);
+        setLocal('companyAssets', data.companyAssets);
+        // Ensure the page runs with the freshly synced data on first receipt
+        try {
+          if (!sessionStorage.getItem('__companyDataSynced')) {
+            sessionStorage.setItem('__companyDataSynced', '1');
+            location.reload();
+          }
+        } catch (e) {}
+      }
+    });
+    iframe.addEventListener('load', function(){
+      try { iframe.contentWindow.postMessage({ type: 'REQUEST_COMPANY_DATA' }, appOrigin); } catch(e) {}
+    });
+  } catch (err) { console.warn('Company data bridge init failed:', err); }
+})();
+ (function() {
+  try {
+    var details = {};
+    var assets = {};
+    
+    // Load actual company data from localStorage (no sample data override)
+    console.log('Loading company data from localStorage...');
+    console.log('Available localStorage keys:', Object.keys(localStorage));
+    
+    try {
+      var d = localStorage.getItem('companyDetails');
+      if (d) details = JSON.parse(d);
+    } catch (e) { console.warn('Could not parse companyDetails from localStorage', e); }
+    try {
+      var a = localStorage.getItem('companyAssets');
+      if (a) assets = JSON.parse(a);
+    } catch (e) { console.warn('Could not parse companyAssets from localStorage', e); }
+
+    // Use actual company data if available, otherwise fall back to MOK Mzansi Books defaults
+    var companyName = details.companyName || details.name || 'MOK Mzansi Books';
+    var website = details.website || 'https://mokmzansibooks.com';
+    var email = details.email || 'support@mokmzansibooks.com';
+    var phone = details.phone || '+27 64 550 4029';
+    var addressLines = [details.addressLine1, details.addressLine2, details.addressLine3, details.addressLine4].filter(Boolean);
+    
+    // Debug: Log the loaded company data
+    console.log('Loaded company details:', details);
+    console.log('Loaded company assets:', assets);
+    console.log('Final company name:', companyName);
+    console.log('Final email:', email);
+    console.log('Final phone:', phone);
+
+    var logoUrl = (assets.Logo && assets.Logo.dataUrl) || assets.logo || details.logo || 'https://mokmzansibooks.com/logo.png';
+    var signatureUrl = (assets.Signature && assets.Signature.dataUrl) || assets.signature || details.signature || '';
+    var stampUrl = (assets.Stamp && assets.Stamp.dataUrl) || assets.stamp || '';
+
+    // Ensure ONLY Team Invitation template uses company logo from Company Assets
+    document.querySelectorAll('[data-template="team-invitation"] .email-header .email-logo').forEach(function(img) {
+      // Always use company logo for Team Invitation if available from Company Assets
+      if (assets.Logo && assets.Logo.dataUrl) {
+        img.setAttribute('src', assets.Logo.dataUrl);
+        img.setAttribute('alt', companyName + ' Logo');
+      } else if (logoUrl && logoUrl !== 'https://mokmzansibooks.com/logo.png') {
+        img.setAttribute('src', logoUrl);
+        img.setAttribute('alt', companyName + ' Logo');
+      }
+    });
+
+    // Team Invitation: Update company name and contact person information
+    document.querySelectorAll('[data-template="team-invitation"] .email-content').forEach(function(content) {
+      // Update the inviter name from hardcoded "Wilson Mokgethwa Moabelo" to company contact person
+      var contactPersonName = (details.contactName && details.contactSurname) 
+        ? details.contactName + ' ' + details.contactSurname 
+        : details.ownerName && details.ownerSurname 
+        ? details.ownerName + ' ' + details.ownerSurname
+        : companyName;
+      
+      // Replace hardcoded inviter name in the invitation text
+      var invitationText = content.querySelector('p:nth-child(2)');
+      if (invitationText) {
+        invitationText.innerHTML = '<strong>' + contactPersonName + '</strong> has invited you to join <strong>' + companyName + '</strong> as <strong>Manager</strong>.';
+      }
+    });
+
+    // Team Invitation: strictly use ONLY company branding elements from Company Assets (logo, stamp, authorized signature)
+    document.querySelectorAll('[data-template="team-invitation"] .email-signature').forEach(function(sig) {
+      // Clear any existing content to enforce exclusivity
+      sig.innerHTML = '';
+
+      // Authorized Signature div (most important for business correspondence)
+      if (signatureUrl) {
+        var signatureDiv = document.createElement('div');
+        signatureDiv.className = 'authorized-signature';
+        signatureDiv.style.marginBottom = '15px';
+        var sigImg = document.createElement('img');
+        sigImg.src = signatureUrl;
+        sigImg.alt = 'Authorized Signature';
+        sigImg.style.maxWidth = '180px';
+        sigImg.style.display = 'block';
+        signatureDiv.appendChild(sigImg);
+        sig.appendChild(signatureDiv);
+      }
+
+      // Company contact information
+      var contactDiv = document.createElement('div');
+      contactDiv.className = 'company-contact-info';
+      var contactPersonName = (details.contactName && details.contactSurname) 
+        ? details.contactName + ' ' + details.contactSurname 
+        : details.ownerName && details.ownerSurname 
+        ? details.ownerName + ' ' + details.ownerSurname
+        : 'Company Representative';
+      var position = details.position || details.ownerPosition || 'Manager';
+      
+      contactDiv.innerHTML = '<p><strong>' + contactPersonName + '</strong><br />' + position + '<br />' + companyName + '</p>';
+      
+      // Add contact details
+      var contactDetailsDiv = document.createElement('div');
+      contactDetailsDiv.innerHTML = '<p><a href="mailto:' + email + '" style="color: #4f46e5;">' + email + '</a><br /><a href="tel:' + phone + '" style="color: #4f46e5;">' + phone + '</a></p>';
+      contactDiv.appendChild(contactDetailsDiv);
+      
+      // Add address if available
+      if (addressLines.length > 0) {
+        var addressDiv = document.createElement('div');
+        addressDiv.innerHTML = '<p>' + addressLines.join('<br />') + '</p>';
+        contactDiv.appendChild(addressDiv);
+      }
+      
+      sig.appendChild(contactDiv);
+
+      // Company Stamp div (add after contact info for official look)
+      if (stampUrl) {
+        var stampDiv = document.createElement('div');
+        stampDiv.className = 'company-stamp';
+        stampDiv.style.marginTop = '15px';
+        stampDiv.style.textAlign = 'center';
+        var stampImg = document.createElement('img');
+        stampImg.src = stampUrl;
+        stampImg.alt = (companyName || 'Company') + ' Official Stamp';
+        stampImg.style.maxWidth = '120px';
+        stampImg.style.opacity = '0.85';
+        stampDiv.appendChild(stampImg);
+        sig.appendChild(stampDiv);
+      }
+    });
+
+    // Other templates: enforce MOKMzansiBooks branding (logo) and ensure developer's signature image is shown
+    document.querySelectorAll('.email-wrapper:not([data-template="team-invitation"]) .email-header .email-logo').forEach(function(img) {
+      img.setAttribute('src', 'public/mokmzansi-logo.PNG');
+      img.setAttribute('alt', 'MOK Mzansi Books');
+    });
+
+    document.querySelectorAll('.email-wrapper:not([data-template="team-invitation"]) .email-signature').forEach(function(sig) {
+      var sigImg = sig.querySelector('img');
+      if (!sigImg) {
+        sigImg = document.createElement('img');
+        sig.insertBefore(sigImg, sig.firstChild);
+      }
+      sigImg.src = 'public/developer-signature.png';
+      sigImg.alt = 'Developer Signature - Wilson Mokgethwa Moabelo';
+      sigImg.style.display = 'block';
+      sigImg.style.maxWidth = '180px';
+    });
+  } catch (e) {
+    console.error('Preview dynamic branding error', e);
+  }
+})();
+</script>
+</body>
+</html>

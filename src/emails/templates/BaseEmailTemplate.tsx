@@ -1,0 +1,186 @@
+import React from 'react';
+
+interface BaseEmailTemplateProps {
+  title: string;
+  previewText: string;
+  children: React.ReactNode;
+  // Optional company branding overrides
+  companyName?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  companyWebsite?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
+  addressLine4?: string;
+  logoUrl?: string;
+  stampUrl?: string;
+  signatureUrl?: string;
+}
+
+export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
+  title,
+  previewText,
+  children,
+  companyName,
+  companyEmail,
+  companyPhone,
+  companyWebsite,
+  addressLine1,
+  addressLine2,
+  addressLine3,
+  addressLine4,
+  logoUrl,
+  stampUrl,
+  signatureUrl,
+}) => {
+  // Fallbacks to maintain backward compatibility with existing templates
+  const fallbackCompanyName = 'MOK Mzansi Books';
+  const effectiveCompanyName = companyName || fallbackCompanyName;
+  const effectiveLogo = logoUrl || 'https://mokmzansibooks.com/logo.png';
+  const effectiveSignature = signatureUrl || 'https://mokmzansibooks.com/signature.png';
+  const effectiveWebsite = companyWebsite || 'https://mokmzansibooks.com';
+
+  return (
+    <html>
+      <head>
+        <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{title}</title>
+        <style>
+          {`
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              line-height: 1.6;
+              color: #333333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+              background-color: #f9f9f9;
+            }
+            .container {
+              background-color: #ffffff;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            .header {
+              background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+              padding: 30px 20px;
+              text-align: center;
+              color: white;
+            }
+            .logo {
+              max-width: 180px;
+              margin-bottom: 15px;
+            }
+            .content {
+              padding: 30px;
+            }
+            .footer {
+              background-color: #f5f5f5;
+              padding: 20px;
+              text-align: center;
+              font-size: 12px;
+              color: #666666;
+              border-top: 1px solid #eeeeee;
+            }
+            .button {
+              display: inline-block;
+              padding: 12px 24px;
+              background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+              color: white;
+              text-decoration: none;
+              border-radius: 4px;
+              font-weight: 600;
+              margin: 20px 0;
+            }
+            .signature {
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #eeeeee;
+            }
+            .signature img {
+              max-width: 150px;
+              margin-bottom: 10px;
+            }
+            .brand-row {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 16px;
+              flex-wrap: wrap;
+            }
+            .stamp {
+              max-width: 120px;
+              opacity: 0.9;
+            }
+          `}
+        </style>
+      </head>
+      <body>
+        <div className="container">
+          <div className="header">
+            <img 
+              src={effectiveLogo}
+              alt={effectiveCompanyName}
+              className="logo"
+            />
+            <h1>{title}</h1>
+          </div>
+          
+          <div className="content">
+            <div style={{display: 'none'}}>{previewText}</div>
+            {children}
+            
+            <div className="signature">
+              <div className="brand-row">
+                {effectiveSignature && (
+                  <img 
+                    src={effectiveSignature}
+                    alt="Authorized Signature"
+                  />
+                )}
+                {stampUrl && (
+                  <img 
+                    src={stampUrl}
+                    alt="Company Stamp"
+                    className="stamp"
+                  />
+                )}
+              </div>
+              <p>
+                <strong>{effectiveCompanyName}</strong><br />
+                {companyEmail && (<><a href={`mailto:${companyEmail}`} style={{color: '#4f46e5'}}>{companyEmail}</a><br /></>)}
+                {companyPhone && (<><a href={`tel:${companyPhone}`} style={{color: '#4f46e5'}}>{companyPhone}</a><br /></>)}
+                {addressLine1 && (<>{addressLine1}<br /></>)}
+                {addressLine2 && (<>{addressLine2}<br /></>)}
+                {addressLine3 && (<>{addressLine3}<br /></>)}
+                {addressLine4 && (<>{addressLine4}</>)}
+              </p>
+            </div>
+          </div>
+          
+          <div className="footer">
+            <p>© {new Date().getFullYear()} {effectiveCompanyName}. All rights reserved.</p>
+            <p>
+              {companyWebsite ? (
+                <>
+                  <a href={companyWebsite} style={{color: '#4f46e5', textDecoration: 'none'}}>Website</a>
+                </>
+              ) : (
+                <>
+                  <a href={effectiveWebsite} style={{color: '#4f46e5', textDecoration: 'none'}}>Website</a> |
+                  <a href="/privacy" style={{color: '#4f46e5', textDecoration: 'none'}}> Privacy Policy</a> |
+                  <a href="/terms" style={{color: '#4f46e5', textDecoration: 'none'}}> Terms of Service</a>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+  );
+};
+
+export default BaseEmailTemplate;

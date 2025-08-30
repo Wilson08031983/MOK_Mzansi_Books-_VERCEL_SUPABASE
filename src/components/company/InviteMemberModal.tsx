@@ -9,7 +9,7 @@ import { Mail, Shield, AlertCircle, UserPlus, Lock, CheckCircle, Link, Eye, Edit
 import { useAuth } from '@/hooks/useAuthHook';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { sendInvitationEmail } from '@/services/emailService';
+import EmailService from '@/emails/services/EmailService';
 import { verifyAdminPermission } from '@/services/localAuthService';
 import { createInvitation, generateInvitationLink } from '@/services/invitationService';
 import { PERMISSION_PAGES, UserPermissions, isAdminRole, getAdminPermissions, getDefaultPermissions } from '@/services/permissionService';
@@ -136,14 +136,46 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
       // Set the invitation link for display
       setInvitationLink(inviteLink);
       
-      // Send invitation email using Resend API
-      const emailSent = await sendInvitationEmail({
+      // Get company details and assets from localStorage for dynamic branding
+      let companyDetails = null;
+      let companyAssets = null;
+      
+      try {
+        const storedCompanyDetails = localStorage.getItem('companyDetails');
+        if (storedCompanyDetails) {
+          companyDetails = JSON.parse(storedCompanyDetails);
+        }
+        
+        const storedCompanyAssets = localStorage.getItem('companyAssets');
+        if (storedCompanyAssets) {
+          companyAssets = JSON.parse(storedCompanyAssets);
+        }
+      } catch (storageError) {
+        console.warn('Error retrieving company branding from localStorage:', storageError);
+      }
+      
+      // Fallback to default values if company details are not available
+      const emailParams = {
         to: inviteEmail,
+        recipientEmail: inviteEmail,
         inviterName: adminName,
-        email: inviteEmail,
         role: selectedRole,
-        invitationLink: inviteLink
-      });
+        invitationLink: inviteLink,
+        companyName: companyDetails?.name || companyDetails?.companyName || 'Your Company',
+        companyEmail: companyDetails?.email,
+        companyPhone: companyDetails?.phone,
+        companyWebsite: companyDetails?.website,
+        addressLine1: companyDetails?.addressLine1,
+        addressLine2: companyDetails?.addressLine2,
+        addressLine3: companyDetails?.addressLine3,
+        addressLine4: companyDetails?.addressLine4,
+        logoUrl: companyAssets?.Logo?.dataUrl || companyAssets?.logo,
+        stampUrl: companyAssets?.Stamp?.dataUrl || companyAssets?.stamp,
+        signatureUrl: companyAssets?.Signature?.dataUrl || companyAssets?.signature,
+      };
+      
+      // Send invitation email using the new dynamic template
+      const emailSent = await EmailService.sendTeamInvitationEmail(emailParams);
       
       if (!emailSent) {
         // Even if email fails, the invitation is still created

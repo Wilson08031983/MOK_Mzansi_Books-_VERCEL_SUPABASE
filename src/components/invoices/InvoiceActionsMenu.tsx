@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { generateInvoicePdf } from '@/utils/invoicePdfGenerator_v2';
 import { Invoice, InvoiceStatus } from '@/types/invoice';
+import SendInvoiceModal from './SendInvoiceModal';
 
 // Define a specific type for company details
 interface CompanyDetails {
@@ -50,6 +51,7 @@ const InvoiceActionsMenu = ({
   getCompanyDetails
 }: InvoiceActionsMenuProps) => {
   const [loading, setLoading] = useState<string | null>(null);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   
   const handleEdit = () => {
     if (onEdit) {
@@ -57,44 +59,9 @@ const InvoiceActionsMenu = ({
     }
   };
 
-  const handleSend = async () => {
-    try {
-      setLoading('send');
-      
-      // Check if we have the client email
-      if (!invoice.clientEmail) {
-        toast.error('Client email not available. Please update the client information.');
-        setLoading(null);
-        return;
-      }
-      
-      // Simulate a delay to make it feel real
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast.success(`Invoice ${invoice.number} would be sent to ${invoice.clientEmail}`);
-      
-      // Update invoice status to 'sent' if it was in draft
-      if (invoice.status === 'draft') {
-        // Get current invoices from localStorage
-        const storedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-        
-        // Update the invoice status
-        const updatedInvoices = storedInvoices.map((inv: Invoice) => {
-          if (inv.id === invoice.id) {
-            return { ...inv, status: 'sent' as InvoiceStatus };
-          }
-          return inv;
-        });
-        
-        // Save back to localStorage
-        localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
-      }
-    } catch (error) {
-      console.error('Error in handleSend:', error);
-      toast.error('An error occurred while sending the invoice.');
-    } finally {
-      setLoading(null);
-    }
+  const handleSend = () => {
+    // Open the send modal instead of sending directly
+    setIsSendModalOpen(true);
   };
 
   const handleDuplicate = () => {
@@ -221,17 +188,118 @@ const InvoiceActionsMenu = ({
     onDelete(invoice.id);
   };
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0">
-          <span className="sr-only">Open menu</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+  const handleSendSuccess = () => {
+    // Update invoice status to 'sent' if it was in draft
+    if (invoice.status === 'draft') {
+      // Get current invoices from localStorage
+      const storedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
+      
+      // Update the invoice status
+      const updatedInvoices = storedInvoices.map((inv: Invoice) => {
+        if (inv.id === invoice.id) {
+          return { ...inv, status: 'sent' as InvoiceStatus };
+        }
+        return inv;
+      });
+      
+      // Save back to localStorage
+      localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+      
+      // Notify parent component of the status change
+      if (onEdit) {
+        onEdit(invoice.id);
+      }
+    }
+    
+    // Close the modal
+    setIsSendModalOpen(false);
+  };
 
-        <DropdownMenuItem onClick={handleEdit} disabled={loading !== null}>
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
+            <span className="sr-only">Open menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          {onEdit && (
+            <DropdownMenuItem onClick={handleEdit} disabled={loading === 'edit'}>
+              {loading === 'edit' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Edit className="mr-2 h-4 w-4" />
+              )}
+              Edit
+            </DropdownMenuItem>
+          )}
+          
+          <DropdownMenuItem 
+            onClick={handleSend} 
+            disabled={loading === 'send'}
+            className="text-blue-600 dark:text-blue-400"
+          >
+            {loading === 'send' ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="mr-2 h-4 w-4" />
+            )}
+            Send
+          </DropdownMenuItem>
+          
+          {onDuplicate && (
+            <DropdownMenuItem 
+              onClick={() => onDuplicate(invoice)} 
+              disabled={loading === 'duplicate'}
+            >
+              {loading === 'duplicate' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="mr-2 h-4 w-4" />
+              )}
+              Duplicate
+            </DropdownMenuItem>
+          )}
+          
+          <DropdownMenuItem 
+            onClick={() => generateInvoicePdf(invoice, getCompanyDetails())}
+            disabled={loading === 'download'}
+          >
+            {loading === 'download' ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Download PDF
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem 
+            onClick={() => onDelete(invoice.id)} 
+            disabled={loading === 'delete'}
+            className="text-red-600 dark:text-red-400"
+          >
+            {loading === 'delete' ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      
+      {/* Send Invoice Modal */}
+      <SendInvoiceModal
+        isOpen={isSendModalOpen}
+        onClose={() => setIsSendModalOpen(false)}
+        invoice={invoice}
+        companyName={getCompanyDetails().name || 'MOK Mzansi Books'}
+        companyEmail={getCompanyDetails().email || 'support@mokmzansibooks.com'}
+        onSuccess={handleSendSuccess}
+      />
+    </>
           <Edit className="mr-2 h-4 w-4" />
           Edit
         </DropdownMenuItem>

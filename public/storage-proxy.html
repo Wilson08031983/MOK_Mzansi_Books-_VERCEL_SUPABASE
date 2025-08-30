@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Storage Proxy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>html,body{margin:0;padding:0;background:#fff}</style>
+</head>
+<body>
+<script>
+(function(){
+  function safeParse(v){try{return JSON.parse(v)}catch(e){return null}}
+  function get(key){return safeParse(localStorage.getItem(key))}
+  function send(targetOrigin){
+    var payload={type:'companyData',companyDetails:get('companyDetails'),companyAssets:get('companyAssets')};
+    try{window.parent.postMessage(payload,targetOrigin||'*')}catch(e){window.parent.postMessage(payload,'*')}
+  }
+  var target='*';
+  try{
+    var ref=document.referrer?new URL(document.referrer).origin:null;
+    var qp=new URLSearchParams(location.search);
+    target=qp.get('origin')||ref||'*';
+  }catch(e){target='*'}
+
+  // Respond to explicit requests from parent
+  window.addEventListener('message',function(ev){
+    if(!ev||!ev.data) return;
+    if(ev.data.type==='REQUEST_COMPANY_DATA'){
+      send(ev.origin||target);
+    }
+  });
+
+  // Send immediately on load
+  send(target);
+
+  // Re-send whenever storage changes on this origin
+  window.addEventListener('storage',function(){send(target)});
+})();
+</script>
+</body>
+</html>

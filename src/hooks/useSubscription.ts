@@ -92,11 +92,33 @@ export const useSubscription = () => {
     return Promise.resolve(paymentData);
   };
 
+  const upgradeToProPlan = async () => {
+    if (!user) throw new Error('User not authenticated');
+
+    const subscriptionData = {
+      id: `subscription-${Date.now()}`,
+      user_id: user.id,
+      plan_type: 'pro',
+      status: 'active',
+      access_level: 'full',
+      paystack_reference: `pro-upgrade-${Date.now()}`,
+      start_date: new Date().toISOString(),
+      end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year subscription
+    };
+
+    // Store in local storage for persistence
+    localStorage.setItem('mokSubscription', JSON.stringify(subscriptionData));
+    
+    setSubscription(subscriptionData);
+    return subscriptionData;
+  };
+
   return {
     subscription,
     loading,
     createSubscription,
     createPayment,
+    upgradeToProPlan,
     refetch: fetchSubscription
   };
 };

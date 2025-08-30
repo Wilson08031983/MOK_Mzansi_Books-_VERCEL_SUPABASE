@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   DollarSign, 
   Users, 
@@ -17,6 +17,7 @@ import { formatCurrency, formatNumber, formatDate } from '@/utils/formatters';
 import { getNotifications } from '@/services/notificationService';
 import bankStatementService from '@/services/bankStatementService';
 import ExpenseCategorizationService from '@/services/expenseCategorizationService';
+import { useAuth } from '@/hooks/useAuthHook';
 import { startOfWeek, endOfWeek, subMonths, format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { useUserTracking } from '@/hooks/useUserTracking';
 
 // Define TypeScript types
 type StatItem = {
@@ -120,7 +122,27 @@ const Dashboard: React.FC = () => {
   const [period, setPeriod] = useState('month');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  // State for Add Task modal and saved tasks
+  // Get authenticated user and activity service
+  const { user } = useAuth();
+  useUserTracking(user || null);
+  
+  // Initialize activity service
+  const activityService = {
+    logActivity: async (activity: { type: string; action: string; details: string }) => {
+      console.log('Activity logged:', activity);
+      // In a real app, this would save to a database
+      return { success: true };
+    },
+    logTaskAction: async (taskId: string, action: string, details: Record<string, any> = {}) => {
+      console.log(`Task action logged - Task ID: ${taskId}, Action: ${action}`, details);
+      // In a real app, this would save to a database
+      return { success: true };
+    }
+  };
+
+  // State for the new task modal
+  // Task management state
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [savedTasks, setSavedTasks] = useState<GeneralTask[]>([]);
   const [newTask, setNewTask] = useState<{

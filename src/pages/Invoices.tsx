@@ -110,7 +110,7 @@ const Invoices: React.FC = () => {
     accountType: 'Business Account',
     branchCode: '250655',
     accountHolder: 'MOK Mzansi Books (Pty) Ltd',
-    logoUrl: 'https://mokmzansibooks.com/logo.png'
+    logoUrl: '/placeholder.svg'
   });
 
   // Fetch clients from localStorage

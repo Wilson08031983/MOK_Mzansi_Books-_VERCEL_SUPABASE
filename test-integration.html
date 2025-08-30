@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company-Email Integration Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #4f46e5;
+        }
+        .status-pass {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status-fail {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .data-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #3730a3;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Company Page ↔ Email Template Integration Test</h1>
+        <p>This page tests the integration between the Company Details page and the Team Invitation Email Template.</p>
+        
+        <div class="test-section">
+            <h3>1. Company Details Data</h3>
+            <div id="company-details-status"></div>
+            <div id="company-details-data" class="data-display"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. Company Assets Data</h3>
+            <div id="company-assets-status"></div>
+            <div id="company-assets-data" class="data-display"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. Integration Test Results</h3>
+            <div id="integration-results"></div>
+            <button onclick="runIntegrationTest()">Run Integration Test</button>
+            <button onclick="clearTestData()">Clear Test Data</button>
+            <button onclick="setTestData()">Set Test Company Data</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>4. Quick Links</h3>
+            <p>
+                <a href="http://localhost:8083/company" target="_blank">→ Company Page (localhost:8083/company)</a><br>
+                <a href="http://localhost:5501/email-template-preview.html" target="_blank">→ Email Template Preview (localhost:5501/email-template-preview.html)</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function loadCompanyDetails() {
+            try {
+                const details = localStorage.getItem('companyDetails');
+                const detailsDiv = document.getElementById('company-details-data');
+                const statusDiv = document.getElementById('company-details-status');
+                
+                if (details) {
+                    const parsed = JSON.parse(details);
+                    detailsDiv.textContent = JSON.stringify(parsed, null, 2);
+                    statusDiv.innerHTML = '<div class="status-pass">✓ Company Details Found</div>';
+                } else {
+                    detailsDiv.textContent = 'No company details found in localStorage';
+                    statusDiv.innerHTML = '<div class="status-fail">✗ No Company Details</div>';
+                }
+            } catch (error) {
+                document.getElementById('company-details-status').innerHTML = '<div class="status-fail">✗ Error loading company details: ' + error.message + '</div>';
+            }
+        }
+        
+        function loadCompanyAssets() {
+            try {
+                const assets = localStorage.getItem('companyAssets');
+                const assetsDiv = document.getElementById('company-assets-data');
+                const statusDiv = document.getElementById('company-assets-status');
+                
+                if (assets) {
+                    const parsed = JSON.parse(assets);
+                    // Show only the structure, not the full data URLs
+                    const summary = {};
+                    Object.keys(parsed).forEach(key => {
+                        if (parsed[key] && parsed[key].dataUrl) {
+                            summary[key] = {
+                                name: parsed[key].name,
+                                hasDataUrl: true,
+                                dataUrlLength: parsed[key].dataUrl.length
+                            };
+                        } else {
+                            summary[key] = parsed[key];
+                        }
+                    });
+                    assetsDiv.textContent = JSON.stringify(summary, null, 2);
+                    statusDiv.innerHTML = '<div class="status-pass">✓ Company Assets Found</div>';
+                } else {
+                    assetsDiv.textContent = 'No company assets found in localStorage';
+                    statusDiv.innerHTML = '<div class="status-fail">✗ No Company Assets</div>';
+                }
+            } catch (error) {
+                document.getElementById('company-assets-status').innerHTML = '<div class="status-fail">✗ Error loading company assets: ' + error.message + '</div>';
+            }
+        }
+        
+        function runIntegrationTest() {
+            const resultsDiv = document.getElementById('integration-results');
+            let results = [];
+            
+            try {
+                // Test 1: Company Details exist
+                const details = localStorage.getItem('companyDetails');
+                if (details) {
+                    const parsed = JSON.parse(details);
+                    results.push('✓ Company Details loaded successfully');
+                    
+                    // Test contact person data
+                    if (parsed.contactName && parsed.contactSurname) {
+                        results.push('✓ Contact person name available: ' + parsed.contactName + ' ' + parsed.contactSurname);
+                    } else if (parsed.ownerName && parsed.ownerSurname) {
+                        results.push('✓ Owner name available: ' + parsed.ownerName + ' ' + parsed.ownerSurname);
+                    } else {
+                        results.push('✗ No contact person or owner name found');
+                    }
+                    
+                    // Test company name
+                    if (parsed.companyName || parsed.name) {
+                        results.push('✓ Company name available: ' + (parsed.companyName || parsed.name));
+                    } else {
+                        results.push('✗ No company name found');
+                    }
+                } else {
+                    results.push('✗ No company details found');
+                }
+                
+                // Test 2: Company Assets exist
+                const assets = localStorage.getItem('companyAssets');
+                if (assets) {
+                    const parsed = JSON.parse(assets);
+                    results.push('✓ Company Assets loaded successfully');
+                    
+                    if (parsed.Logo && parsed.Logo.dataUrl) {
+                        results.push('✓ Company Logo available');
+                    } else {
+                        results.push('✗ No company logo found');
+                    }
+                    
+                    if (parsed.Signature && parsed.Signature.dataUrl) {
+                        results.push('✓ Company Signature available');
+                    } else {
+                        results.push('✗ No company signature found');
+                    }
+                    
+                    if (parsed.Stamp && parsed.Stamp.dataUrl) {
+                        results.push('✓ Company Stamp available');
+                    } else {
+                        results.push('✗ No company stamp found');
+                    }
+                } else {
+                    results.push('✗ No company assets found');
+                }
+                
+                // Display results
+                resultsDiv.innerHTML = results.map(result => {
+                    const isPass = result.startsWith('✓');
+                    return '<div class="' + (isPass ? 'status-pass' : 'status-fail') + '">' + result + '</div>';
+                }).join('');
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="status-fail">✗ Integration test failed: ' + error.message + '</div>';
+            }
+        }
+        
+        function clearTestData() {
+            localStorage.removeItem('companyDetails');
+            localStorage.removeItem('companyAssets');
+            loadCompanyDetails();
+            loadCompanyAssets();
+            document.getElementById('integration-results').innerHTML = '<div class="status-pass">Test data cleared</div>';
+        }
+        
+        function setTestData() {
+            // Set test company details
+            const testDetails = {
+                companyName: 'Test Company Ltd',
+                name: 'Test Company Ltd',
+                contactName: 'Jane',
+                contactSurname: 'Doe',
+                ownerName: 'Jane',
+                ownerSurname: 'Doe',
+                position: 'CEO',
+                ownerPosition: 'CEO',
+                email: 'jane.doe@testcompany.com',
+                phone: '+27 11 123 4567',
+                website: 'www.testcompany.com',
+                addressLine1: '456 Test Street',
+                addressLine2: 'Test Area',
+                addressLine3: 'Test City',
+                addressLine4: 'Test Province, 1234'
+            };
+            
+            // Set test company assets
+            const testAssets = {
+                Logo: {
+                    name: 'test-logo.png',
+                    dataUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjMDA3YWZmIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iNDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZvbnQtd2VpZ2h0PSJib2xkIj5UZXN0IENvbXBhbnk8L3RleHQ+Cjx0ZXh0IHg9IjEwMCIgeT0iNjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiPkx0ZDwvdGV4dD4KPC9zdmc+Cg==',
+                    lastModified: Date.now()
+                },
+                Signature: {
+                    name: 'test-signature.png',
+                    dataUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjYwIiB2aWV3Qm94PSIwIDAgMTgwIDYwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cGF0aCBkPSJNMTAgMzBRMzAgMTAgNTAgMzBUOTAgMzBRMTEwIDEwIDEzMCAzMFQxNzAgMzAiIHN0cm9rZT0iIzAwN2FmZiIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSJub25lIi8+Cjx0ZXh0IHg9IjkwIiB5PSI1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzAwN2FmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIj5KYW5lIERvZSBTaWduYXR1cmU8L3RleHQ+Cjwvc3ZnPgo=',
+                    lastModified: Date.now()
+                },
+                Stamp: {
+                    name: 'test-stamp.png',
+                    dataUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMTIwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB4PSI1IiB5PSI1IiB3aWR0aD0iMTEwIiBoZWlnaHQ9IjcwIiBzdHJva2U9IiMwMDdhZmYiIHN0cm9rZS13aWR0aD0iMyIgZmlsbD0ibm9uZSIvPgo8dGV4dCB4PSI2MCIgeT0iMzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMwMDdhZmYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZm9udC13ZWlnaHQ9ImJvbGQiPk9GRklDSUFMIFNUQU1QPC90ZXh0Pgo8dGV4dCB4PSI2MCIgeT0iNDUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMwMDdhZmYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4Ij5UZXN0IENvbXBhbnk8L3RleHQ+Cjx0ZXh0IHg9IjYwIiB5PSI1OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzAwN2FmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjgiPkx0ZDwvdGV4dD4KPC9zdmc+Cg==',
+                    lastModified: Date.now()
+                }
+            };
+            
+            localStorage.setItem('companyDetails', JSON.stringify(testDetails));
+            localStorage.setItem('companyAssets', JSON.stringify(testAssets));
+            
+            loadCompanyDetails();
+            loadCompanyAssets();
+            document.getElementById('integration-results').innerHTML = '<div class="status-pass">Test data set successfully. Now check the email template to see if it reflects these changes.</div>';
+        }
+        
+        // Load data on page load
+        window.onload = function() {
+            loadCompanyDetails();
+            loadCompanyAssets();
+        };
+    </script>
+</body>
+</html>

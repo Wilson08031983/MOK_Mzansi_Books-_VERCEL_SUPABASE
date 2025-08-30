@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,11 +13,37 @@ const Login = () => {
     email: '',
     password: ''
   });
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    
+    if (savedEmail && savedPassword) {
+      setFormData({
+        email: savedEmail,
+        password: savedPassword
+      });
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (rememberMe) {
+      // Save credentials to localStorage
+      localStorage.setItem('rememberedEmail', formData.email);
+      localStorage.setItem('rememberedPassword', formData.password);
+    } else {
+      // Clear any saved credentials
+      localStorage.removeItem('rememberedEmail');
+      localStorage.removeItem('rememberedPassword');
+    }
+    
     // Handle login logic here
-    console.log('Login attempt:', formData);
+    console.log('Login attempt:', { ...formData, rememberMe });
   };
 
   return (
@@ -84,7 +110,12 @@ const Login = () => {
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center">
-                  <input type="checkbox" className="mr-2 rounded border-gray-300 shadow-sm" />
+                  <input 
+                    type="checkbox" 
+                    className="mr-2 rounded border-gray-300 shadow-sm text-purple-600 focus:ring-purple-500"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
                   <span className="text-sm text-gray-600">Remember me</span>
                 </label>
                 <Link to="/forgot-password" className="text-sm text-purple-600 hover:text-purple-700 transition-colors hover:underline">

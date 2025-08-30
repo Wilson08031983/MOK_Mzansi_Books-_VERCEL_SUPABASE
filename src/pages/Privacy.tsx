@@ -10,132 +10,245 @@ const Privacy = () => {
       <div className="py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white rounded-lg shadow-lg p-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-6">MOK Mzansi Books Privacy Policy</h1>
-            <p className="text-sm text-gray-600 mb-8"><strong>Last Updated:</strong> June 3, 2025</p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-6">Privacy Policy</h1>
+            <p className="text-sm text-gray-600 mb-8"><strong>Last Updated:</strong> August 2025</p>
 
-            <div className="prose prose-lg max-w-none">
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">1. Introduction</h2>
-              <p className="mb-4">
-                Welcome to MOK Mzansi Books ("we," "our," or "us"). We are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our financial management software and related services (collectively, the "Service").
-              </p>
-              <p className="mb-6">
-                By accessing or using our Service, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, please do not use our Service.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">2. Information We Collect</h2>
+            <div className="prose prose-lg max-w-none space-y-8">
               
-              <h3 className="text-xl font-semibold text-gray-700 mt-6 mb-3">2.1 Information You Provide to Us</h3>
-              <p className="mb-4">When you register for an account or use our Service, we may collect:</p>
-              <ul className="list-disc pl-6 mb-4">
-                <li><strong>Account Information</strong>: Name, email address, phone number, company name, and password.</li>
-                <li><strong>Billing Information</strong>: Credit card details, billing address, and payment history (processed through secure third-party payment processors).</li>
-                <li><strong>Business Information</strong>: Client details, financial records, invoices, quotations, and other business-related documents you upload or create.</li>
-                <li><strong>Communication Data</strong>: Records of your correspondence with us, including support requests and feedback.</li>
-              </ul>
-
-              <h3 className="text-xl font-semibold text-gray-700 mt-6 mb-3">2.2 Information We Collect Automatically</h3>
-              <p className="mb-4">When you use our Service, we may automatically collect:</p>
-              <ul className="list-disc pl-6 mb-4">
-                <li><strong>Usage Data</strong>: Information about how you interact with our Service, including pages visited, features used, and time spent.</li>
-                <li><strong>Device Information</strong>: IP address, browser type, operating system, device identifiers, and other technical data.</li>
-                <li><strong>Cookies and Tracking Technologies</strong>: We use cookies and similar technologies to enhance your experience and analyze usage patterns.</li>
-              </ul>
-
-              <h3 className="text-xl font-semibold text-gray-700 mt-6 mb-3">2.3 Information from Third Parties</h3>
-              <p className="mb-4">We may receive information about you from third parties, such as:</p>
-              <ul className="list-disc pl-6 mb-6">
-                <li>Business partners and service providers.</li>
-                <li>Social media platforms (if you choose to connect your account).</li>
-                <li>Publicly available sources.</li>
-              </ul>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">3. How We Use Your Information</h2>
-              <p className="mb-4">We use the information we collect for the following purposes:</p>
-              <ul className="list-disc pl-6 mb-6">
-                <li><strong>To Provide and Maintain Our Service</strong>: Create and manage your account, process payments, and deliver the features you request.</li>
-                <li><strong>To Improve Our Service</strong>: Analyze usage patterns, troubleshoot issues, and enhance user experience.</li>
-                <li><strong>To Communicate with You</strong>: Send important notices, updates, and marketing communications (with your consent where required).</li>
-                <li><strong>To Ensure Security</strong>: Protect against fraud, unauthorized access, and other security risks.</li>
-                <li><strong>To Comply with Legal Obligations</strong>: Meet legal and regulatory requirements.</li>
-                <li><strong>For Business Transfers</strong>: In connection with a merger, acquisition, or sale of assets.</li>
-              </ul>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">4. How We Share Your Information</h2>
-              <p className="mb-4">We may share your information in the following circumstances:</p>
-              <ul className="list-disc pl-6 mb-6">
-                <li><strong>With Service Providers</strong>: Third-party vendors who assist us in delivering our Service (e.g., payment processors, hosting providers).</li>
-                <li><strong>With Your Consent</strong>: When you give us permission to share your information.</li>
-                <li><strong>For Legal Reasons</strong>: To comply with legal obligations, protect our rights, or respond to lawful requests from authorities.</li>
-                <li><strong>In Aggregated or Anonymized Form</strong>: For research, analytics, or marketing purposes (cannot be used to identify you).</li>
-              </ul>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">5. Data Retention</h2>
-              <p className="mb-6">
-                We retain your personal information only for as long as necessary to fulfill the purposes outlined in this Privacy Policy, unless a longer retention period is required or permitted by law. When your information is no longer needed, we will securely delete or anonymize it.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">6. Data Security</h2>
-              <p className="mb-4">We implement appropriate technical and organizational measures to protect your personal information from unauthorized access, alteration, disclosure, or destruction. These measures include:</p>
-              <ul className="list-disc pl-6 mb-4">
-                <li><strong>Encryption</strong>: Data in transit and at rest using industry-standard protocols.</li>
-                <li><strong>Access Controls</strong>: Restrict access to personal information to authorized personnel only.</li>
-                <li><strong>Regular Audits</strong>: Conduct security assessments to identify and address vulnerabilities.</li>
-              </ul>
-              <p className="mb-6">
-                Despite our efforts, no method of transmission over the internet or electronic storage is 100% secure. We cannot guarantee absolute security but are committed to protecting your information to the best of our ability.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">7. Your Rights Under POPIA and GDPR</h2>
-              <p className="mb-4">Depending on your location, you may have the following rights regarding your personal information:</p>
-              <ul className="list-disc pl-6 mb-4">
-                <li><strong>Right to Access</strong>: Request a copy of the personal information we hold about you.</li>
-                <li><strong>Right to Rectification</strong>: Correct inaccurate or incomplete information.</li>
-                <li><strong>Right to Erasure</strong>: Request deletion of your personal information under certain conditions.</li>
-                <li><strong>Right to Restrict Processing</strong>: Limit how we use your information.</li>
-                <li><strong>Right to Data Portability</strong>: Receive your data in a structured, commonly used format.</li>
-                <li><strong>Right to Object</strong>: Opt out of certain uses of your information, such as direct marketing.</li>
-                <li><strong>Right to Withdraw Consent</strong>: Withdraw previously given consent at any time.</li>
-              </ul>
-              <p className="mb-6">
-                To exercise these rights, please contact us at mokgethwamoabelo@gmail.com. We may need to verify your identity before processing your request.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">8. International Data Transfers</h2>
-              <p className="mb-6">
-                Your information may be transferred to and processed in countries other than South Africa, where data protection laws may differ. We will take all necessary steps to ensure your data is treated securely and in accordance with this Privacy Policy.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">9. Children's Privacy</h2>
-              <p className="mb-6">
-                Our Service is not intended for individuals under the age of 18. We do not knowingly collect personal information from children. If we become aware that we have collected personal information from a child, we will take steps to delete it immediately.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">10. Changes to This Privacy Policy</h2>
-              <p className="mb-6">
-                We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last Updated" date. Your continued use of the Service after such changes constitutes acceptance of the updated policy.
-              </p>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">11. Contact Us</h2>
-              <p className="mb-4">If you have any questions or concerns about this Privacy Policy or our data practices, please contact us at:</p>
-              <div className="bg-gray-100 p-4 rounded-lg mb-6">
-                <p><strong>Email:</strong> mokgethwamoabelo@gmail.com</p>
-                <p><strong>Phone:</strong> +27 64 550 4029</p>
-                <p><strong>Company:</strong> Morwa Moabelo (Pty) Ltd</p>
-                <p><strong>Reg No:</strong> 2018/421571/07</p>
-              </div>
-
-              <h2 className="text-2xl font-semibold text-gray-800 mt-8 mb-4">12. Complaints</h2>
-              <p className="mb-4">If you believe your data protection rights have been violated, you have the right to lodge a complaint with the relevant data protection authority:</p>
-              <ul className="list-disc pl-6 mb-6">
-                <li><strong>South Africa:</strong> Information Regulator (https://www.justice.gov.za/inforeg/)</li>
-                <li><strong>EU:</strong> Your local data protection authority</li>
-              </ul>
-
-              <div className="border-t pt-6 mt-8">
-                <p className="text-sm text-gray-600 italic">
-                  This Privacy Policy is effective as of the date stated above and supersedes all prior versions.
+              {/* Introduction */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">1. Introduction</h2>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  MOK Mzansi Books ("we," "our," or "us") is committed to protecting your privacy and personal data. 
+                  This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you 
+                  visit our website and use our accounting and business management services.
                 </p>
-              </div>
+                <p className="text-gray-700 leading-relaxed">
+                  By using our services, you agree to the collection and use of information in accordance with this policy. 
+                  We comply with applicable data protection laws, including the General Data Protection Regulation (GDPR) 
+                  and the California Consumer Privacy Act (CCPA).
+                </p>
+              </section>
+
+              {/* Data Collection */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">2. Information We Collect</h2>
+                
+                <h3 className="text-xl font-medium text-gray-700 mb-3">2.1 Personal Information</h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  We may collect the following types of personal information:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-6">
+                  <li><strong>Contact Information:</strong> Name, email address, phone number, postal address</li>
+                  <li><strong>Account Information:</strong> Username, password, profile information</li>
+                  <li><strong>Business Information:</strong> Company name, tax identification numbers, business address</li>
+                  <li><strong>Financial Information:</strong> Bank account details, payment information (processed securely through third-party providers)</li>
+                  <li><strong>Communication Data:</strong> Messages, support tickets, feedback</li>
+                </ul>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">2.2 Technical Information</h3>
+                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-6">
+                  <li><strong>Device Information:</strong> IP address, browser type, operating system, device identifiers</li>
+                  <li><strong>Usage Data:</strong> Pages visited, time spent on site, click patterns, feature usage</li>
+                  <li><strong>Location Data:</strong> General geographic location based on IP address</li>
+                  <li><strong>Cookies and Tracking:</strong> Session data, preferences, analytics information</li>
+                </ul>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">2.3 Business Data</h3>
+                <ul className="list-disc list-inside text-gray-700 space-y-2">
+                  <li>Client and customer information you input into our system</li>
+                  <li>Financial records, invoices, and transaction data</li>
+                  <li>Inventory and product information</li>
+                  <li>Reports and analytics generated through our platform</li>
+                </ul>
+              </section>
+
+              {/* Purpose of Data Collection */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">3. How We Use Your Information</h2>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  We use your personal information for the following purposes:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 space-y-2">
+                  <li><strong>Service Provision:</strong> To provide, maintain, and improve our accounting and business management services</li>
+                  <li><strong>Account Management:</strong> To create and manage your account, authenticate users, and provide customer support</li>
+                  <li><strong>Communication:</strong> To send service-related notifications, updates, and respond to inquiries</li>
+                  <li><strong>Payment Processing:</strong> To process payments and manage billing (through secure third-party processors)</li>
+                  <li><strong>Legal Compliance:</strong> To comply with applicable laws, regulations, and legal processes</li>
+                  <li><strong>Security:</strong> To protect against fraud, unauthorized access, and security threats</li>
+                  <li><strong>Analytics:</strong> To analyze usage patterns and improve our services</li>
+                  <li><strong>Marketing:</strong> To send promotional materials (with your consent where required)</li>
+                </ul>
+              </section>
+
+              {/* Data Storage and Security */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. Data Storage and Security</h2>
+                
+                <h3 className="text-xl font-medium text-gray-700 mb-3">4.1 Data Storage</h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  Your data is stored on secure servers provided by reputable cloud service providers. We use industry-standard 
+                  encryption and security measures to protect your information both in transit and at rest.
+                </p>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">4.2 Security Measures</h3>
+                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4">
+                  <li>SSL/TLS encryption for data transmission</li>
+                  <li>Regular security audits and vulnerability assessments</li>
+                  <li>Access controls and authentication mechanisms</li>
+                  <li>Regular data backups and disaster recovery procedures</li>
+                  <li>Employee training on data protection and security practices</li>
+                </ul>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">4.3 Data Retention</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  We retain your personal information for as long as necessary to provide our services and comply with legal 
+                  obligations. Business and financial data may be retained for longer periods as required by applicable 
+                  accounting and tax regulations.
+                </p>
+              </section>
+
+              {/* User Rights */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">5. Your Rights</h2>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  Depending on your location, you may have the following rights regarding your personal data:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 space-y-2">
+                  <li><strong>Access:</strong> Request access to your personal information</li>
+                  <li><strong>Rectification:</strong> Request correction of inaccurate or incomplete data</li>
+                  <li><strong>Erasure:</strong> Request deletion of your personal information ("right to be forgotten")</li>
+                  <li><strong>Portability:</strong> Request transfer of your data to another service provider</li>
+                  <li><strong>Restriction:</strong> Request limitation of processing of your personal information</li>
+                  <li><strong>Objection:</strong> Object to processing of your personal information for certain purposes</li>
+                  <li><strong>Withdraw Consent:</strong> Withdraw consent for processing where consent is the legal basis</li>
+                </ul>
+                <p className="text-gray-700 leading-relaxed mt-4">
+                  To exercise these rights, please contact us at <a href="mailto:admin@mokmzansibooks.com" className="text-blue-600 hover:text-blue-800">admin@mokmzansibooks.com</a>. 
+                  We will respond to your request within 30 days.
+                </p>
+              </section>
+
+              {/* Cookies Policy */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">6. Cookies and Tracking Technologies</h2>
+                
+                <h3 className="text-xl font-medium text-gray-700 mb-3">6.1 Types of Cookies</h3>
+                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4">
+                  <li><strong>Essential Cookies:</strong> Required for basic website functionality and security</li>
+                  <li><strong>Performance Cookies:</strong> Help us understand how visitors interact with our website</li>
+                  <li><strong>Functional Cookies:</strong> Remember your preferences and settings</li>
+                  <li><strong>Marketing Cookies:</strong> Used to deliver relevant advertisements (with your consent)</li>
+                </ul>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">6.2 Managing Cookies</h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  You can control cookies through your browser settings. However, disabling certain cookies may affect 
+                  the functionality of our website. We also use analytics tools like Google Analytics to understand 
+                  user behavior and improve our services.
+                </p>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">6.3 Third-Party Tracking</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  We may use third-party services for analytics, advertising, and other purposes. These services may 
+                  collect information about your online activities across different websites.
+                </p>
+              </section>
+
+              {/* Third-Party Sharing */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">7. Data Sharing and Disclosure</h2>
+                
+                <h3 className="text-xl font-medium text-gray-700 mb-3">7.1 Service Providers</h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  We may share your information with trusted third-party service providers who assist us in operating 
+                  our website and providing our services, including:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4">
+                  <li>Cloud hosting and storage providers</li>
+                  <li>Payment processors</li>
+                  <li>Email service providers</li>
+                  <li>Analytics and marketing platforms</li>
+                  <li>Customer support tools</li>
+                </ul>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">7.2 Legal Requirements</h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  We may disclose your information when required by law, court order, or government regulation, or when 
+                  we believe disclosure is necessary to protect our rights, your safety, or the safety of others.
+                </p>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">7.3 Business Transfers</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  In the event of a merger, acquisition, or sale of assets, your personal information may be transferred 
+                  to the acquiring entity, subject to the same privacy protections.
+                </p>
+              </section>
+
+              {/* International Transfers */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">8. International Data Transfers</h2>
+                <p className="text-gray-700 leading-relaxed">
+                  Your information may be transferred to and processed in countries other than your country of residence. 
+                  We ensure appropriate safeguards are in place to protect your personal information in accordance with 
+                  applicable data protection laws, including the use of standard contractual clauses approved by the 
+                  European Commission.
+                </p>
+              </section>
+
+              {/* Children's Privacy */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">9. Children's Privacy</h2>
+                <p className="text-gray-700 leading-relaxed">
+                  Our services are not intended for individuals under the age of 18. We do not knowingly collect personal 
+                  information from children under 18. If we become aware that we have collected personal information from 
+                  a child under 18, we will take steps to delete such information.
+                </p>
+              </section>
+
+              {/* Policy Updates */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">10. Policy Updates</h2>
+                <p className="text-gray-700 leading-relaxed">
+                  We may update this Privacy Policy from time to time to reflect changes in our practices or applicable laws. 
+                  We will notify you of any material changes by posting the updated policy on our website and updating the 
+                  "Last updated" date. For significant changes, we may also send you an email notification. Your continued 
+                  use of our services after the effective date of the updated policy constitutes acceptance of the changes.
+                </p>
+              </section>
+
+              {/* Contact Information */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">11. Contact Us</h2>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  If you have any questions about this Privacy Policy or our data practices, please contact us:
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-gray-700"><strong>MOK Mzansi Books</strong></p>
+                  <p className="text-gray-700">Email: <a href="mailto:admin@mokmzansibooks.com" className="text-blue-600 hover:text-blue-800">admin@mokmzansibooks.com</a></p>
+                  <p className="text-gray-700">Phone: <a href="tel:+27645504029" className="text-blue-600 hover:text-blue-800">+27 64 550 4029</a></p>
+                  <p className="text-gray-700">Address: 81 Monokane Street, Atterigeville x17, Pretoria, Gauteng 0006, South Africa</p>
+                </div>
+              </section>
+
+              {/* GDPR/CCPA Specific Rights */}
+              <section>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">12. Additional Rights for EU and California Residents</h2>
+                
+                <h3 className="text-xl font-medium text-gray-700 mb-3">12.1 GDPR Rights (EU Residents)</h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  If you are located in the European Union, you have additional rights under the GDPR, including the right 
+                  to lodge a complaint with your local data protection authority.
+                </p>
+
+                <h3 className="text-xl font-medium text-gray-700 mb-3">12.2 CCPA Rights (California Residents)</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  If you are a California resident, you have the right to know what personal information we collect, 
+                  the right to delete personal information, and the right to opt-out of the sale of personal information. 
+                  We do not sell personal information to third parties.
+                </p>
+              </section>
+
             </div>
           </div>
         </div>

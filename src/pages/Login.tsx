@@ -130,23 +130,21 @@ const Login = () => {
                   {t('auth.login.signUp')}
                 </Link>
               </p>
-              <div className="flex justify-between mt-2">
+              <div className="mt-2">
                 <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-primary inline-block">
-                   {t('auth.login.forgotPassword')}
-                 </Link>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-sm text-mokm-orange-600 hover:text-mokm-orange-800 flex items-center gap-1 p-0"
-                  onClick={() => {
-                    resetLocalAuth();
-                    alert(t('auth.login.refreshLocalAuth'));
-                  }}
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  {t('auth.login.refreshLocalAuth')}
-                </Button>
+                  {t('auth.login.forgotPassword')}
+                </Link>
+              </div>
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-xs text-muted-foreground">
+                  <Link to="/privacy" className="hover:text-primary transition-colors hover:underline">
+                    Privacy Policy
+                  </Link>
+                  <span className="hidden sm:inline">•</span>
+                  <Link to="/terms" className="hover:text-primary transition-colors hover:underline">
+                    Terms of Service
+                  </Link>
+                </div>
               </div>
             </div>
           </CardContent>
