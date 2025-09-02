@@ -67,7 +67,25 @@ export const resetLocalAuth = () => {
       permissions: wilsonPermissions,
       isDefaultAdmin: true  // Special flag to identify this as a permanent admin account
     },
-
+    'trial-user': {
+      email: 'trial@mokmzansibooks.com',
+      password: 'trial123',
+      fullName: 'Trial User',
+      role: 'Staff',
+      permissions: {
+        dashboard: { read: true, write: false, delete: false },
+        clients: { read: true, write: false, delete: false },
+        quotations: { read: true, write: false, delete: false },
+        invoices: { read: true, write: false, delete: false },
+        inventory: { read: true, write: false, delete: false },
+        projects: { read: true, write: false, delete: false },
+        hrManagement: { read: false, write: false, delete: false },
+        accounting: { read: false, write: false, delete: false },
+        reports: { read: true, write: false, delete: false },
+        settings: { read: false, write: false, delete: false },
+        company: { read: false, write: false, delete: false }
+      }
+    }
   };
   
   window.localStorage.setItem('userCredentials', JSON.stringify(defaultCredentials));

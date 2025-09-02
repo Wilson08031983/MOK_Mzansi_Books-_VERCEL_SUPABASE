@@ -40,6 +40,7 @@ import CreateProjectModal from '@/components/projects/CreateProjectModal';
 import ProjectFilters from '@/components/projects/ProjectFilters';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { addNotification, getNotifications, NotificationItem } from '@/services/notificationService';
+import { toast } from 'sonner';
 
 // Using shared Project type from types/project.ts
 
@@ -537,6 +538,31 @@ const Projects = () => {
   };
 
   const handleOpenCreateModal = () => {
+    // Trial gating: allow max 5 projects on trial plan
+    try {
+      const subRaw = localStorage.getItem('mokSubscription');
+      const subscription = subRaw ? JSON.parse(subRaw) : null;
+      const isTrial = subscription?.status === 'trial' || subscription?.plan_type === 'trial';
+      if (isTrial) {
+        const count = Array.isArray(projects) ? projects.length : 0;
+        if (count >= 5) {
+          // Prefer toast from existing patterns
+          toast.error('Trial limit reached: You can add up to 5 projects on the trial. Upgrade to unlock unlimited projects.');
+          try {
+            logAudit({
+              category: 'system',
+              action: 'Open Create Project Modal Blocked - Trial',
+              changeType: 'read',
+              description: `Blocked adding project at trial limit (projects=${count})`
+            });
+          } catch {}
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Project gating check failed:', e);
+    }
+
     setShowCreateModal(true);
     try {
       logAudit({
@@ -602,7 +628,7 @@ const Projects = () => {
 
           {/* Empty State */}
           {filteredProjects.length === 0 && (
-            <ProjectsEmptyState onCreateProject={() => setShowCreateModal(true)} />
+            <ProjectsEmptyState onCreateProject={handleOpenCreateModal} />
           )}
 
           {/* Create Project Modal */}

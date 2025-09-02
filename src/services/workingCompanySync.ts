@@ -50,11 +50,18 @@ interface CompanyAssetsData {
 class WorkingCompanySync {
   private isUpdating = false;
   private lastSyncTime = 0;
+  // Loop guard to avoid reacting to our own recent writes
+  private lastWriteKey: string | null = null;
+  private lastWriteTime = 0;
+  private initialized = false;
+  private lastHandledTime = 0;
 
   /**
    * Initialize sync listeners
    */
   init() {
+    if (this.initialized) return;
+    this.initialized = true;
     // Listen for storage changes across tabs
     window.addEventListener('storage', this.handleStorageChange.bind(this));
     
@@ -68,8 +75,25 @@ class WorkingCompanySync {
   private handleStorageChange(event: StorageEvent) {
     if (this.isUpdating) return;
     
-    if (event.key === 'companyDetails' || event.key === 'generalSettings') {
-      setTimeout(() => this.syncBothWays(), 100);
+    // Ignore storage events caused by our own recent writes (extended debounce window)
+    const key = event.key;
+    if (key && this.lastWriteKey === key && Date.now() - this.lastWriteTime < 1500) {
+      return;
+    }
+
+    // Only react to companyDetails updates to avoid storms from in-progress General Settings edits
+    if (event.key === 'companyDetails' && event.newValue) {
+      // Throttle reactions to at most once per second
+      const now = Date.now();
+      if (now - this.lastHandledTime < 1000) return;
+      this.lastHandledTime = now;
+
+      // Longer delay to prevent rapid successive syncs
+      setTimeout(() => {
+        if (!this.isUpdating) {
+          this.syncBothWays();
+        }
+      }, 300);
     }
   }
 
@@ -106,6 +130,11 @@ class WorkingCompanySync {
       };
 
       localStorage.setItem('generalSettings', JSON.stringify(updatedSettings));
+      // Ensure timestamp is updated to prevent repeated company->settings syncs
+      localStorage.setItem('generalSettings_timestamp', Date.now().toString());
+      // Mark last write for loop guard
+      this.lastWriteKey = 'generalSettings';
+      this.lastWriteTime = Date.now();
       console.log('✅ Synced Company → Settings:', updatedSettings.companyInfo);
       
     } catch (error) {
@@ -148,7 +177,6 @@ class WorkingCompanySync {
 
       localStorage.setItem('companyDetails', JSON.stringify(updatedCompanyDetails));
       localStorage.setItem('companyDetails_timestamp', Date.now().toString());
-      
       // Sync company logo from settings to company assets
       const settingsAssets = this.getCompanyAssets();
       if (settingsAssets && (settingsAssets.Logo || settingsAssets.logo)) {
@@ -166,6 +194,9 @@ class WorkingCompanySync {
         }
         localStorage.setItem('companyAssets', JSON.stringify(settingsAssets));
       }
+      // Mark last write for loop guard
+      this.lastWriteKey = 'companyDetails';
+      this.lastWriteTime = Date.now();
       
       console.log('✅ Synced Settings → Company:', updatedCompanyDetails);
       this.dispatchSyncSuccess();
@@ -364,9 +395,13 @@ class WorkingCompanySync {
 // Create and export singleton
 export const workingCompanySync = new WorkingCompanySync();
 
-// Auto-initialize
+// Auto-initialize with HMR-safe global guard
 if (typeof window !== 'undefined') {
-  workingCompanySync.init();
+  const w = window as any;
+  if (!w.__workingCompanySyncInitialized) {
+    workingCompanySync.init();
+    w.__workingCompanySyncInitialized = true;
+  }
 }
 
 export default workingCompanySync;

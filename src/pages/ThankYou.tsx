@@ -1,15 +1,19 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const ThankYou = () => {
   const navigate = useNavigate();
+  const { refreshSubscription } = useSubscription();
   const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
+    refreshSubscription(); // Refresh subscription status on mount
+
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -21,7 +25,7 @@ const ThankYou = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [navigate]);
+  }, [navigate, refreshSubscription]);
 
   const handleGoToDashboard = () => {
     navigate('/dashboard');

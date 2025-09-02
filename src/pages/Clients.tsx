@@ -33,10 +33,14 @@ import BulkActionsBar from '@/components/clients/BulkActionsBar';
 import ClientsStats from '@/components/clients/ClientsStats';
 import { getClientOutstandingBalance } from '@/services/invoiceService';
 import HelpCentre from '@/components/HelpCentre';
-import { Client, getClients, initializeClients } from '@/services/clientService';
+import { Client, getClients, initializeClients, deleteClients } from '@/services/clientService';
 import { addNotification, getNotifications, NotificationItem } from '@/services/notificationService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import { useAuditLogger } from '@/hooks/useAuditLogger';
+import AuthVerificationModal from '@/components/company/AuthVerificationModal';
+import { isAdminRole, getCurrentUser } from '@/services/localAuthService';
+import { useToast } from '@/hooks/use-toast';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 
 // Define interfaces for invoice and payment data from localStorage
 interface InvoiceData {
@@ -100,15 +104,41 @@ const Clients = () => {
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const { logCreate, logUpdate, logDelete, logNavigation, logSystem } = useAuditLogger();
+  const { isTrial, getLimit } = useSubscriptionAccess();
 
   // Open add client modal when navigated with state from Quick Actions
   useEffect(() => {
     const state = location.state as any;
     if (state?.openAddClientModal) {
-      setIsAddClientModalOpen(true);
-      navigate(location.pathname, { replace: true });
+      const openIfAllowed = async () => {
+        try {
+          if (isTrial) {
+            const existing = await getClients();
+            const limit = getLimit('clients');
+            if (existing.length >= limit) {
+              toast({
+                title: 'Trial limit reached',
+                description: `You can add up to ${limit} clients on the trial plan. Upgrade to add unlimited clients.`,
+                variant: 'destructive'
+              });
+              try {
+                logSystem('Open Modal Blocked - Trial', `Blocked adding client at trial limit (clients=${existing.length})`);
+              } catch {}
+              return;
+            }
+          }
+          setIsAddClientModalOpen(true);
+        } catch (e) {
+          console.warn('Client gating check failed:', e);
+          // Fail open
+          setIsAddClientModalOpen(true);
+        } finally {
+          navigate(location.pathname, { replace: true });
+        }
+      };
+      openIfAllowed();
     }
-  }, [location.state, navigate]);
+  }, [location.state, navigate, isTrial, getLimit]);
 
   // Update document title when language changes
   useEffect(() => {
@@ -127,6 +157,9 @@ const Clients = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [clients, setClients] = useState<ClientDisplay[]>([]);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
   
   // Ref for container to save scroll position
   const contentContainerRef = useRef<HTMLDivElement>(null);
@@ -175,234 +208,8 @@ const Clients = () => {
       }
     };
 
-  // Determine status and last activity based on invoices, payments and incomes
-  const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string; statusReason?: string } => {
-    try {
-      const invoices: any[] = JSON.parse(localStorage.getItem('invoices') || '[]');
-      const payments: any[] = JSON.parse(localStorage.getItem('payments') || '[]');
-      const incomes: any[] = JSON.parse(localStorage.getItem('incomes') || '[]');
-
-      const clientInvoices = invoices.filter(inv => inv.clientId === clientId || inv.client === clientId);
-      const clientPayments = payments.filter(pay => pay && pay.invoiceId && clientInvoices.some(inv => inv.id === pay.invoiceId));
-      const clientIncomes = incomes.filter(inc => inc && inc.clientId === clientId);
-
-      // Last activity = latest among invoiceDate/date, paymentDate, income date, fallback to now
-      const dateCandidates: number[] = [];
-      clientInvoices.forEach(inv => {
-        const d = new Date(inv.updatedAt || inv.invoiceDate || inv.date).getTime();
-        if (!isNaN(d)) dateCandidates.push(d);
-      });
-      clientPayments.forEach(pay => {
-        const d = new Date(pay.paymentDate).getTime();
-        if (!isNaN(d)) dateCandidates.push(d);
-      });
-      clientIncomes.forEach(inc => {
-        const d = new Date(inc.date).getTime();
-        if (!isNaN(d)) dateCandidates.push(d);
-      });
-
-      const latestTs = dateCandidates.length > 0 ? Math.max(...dateCandidates) : Date.now();
-      const lastActivity = new Date(latestTs).toISOString();
-
-      // Improved overdue detection with better credit agreement checks
-      const nowTs = Date.now();
-      const hasOverdue = clientInvoices.some(inv => {
-        const dueTs = new Date(inv.dueDate || inv.date).getTime();
-        const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
-        // Invoice is overdue if it has a positive balance and is past due date
-        return balance > 0 && !isNaN(dueTs) && dueTs < nowTs && (nowTs - dueTs) > (7 * 24 * 60 * 60 * 1000); // At least 7 days overdue
-      });
-      
-      // Check for at-risk clients (multiple late payments in history but not severely overdue)
-      const hasLatePayments = clientPayments.filter(pay => {
-        const paymentDate = new Date(pay.paymentDate).getTime();
-        const invoice = clientInvoices.find(inv => inv.id === pay.invoiceId);
-        if (invoice && invoice.dueDate) {
-          const dueDate = new Date(invoice.dueDate).getTime();
-          // Payment was made after due date
-          return paymentDate > dueDate;
-        }
-        return false;
-      }).length >= 2; // At least 2 late payments
-      
-      // Check for warning status (approaching credit limit)
-      const clientData = JSON.parse(localStorage.getItem('clients') || '[]').find(c => c.id === clientId);
-      const clientCredit = parseFloat(clientData?.creditLimit || '0');
-      const clientOutstanding = getClientOutstandingBalance(clientId);
-      const isApproachingCreditLimit = clientCredit > 0 && clientOutstanding > (clientCredit * 0.8) && clientOutstanding <= clientCredit;
-
-      // Active logic: recent activity (<= 90 days) or outstanding not overdue
-      const days90 = 90 * 24 * 60 * 60 * 1000;
-      const hasRecentActivity = nowTs - latestTs <= days90;
-      const hasVeryOldActivity = (nowTs - latestTs) > (180 * 24 * 60 * 60 * 1000); // No activity for 6 months
-
-      const outstandingNotOverdue = clientInvoices.some(inv => {
-        const dueTs = new Date(inv.dueDate || inv.date).getTime();
-        const balance = Number(inv.balance ?? (Number(inv.total || inv.amount || 0) - Number(inv.paidAmount || 0)));
-        return balance > 0 && (!dueTs || isNaN(dueTs) || dueTs >= nowTs);
-      });
-
-      let status = 'inactive';
-      let statusReason: string | undefined;
-      
-      if (hasOverdue) status = 'overdue';
-      else if (hasLatePayments) {
-        status = 'at-risk';
-        statusReason = 'Multiple late payments';
-      }
-      else if (isApproachingCreditLimit) {
-        status = 'warning';
-        statusReason = 'Approaching credit limit';
-      }
-      else if (hasRecentActivity || outstandingNotOverdue) status = 'active';
-      
-      // Extra check for long-term inactivity
-      if (hasVeryOldActivity && status === 'inactive') {
-        statusReason = 'No activity for over 6 months';
-      }
-
-      return { status, lastActivity, statusReason };
-    } catch (e) {
-      console.error('Error determining client status:', e);
-      return { status: 'inactive', lastActivity: new Date().toISOString(), statusReason: 'Error calculating status' };
-    }
-  };
-    
-    // Define the custom event handler for invoice, payment and income updates
-    const handleDataUpdate = () => {
-      loadClientsFromStorage();
-    };
-
-    // Execute initial load
     loadClients();
-    
-    // Add event listeners for custom events that will be dispatched when invoices, payments or incomes change
-    window.addEventListener('invoices-updated', handleDataUpdate);
-    window.addEventListener('payments-updated', handleDataUpdate);
-    window.addEventListener('income-updated', handleDataUpdate);
-    
-    // Listen for client CRUD updates to refresh and create notifications
-    const handleClientsUpdated = (evt: Event) => {
-      try {
-        const e = evt as CustomEvent;
-        const detail = (e && e.detail) || {};
-        const action: string = detail.action || '';
-        const client = detail.client || null;
-        const clientId: string | undefined = detail.clientId;
-        const clientsDeleted: any[] = detail.clients || [];
-
-        // Refresh list
-        loadClientsFromStorage();
-
-        // Build notification title/message
-        let title = '';
-        let message = '';
-        if (action === 'created' && client) {
-          const name = client.contactPerson || client.companyName || 'Client';
-          title = `Client Added: ${name}`;
-          message = `A new client was added${client.companyName ? ` (${client.companyName})` : ''}.`;
-          // Audit log: client created
-          try {
-            logCreate('Client', name, client.id || clientId, client);
-          } catch (e) {
-            console.warn('Audit logging (create) failed:', e);
-          }
-        } else if (action === 'updated' && client) {
-          const name = client.contactPerson || client.companyName || 'Client';
-          title = `Client Updated: ${name}`;
-          message = `Client details were updated${client.companyName ? ` (${client.companyName})` : ''}.`;
-          // Audit log: client updated
-          try {
-            logUpdate('Client', name, client.id || clientId || 'unknown', undefined, client);
-          } catch (e) {
-            console.warn('Audit logging (update) failed:', e);
-          }
-        } else if (action === 'deleted') {
-          const name = (client && (client.contactPerson || client.companyName)) || clientId || 'Client';
-          title = `Client Deleted: ${name}`;
-          message = `A client was deleted.`;
-          // Audit log: single client deleted
-          try {
-            const delId = (client && client.id) || clientId || 'unknown';
-            logDelete('Client', typeof name === 'string' ? name : 'Client', delId);
-          } catch (e) {
-            console.warn('Audit logging (delete) failed:', e);
-          }
-        } else if (action === 'deleted-multiple' && Array.isArray(clientsDeleted) && clientsDeleted.length > 0) {
-          title = `Clients Deleted: ${clientsDeleted.length}`;
-          const names = clientsDeleted
-            .map((c: any) => c?.contactPerson || c?.companyName)
-            .filter(Boolean)
-            .slice(0, 3)
-            .join(', ');
-          message = names ? `Deleted: ${names}${clientsDeleted.length > 3 ? '…' : ''}` : 'Multiple clients were deleted.';
-          // Audit log: multiple clients deleted
-          try {
-            clientsDeleted.forEach((c: any) => {
-              const delName = c?.contactPerson || c?.companyName || 'Client';
-              const delId = c?.id || 'unknown';
-              logDelete('Client', delName, delId);
-            });
-          } catch (e) {
-            console.warn('Audit logging (delete-multiple) failed:', e);
-          }
-        } else {
-          return; // Unknown action
-        }
-
-        // De-duplicate within last 5 minutes based on same title+message+type
-        const existing: NotificationItem[] = getNotifications();
-        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-        const hasRecentDuplicate = existing.some(n => {
-          const ts = new Date(n.date).getTime();
-          return (
-            n.title === title &&
-            n.message === message &&
-            (n.type === 'client' || n.type === 'system') &&
-            !isNaN(ts) && ts >= fiveMinutesAgo
-          );
-        });
-
-        if (!hasRecentDuplicate) {
-          addNotification({
-            title,
-            message,
-            type: 'client'
-          });
-        }
-      } catch (err) {
-        console.warn('Failed handling clients-updated event:', err);
-      }
-    };
-    window.addEventListener('clients-updated', handleClientsUpdated as EventListener);
-    
-    // Cleanup event listeners on component unmount
-    return () => {
-      window.removeEventListener('invoices-updated', handleDataUpdate);
-      window.removeEventListener('payments-updated', handleDataUpdate);
-      window.removeEventListener('income-updated', handleDataUpdate);
-      window.removeEventListener('clients-updated', handleClientsUpdated as EventListener);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Function to save current scroll position
-  const saveScrollPosition = (): void => {
-    if (contentContainerRef.current) {
-      scrollPositionRef.current = contentContainerRef.current.scrollTop;
-    }
-  };
-
-  // Function to restore scroll position
-  const restoreScrollPosition = (): void => {
-    if (contentContainerRef.current) {
-      setTimeout(() => {
-        if (contentContainerRef.current) {
-          contentContainerRef.current.scrollTop = scrollPositionRef.current;
-        }
-      }, 10);
-    }
-  };
   
   // Determine status and last activity based on invoices, payments and incomes
   const calculateClientStatusAndActivity = (clientId: string): { status: string; lastActivity: string; statusReason?: string } => {
@@ -610,6 +417,23 @@ const Clients = () => {
     loadClientsFromStorage(); // Reload all clients from localStorage
   };
 
+  // Save and restore scroll position helpers
+  const saveScrollPosition = (): void => {
+    if (contentContainerRef.current) {
+      scrollPositionRef.current = contentContainerRef.current.scrollTop;
+    }
+  };
+
+  const restoreScrollPosition = (): void => {
+    if (contentContainerRef.current) {
+      setTimeout(() => {
+        if (contentContainerRef.current) {
+          contentContainerRef.current.scrollTop = scrollPositionRef.current;
+        }
+      }, 10);
+    }
+  };
+
   // Handle refresh button click
   const handleRefresh = (): void => {
     saveScrollPosition();
@@ -721,6 +545,74 @@ const Clients = () => {
     });
   };
 
+  // Handle delete selected clients with admin authentication
+  const handleDeleteSelectedClients = () => {
+    if (selectedClients.length === 0) {
+      toast({
+        title: t('clients.noClientsSelected'),
+        description: t('clients.selectClientsToDelete'),
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsAuthModalOpen(true);
+  };
+
+  // Handle authentication verification for deletion
+  const handleAuthVerified = async () => {
+    try {
+      setIsDeleting(true);
+      
+      // Get current user using local auth service (fallback to localStorage if needed)
+      const currentUser = getCurrentUser() || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const detectedRole = currentUser?.role || currentUser?.user_metadata?.role || (currentUser as any)?.position || '';
+      
+      // Check if user has admin role
+      if (!detectedRole || !isAdminRole(detectedRole)) {
+        toast({
+          title: t('common.accessDenied'),
+          description: t('clients.adminRoleRequired'),
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Get selected client names for audit log
+      const selectedClientNames = clients
+        .filter(client => selectedClients.includes(client.id))
+        .map(client => client.name)
+        .join(', ');
+
+      // Delete the selected clients
+      await deleteClients(selectedClients);
+      
+      // Log the deletion
+      logSystem('Delete Clients', `Deleted ${selectedClients.length} clients: ${selectedClientNames}`);
+      
+      // Show success message
+      toast({
+        title: t('clients.deleteSuccess'),
+        description: t('clients.clientsDeletedSuccessfully', { count: selectedClients.length }),
+        variant: 'default'
+      });
+      
+      // Clear selection and refresh
+      setSelectedClients([]);
+      loadClientsFromStorage();
+      
+    } catch (error) {
+      console.error('Error deleting clients:', error);
+      toast({
+        title: t('clients.deleteError'),
+        description: t('clients.failedToDeleteClients'),
+        variant: 'destructive'
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsAuthModalOpen(false);
+    }
+  };
+
   // View mode change with audit logging
   const handleViewModeChange = (mode: 'table' | 'grid') => {
     setViewMode(mode);
@@ -732,7 +624,28 @@ const Clients = () => {
   };
 
   // Open Add Client modal with audit logging
-  const handleOpenAddClient = () => {
+  const handleOpenAddClient = async () => {
+    try {
+      if (isTrial) {
+        const existing = await getClients();
+        const limit = getLimit('clients');
+        if (existing.length >= limit) {
+          toast({
+            title: 'Trial limit reached',
+            description: `You can add up to ${limit} clients on the trial plan. Upgrade to add unlimited clients.`,
+            variant: 'destructive'
+          });
+          try {
+            logSystem('Open Modal Blocked - Trial', `Blocked adding client at trial limit (clients=${existing.length})`);
+          } catch {}
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Client gating check failed:', e);
+      // Fail open
+    }
+
     setIsAddClientModalOpen(true);
     try {
       logSystem('Open Modal', 'Opened Add Client modal');
@@ -919,10 +832,12 @@ const Clients = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="font-sf-pro rounded-lg text-red-600 hover:text-red-700"
+                    onClick={handleDeleteSelectedClients}
+                    disabled={selectedClients.length === 0 || isDeleting}
+                    className="font-sf-pro rounded-lg text-red-600 hover:text-red-700 disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    {t('clients.deleteSelected')}
+                    {isDeleting ? t('common.deleting') : t('clients.deleteSelected')}
                   </Button>
                 </div>
               </div>
@@ -1005,7 +920,7 @@ const Clients = () => {
               <h3 className="text-slate-900 dark:text-slate-100 font-semibold font-sf-pro mb-2">{t('clients.noClientsFound')}</h3>
               <p className="text-slate-600 dark:text-slate-400 font-sf-pro text-sm mb-4">{t('clients.adjustSearchFilters')}</p>
               <Button
-                onClick={() => setIsAddClientModalOpen(true)}
+                onClick={handleOpenAddClient}
                 className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white font-sf-pro rounded-xl"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -1018,6 +933,15 @@ const Clients = () => {
 
       {/* Add Client Modal */}
       {isAddClientModalOpen && <AddClientModal isOpen={isAddClientModalOpen} onClose={() => setIsAddClientModalOpen(false)} onClientAdded={handleClientAdded} />}
+      
+      {/* Auth Verification Modal for Delete */}
+      <AuthVerificationModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onVerified={handleAuthVerified}
+        actionType="delete"
+        targetEntityName="clients"
+      />
       </div>
     </div>
   );

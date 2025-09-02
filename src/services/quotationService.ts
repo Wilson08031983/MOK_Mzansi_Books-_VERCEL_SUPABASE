@@ -53,7 +53,9 @@ export interface Quotation {
     userId: string;
     userName: string;
   }>;
-  // Timestamps for status changes
+  // Company scoping
+  companyId?: string;
+  // Status timestamps
   viewedAt?: string | null;
   sentAt?: string | null;
   acceptedAt?: string | null;
@@ -63,6 +65,7 @@ export interface Quotation {
 }
 
 import { safeLocalStorage, safeArray, safeString, safeNumber, defaultValues } from '@/utils/safeAccess';
+import { getCompanyId } from '@/services/companyService';
 
 // Mock quotations for initial data seeding
 const mockQuotations: Quotation[] = [
@@ -255,6 +258,17 @@ const mockQuotations: Quotation[] = [
 // Local Storage Keys
 const QUOTATIONS_STORAGE_KEY = 'mokMzansiBooks_quotations';
 
+// Helper: check if quotation belongs to current company (legacy quotes without companyId are treated as current)
+const belongsToCurrentCompany = (q: Quotation, currentCompanyId?: string) => {
+  const cid = currentCompanyId ?? getCompanyId();
+  return q.companyId ? q.companyId === cid : true;
+};
+
+// Helper: get all quotations (unfiltered) ensuring storage is initialized
+const getAllQuotations = (): Quotation[] => {
+  return initializeQuotations();
+};
+
 /**
  * Initialize quotations in localStorage with sample data if none exist
  * @returns array of quotations
@@ -264,8 +278,11 @@ export const initializeQuotations = (): Quotation[] => {
     const storedQuotations = safeLocalStorage.getItem(QUOTATIONS_STORAGE_KEY, null);
     
     if (!storedQuotations) {
-      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, mockQuotations);
-      return mockQuotations;
+      // Seed mock quotations with current companyId for first-time initialization
+      const cid = getCompanyId();
+      const seeded = mockQuotations.map(q => ({ ...q, companyId: cid }));
+      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, seeded);
+      return seeded;
     }
     
     return safeArray(storedQuotations);
@@ -276,11 +293,13 @@ export const initializeQuotations = (): Quotation[] => {
 };
 
 /**
- * Get all quotations from localStorage
+ * Get all quotations for the current company from localStorage
  * @returns array of quotations
  */
 export const getQuotations = (): Quotation[] => {
-  return initializeQuotations();
+  const all = getAllQuotations();
+  const cid = getCompanyId();
+  return all.filter(q => belongsToCurrentCompany(q, cid));
 };
 
 /**
@@ -296,7 +315,7 @@ export const getQuotationById = (id: string): Quotation | undefined => {
 /**
  * Save a quotation to localStorage (create or update)
  * @param quotation quotation data
- * @returns updated quotations array
+ * @returns updated quotations array (for current company)
  */
 // Default values for new quotations
 const defaultQuotation: Partial<Quotation> = {
@@ -349,7 +368,8 @@ export const generateQuotationNumber = (): string => {
 
 export const saveQuotation = (quotation: Quotation): Quotation[] => {
   try {
-    const quotations = getQuotations();
+    const all = getAllQuotations();
+    const cid = getCompanyId();
     const now = new Date().toISOString();
     
     // Generate a new quotation number for new quotations if not provided
@@ -373,26 +393,28 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
         amount: Number(item.amount) || 0,
         markupPercent: Number(item.markupPercent) || 0
       }))
-    };
+    } as Quotation;
     
-    const index = quotations.findIndex(q => q.id === safeQuotation.id);
+    const index = all.findIndex(q => q.id === safeQuotation.id);
     
     if (index >= 0) {
       // Update existing quotation - preserve created date and number if they exist
-      const createdDateRaw = quotations[index].date || now;
+      const createdDateRaw = all[index].date || now;
       const createdDate = createdDateRaw && createdDateRaw.includes('T') ? createdDateRaw.split('T')[0] : createdDateRaw;
-      const existingNumber = quotations[index].number || quotationNumber;
-      quotations[index] = { 
+      const existingNumber = all[index].number || quotationNumber;
+      const existingCompanyId = all[index].companyId || cid;
+      all[index] = { 
         ...safeQuotation,
         number: existingNumber, // Preserve existing number
         date: createdDate,
-        lastModified: now 
+        lastModified: now,
+        companyId: existingCompanyId
       };
       // Dispatch event for update
       try {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('quotations-updated', {
-            detail: { action: 'updated', quotation: quotations[index] }
+            detail: { action: 'updated', quotation: all[index] }
           }));
         }
       } catch (e) {
@@ -405,9 +427,10 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
         id: safeQuotation.id || Date.now().toString(),
         number: quotationNumber, // Ensure new quotation has a number
         date: now.split('T')[0], // Set creation date (YYYY-MM-DD)
-        lastModified: now
+        lastModified: now,
+        companyId: cid
       } as Quotation;
-      quotations.push(created);
+      all.push(created);
       // Dispatch event for create
       try {
         if (typeof window !== 'undefined') {
@@ -420,8 +443,8 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
       }
     }
     
-    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, quotations);
-    return quotations;
+    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, all);
+    return all.filter(q => belongsToCurrentCompany(q, cid));
   } catch (error) {
     console.error('Error saving quotation:', error);
     return getQuotations();
@@ -431,16 +454,21 @@ export const saveQuotation = (quotation: Quotation): Quotation[] => {
 /**
  * Delete a quotation from localStorage
  * @param id quotation ID to delete
- * @returns updated quotations array
+ * @returns updated quotations array (for current company)
  */
 export const deleteQuotation = (id: string): Quotation[] => {
   try {
-    const quotations = getQuotations();
-    const toDelete = quotations.find(q => q.id === id);
+    const all = getAllQuotations();
+    const cid = getCompanyId();
+    const toDelete = all.find(q => q.id === id && belongsToCurrentCompany(q, cid));
     const safeId = safeString(id);
-    const updatedQuotations = quotations.filter(quotation => quotation.id !== safeId);
+    const updatedAll = all.filter(quotation => {
+      if (quotation.id !== safeId) return true;
+      // If IDs match, only delete if it belongs to current company (legacy treated as current)
+      return !belongsToCurrentCompany(quotation, cid);
+    });
     
-    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedQuotations);
+    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedAll);
     // Dispatch event for delete
     try {
       if (typeof window !== 'undefined') {
@@ -451,7 +479,7 @@ export const deleteQuotation = (id: string): Quotation[] => {
     } catch (e) {
       console.warn('quotations-updated dispatch failed (delete):', e);
     }
-    return updatedQuotations;
+    return updatedAll.filter(q => belongsToCurrentCompany(q, cid));
   } catch (error) {
     console.error('Error deleting quotation:', error);
     return getQuotations();
@@ -462,7 +490,7 @@ export const deleteQuotation = (id: string): Quotation[] => {
  * Update quotation status
  * @param id quotation ID
  * @param status new status
- * @returns updated quotations array
+ * @returns updated quotations array (for current company)
  */
 // Type for valid status values
 type QuotationStatus = Quotation['status'];
@@ -488,8 +516,9 @@ export function updateQuotationStatus(id: string, status: string | QuotationStat
   const validStatus = status as QuotationStatus;
   
   try {
-    const quotations = getQuotations();
-    const index = quotations.findIndex(q => q.id === id);
+    const all = getAllQuotations();
+    const cid = getCompanyId();
+    const index = all.findIndex(q => q.id === id && belongsToCurrentCompany(q, cid));
     
     if (index === -1) {
       throw new Error('Quotation not found');
@@ -497,9 +526,10 @@ export function updateQuotationStatus(id: string, status: string | QuotationStat
     
     const now = new Date().toISOString();
     const updatedQuotation: Quotation = {
-      ...quotations[index],
+      ...all[index],
       status: validStatus,
-      lastModified: now
+      lastModified: now,
+      companyId: all[index].companyId || cid
     };
     
     // Update status-specific timestamps
@@ -541,9 +571,9 @@ export function updateQuotationStatus(id: string, status: string | QuotationStat
       statusChange
     ];
     
-    const prevStatus = quotations[index].status;
-    quotations[index] = updatedQuotation;
-    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, quotations);
+    const prevStatus = all[index].status;
+    all[index] = updatedQuotation;
+    safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, all);
     // Dispatch event for status change
     try {
       if (typeof window !== 'undefined') {
@@ -555,7 +585,7 @@ export function updateQuotationStatus(id: string, status: string | QuotationStat
       console.warn('quotations-updated dispatch failed (status):', e);
     }
     
-    return quotations;
+    return all.filter(q => belongsToCurrentCompany(q, cid));
   } catch (error) {
     console.error('Error updating quotation status:', error);
     throw error;
@@ -564,17 +594,21 @@ export function updateQuotationStatus(id: string, status: string | QuotationStat
 
 /**
  * Check and update expired quotations automatically
- * @returns updated quotations array
+ * @returns updated quotations array (for current company)
  */
 export function checkAndUpdateExpiredQuotations(): Quotation[] {
   try {
-    const quotations = getQuotations();
+    const all = getAllQuotations();
+    const cid = getCompanyId();
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Set to start of day for comparison
     
     let hasUpdates = false;
     
-    const updatedQuotations = quotations.map(quotation => {
+    const updatedAll = all.map(quotation => {
+      // Only check quotations that belong to current company
+      if (!belongsToCurrentCompany(quotation, cid)) return quotation;
+      
       // Only check quotations that are not already expired, cancelled, accepted, or rejected
       if (['expired', 'cancelled', 'accepted', 'rejected'].includes(quotation.status)) {
         return quotation;
@@ -594,6 +628,7 @@ export function checkAndUpdateExpiredQuotations(): Quotation[] {
             status: 'expired' as QuotationStatus,
             expiredAt: now,
             lastModified: now,
+            companyId: quotation.companyId || cid,
             revisionHistory: [
               ...(quotation.revisionHistory || []),
               {
@@ -611,13 +646,13 @@ export function checkAndUpdateExpiredQuotations(): Quotation[] {
     });
     
     if (hasUpdates) {
-      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedQuotations);
+      safeLocalStorage.setItem(QUOTATIONS_STORAGE_KEY, updatedAll);
       // Dispatch batch event for automatic expiry updates
       try {
         if (typeof window !== 'undefined') {
-          const changed = quotations
-            .map((q, i) => ({ before: q, after: updatedQuotations[i] }))
-            .filter(pair => pair.before.status !== pair.after.status);
+          const changed = all
+            .map((q, i) => ({ before: q, after: updatedAll[i] }))
+            .filter(pair => pair.before.status !== pair.after.status && belongsToCurrentCompany(pair.after, cid));
           window.dispatchEvent(new CustomEvent('quotations-updated', {
             detail: { action: 'status-batch-updated', count: changed.length }
           }));
@@ -627,7 +662,7 @@ export function checkAndUpdateExpiredQuotations(): Quotation[] {
       }
     }
     
-    return updatedQuotations;
+    return updatedAll.filter(q => belongsToCurrentCompany(q, cid));
   } catch (error) {
     console.error('Error checking expired quotations:', error);
     return getQuotations();

@@ -756,36 +756,16 @@ export const translations = {
     // Settings
     settings: {
       title: 'Settings',
-      general: 'General',
-      localization: 'Localization',
-      description: 'Configure your application preferences',
-      defaultLanguage: 'Default Language',
-      dateFormat: 'Date Format',
-      timeFormat: 'Time Format',
-      timezone: 'Timezone',
-      currency: 'Currency',
-      firstDayOfWeek: 'First Day of Week',
-      numberFormat: 'Number Format',
-      measurementUnits: 'Measurement Units',
-      companyInformation: 'Company Information',
-      companyName: 'Company Name',
-      businessType: 'Business Type',
-      industry: 'Industry',
-      registrationNumber: 'Registration Number',
-      vatNumber: 'VAT Number',
-      physicalAddress: 'Physical Address',
-      mailingAddress: 'Mailing Address',
-      companyLogo: 'Company Logo',
-      // Display settings
-      displaySettings: 'Display Settings',
-      theme: 'Theme',
-      fontSize: 'Font Size',
-      themeLight: 'Light',
-      themeDark: 'Dark',
-      themeAuto: 'Auto',
-      fontSmall: 'Small',
-      fontMedium: 'Medium',
-      fontLarge: 'Large',
+      sidebar: {
+        general: 'General',
+        security: 'Security',
+        notifications: 'Notifications',
+        billing: 'Billing & Subscription',
+        financial: 'Financial',
+        reporting: 'Reporting & Analytics',
+        localization: 'Localization',
+        advanced: 'Advanced'
+      },
       tabs: {
         general: 'General',
         users: 'Users',
@@ -799,6 +779,215 @@ export const translations = {
         reports: 'Reports',
         dataSecurity: 'Data Security',
         maintenance: 'Maintenance'
+      },
+      // Aliases for commonly used Settings keys (to match UI components)
+      description: 'Configure your application preferences',
+      companyInformation: 'Company Information',
+      companyName: 'Company Name',
+      businessType: 'Business Type',
+      industry: 'Industry',
+      registrationNumber: 'Registration Number',
+      vatNumber: 'VAT Number',
+      companyLogo: 'Company Logo',
+      physicalAddress: 'Physical Address',
+      mailingAddress: 'Mailing Address',
+      displaySettings: 'Display Settings',
+      theme: 'Theme',
+      fontSize: 'Font Size',
+      themeLight: 'Light',
+      themeDark: 'Dark',
+      themeAuto: 'Auto',
+      fontSmall: 'Small',
+      fontMedium: 'Medium',
+      fontLarge: 'Large',
+      defaultLanguage: 'Default Language',
+      timezone: 'Timezone',
+      currency: 'Currency',
+      general: {
+        title: 'General Settings',
+        description: 'Configure your application preferences',
+        companyInformation: 'Company Information',
+        companyName: 'Company Name',
+        businessType: 'Business Type',
+        industry: 'Industry',
+        registrationNumber: 'Registration Number',
+        vatNumber: 'VAT Number',
+        physicalAddress: 'Physical Address',
+        mailingAddress: 'Mailing Address',
+        companyLogo: 'Company Logo',
+        displaySettings: 'Display Settings',
+        theme: 'Theme',
+        fontSize: 'Font Size',
+        themeLight: 'Light',
+        themeDark: 'Dark',
+        themeAuto: 'Auto',
+        fontSmall: 'Small',
+        fontMedium: 'Medium',
+        fontLarge: 'Large'
+      },
+      localization: {
+        title: 'Localization',
+        description: 'Set your language, date, and time preferences',
+        defaultLanguage: 'Default Language',
+        dateFormat: 'Date Format',
+        timeFormat: 'Time Format',
+        timezone: 'Timezone',
+        currency: 'Currency',
+        firstDayOfWeek: 'First Day of Week',
+        numberFormat: 'Number Format',
+        measurementUnits: 'Measurement Units'
+      },
+
+      billing: {
+        title: 'Billing & Subscription',
+        subtitle: 'Manage your subscription, payment methods and billing history',
+        tabs: {
+          overview: 'Overview',
+          plans: 'Plans',
+          billing: 'Billing'
+        },
+        status: {
+          trial: 'Trial',
+          active: 'Active',
+          paymentIssue: 'Payment Issue',
+          expired: 'Expired',
+          canceled: 'Canceled'
+        },
+        tiers: {
+          free: 'Free',
+          basic: 'Basic',
+          premium: 'Premium',
+          enterprise: 'Enterprise'
+        },
+        planDescriptions: {
+          free: 'Basic financial management tools',
+          basic: 'Essential tools for small businesses',
+          premium: 'Advanced tools for growing businesses',
+          enterprise: 'Complete solution for established businesses'
+        },
+        // Overview section used by OverviewTab
+        overview: {
+          title: 'Subscription Overview',
+          description: 'Your current plan and billing status',
+          currentPlan: 'Current Plan',
+          status: 'Status',
+          nextBillingDate: 'Next billing date',
+          trialEndsIn: 'Trial ends',
+          daysLeft: '{{count}} days left',
+          cancelSubscription: 'Cancel subscription',
+          upgradePlan: 'Upgrade plan'
+        },
+        // Section headings and labels used in BillingSubscriptionTab
+        subscriptionStatus: 'Subscription Status',
+        subscriptionDetails: 'Your subscription details',
+        trialPeriod: 'Trial Period',
+        trialDaysLeft: '{{days}} days left',
+        trialEndingSoon: 'Trial ending soon',
+        paymentIssue: 'Payment Issue',
+        paymentIssueDesc: 'We had trouble processing your last payment. Please update your payment method.',
+        updatePaymentMethod: 'Update payment method',
+        currentPlan: 'Current Plan',
+        billingCycle: 'Billing cycle',
+        monthly: 'Monthly',
+        startDate: 'Start date',
+        nextBillingDate: 'Next billing date',
+        cancelSubscription: 'Cancel subscription',
+        viewPlans: 'View plans',
+
+        // Payment method card
+        paymentMethod: 'Payment Method',
+        managePayment: 'Manage your payment details',
+        cardMasked: 'Card ending in {{last4}}',
+        cardExpires: 'Expires {{expiry}}',
+        update: 'Update',
+        noPaymentMethod: 'No payment method on file',
+        addPaymentMethod: 'Add payment method',
+
+        // Plan cards
+        currentPlanBadge: 'Current Plan',
+        selectPlan: 'Select Plan',
+
+        // Payment history table
+        paymentHistory: 'Payment History',
+        viewRecentPayments: 'View your recent payments',
+        table: {
+          date: 'Date',
+          description: 'Description',
+          amount: 'Amount',
+          status: 'Status'
+        },
+        paid: 'Paid',
+        failed: 'Failed',
+        noPaymentHistory: 'No payment history found',
+
+        // Billing info panel
+        billingInfo: 'Billing Information',
+        manageBilling: 'Manage your billing profile',
+        companyInfo: 'Company Information',
+        billingContact: 'Billing Contact',
+        updateContact: 'Update Contact',
+
+        // Update payment method sheet
+        cardNumber: 'Card Number',
+        expiryDate: 'Expiry Date',
+        cvc: 'CVC',
+        nameOnCard: 'Name on Card',
+        savePaymentMethod: 'Save payment method',
+        paymentSecurityNote: 'Payments are processed securely. We never store full card details.',
+
+        // Toasts
+        toasts: {
+          upgradeRequestedTitle: 'Upgrade requested',
+          upgradeRequestedDesc: 'We will process your request to upgrade to {{tier}} shortly',
+          canceledTitle: 'Subscription canceled',
+          canceledDesc: 'Your subscription has been canceled',
+          retryTitle: 'Retry payment',
+          retryDesc: 'Please try your payment again',
+          paymentUpdatedTitle: 'Payment method updated',
+          paymentUpdatedDesc: 'Your payment method has been updated successfully'
+        },
+
+        // Plans and History tabs
+        plans: {
+          title: 'Plans & Pricing',
+          description: 'Choose the plan that fits your needs'
+        },
+        history: {
+          title: 'Billing History',
+          description: 'Your invoices and payment records'
+        },
+
+        // Plan feature bullets
+        planFeatureDescription: 'Everything included in {{tier}}',
+        features: {
+          free: {
+            basicInvoicing: 'Basic invoicing',
+            upToClients: 'Up to 10 clients',
+            upToDocuments: 'Up to 25 documents'
+          },
+          basic: {
+            unlimitedInvoices: 'Unlimited invoices',
+            upToClients: 'Up to 50 clients',
+            upToDocuments: 'Up to 200 documents',
+            exportReports: 'Export reports',
+            bulkInvoicing: 'Bulk invoicing'
+          },
+          premium: {
+            everythingInBasic: 'Everything in Basic',
+            unlimitedClients: 'Unlimited clients',
+            unlimitedDocuments: 'Unlimited documents',
+            advancedReporting: 'Advanced reporting & analytics',
+            customBranding: 'Custom branding',
+            teamMembersUpTo3: 'Team members (up to 3)'
+          },
+          enterprise: {
+            everythingInPremium: 'Everything in Premium',
+            apiAccess: 'API access',
+            unlimitedTeamMembers: 'Unlimited team members',
+            prioritySupport: 'Priority support',
+            customIntegrations: 'Custom integrations'
+          }
+        }
       },
       help: {
         title: 'Help & Support',
@@ -945,120 +1134,7 @@ export const translations = {
           upToDateDesc: 'Running {{version}}. No updates available right now.'
         }
       },
-      billing: {
-        title: 'Billing & Subscription',
-        subtitle: 'Manage your subscription, payment methods and billing history',
-        tabs: {
-          overview: 'Overview',
-          plans: 'Plans',
-          billing: 'Billing'
-        },
-        status: {
-          trial: 'Trial',
-          active: 'Active',
-          paymentIssue: 'Payment Issue',
-          expired: 'Expired',
-          canceled: 'Canceled'
-        },
-        tiers: {
-          free: 'Free',
-          basic: 'Basic',
-          premium: 'Premium',
-          enterprise: 'Enterprise'
-        },
-        planDescriptions: {
-          free: 'Basic financial management tools',
-          basic: 'Essential tools for small businesses',
-          premium: 'Advanced tools for growing businesses',
-          enterprise: 'Complete solution for established businesses'
-        },
-        features: {
-          free: {
-            basicInvoicing: 'Basic invoicing',
-            upToClients: 'Up to 5 clients',
-            upToDocuments: 'Up to 10 documents'
-          },
-          basic: {
-            unlimitedInvoices: 'Unlimited invoices',
-            upToClients: 'Up to 25 clients',
-            upToDocuments: 'Up to 100 documents',
-            exportReports: 'Export reports',
-            bulkInvoicing: 'Bulk invoicing'
-          },
-          premium: {
-            everythingInBasic: 'Everything in Basic',
-            unlimitedClients: 'Unlimited clients',
-            unlimitedDocuments: 'Unlimited documents',
-            advancedReporting: 'Advanced reporting',
-            customBranding: 'Custom branding',
-            teamMembersUpTo3: 'Team members (up to 3)'
-          },
-          enterprise: {
-            everythingInPremium: 'Everything in Premium',
-            apiAccess: 'API access',
-            unlimitedTeamMembers: 'Unlimited team members',
-            prioritySupport: 'Priority support',
-            customIntegrations: 'Custom integrations'
-          }
-        },
-        subscriptionStatus: 'Subscription Status',
-        subscriptionDetails: 'Your current subscription details and status',
-        trialPeriod: 'Trial Period',
-        trialDaysLeft: '{{days}} days left in trial',
-        trialEndingSoon: 'Trial ending soon',
-        paymentIssue: 'Payment Issue',
-        paymentIssueDesc: 'We were unable to process your last payment. Please update your payment method to avoid interruption.',
-        updatePaymentMethod: 'Update Payment Method',
-        currentPlan: 'Current Plan',
-        billingCycle: 'Billing Cycle',
-        monthly: 'Monthly',
-        startDate: 'Start Date',
-        nextBillingDate: 'Next Billing Date',
-        cancelSubscription: 'Cancel Subscription',
-        viewPlans: 'View Plans',
-        paymentMethod: 'Payment Method',
-        managePayment: 'Manage your saved card and update payment details',
-        cardMasked: 'Card ending in •••• {{last4}}',
-        cardExpires: 'Expires {{expiry}}',
-        update: 'Update',
-        noPaymentMethod: 'No payment method on file',
-        addPaymentMethod: 'Add Payment Method',
-        currentPlanBadge: 'Current Plan',
-        selectPlan: 'Select Plan',
-        paymentHistory: 'Payment History',
-        viewRecentPayments: 'View your recent subscription payments',
-        table: {
-          date: 'Date',
-          description: 'Description',
-          amount: 'Amount',
-          status: 'Status'
-        },
-        paid: 'Paid',
-        failed: 'Failed',
-        noPaymentHistory: 'No payment history available',
-        billingInfo: 'Billing Information',
-        manageBilling: 'Manage your company billing and contact information',
-        companyInfo: 'Company Information',
-        billingContact: 'Billing Contact',
-        updateContact: 'Update Contact',
-        cardNumber: 'Card Number',
-        expiryDate: 'Expiry Date',
-        cvc: 'CVC',
-        nameOnCard: 'Name on Card',
-        savePaymentMethod: 'Save Payment Method',
-        paymentSecurityNote: 'Your payment details are processed securely. We do not store your full card information.',
-        toasts: {
-          upgradeRequestedTitle: 'Plan upgrade requested',
-          upgradeRequestedDesc: 'Upgrading to {{tier}} plan...',
-          canceledTitle: 'Subscription cancellation requested',
-          canceledDesc: 'We are processing your cancellation request.',
-          retryTitle: 'Retry payment',
-          retryDesc: 'Please update your payment method to retry the payment.',
-          paymentUpdatedTitle: 'Payment method updated',
-          paymentUpdatedDesc: 'Your payment method has been updated successfully.'
-        },
-        planFeatureDescription: 'Monthly subscription - {{tier}}'
-      },
+
       security: {
         title: 'Security Settings',
         // Password
@@ -1459,7 +1535,8 @@ export const translations = {
         backToLogin: 'Back to Login',
         accountCreatedSuccess: 'Account created successfully! Please check your email for verification instructions.',
         accountCreatedPartial: 'Account created, but we encountered an issue sending your verification email. Please contact support if you don\'t receive it.',
-        signupError: 'Error creating account'
+        signupError: 'Error creating account',
+        welcomeTrialNotificationMessage: 'Welcome! Your 30-day free trial has started.'
       },
       // Reset Password page
       resetPassword: {
@@ -1783,51 +1860,163 @@ export const translations = {
         }
       }
     },
-    // Clients
-    clients: {
-      title: 'Kliënte',
-      addClient: 'Voeg Kliënt By',
-      clientName: 'Kliënt Naam',
-      email: 'E-pos',
-      phone: 'Telefoon',
-      address: 'Adres',
-      status: 'Status',
-      actions: 'Aksies',
-      manageClients: 'Bestuur jou besigheidskliënte en hul inligting',
-      searchPlaceholder: 'Soek kliënte volgens naam, e-pos of maatskappy',
-      allStatus: 'Alle Statusse',
-      allTypes: 'Alle Tipes',
-      individual: 'Individueel',
-      business: 'Besigheid',
-      government: 'Regering',
-      active: 'Aktief',
-      inactive: 'Onaktief',
-      overdue: 'Achterstallig',
-      pending: 'Hangende',
-      // Added missing keys for table headers and stats
-      company: 'Maatskappy',
-      totalValue: 'Totale Waarde',
-      lastActivity: 'Laaste Aktiwiteit',
-      totalClients: 'Totale Kliënte',
-      activeClients: 'Aktiewe Kliënte',
-      overdueClients: 'Achterstallige Kliënte',
-      clearFilters: 'Vee Filters Skoon',
-      selected: 'geselekteer',
-      client: 'kliënt',
-      clients: 'kliënte',
-      changeStatus: 'Verander Status',
-      deleteSelected: 'Skrap Geselekteerdes',
-      clearSelection: 'Maak Seleksie Skoon',
-      noClientsFound: 'Geen kliënte gevind nie',
-      adjustSearchFilters: 'Probeer jou soekterme of filters aanpas',
-      addFirstClient: 'Voeg Jou Eerste Kliënt By',
-      noName: 'Geen Naam',
-      noCompany: 'Geen Maatskappy',
-      failedToLoadClients: 'Kon nie kliënte laai nie:',
-      errorCalculatingTotal: 'Fout met berekening van kliënt se totale waarde:',
-      errorLoadingClients: 'Fout met laai van kliënte:',
-      invoicesUpdated: 'invoices-updated',
-      paymentsUpdated: 'payments-updated'
+    // Authentication
+    auth: {
+      // Login page
+      login: {
+        title: 'Meld aan by MOK Mzansi Books',
+        subtitle: 'Toegang tot jou besigheidsbestuursplatform',
+        emailLabel: 'E-posadres',
+        emailPlaceholder: 'jou@epos.com',
+        passwordLabel: 'Wagwoord',
+        passwordPlaceholder: 'Voer jou wagwoord in',
+        rememberMe: 'Onthou my',
+        signInButton: 'Meld aan',
+        signingInButton: 'Meld tans aan...',
+        dontHaveAccount: 'Het jy nie \'n rekening nie?',
+        signUp: 'Sluit aan',
+        forgotPassword: 'Wagwoord vergeet?',
+        refreshLocalAuth: 'Verfris Plaaslike Stawing',
+        backToLogin: 'Terug na Aanmelding',
+        loginError: 'Fout met aanmelding:',
+        loginSuccess: 'Suksesvol aangemeld!'
+      },
+      // Signup page
+      signup: {
+        title: 'Skep Rekening',
+        subtitle: 'Sluit aan by MOK Mzansi Books en begin jou besigheid bestuur',
+        nameLabel: 'Volle Naam',
+        namePlaceholder: 'Voer jou volle naam in',
+        emailLabel: 'E-posadres',
+        emailPlaceholder: 'jou@epos.com',
+        phoneLabel: 'Telefoonnommer',
+        phonePlaceholder: 'Voer jou telefoonnommer in',
+        companyLabel: 'Maatskappynaam',
+        companyPlaceholder: 'Voer jou maatskappynaam in',
+        industryLabel: 'Bedryf',
+        industryPlaceholder: 'Kies jou bedryf',
+        passwordLabel: 'Wagwoord',
+        passwordPlaceholder: 'Skep \'n veilige wagwoord',
+        confirmPasswordLabel: 'Bevestig Wagwoord',
+        confirmPasswordPlaceholder: 'Bevestig jou wagwoord',
+        signUpButton: 'Skep Rekening',
+        signingUpButton: 'Besig om rekening te skep...',
+        alreadyHaveAccount: 'Het jy reeds \'n rekening?',
+        signIn: 'Meld aan',
+        backToLogin: 'Terug na Aanmelding',
+        accountCreatedSuccess: 'Rekening suksesvol geskep! Gaan asseblief jou e-pos na vir verifikasie-instruksies.',
+        accountCreatedPartial: 'Rekening geskep, maar ons het \'n probleem ondervind met die stuur van jou verifikasie-e-pos. Kontak asseblief ondersteuning as jy dit nie ontvang nie.',
+        signupError: 'Fout met die skep van rekening',
+        welcomeTrialNotificationMessage: 'Welkom! Jou 30-dae gratis proeflopie het begin.'
+      },
+      // Reset Password page
+      resetPassword: {
+        title: 'Herstel Wagwoord',
+        subtitle: 'Skep \'n nuwe wagwoord vir jou rekening',
+        validatingToken: 'Besig om herstelskakel te valideer...',
+        passwordLabel: 'Nuwe Wagwoord',
+        passwordPlaceholder: 'Voer jou nuwe wagwoord in',
+        confirmPasswordLabel: 'Bevestig Nuwe Wagwoord',
+        confirmPasswordPlaceholder: 'Bevestig jou nuwe wagwoord',
+        resetButton: 'Herstel Wagwoord',
+        resettingButton: 'Besig om te herstel...',
+        passwordMismatch: 'Wagwoorde stem nie ooreen nie',
+        passwordTooShort: 'Wagwoord moet ten minste 8 karakters lank wees',
+        invalidLink: 'Hierdie wagwoordherstel-skakel is ongeldig of het verval.',
+        requestNewLink: 'Versoek Nuwe Herstelskakel',
+        passwordResetSuccess: 'Wagwoordherstel suksesvol!',
+        passwordResetSuccessMessage: 'Jou wagwoord is suksesvol opgedateer. Jy kan nou met jou nuwe wagwoord aanmeld.',
+        goToLogin: 'Gaan na Aanmelding',
+        userNotFound: 'Gebruiker nie gevind nie. Sluit asseblief eers aan.',
+        resetError: 'Fout met wagwoordherstel',
+        validationError: 'Daar was \'n probleem met die validering van jou herstelskakel.'
+      },
+      // Accept Invitation page
+      acceptInvitation: {
+        title: 'Aanvaar Uitnodiging',
+        subtitle: 'Voltooi jou uitnodiging om by die span aan te sluit',
+        verifyingInvitation: 'Besig om uitnodiging te verifieer...',
+        invalidInvitation: 'Hierdie uitnodiging is ongeldig of het verval',
+        passwordLabel: 'Skep Wagwoord',
+        passwordPlaceholder: 'Skep \'n veilige wagwoord',
+        confirmPasswordLabel: 'Bevestig Wagwoord',
+        confirmPasswordPlaceholder: 'Bevestig jou wagwoord',
+        acceptButton: 'Aanvaar Uitnodiging',
+        acceptingButton: 'Besig om te verwerk...',
+        passwordMismatch: 'Wagwoorde Stem Nie Ooreen Nie',
+        passwordMismatchMessage: 'Wagwoorde stem nie ooreen nie',
+        passwordTooShort: 'Wagwoord Te Kort',
+        passwordTooShortMessage: 'Wagwoord moet ten minste 6 karakters lank wees',
+        invitationAccepted: 'Uitnodiging suksesvol aanvaar!',
+        errorAccepting: 'Fout met die aanvaarding van uitnodiging'
+      },
+      forgotPassword: {
+        title: 'Wagwoord Vergeet',
+        resetTitle: 'Herstel Jou MOK Mzansi Books Wagwoord',
+        description: 'Voer jou e-pos in om \'n wagwoordherstel-skakel te ontvang',
+        successMessage: 'Gaan jou e-pos na vir herstel-instruksies',
+        emailPlaceholder: 'jou@epos.com',
+        emailLabel: 'E-posadres',
+        resetButton: 'Herstel Wagwoord',
+        sendingButton: 'Besig om te stuur...',
+        backToLogin: 'Onthou jy jou wagwoord?',
+        signIn: 'Meld Aan',
+        emailSentTo: 'Ons het \'n wagwoordherstel-skakel gestuur na',
+        checkInboxMessage: 'Gaan asseblief jou inkassie na en volg die instruksies om jou wagwoord te herstel.',
+        tryDifferentEmail: 'Probeer \'n ander e-pos',
+        failedToSend: 'Kon nie e-pos stuur nie',
+        resetError: 'Wagwoordherstel-fout:',
+        generalError: 'Daar was \'n probleem met die verwerking van jou versoek. Probeer asseblief weer.'
+      },
+      authReset: {
+        title: 'Stawing Herstel - MOK Mzansi Books',
+        heading: 'Stawing Herstel',
+        description: 'Herstel die stawingstelsel na sy verstektoestand',
+        toolDescription: 'Gebruik hierdie instrument om alle stawingbewyse na die verstek toetsrekeninge te herstel. Dit is nuttig as jy probleme ondervind met aanmelding.',
+        adminUser: 'Admin Gebruiker:',
+        adminPassword: 'Admin Wagwoord:',
+        resetButton: 'Herstel Stawing',
+        resetting: 'Besig om te herstel...',
+        successMessage: 'Stawing suksesvol herstel!',
+        successCount: 'Sukses! {{count}} toetsgebruikers herstel.',
+        noCredentialsError: 'Kon nie stawing herstel nie. Geen gebruikerbewyse gevind nie.',
+        failedMessage: 'Stawing herstel onsuksesvol!',
+        errorPrefix: 'Fout met herstel van stawing:',
+        generalError: 'Kon nie stawing herstel nie as gevolg van \'n fout.',
+        backToHome: 'Terug na Tuisblad',
+        goToLogin: 'Gaan na Aanmelding'
+      },
+      invitedSignup: {
+        title: 'Voltooi Jou Profiel',
+        invitationTitle: 'Jy is uitgenooi om by MOK Mzansi Books aan te sluit',
+        verifyingMessage: 'Besig om jou uitnodiging te verifieer...',
+        invalidInvitation: 'Ongeldige Uitnodiging',
+        invalidInvitationMessage: 'Die uitnodigingskakel is ongeldig of het verval.',
+        profileCompleted: 'Profiel Voltooi',
+        failedToComplete: 'Kon nie profiel voltooi nie',
+        error: 'Fout',
+        nameLabel: 'Naam',
+        namePlaceholder: 'Jou voornaam',
+        surnameLabel: 'Van',
+        surnamePlaceholder: 'Jou van',
+        emailLabel: 'E-posadres',
+        emailDescription: 'Hierdie e-posadres is in jou uitnodiging gespesifiseer',
+        positionLabel: 'Posisie / Rol',
+        positionPlaceholder: 'Jou toegewysde rol in die organisasie',
+        phoneLabel: 'Telefoonnommer',
+        phonePlaceholder: 'Jou kontaknommer',
+        address1Label: 'Adres Reël 1',
+        address1Placeholder: 'Straatadres',
+        address2Label: 'Adres Reël 2',
+        address2Placeholder: 'Woonstel, suite, eenheid, ens.',
+        address3Label: 'Adres Reël 3',
+        address4Label: 'Adres Reël 4',
+        cityLabel: 'Stad',
+        postalCodeLabel: 'Poskode',
+        processingButton: 'Besig om te verwerk...',
+        completeButton: 'Voltooi Profiel & Gaan Voort',
+        backToLogin: 'Terug na Aanmelding'
+      }
     },
     // Quotations
     quotations: {
@@ -2557,120 +2746,7 @@ quotations: {
           upToDateDesc: 'Usebenzisa {{version}}. Azikho izibuyekezo okwamanje.'
         }
       },
-      billing: {
-        title: 'Ukukhokha & Ukubhalisa',
-        subtitle: 'Phatha ukubhalisa kwakho, izindlela zokukhokha, nomlando wokukhokha',
-        tabs: {
-          overview: 'Uhlolojikelele',
-          plans: 'Amaphuzu',
-          billing: 'Ukukhokha'
-        },
-        status: {
-          trial: 'Isivivinyo',
-          active: 'Kuyasebenza',
-          paymentIssue: 'Inkinga Yokukhokha',
-          expired: 'Kuphelelwe Isikhathi',
-          canceled: 'Kukhanseliwe'
-        },
-        tiers: {
-          free: 'Mahhala',
-          basic: 'Okuyisisekelo',
-          premium: 'Iphremiyamu',
-          enterprise: 'Ibhizinisi'
-        },
-        planDescriptions: {
-          free: 'Amathuluzi ayisisekelo okuphatha ezimali',
-          basic: 'Amathuluzi abalulekile amabhizinisi amancane',
-          premium: 'Amathuluzi athuthukile amabhizinisi akhula',
-          enterprise: 'Isixazululo esigcwele samabhizinisi asunguliwe'
-        },
-        features: {
-          free: {
-            basicInvoicing: 'Ukubhalisa izikweletu okuyisisekelo',
-            upToClients: 'Kufika kumakhasimende angu-5',
-            upToDocuments: 'Kufika emibhalweni eyi-10'
-          },
-          basic: {
-            unlimitedInvoices: 'Izikweletu ezingapheli',
-            upToClients: 'Kufika kumakhasimende angu-25',
-            upToDocuments: 'Kufika emibhalweni eyi-100',
-            exportReports: 'Thekelisa imibiko',
-            bulkInvoicing: 'Ukufakela ngobuningi'
-          },
-          premium: {
-            everythingInBasic: 'Konke oku-Basic',
-            unlimitedClients: 'Amakhasimende angapheli',
-            unlimitedDocuments: 'Imibhalo engapheli',
-            advancedReporting: 'Ukubika okuthuthukile',
-            customBranding: 'Ukubhrenda okwenziwe ngokwezifiso',
-            teamMembersUpTo3: 'Amalungu eqembu (kuze kube ngu-3)'
-          },
-          enterprise: {
-            everythingInPremium: 'Konke oku-Premium',
-            apiAccess: 'Ukufinyelela kwe-API',
-            unlimitedTeamMembers: 'Amalungu eqembu angapheli',
-            prioritySupport: 'Usekelo olubaluleke kakhulu',
-            customIntegrations: 'Ukuhlanganiswa okwenziwe ngokwezifiso'
-          }
-        },
-        subscriptionStatus: 'Isimo Sokubhalisa',
-        subscriptionDetails: 'Imininingwane yakho yokubhalisa yamanje nesimo',
-        trialPeriod: 'Isikhathi Sesivivinyo',
-        trialDaysLeft: 'Kusele izinsuku ezingu-{{days}} esivivinyweni',
-        trialEndingSoon: 'Isivivinyo siphela maduze',
-        paymentIssue: 'Inkinga Yokukhokha',
-        paymentIssueDesc: 'Asikwazanga ukucubungula inkokhelo yakho yakamuva. Sicela uvuselele indlela yakho yokukhokha ukuvimbela ukuphazamiseka.',
-        updatePaymentMethod: 'Vuselela Indlela Yokukhokha',
-        currentPlan: 'Uhlelo Lamanje',
-        billingCycle: 'Umjikelezo Wokukhokha',
-        monthly: 'Ngenyanga',
-        startDate: 'Usuku Lokuqala',
-        nextBillingDate: 'Usuku Lokukhokha Okulandelayo',
-        cancelSubscription: 'Khansela Ukubhalisa',
-        viewPlans: 'Buka Izinhlelo',
-        paymentMethod: 'Indlela Yokukhokha',
-        managePayment: 'Phatha ikhadi lakho eligciniwe futhi uvuselele imininingwane yokukhokha',
-        cardMasked: 'Ikhadi eliphetha ngo •••• {{last4}}',
-        cardExpires: 'Liphelelwa {{expiry}}',
-        update: 'Vuselela',
-        noPaymentMethod: 'Ayikho indlela yokukhokha egciniwe',
-        addPaymentMethod: 'Engeza Indlela Yokukhokha',
-        currentPlanBadge: 'Uhlelo Lamanje',
-        selectPlan: 'Khetha Uhlelo',
-        paymentHistory: 'Umlando Wokukhokha',
-        viewRecentPayments: 'Buka izinkokhelo zakho zakamuva zokubhalisa',
-        table: {
-          date: 'Usuku',
-          description: 'Incazelo',
-          amount: 'Inani',
-          status: 'Isimo'
-        },
-        paid: 'Khokhiwe',
-        failed: 'Kwehlulekile',
-        noPaymentHistory: 'Awukho umlando wokukhokha otholakalayo',
-        billingInfo: 'Imininingwane Yokukhokha',
-        manageBilling: 'Phatha imininingwane yokukhokha kanye nolwazi lokuxhumana lwenkampani yakho',
-        companyInfo: 'Imininingwane Yenkampani',
-        billingContact: 'Uxhumano Lokukhokha',
-        updateContact: 'Vuselela Uxhumano',
-        cardNumber: 'Inombolo Lekhadi',
-        expiryDate: 'Usuku Lokuphelelwa',
-        cvc: 'CVC',
-        nameOnCard: 'Igama Elisekhadini',
-        savePaymentMethod: 'Gcina Indlela Yokukhokha',
-        paymentSecurityNote: 'Imininingwane yakho yokukhokha icutshungulwa ngokuphepha. Asigcini lonke ulwazi lwekhadi lakho.',
-        toasts: {
-          upgradeRequestedTitle: 'Ukuphakanyiswa kohlelo kuceliwe',
-          upgradeRequestedDesc: 'Kuyanyuselwa kuhlelo lwe-{{tier}}...',
-          canceledTitle: 'Isicelo sokukhansela ukubhalisa',
-          canceledDesc: 'Siyawucubungula umyalezo wakho wokukhansela.',
-          retryTitle: 'Phinda uzame inkokhelo',
-          retryDesc: 'Sicela uvuselele indlela yokukhokha ukuze uphinde uzame inkokhelo.',
-          paymentUpdatedTitle: 'Indlela yokukhokha ivuselelwe',
-          paymentUpdatedDesc: 'Indlela yakho yokukhokha ivuselelwe ngempumelelo.'
-        },
-        planFeatureDescription: 'Ukubhalisa kwenyanga - {{tier}}'
-      },
+
       security: {
         title: 'Izilungiselelo Zokuphepha',
         // Password

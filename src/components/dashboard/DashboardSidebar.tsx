@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocalization } from '@/hooks/useLocalization';
 import { useAuth } from '@/hooks/useAuthHook';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface SidebarItem {
   title: string;
@@ -45,7 +46,7 @@ const sidebarItems: SidebarItem[] = [
   { title: 'HR Management', labelKey: 'hr', icon: UserCheck, href: '/hr-management' },
   { title: 'Accounting', labelKey: 'accounting', icon: Calculator, href: '/accounting' },
   // { title: 'Reports', labelKey: 'reports', icon: PieChart, href: '/reports' },
-  { title: 'Settings', labelKey: 'settings', icon: Settings, href: '/settings' },
+  { title: 'Settings', labelKey: 'settings', icon: Settings, href: '/settings', alwaysAccessible: true },
 ];
 
 interface DashboardSidebarProps {
@@ -60,6 +61,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
   const { canAccessPage } = usePermissions();
   const { t } = useLocalization();
   const { signOut } = useAuth();
+  const { subscription } = useSubscription();
   const [collapsed, setCollapsed] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
@@ -91,11 +93,24 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
 
   const handleNavigation = (href: string, canAccess: boolean) => {
     if (!canAccess) {
-      toast({
-        title: "Access Restricted",
-        description: "You don't have permission to access this page.",
-        variant: "destructive"
-      });
+      if (subscription?.status === 'past_due' || subscription?.status === 'canceled') {
+        toast({
+          title: "Subscription Required",
+          description: "Your subscription has expired. Please update your payment information to regain access.",
+          variant: "destructive",
+          action: (
+            <Button variant="outline" size="sm" onClick={() => navigate('/settings?tab=billing')}>
+              Update Payment
+            </Button>
+          )
+        });
+      } else {
+        toast({
+          title: "Access Restricted",
+          description: "You don't have permission to access this page.",
+          variant: "destructive"
+        });
+      }
       return;
     }
     navigate(href);

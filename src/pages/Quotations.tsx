@@ -26,6 +26,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { activityService } from '@/services/activityService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import { useAuditLogger } from '@/hooks/useAuditLogger';
+import AuthVerificationModal from '@/components/company/AuthVerificationModal';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 
 const Quotations = () => {
   const { t, formatCurrency, settings } = useLocalization();
@@ -33,12 +35,13 @@ const Quotations = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logCreate, logUpdate, logDelete, logAudit, logNavigation, logSystem } = useAuditLogger();
+  const { isTrial, getLimit } = useSubscriptionAccess();
 
   // Open create modal when navigated with state from Quick Actions
   useEffect(() => {
     const state = location.state as any;
     if (state?.openCreateQuotationModal) {
-      setIsCreateQuotationModalOpen(true);
+      handleOpenCreateQuotation(true);
       navigate(location.pathname, { replace: true });
     }
   }, [location.state, navigate]);
@@ -307,9 +310,12 @@ const Quotations = () => {
   }, []);
 
   const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
+  // New: modal state for admin verification on edit/delete
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'delete' | 'update'; quotationId: string | null }>({ type: 'delete', quotationId: null });
 
-  // Handle edit quotation
-  const handleEditQuotation = (quotationId: string) => {
+  // Helper to perform edit after verification
+  const doEditQuotation = (quotationId: string) => {
     const quotationToEdit = quotations.find(q => q.id === quotationId);
     if (quotationToEdit) {
       setEditingQuotation(quotationToEdit);
@@ -324,21 +330,8 @@ const Quotations = () => {
     }
   };
 
-  // Handle when a new or updated quotation is saved
-  const handleQuotationSaved = (newQuotation: Quotation, allQuotations: Quotation[]) => {
-    // Update the local state with the latest quotations
-    setQuotations(allQuotations);
-    
-    // Show success message
-    const action = editingQuotation ? 'updated' : 'saved';
-    toast.success(`Quotation ${newQuotation.number} ${action} successfully`);
-    
-    // Reset editing state and close the modal
-    setEditingQuotation(null);
-    setIsCreateQuotationModalOpen(false);
-  };
-
-  const handleDeleteQuotation = (quotationId: string): void => {
+  // Helper to perform delete after verification
+  const doDeleteQuotation = (quotationId: string): void => {
     // Find quotation before deletion for logging metadata
     const quot = quotations.find(q => q.id === quotationId);
 
@@ -372,6 +365,48 @@ const Quotations = () => {
     }
 
     toast.success('Quotation deleted successfully');
+  };
+
+  // Handle edit quotation (now requires verification)
+  const handleEditQuotation = (quotationId: string) => {
+    setPendingAction({ type: 'update', quotationId });
+    setIsAuthModalOpen(true);
+  };
+
+  // Handle when a new or updated quotation is saved
+  const handleQuotationSaved = (newQuotation: Quotation, allQuotations: Quotation[]) => {
+    // Update the local state with the latest quotations
+    setQuotations(allQuotations);
+    
+    // Show success message
+    const action = editingQuotation ? 'updated' : 'saved';
+    toast.success(`Quotation ${newQuotation.number} ${action} successfully`);
+    
+    // Reset editing state and close the modal
+    setEditingQuotation(null);
+    setIsCreateQuotationModalOpen(false);
+  };
+
+  const handleDeleteQuotation = (quotationId: string): void => {
+    // Require verification before performing deletion
+    setPendingAction({ type: 'delete', quotationId });
+    setIsAuthModalOpen(true);
+  };
+
+  // Called when the admin verification modal succeeds
+  const handleAuthVerified = () => {
+    const id = pendingAction.quotationId;
+    if (!id) {
+      setIsAuthModalOpen(false);
+      return;
+    }
+    if (pendingAction.type === 'delete') {
+      doDeleteQuotation(id);
+    } else {
+      doEditQuotation(id);
+    }
+    setIsAuthModalOpen(false);
+    setPendingAction({ type: 'delete', quotationId: null });
   };
 
   // Get status icon with proper typing
@@ -609,6 +644,33 @@ const Quotations = () => {
   };
 
   const handleOpenCreateQuotation = (open: boolean) => {
+    // Trial gating when attempting to open creation modal
+    if (open) {
+      try {
+        if (isTrial) {
+          const limit = getLimit('quotationsPerMonth');
+          const all = Array.isArray(quotations) ? quotations : [];
+          const now = new Date();
+          const monthCount = all.filter((q) => {
+            if (!q) return false;
+            const dStr = (q as any).date || (q as any).createdAt || (q as any).issueDate;
+            if (!dStr) return false;
+            const d = new Date(dStr);
+            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+          }).length;
+          if (monthCount >= limit) {
+            toast.error(`Trial limit reached: You can create up to ${limit} quotations per month on the trial plan. Upgrade to unlock unlimited quotations.`);
+            try {
+              logSystem('Quotations', 'Create blocked - trial limit', { monthCount, limit });
+            } catch {}
+            return; // block opening modal
+          }
+        }
+      } catch (e) {
+        console.warn('Quotation gating check failed:', e);
+      }
+    }
+
     setIsCreateQuotationModalOpen(open);
     if (open) {
       try {
@@ -739,6 +801,16 @@ const Quotations = () => {
         }}
         onQuotationSaved={handleQuotationSaved}
         quotationToEdit={editingQuotation}
+      />
+
+      {/* Admin verification modal for edit/delete actions */}
+      <AuthVerificationModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onVerified={handleAuthVerified}
+        actionType={pendingAction.type}
+        targetEntityName="Quotation"
+        adminScope="extended"
       />
       </div>
     </div>

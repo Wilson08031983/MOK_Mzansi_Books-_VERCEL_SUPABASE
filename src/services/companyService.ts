@@ -31,7 +31,31 @@ export const getCompanyAssets = (): CompanyAssets => {
   }
 };
 
+// Centralized companyId resolver used for data scoping across services
+export const getCompanyId = (): string => {
+  try {
+    // Prefer the typed company record if present
+    const company = getCompany();
+    if (company && company.id) return company.id;
+
+    // Fallback to "companyDetails" used elsewhere in the app
+    const detailsRaw = localStorage.getItem('companyDetails');
+    if (detailsRaw) {
+      const parsed = JSON.parse(detailsRaw);
+      const name: string | undefined = parsed?.companyName || parsed?.name;
+      if (typeof name === 'string' && name.trim().length > 0) {
+        return `company_${name.replace(/\s+/g, '_').toLowerCase()}`;
+      }
+    }
+  } catch (error) {
+    console.error('Error resolving company id:', error);
+  }
+  // Safe fallback
+  return 'current-company-id';
+};
+
 export default {
   getCompany,
-  getCompanyAssets
+  getCompanyAssets,
+  getCompanyId
 };

@@ -321,7 +321,7 @@ const BillingSubscriptionTab = () => {
                   {currentSubscription.status !== 'canceled' && (
                     <Button 
                       variant="outline" 
-                      className="text-red-300 border-red-800/40 hover:bg-red-900/20"
+                      className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-300 dark:border-red-800/40 dark:hover:bg-red-900/20"
                       onClick={handleCancelSubscription}
                     >
                       <X className="h-4 w-4 mr-2" />
@@ -352,7 +352,7 @@ const BillingSubscriptionTab = () => {
                           <p className="text-sm text-slate-400">{t('settings.billing.cardExpires', { expiry: '12/25' })}</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" className="border-white/10 text-slate-100 hover:bg-white/10" onClick={() => { setIsPaymentModalOpen(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal from Payment Method card', }); } catch {/* noop */} }}>
+                      <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => { setIsPaymentModalOpen(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal from Payment Method card', }); } catch {/* noop */} }}>
                         {t('settings.billing.update')}
                       </Button>
                     </div>
@@ -366,49 +366,7 @@ const BillingSubscriptionTab = () => {
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
 
-            {/* Plans Tab */}
-            <TabsContent value="plans" className="space-y-6">
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {plans.map((plan) => (
-                  <Card key={plan.id} className={`relative glass bg-slate-900/40 border-white/10 ${plan.isCurrent ? 'border-mokm-orange-500 ring-2 ring-mokm-orange-200' : ''}`}>
-                    {plan.isCurrent && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-mokm-orange-500 text-white text-xs py-1 px-3 rounded-full">
-                        {t('settings.billing.currentPlanBadge')}
-                      </div>
-                    )}
-                    <CardHeader>
-                      <CardTitle className="text-slate-100">{plan.name}</CardTitle>
-                      <CardDescription className="text-lg font-bold text-slate-300">{plan.price}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm mb-4 text-slate-400">{plan.description}</p>
-                      <ul className="space-y-2">
-                        {plan.features.map((feature, index) => (
-                          <li key={index} className="flex items-start">
-                            <Check className="h-4 w-4 text-green-400 mr-2 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm text-slate-100">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                    <CardFooter>
-                      <Button 
-                        className={`w-full ${plan.isCurrent ? 'bg-gray-300 hover:bg-gray-300 cursor-not-allowed' : 'bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600'}`}
-                        disabled={plan.isCurrent}
-                        onClick={() => handleUpgrade(plan.id)}
-                      >
-                        {plan.isCurrent ? t('settings.billing.currentPlanBadge') : t('settings.billing.selectPlan')}
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            </TabsContent>
-
-            {/* Billing Tab */}
-            <TabsContent value="billing" className="space-y-6">
               <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
                   <CardTitle className="text-slate-100">{t('settings.billing.paymentHistory')}</CardTitle>
@@ -454,38 +412,6 @@ const BillingSubscriptionTab = () => {
                         )}
                       </tbody>
                     </table>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="glass bg-slate-900/40 border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-slate-100">{t('settings.billing.billingInfo')}</CardTitle>
-                  <CardDescription className="text-slate-400">{t('settings.billing.manageBilling')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-medium mb-2 text-slate-100">{t('settings.billing.companyInfo')}</h3>
-                      <address className="not-italic text-sm text-slate-400">
-                        <p>MOK Mzansi Books (Pty) Ltd</p>
-                        <p>VAT: ZA123456789</p>
-                        <p>123 Main Street</p>
-                        <p>Johannesburg, Gauteng 2000</p>
-                        <p>South Africa</p>
-                      </address>
-                    </div>
-                    <div>
-                      <h3 className="font-medium mb-2 text-slate-100">{t('settings.billing.billingContact')}</h3>
-                      <div className="text-sm text-slate-400">
-                        <p>Wilson Moabelo</p>
-                        <p>admin@mokmzansibooks.co.za</p>
-                        <p>+27 12 345 6789</p>
-                      </div>
-                      <Button variant="outline" size="sm" className="mt-2 border-white/10 text-slate-100 hover:bg-white/10">
-                        {t('settings.billing.updateContact')}
-                      </Button>
-                    </div>
                   </div>
                 </CardContent>
               </Card>

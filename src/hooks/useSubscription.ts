@@ -1,24 +1,36 @@
 
-import { useState, useEffect } from 'react';
-import { useAuth } from './useAuthHook';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { SUBSCRIPTION_PLANS } from '@/lib/paystack';
 
-interface Subscription {
-  id: string;
-  plan_type: string;
-  status: string;
-  access_level: string;
-  paystack_reference?: string;
-  start_date: string;
-  end_date?: string;
+export interface SubscriptionInfo {
+  id?: string;
+  userId?: string;
+  tier: string;
+  status: 'trial' | 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
+  currentPeriodEnd: string | Date;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export const useSubscription = () => {
   const { user } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
+      // If the user is an admin, provide a full-access subscription
+      if (user.role && ['Manager', 'CEO', 'Admin'].includes(user.role)) {
+        setSubscription({
+          tier: 'business',
+          status: 'active',
+          currentPeriodEnd: new Date('2099-12-31'), // A date far in the future
+          userId: user.id
+        });
+        setLoading(false);
+        return;
+      }
       fetchSubscription();
     } else {
       setSubscription(null);
@@ -27,19 +39,33 @@ export const useSubscription = () => {
   }, [user]);
 
   const fetchSubscription = async () => {
+    if (!user) return;
     try {
-      // Mock subscription data for development
-      const mockSubscription = {
-        id: 'mock-subscription',
-        plan_type: 'premium',
-        status: 'active',
-        access_level: 'full',
-        paystack_reference: 'mock-ref-123',
-        start_date: new Date().toISOString(),
-        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      };
-      
-      setSubscription(mockSubscription);
+      // First try localStorage
+      const storedSub = localStorage.getItem('mokSubscription');
+      if (storedSub) {
+        const parsed = JSON.parse(storedSub);
+        setSubscription({
+          tier: parsed.tier || parsed.plan_type || 'trial',
+          status: parsed.status || 'trial',
+          currentPeriodEnd: parsed.end_date || parsed.validUntil || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          userId: user.id
+        });
+      } else {
+        // Default to trial subscription
+        const defaultSub = {
+          tier: 'trial',
+          status: 'trial' as const,
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          userId: user.id
+        };
+        setSubscription(defaultSub);
+        localStorage.setItem('mokSubscription', JSON.stringify({
+          tier: 'trial',
+          status: 'trial',
+          validUntil: defaultSub.currentPeriodEnd.toISOString()
+        }));
+      }
     } catch (error) {
       console.error('Error fetching subscription:', error);
     } finally {
@@ -50,75 +76,96 @@ export const useSubscription = () => {
   const createSubscription = async (planType: string, paystackReference?: string) => {
     if (!user) throw new Error('User not authenticated');
 
-    const subscriptionData = {
-      id: `subscription-${Date.now()}`,
-      user_id: user.id,
-      plan_type: planType,
+    const plan = SUBSCRIPTION_PLANS[planType as keyof typeof SUBSCRIPTION_PLANS];
+    if (!plan) {
+      throw new Error(`Subscription plan ${planType} not found`);
+    }
+
+    const currentPeriodEnd = new Date(Date.now() + plan.duration * 24 * 60 * 60 * 1000);
+
+    const newSubscription: SubscriptionInfo = {
+      userId: user.id,
+      tier: planType,
       status: planType === 'trial' ? 'trial' : 'active',
-      access_level: 'full',
-      paystack_reference: paystackReference,
-      start_date: new Date().toISOString(),
-      end_date: planType === 'trial' 
-        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        : undefined
+      currentPeriodEnd,
     };
 
-    // Store in local storage for persistence
-    localStorage.setItem('mokSubscription', JSON.stringify(subscriptionData));
+    setSubscription(newSubscription);
     
-    setSubscription(subscriptionData);
-    return subscriptionData;
+    // Store in localStorage
+    localStorage.setItem('mokSubscription', JSON.stringify({
+      tier: planType,
+      status: newSubscription.status,
+      validUntil: currentPeriodEnd.toISOString()
+    }));
+
+    return newSubscription;
   };
 
   const createPayment = async (subscriptionId: string, amount: number, paystackReference: string) => {
     if (!user) throw new Error('User not authenticated');
 
-    // Create mock payment record
-    const paymentData = {
-      id: `payment-${Date.now()}`,
-      user_id: user.id,
-      subscription_id: subscriptionId,
-      paystack_reference: paystackReference,
+    // In a real implementation, this would create a payment record via API
+    const newPayment = {
+      userId: user.id,
       amount,
-      status: 'success',
-      payment_date: new Date().toISOString()
+      currency: 'ZAR',
+      status: 'succeeded',
+      reference: paystackReference,
+      createdAt: new Date(),
     };
-    
-    // Store in local storage
-    const payments = JSON.parse(localStorage.getItem('mokPayments') || '[]');
-    payments.push(paymentData);
-    localStorage.setItem('mokPayments', JSON.stringify(payments));
-    
-    return Promise.resolve(paymentData);
+
+    return newPayment;
   };
 
-  const upgradeToProPlan = async () => {
-    if (!user) throw new Error('User not authenticated');
+  const upgradeToAnnualPlan = async () => {
+    if (!user || !subscription) throw new Error('User or subscription not found');
 
-    const subscriptionData = {
-      id: `subscription-${Date.now()}`,
-      user_id: user.id,
-      plan_type: 'pro',
+    const annualPlan = SUBSCRIPTION_PLANS.annual;
+    if (!annualPlan) {
+      throw new Error('Annual subscription plan not found');
+    }
+
+    const currentPeriodEnd = new Date(Date.now() + annualPlan.duration * 24 * 60 * 60 * 1000);
+
+    const updatedSubscription: SubscriptionInfo = {
+      ...subscription,
+      tier: 'annual',
       status: 'active',
-      access_level: 'full',
-      paystack_reference: `pro-upgrade-${Date.now()}`,
-      start_date: new Date().toISOString(),
-      end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year subscription
+      currentPeriodEnd,
     };
 
-    // Store in local storage for persistence
-    localStorage.setItem('mokSubscription', JSON.stringify(subscriptionData));
+    setSubscription(updatedSubscription);
     
-    setSubscription(subscriptionData);
-    return subscriptionData;
+    // Store in localStorage
+    localStorage.setItem('mokSubscription', JSON.stringify({
+      tier: 'annual',
+      status: 'active',
+      validUntil: currentPeriodEnd.toISOString()
+    }));
+
+    return updatedSubscription;
   };
+
+  const fetchPaymentHistory = useCallback(async () => {
+    if (!user) return [];
+    try {
+      // In a real implementation, this would fetch from API
+      // For now, return empty array
+      return [];
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      return [];
+    }
+  }, [user]);
 
   return {
     subscription,
     loading,
     createSubscription,
     createPayment,
-    upgradeToProPlan,
-    refetch: fetchSubscription
+    upgradeToAnnualPlan,
+    fetchPaymentHistory,
+    refreshSubscription: fetchSubscription
   };
 };

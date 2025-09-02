@@ -68,6 +68,8 @@ import AddStorageModal from '@/components/inventory/AddStorageModal';
 import UpdateStockWithBarcodeModal from '@/components/inventory/UpdateStockWithBarcodeModal';
 import SalesModal from '@/components/inventory/SalesModal';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
+import AuthVerificationModal from '@/components/company/AuthVerificationModal';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 
 // Notifications
 import { addNotification, getNotifications } from '@/services/notificationService';
@@ -105,12 +107,15 @@ const getHistoryTypeBadgeClass = (type: string): string => {
 
 // Types
 import { InventoryItem, StockHistoryEntry, STOCK_STATUS } from '@/types/inventory';
+import { getAllSuppliers } from '@/services/supplierService';
+import { getAllStorageLocations } from '@/services/storageLocationService';
 
 
 
 const Inventory = () => {
   const { t, formatDateTime, getTimezoneDisplayName, formatCurrency, settings, formatNumber: localizeNumber, formatDate: localizeDate } = useLocalization();
   const { toast } = useToast();
+  const { isTrial, getLimit } = useSubscriptionAccess();
   const [activeTab, setActiveTab] = useState('all-stock');
   const [searchTerm, setSearchTerm] = useState('');
   const [showScanner, setShowScanner] = useState(false);
@@ -127,6 +132,9 @@ const Inventory = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSalesModal, setShowSalesModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  // Admin verification modal state for gating edit/delete actions
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'delete' | 'update'; itemId: string | null } | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -380,15 +388,34 @@ const Inventory = () => {
       setSelectedItem(item);
     }
 
+    // Centralized trial limits via useSubscriptionAccess
+    const TRIAL_LIMIT_ITEMS = getLimit('inventoryItems');
+    const TRIAL_LIMIT_SUPPLIERS = getLimit('suppliers');
+    const TRIAL_LIMIT_LOCATIONS = getLimit('storageLocations');
+
     switch(action) {
-      case 'new':
-        setShowNewStockForm(true);
-        break;
+      case 'new': {
+        if (isTrial) {
+          const currentCount = Array.isArray(items) ? items.length : 0;
+          if (currentCount >= TRIAL_LIMIT_ITEMS) {
+            toast({
+              title: 'Trial limit reached',
+              description: `You can add up to ${TRIAL_LIMIT_ITEMS} inventory items on the trial. Upgrade to unlock unlimited inventory.`,
+              variant: 'destructive',
+            });
+            return;
+          }
+        }
+         setShowNewStockForm(true);
+         break;
+      }
       case 'update':
         setShowUpdateWithBarcodeModal(true);
         break;
       case 'edit':
-        setShowEditModal(true);
+        // Gate editing behind admin verification
+        setPendingAction({ type: 'update', itemId: item?.id ?? selectedItem?.id ?? null });
+        setIsAuthModalOpen(true);
         break;
       case 'invoice':
         if (item) {
@@ -406,12 +433,40 @@ const Inventory = () => {
       case 'scan':
         setShowProductScanModal(true);
         break;
-      case 'supplier':
+      case 'supplier': {
+        if (isTrial) {
+          try {
+            const suppliers = getAllSuppliers();
+            if (suppliers.length >= TRIAL_LIMIT_SUPPLIERS) {
+              toast({
+                title: 'Trial limit reached',
+                description: `You can add up to ${TRIAL_LIMIT_SUPPLIERS} suppliers on the trial. Upgrade to unlock unlimited suppliers.`,
+                variant: 'destructive',
+              });
+              return;
+            }
+          } catch {}
+        }
         setShowSupplierModal(true);
         break;
-      case 'storage':
+      }
+      case 'storage': {
+        if (isTrial) {
+          try {
+            const locations = getAllStorageLocations();
+            if (locations.length >= TRIAL_LIMIT_LOCATIONS) {
+              toast({
+                title: 'Trial limit reached',
+                description: `You can add up to ${TRIAL_LIMIT_LOCATIONS} storage locations on the trial. Upgrade to unlock unlimited storage.`,
+                variant: 'destructive',
+              });
+              return;
+            }
+          } catch {}
+        }
         setShowStorageModal(true);
         break;
+      }
       case 'sales':
         setShowSalesModal(true);
         break;
@@ -419,7 +474,9 @@ const Inventory = () => {
         setShowHistoryModal(true);
         break;
       case 'delete':
-        setShowDeleteConfirm(true);
+        // Gate delete behind admin verification
+        setPendingAction({ type: 'delete', itemId: item?.id ?? selectedItem?.id ?? null });
+        setIsAuthModalOpen(true);
         break;
       case 'refresh':
         // Force a complete refresh of the data from localStorage
@@ -822,6 +879,27 @@ const Inventory = () => {
           onSuccess={() => {
             // Optionally refresh data or show a success message
           }}
+        />
+
+        {/* Admin Verification Modal for Edit/Delete */}
+        <AuthVerificationModal
+          isOpen={isAuthModalOpen}
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setPendingAction(null);
+          }}
+          onVerified={() => {
+            // After successful verification, proceed based on pending action
+            if (pendingAction?.type === 'update') {
+              setShowEditModal(true);
+            } else if (pendingAction?.type === 'delete') {
+              setShowDeleteConfirm(true);
+            }
+            setIsAuthModalOpen(false);
+          }}
+          actionType={pendingAction?.type === 'delete' ? 'delete' : 'update'}
+          targetEntityName={selectedItem?.name || 'Inventory Item'}
+          adminScope="extended"
         />
 
         {/* Delete Confirmation Dialog */}

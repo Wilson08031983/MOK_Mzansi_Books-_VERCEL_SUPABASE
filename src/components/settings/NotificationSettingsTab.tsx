@@ -20,11 +20,36 @@ import {
 const NotificationSettingsTab = () => {
   const [settings, setSettings] = useState<NotificationSettings>(getNotificationSettings());
   const { t } = useLocalization();
+  const saveTimeoutRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     // Load current settings on mount
     setSettings(getNotificationSettings());
   }, []);
+
+  // Clear any pending debounced save on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Debounced persist helper (no toast; explicit Save shows toast)
+  const debouncedPersist = (updated: NotificationSettings) => {
+    if (saveTimeoutRef.current) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = window.setTimeout(() => {
+      try {
+        saveNotificationSettings(updated);
+      } catch (e) {
+        console.error('Error auto-saving notification settings:', e);
+      }
+    }, 300);
+  };
 
   const handleSave = async () => {
     try {
@@ -47,17 +72,19 @@ const NotificationSettingsTab = () => {
   };
 
   const updateEmailSetting = (key: string, value: boolean | string) => {
-    setSettings(prev => ({
-      ...prev,
-      email: { ...prev.email, [key]: value }
-    }));
+    setSettings(prev => {
+      const updated = { ...prev, email: { ...prev.email, [key]: value } };
+      debouncedPersist(updated);
+      return updated;
+    });
   };
 
   const updateInAppSetting = (key: string, value: boolean) => {
-    setSettings(prev => ({
-      ...prev,
-      inApp: { ...prev.inApp, [key]: value }
-    }));
+    setSettings(prev => {
+      const updated = { ...prev, inApp: { ...prev.inApp, [key]: value } };
+      debouncedPersist(updated);
+      return updated;
+    });
   };
 
   return (

@@ -1,15 +1,24 @@
 
 // PayStack configuration
 export const PAYSTACK_CONFIG = {
-  publicKey: 'pk_live_04cecd786eaed713e065a61d330535507b4cc05a',
-  secretKey: 'sk_live_568472e1fee6118f30893183f231c170a54f0bce', // This should be in backend
+  publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string,
 };
 
 export const SUBSCRIPTION_PLANS = {
   trial: {
     name: 'Free 30-Day Trial',
     price: 0,
-    features: ['Limited Features', 'Up to 5 invoices per month', 'Basic support'],
+    features: [
+      'Free for 30 days',
+      'Up to 5 invoices per month',
+      'Up to 5 quotations per month',
+      'Up to 5 clients',
+      'Up to 5 projects',
+      'Up to 5 inventory items',
+      'Up to 5 suppliers',
+      'Up to 5 storage locations',
+      'Basic support'
+    ],
     duration: 30,
     type: 'trial'
   },
@@ -17,7 +26,7 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Monthly Subscription',
     price: 6000, // R60.00 in kobo (PayStack uses kobo)
     features: ['All Features', 'Unlimited invoices', 'Priority support', 'Advanced analytics'],
-    duration: 30,
+    duration: 31,
     type: 'monthly'
   },
   annual: {

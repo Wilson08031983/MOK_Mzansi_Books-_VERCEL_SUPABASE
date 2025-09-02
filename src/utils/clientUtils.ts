@@ -5,7 +5,7 @@
  * including formatting addresses, display names, and contact information.
  */
 
-import * as localStorageService from '../services/localStorageService';
+import { getClients } from '../services/clientService';
 
 // Client interface
 export interface Client {
@@ -168,13 +168,13 @@ export const getContactInfo = (client: Client): { email: string; phone: string }
 export const getClientById = (clientId: string): Client | null => {
   if (!clientId) return null;
   
-  // Get clients from localStorage
-  const clients = localStorageService.getItem<Client[]>('clients', []);
+  // Use service-layer retrieval to ensure company scoping and migrations
+  const clients = getClients() as unknown as Client[];
   
   // Find client by ID
-  const client = clients.find(c => c.id === clientId);
+  const client = clients.find(c => c.id === clientId) || null;
   
-  return client || null;
+  return client;
 };
 
 /**

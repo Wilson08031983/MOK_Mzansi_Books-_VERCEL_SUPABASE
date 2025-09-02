@@ -55,6 +55,33 @@ try {
   recordStartupError('auth_init', error)
 }
 
+// Dev-only helper: seed trial invoices and subscription via URL param, e.g., ?seedTrialInvoices=5
+try {
+  const params = new URLSearchParams(window.location.search)
+  if (params.has('seedTrialInvoices')) {
+    const n = Math.max(0, parseInt(params.get('seedTrialInvoices') || '5', 10) || 5)
+    const now = new Date()
+    const seeded = Array.from({ length: n }, (_, i) => ({
+      id: `seed-${Date.now()}-${i}`,
+      invoiceDate: new Date(now.getFullYear(), now.getMonth(), Math.min(28, i + 1)).toISOString(),
+      total: 100,
+      status: 'unpaid',
+    }))
+    localStorage.setItem('invoices', JSON.stringify(seeded))
+    // Ensure we are in trial tier for gating
+    const existing = localStorage.getItem('mokSubscription')
+    if (!existing) {
+      localStorage.setItem('mokSubscription', JSON.stringify({
+        tier: 'trial',
+        validUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }))
+    }
+    console.log(`[dev] Seeded ${n} invoices for current month and ensured trial subscription`)
+  }
+} catch (e) {
+  console.warn('Dev seeding skipped:', e)
+}
+
 // Mount application
 const rootElement = document.getElementById('root')
 

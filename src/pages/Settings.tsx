@@ -155,9 +155,10 @@ const Settings = () => {
 
             {settingsTabs.map((tab) => {
               const ComponentToRender = tab.component as any;
+              const isActive = activeTab === tab.id;
               return (
                 <TabsContent key={tab.id} value={tab.id} className="space-y-6">
-                  <ComponentToRender />
+                  {isActive ? <ComponentToRender /> : null}
                 </TabsContent>
               );
             })}

@@ -12,10 +12,12 @@ import InvoicesBulkActions from '@/components/invoices/InvoicesBulkActions';
 import CreateInvoiceModal from '@/components/invoices/CreateInvoiceModal';
 import RecordPaymentModal from '@/components/invoices/RecordPaymentModal';
 import InvoiceViewModal from '@/components/invoices/InvoiceViewModal';
+import AuthVerificationModal from '@/components/company/AuthVerificationModal';
 import { Invoice, InvoiceItem, InvoiceStatus } from '@/types/invoice';
 import { activityService } from '@/services/activityService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import { addNotification, getNotifications, NotificationItem } from '@/services/notificationService';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 
 // Define types for the invoice modal data
 interface ModalLineItem {
@@ -49,11 +51,12 @@ const Invoices: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
+  const { isTrial, getLimit } = useSubscriptionAccess();
 
   useEffect(() => {
     const state = location.state as any;
     if (state?.openCreateInvoiceModal) {
-      setShowCreateModal(true);
+      handleOpenCreateInvoice();
       // Clear state to prevent reopening on refresh/navigation
       navigate(location.pathname, { replace: true });
     }
@@ -83,6 +86,9 @@ const Invoices: React.FC = () => {
   const [selectedInvoiceForPreview, setSelectedInvoiceForPreview] = useState<Invoice | null>(null);
   const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(false);
+  // Auth modal state for gating edit/delete
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'edit' | 'delete'; invoiceId: string } | null>(null);
 
   // Initialize clients data
   const [clients, setClients] = useState<{
@@ -347,6 +353,63 @@ const Invoices: React.FC = () => {
     }
   }, []);
 
+  // Helper that performs the actual delete (used after auth passes)
+  const doDeleteInvoice = (invoiceId: string) => {
+    // Get current invoices from localStorage
+    const storedInvoicesStr = localStorage.getItem('invoices') || '[]';
+    let storedInvoices: any[] = [];
+    
+    try {
+      // Safely parse and ensure it's an array
+      const parsedInvoices = JSON.parse(storedInvoicesStr);
+      storedInvoices = Array.isArray(parsedInvoices) ? parsedInvoices : [];
+    } catch (error) {
+      console.error('Error parsing invoices from localStorage:', error);
+      storedInvoices = [];
+    }
+    
+    // Find invoice being deleted for logging metadata
+    const invoiceToDelete = (storedInvoices as any[]).find(inv => inv?.id === invoiceId);
+
+    // Filter out the invoice to delete
+    const filteredInvoices = storedInvoices.filter(invoice => invoice?.id !== invoiceId);
+    
+    // Save back to localStorage
+    localStorage.setItem('invoices', JSON.stringify(filteredInvoices));
+    
+    // Update state - ensure prev is treated as an array
+    setInvoices(prev => {
+      const safeArray = Array.isArray(prev) ? prev : [];
+      return safeArray.filter(invoice => invoice?.id !== invoiceId);
+    });
+    
+    // Update selectedInvoices state
+    setSelectedInvoices(prev => {
+      const safeArray = Array.isArray(prev) ? prev : [];
+      return safeArray.filter(id => id !== invoiceId);
+    });
+
+    // Log activity: invoice deleted
+    activityService.logFinancialAction(
+      'Invoice deleted',
+      `Invoice ${invoiceToDelete?.number || invoiceId} deleted`,
+      'invoice',
+      invoiceId,
+      {
+        clientName: invoiceToDelete?.clientName,
+        amount: invoiceToDelete?.total,
+      }
+    );
+
+    // Dispatch event for delete
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('invoices-updated', { detail: { action: 'deleted', invoiceId, invoice: invoiceToDelete } }));
+      }
+    } catch {}
+
+    toast.success(t('invoices.toasts.deleted'));
+  };
 
   // Function to save invoice to localStorage
   const handleSaveInvoice = async (invoice: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -472,61 +535,10 @@ const Invoices: React.FC = () => {
     }
   };
 
+  // Gate delete behind admin authentication
   const handleDeleteInvoice = (invoiceId: string) => {
-    // Get current invoices from localStorage
-    const storedInvoicesStr = localStorage.getItem('invoices') || '[]';
-    let storedInvoices = [];
-    
-    try {
-      // Safely parse and ensure it's an array
-      const parsedInvoices = JSON.parse(storedInvoicesStr);
-      storedInvoices = Array.isArray(parsedInvoices) ? parsedInvoices : [];
-    } catch (error) {
-      console.error('Error parsing invoices from localStorage:', error);
-      storedInvoices = [];
-    }
-    
-    // Find invoice being deleted for logging metadata
-    const invoiceToDelete = (storedInvoices as any[]).find(inv => inv?.id === invoiceId);
-
-    // Filter out the invoice to delete
-    const filteredInvoices = storedInvoices.filter(invoice => invoice?.id !== invoiceId);
-    
-    // Save back to localStorage
-    localStorage.setItem('invoices', JSON.stringify(filteredInvoices));
-    
-    // Update state - ensure prev is treated as an array
-    setInvoices(prev => {
-      const safeArray = Array.isArray(prev) ? prev : [];
-      return safeArray.filter(invoice => invoice?.id !== invoiceId);
-    });
-    
-    // Update selectedInvoices state
-    setSelectedInvoices(prev => {
-      const safeArray = Array.isArray(prev) ? prev : [];
-      return safeArray.filter(id => id !== invoiceId);
-    });
-
-    // Log activity: invoice deleted
-    activityService.logFinancialAction(
-      'Invoice deleted',
-      `Invoice ${invoiceToDelete?.number || invoiceId} deleted`,
-      'invoice',
-      invoiceId,
-      {
-        clientName: invoiceToDelete?.clientName,
-        amount: invoiceToDelete?.total,
-      }
-    );
-
-    // Dispatch event for delete
-    try {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('invoices-updated', { detail: { action: 'deleted', invoiceId, invoice: invoiceToDelete } }));
-      }
-    } catch {}
-
-    toast.success(t('invoices.toasts.deleted'));
+    setPendingAction({ type: 'delete', invoiceId });
+    setIsAuthModalOpen(true);
   };
 
   // Function to update invoice status
@@ -535,7 +547,7 @@ const Invoices: React.FC = () => {
     const storedInvoices = JSON.parse(localStorage.getItem('invoices') || '[]');
     
     // Update the invoice status
-    const updatedInvoices = storedInvoices.map(inv => {
+    const updatedInvoices = storedInvoices.map((inv: any) => {
       if (inv.id === invoiceId) {
         return { ...inv, status: newStatus };
       }
@@ -574,7 +586,8 @@ const Invoices: React.FC = () => {
     toast.success(t('invoices.toasts.statusUpdated'));
   };
 
-  const handleEditInvoice = (invoiceId: string) => {
+  // Helper that performs the actual edit (used after auth passes)
+  const doEditInvoice = (invoiceId: string) => {
     const invoice = invoices.find(inv => inv.id === invoiceId);
     if (invoice) {
       setSelectedInvoiceForEdit(invoice);
@@ -588,6 +601,12 @@ const Invoices: React.FC = () => {
         invoiceId
       );
     }
+  };
+
+  // Gate edit behind admin authentication
+  const handleEditInvoice = (invoiceId: string) => {
+    setPendingAction({ type: 'edit', invoiceId });
+    setIsAuthModalOpen(true);
   };
   
   const handleViewInvoice = (invoice: Invoice) => {
@@ -753,6 +772,42 @@ const Invoices: React.FC = () => {
   };
 
   const handleOpenCreateInvoice = () => {
+    // Centralized trial gating: allow up to invoicesPerMonth per current month on trial plan
+    try {
+      if (isTrial) {
+        const limit = getLimit('invoicesPerMonth');
+        const allInvoicesRaw = localStorage.getItem('invoices') || '[]';
+        const parsed = JSON.parse(allInvoicesRaw);
+        const allInvoices: any[] = Array.isArray(parsed) ? parsed : [];
+        const now = new Date();
+        const thisMonthCount = allInvoices.filter((inv) => {
+          if (!inv) return false;
+          const dStr = inv.invoiceDate || inv.date || inv.createdAt;
+          if (!dStr) return false;
+          const d = new Date(dStr);
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+        }).length;
+
+        if (thisMonthCount >= limit) {
+          // Block creation and upsell
+          toast.error(`Trial limit reached: You can create up to ${limit} invoices per month on the trial. Upgrade to unlock unlimited invoices.`);
+          try {
+            activityService.logFinancialAction(
+              'Create invoice blocked - trial limit',
+              `Blocked after reaching monthly trial limit (count=${thisMonthCount})`,
+              'invoice'
+            );
+          } catch (err) {
+            console.warn('Failed to log blocked create due to trial limit:', err);
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Subscription gating check failed:', e);
+      // Fail open: allow modal to open to avoid blocking legitimate users
+    }
+
     setSelectedInvoiceForEdit(null);
     setShowCreateModal(true);
     try {
@@ -771,18 +826,25 @@ const Invoices: React.FC = () => {
   const filteredInvoices = safeInvoices.filter(invoice => {
     // Additional null/undefined check
     if (!invoice) return false;
-    const matchesSearch = 
-      invoice.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      invoice.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (invoice.reference && invoice.reference.toLowerCase().includes(searchQuery.toLowerCase()));
+    const searchQueryLower = (searchQuery || '').toLowerCase();
+    const numberStr = String(invoice.number || '');
+    const clientNameStr = String(invoice.clientName || '');
+    const referenceStr = String(invoice.reference || '');
+
+    const matchesSearch =
+      numberStr.toLowerCase().includes(searchQueryLower) ||
+      clientNameStr.toLowerCase().includes(searchQueryLower) ||
+      referenceStr.toLowerCase().includes(searchQueryLower);
     
     const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
     const matchesClient = clientFilter === 'all' || invoice.clientId === clientFilter;
     
     let matchesDate = true;
     const today = new Date();
-    const invoiceDate = new Date(invoice.invoiceDate);
-    const dueDate = new Date(invoice.dueDate);
+    const invoiceDateStr = (invoice as any).invoiceDate || (invoice as any).date || (invoice as any).createdAt || '';
+    const dueDateStr = (invoice as any).dueDate || (invoice as any).date || (invoice as any).createdAt || '';
+    const invoiceDate = invoiceDateStr ? new Date(invoiceDateStr) : new Date(0);
+    const dueDate = dueDateStr ? new Date(dueDateStr) : new Date(0);
     
     switch (dateFilter) {
       case 'thisMonth': {
@@ -797,7 +859,7 @@ const Invoices: React.FC = () => {
         break;
       }
       case 'overdue':
-        matchesDate = new Date(invoice.dueDate) < today && invoice.balance > 0;
+        matchesDate = dueDate < today && (Number((invoice as any).balance) || 0) > 0;
         break;
       default:
         matchesDate = true;
@@ -814,22 +876,28 @@ const Invoices: React.FC = () => {
     
     switch (sortField) {
       case 'number':
-        comparison = a.number.localeCompare(b.number);
+        comparison = String(a.number || '').localeCompare(String(b.number || ''));
         break;
       case 'clientName':
-        comparison = a.clientName.localeCompare(b.clientName);
+        comparison = String(a.clientName || '').localeCompare(String(b.clientName || ''));
         break;
-      case 'invoiceDate':
-        comparison = new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime();
+      case 'invoiceDate': {
+        const aDateStr = (a as any).invoiceDate || (a as any).date || (a as any).createdAt || '';
+        const bDateStr = (b as any).invoiceDate || (b as any).date || (b as any).createdAt || '';
+        comparison = new Date(aDateStr).getTime() - new Date(bDateStr).getTime();
         break;
-      case 'dueDate':
-        comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+      case 'dueDate': {
+        const aDateStr = (a as any).dueDate || (a as any).date || (a as any).createdAt || '';
+        const bDateStr = (b as any).dueDate || (b as any).date || (b as any).createdAt || '';
+        comparison = new Date(aDateStr).getTime() - new Date(bDateStr).getTime();
         break;
+      }
       case 'amount':
-        comparison = a.amount - b.amount;
+        comparison = (Number((a as any).amount) || 0) - (Number((b as any).amount) || 0);
         break;
       case 'balance':
-        comparison = a.balance - b.balance;
+        comparison = (Number((a as any).balance) || 0) - (Number((b as any).balance) || 0);
         break;
       default:
         comparison = 0;
@@ -843,6 +911,19 @@ const Invoices: React.FC = () => {
     currentPage * itemsPerPage
   );
   const totalPages = Math.ceil(sortedInvoices.length / itemsPerPage);
+
+  // When auth is verified, execute the pending action then close modal
+  const handleAuthVerified = () => {
+    if (pendingAction) {
+      if (pendingAction.type === 'edit') {
+        doEditInvoice(pendingAction.invoiceId);
+      } else if (pendingAction.type === 'delete') {
+        doDeleteInvoice(pendingAction.invoiceId);
+      }
+    }
+    setPendingAction(null);
+    setIsAuthModalOpen(false);
+  };
 
 return (
   <div className="min-h-screen bg-background relative">
@@ -952,6 +1033,16 @@ return (
         open={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         getCompanyDetails={getCompanyDetails}
+      />
+
+      {/* Admin verification modal for edit/delete actions */}
+      <AuthVerificationModal
+        isOpen={isAuthModalOpen}
+        onClose={() => { setIsAuthModalOpen(false); setPendingAction(null); }}
+        onVerified={handleAuthVerified}
+        adminScope="extended"
+        actionType={pendingAction?.type === 'delete' ? 'delete' : 'update'}
+        targetEntityName="invoice"
       />
       </div>
     </div>

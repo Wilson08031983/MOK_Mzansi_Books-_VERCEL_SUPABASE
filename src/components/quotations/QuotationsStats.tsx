@@ -17,6 +17,7 @@ import {
 
 import { Quotation } from '@/services/quotationService';
 import { useLocalization } from '@/hooks/useLocalization';
+import { getCompanyId } from '@/services/companyService';
 
 interface QuotationItem {
   id: string;
@@ -48,6 +49,8 @@ interface PreviousStats {
 const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
   const [previousStats, setPreviousStats] = useState<PreviousStats | null>(null);
   const { t, formatCurrency } = useLocalization();
+  const companyId = getCompanyId();
+  const statsStorageKey = `previousQuotationStats_${companyId}`;
   
   // Load previous stats from localStorage on component mount
   // Load previous stats and calculate new ones when quotations change
@@ -71,38 +74,47 @@ const QuotationsStats: React.FC<QuotationsStatsProps> = ({ quotations }) => {
     };
 
     try {
-      // Get previous stats from localStorage
-      const storedPreviousStats = localStorage.getItem('previousQuotationStats');
+      // Get previous stats from localStorage (company-scoped)
+      const storedPreviousStats = localStorage.getItem(statsStorageKey);
       
       if (storedPreviousStats) {
         // Use stored previous stats
         setPreviousStats(JSON.parse(storedPreviousStats));
-      } else if (quotations.length > 0) {
-        // Create synthetic previous stats for initial display
-        const artificialPrevStats = calculateStats(quotations);
-        
-        // Adjust values slightly to create realistic-looking trends
-        artificialPrevStats.totalCount = Math.max(quotations.length - 1, 0);
-        artificialPrevStats.totalValue *= 0.92; // 8% lower than current
-        artificialPrevStats.acceptedCount = Math.max(artificialPrevStats.acceptedCount - 1, 0);
-        artificialPrevStats.sentCount = Math.max(artificialPrevStats.sentCount + 1, 0); // Fix: Use sentCount
-        artificialPrevStats.viewedCount = Math.max(artificialPrevStats.viewedCount - 1, 0);
-        artificialPrevStats.conversionRate *= 0.95; // 5% lower conversion rate
-        artificialPrevStats.avgValue *= 0.95; // 5% lower average value
-        
-        setPreviousStats(artificialPrevStats);
-        localStorage.setItem('previousQuotationStats', JSON.stringify(artificialPrevStats));
+      } else {
+        // Migration fallback: try legacy, non-scoped key
+        const legacyPreviousStats = localStorage.getItem('previousQuotationStats');
+        if (legacyPreviousStats) {
+          setPreviousStats(JSON.parse(legacyPreviousStats));
+          // Persist under company-scoped key and clean up legacy
+          localStorage.setItem(statsStorageKey, legacyPreviousStats);
+          try { localStorage.removeItem('previousQuotationStats'); } catch {}
+        } else if (quotations.length > 0) {
+          // Create synthetic previous stats for initial display
+          const artificialPrevStats = calculateStats(quotations);
+          
+          // Adjust values slightly to create realistic-looking trends
+          artificialPrevStats.totalCount = Math.max(quotations.length - 1, 0);
+          artificialPrevStats.totalValue *= 0.92; // 8% lower than current
+          artificialPrevStats.acceptedCount = Math.max(artificialPrevStats.acceptedCount - 1, 0);
+          artificialPrevStats.sentCount = Math.max(artificialPrevStats.sentCount + 1, 0); // Fix: Use sentCount
+          artificialPrevStats.viewedCount = Math.max(artificialPrevStats.viewedCount - 1, 0);
+          artificialPrevStats.conversionRate *= 0.95; // 5% lower conversion rate
+          artificialPrevStats.avgValue *= 0.95; // 5% lower average value
+          
+          setPreviousStats(artificialPrevStats);
+          localStorage.setItem(statsStorageKey, JSON.stringify(artificialPrevStats));
+        }
       }
     } catch (error) {
       console.error('Error loading previous quotation stats:', error);
     }
     
-    // Save current stats for future comparison
+    // Save current stats for future comparison (company-scoped)
     if (quotations.length > 0) {
       const currentStats = calculateStats(quotations);
-      localStorage.setItem('previousQuotationStats', JSON.stringify(currentStats));
+      localStorage.setItem(statsStorageKey, JSON.stringify(currentStats));
     }
-  }, [quotations]);
+  }, [quotations, statsStorageKey]);
   
   // Calculate percent change between current and previous values
   const calculateChange = (current: number, previous: number): { value: string, type: 'positive' | 'negative' | 'neutral' } => {

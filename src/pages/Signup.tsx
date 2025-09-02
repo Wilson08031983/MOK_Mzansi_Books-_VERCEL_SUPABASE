@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuthHook';
 import { sendConfirmationEmail } from '@/services/emailService';
 import { useLocalization } from '@/hooks/useLocalization';
 import { userLinkingService } from '@/services/userLinkingService';
+import { addNotification } from '@/services/notificationService';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -103,6 +104,13 @@ const Signup = () => {
         alert(t('auth.signup.accountCreatedSuccess'));
         navigate('/dashboard');
       } else {
+        // Add a welcome notification for new trial users
+        addNotification({
+          title: t('auth.signup.welcomeNotificationTitle'),
+          message: t('auth.signup.welcomeTrialNotificationMessage'),
+          type: 'system'
+        });
+
         // Send confirmation email using Resend
         const emailSent = await sendConfirmationEmail({
           to: formData.email,
@@ -116,7 +124,7 @@ const Signup = () => {
         } else {
           alert(t('auth.signup.accountCreatedPartial'));
         }
-        navigate('/login');
+        window.location.reload();
       }
     } catch (error: any) {
       console.error(t('auth.signup.signupError'), error);
@@ -138,7 +146,7 @@ const Signup = () => {
         <div className="mb-8">
           <Link to={isInvitationSignup ? "/accept-invitation" : "/"} className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg shadow-business hover:shadow-business-lg glass backdrop-blur-sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            {isInvitationSignup ? t('auth.invitedSignup.backToInvitation') : t('auth.login.backToHome')}
+            {isInvitationSignup ? t('auth.invitedSignup.backToInvitation') : t('common.backToHome')}
           </Link>
         </div>
 

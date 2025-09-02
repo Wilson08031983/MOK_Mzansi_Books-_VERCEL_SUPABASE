@@ -13,7 +13,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Employee } from '@/services/employeeService';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { logEmployeeStatusChange } from '@/services/hrAuditService';
 import { format } from 'date-fns';
 

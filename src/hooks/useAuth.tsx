@@ -1,8 +1,9 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getUserCredentialsByEmail } from '@/services/localAuthService';
+import { getUserCredentialsByEmail, addUser } from '@/services/localAuthService';
 import { getCurrentDeviceSession, addDeviceSession, sendLoginNotification } from '@/services/securityService';
+import { getAdminPermissions, getDefaultPermissions, saveUserPermissions, isAdminRole as isAdminRolePermission } from '@/services/permissionService';
 
 // Properly typed user interface without Supabase dependency
 export interface User {
@@ -15,6 +16,8 @@ export interface User {
 export interface UserMetadata {
   first_name?: string;
   last_name?: string;
+  trial_start_date?: string;
+  trial_end_date?: string;
   [key: string]: string | undefined;
 }
 
@@ -47,19 +50,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, userData: UserMetadata) => {
-    // Create mock user
-    const newUser = {
-      id: Date.now().toString(),
-      email,
-      user_metadata: userData
-    };
-    
-    // Store in local storage
-    localStorage.setItem('mokUser', JSON.stringify(newUser));
-    setUser(newUser);
-    
-    // Simulate async behavior
-    return Promise.resolve();
+    try {
+      // Determine role (default first owner is CEO; invitations may pass a role in userData.role)
+      const role = (userData?.role as string) || 'CEO';
+      const fullName = [userData?.first_name, userData?.last_name].filter(Boolean).join(' ') || email.split('@')[0];
+
+      // Persist credentials to local storage credentials registry
+      const addRes = addUser(email, password, role as any, fullName);
+      if (!addRes.success) {
+        throw new Error(addRes.error || 'Failed to create user');
+      }
+
+      // Look up created user to obtain consistent id and role
+      const lookup = getUserCredentialsByEmail(email, password);
+      if (!lookup.success || !lookup.user) {
+        throw new Error(lookup.error || 'User lookup failed after registration');
+      }
+
+      // Add trial period for new, non-invited users
+      if (!userData.invitation_token) {
+        const trialStartDate = new Date();
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialStartDate.getDate() + 30);
+        
+        userData.trial_start_date = trialStartDate.toISOString();
+        userData.trial_end_date = trialEndDate.toISOString();
+      }
+
+      // Ensure permissions are saved in centralized permission store for UI gating
+      const perms = isAdminRolePermission(lookup.user.role) ? getAdminPermissions() : getDefaultPermissions();
+      saveUserPermissions(lookup.user.id, perms);
+
+      // Store session user with correct id and role
+      const newUser: User = {
+        id: lookup.user.id,
+        email,
+        user_metadata: userData,
+        role: lookup.user.role,
+      };
+
+      localStorage.setItem('mokUser', JSON.stringify(newUser));
+      setUser(newUser);
+
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   };
 
   const signIn = async (email: string, password: string) => {

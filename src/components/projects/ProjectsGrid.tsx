@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import ViewProjectModal from './ViewProjectModal';
 import EditProjectModal from './EditProjectModal';
 import useAuditLogger from '@/hooks/useAuditLogger';
+import AuthVerificationModal from '@/components/company/AuthVerificationModal';
 
 interface ProjectsGridProps {
   projects: Project[];
@@ -51,13 +52,19 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   // Dialog state is derived from whether projectToCancel is set
   const isCancelDialogOpen = !!projectToDelete;
+  // Dialog opens when projectToDelete is set
   
   const { formatCurrency, t } = useLocalization();
   const { logAudit } = useAuditLogger();
+
+  // Admin auth modal state
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<null | { type: 'edit' | 'cancel'; project: Project }>(null);
   
   const handleEditProject = (project: Project) => {
-    setViewingProject(null); // Close view modal if open
-    setEditingProject(project);
+    // Require admin verification before opening edit modal
+    setPendingAction({ type: 'edit', project });
+    setIsAuthModalOpen(true);
   };
   
   const handleSaveProject = (updatedProject: Project) => {
@@ -67,10 +74,10 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
     setEditingProject(null);
   };
 
-  // Set the project to cancel and open the confirmation dialog
+  // Set the project to cancel and open the admin verification modal first
   const handleCancelProject = (project: Project) => {
-    // Set the project to cancel which will open the dialog
-    setProjectToDelete(project);
+    setPendingAction({ type: 'cancel', project });
+    setIsAuthModalOpen(true);
   };
   
   const confirmCancelProject = () => {
@@ -93,6 +100,20 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
   // Handler to close cancel dialog without cancelling project
   const closeCancelDialog = () => {
     setProjectToDelete(null);
+  };
+
+  // When admin verification succeeds, perform the pending action
+  const handleAuthVerified = () => {
+    if (!pendingAction) return;
+    if (pendingAction.type === 'edit') {
+      setViewingProject(null); // Close view modal if open
+      setEditingProject(pendingAction.project);
+    } else if (pendingAction.type === 'cancel') {
+      // After verification, open the existing cancel confirmation dialog
+      setProjectToDelete(pendingAction.project);
+    }
+    setPendingAction(null);
+    setIsAuthModalOpen(false);
   };
   
   return (
@@ -142,7 +163,7 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
                       <span className="text-mokm-blue-200">{t('projects.actionLabels.viewDetails')}</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem 
-                      onSelect={() => setEditingProject(project)} 
+                      onSelect={() => handleEditProject(project)} 
                       className="cursor-pointer text-mokm-purple-300 hover:text-mokm-purple-200 focus:text-mokm-purple-200 hover:bg-white/10 focus:bg-white/10"
                     >
                       <Edit className="h-4 w-4 mr-2 text-mokm-purple-400" />
@@ -151,7 +172,6 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
                     <DropdownMenuItem 
                       onSelect={(e) => {
                         e.preventDefault();
-                        console.log('Delete menu item clicked');
                         handleCancelProject(project);
                       }} 
                       className="cursor-pointer text-mokm-pink-300 hover:text-mokm-pink-200 focus:text-mokm-pink-200 hover:bg-white/10 focus:bg-white/10"
@@ -322,7 +342,7 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
                   variant="outline" 
                   size="sm" 
                   className="flex-1 glass backdrop-blur-md bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-white/90 dark:hover:bg-white/10"
-                  onClick={() => setEditingProject(project)}
+                  onClick={() => handleEditProject(project)}
                 >
                   <Edit className="h-4 w-4 mr-2 text-mokm-purple-400" />
                   {t('projects.actionLabels.edit')}
@@ -404,6 +424,16 @@ const ProjectsGrid: React.FC<ProjectsGridProps> = ({
           </div>
         </div>
       )}
+
+      {/* Admin Verification Modal */}
+      <AuthVerificationModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onVerified={handleAuthVerified}
+        actionType={pendingAction?.type === 'cancel' ? 'delete' : 'update'}
+        targetEntityName="project"
+        adminScope="extended"
+      />
     </div>
   );
 };

@@ -21,11 +21,11 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 
 import { Employee } from '@/services/employeeService';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { logQualificationAdded, logQualificationDeleted } from '@/services/hrAuditService';
+import { logQualificationAdded, logQualificationDeleted, logEmployeeStatusChange } from '@/services/hrAuditService';
 
 // Type for qualification
 interface Qualification {
@@ -69,6 +69,9 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     certificateFile: null as File | null,
   });
   
+  // Initialize auth user BEFORE any callbacks that reference it
+  const { user } = useAuth();
+  
   // Handle status change with audit logging
   const handleStatusChange = useCallback(async (employeeId: string, status: 'active' | 'on-leave' | 'terminated') => {
     try {
@@ -101,22 +104,8 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
 
       // Log the status change to audit log
       try {
-        await auditService.logAudit({
-          action: 'UPDATE_EMPLOYEE_STATUS',
-          category: 'hr',
-          targetId: employeeId,
-          targetType: 'employee',
-          userId: user?.id || 'system',
-          userEmail: user?.email || 'system',
-          metadata: {
-            employeeId,
-            previousStatus,
-            newStatus: status,
-            employeeName: `${employee.firstName} ${employee.surname}`.trim(),
-            timestamp: new Date().toISOString()
-          },
-          severity: 'info'
-        });
+        // Use centralized HR audit helper
+        await logEmployeeStatusChange(employee, previousStatus, status);
       } catch (auditError) {
         console.error('Failed to log audit:', auditError);
         // Don't fail the operation if audit logging fails
@@ -136,7 +125,8 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
     }
   }, [employees, setEmployees, user]);
 
-  const { user } = useAuth();
+  // user already initialized above
+  // const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -312,24 +302,15 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       
       // Log the action to audit log
       try {
-        await auditService.logAudit({
-          action: 'ADD_QUALIFICATION',
-          category: 'hr',
-          targetId: newQualification.id,
-          targetType: 'qualification',
-          userId: user?.id || 'system',
-          userEmail: user?.email || 'system',
-          metadata: {
-            employeeId: currentEmployeeId,
-            employeeName: `${employee.firstName} ${employee.surname}`.trim(),
-            institute: newQualification.institute,
-            nqfLevel: newQualification.nqfLevel,
-            startDate: newQualification.startDate,
-            endDate: newQualification.endDate,
-            timestamp: newQualification.dateAdded
-          },
-          severity: 'info'
-        });
+        // Use centralized HR audit helper
+        await logQualificationAdded({
+          id: newQualification.id,
+          employeeId: newQualification.employeeId,
+          institute: newQualification.institute,
+          startDate: newQualification.startDate,
+          endDate: newQualification.endDate,
+          nqfLevel: newQualification.nqfLevel
+        }, employee);
       } catch (auditError) {
         console.error('Failed to log audit:', auditError);
         // Don't fail the operation if audit logging fails
@@ -398,24 +379,17 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       
       // Log the deletion to audit log
       try {
-        await auditService.logAudit({
-          action: 'DELETE_QUALIFICATION',
-          category: 'hr',
-          targetId: qualificationId,
-          targetType: 'qualification',
-          userId: user?.id || 'system',
-          userEmail: user?.email || 'system',
-          metadata: {
+        // Use centralized HR audit helper if employee exists
+        if (employee) {
+          await logQualificationDeleted({
+            id: qualificationToDelete.id,
             employeeId: qualificationToDelete.employeeId,
-            employeeName: employee ? `${employee.firstName} ${employee.surname}`.trim() : 'Unknown',
             institute: qualificationToDelete.institute,
-            nqfLevel: qualificationToDelete.nqfLevel,
             startDate: qualificationToDelete.startDate,
             endDate: qualificationToDelete.endDate,
-            timestamp: new Date().toISOString()
-          },
-          severity: 'warning'
-        });
+            nqfLevel: qualificationToDelete.nqfLevel as number
+          }, employee);
+        }
       } catch (auditError) {
         console.error('Failed to log audit:', auditError);
         // Don't fail the operation if audit logging fails

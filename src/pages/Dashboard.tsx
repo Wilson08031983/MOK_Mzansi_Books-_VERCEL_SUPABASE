@@ -26,6 +26,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useUserTracking } from '@/hooks/useUserTracking';
+import { getCompanyId } from '@/services/companyService';
+import { activityService } from '@/services/activityService';
 
 // Define TypeScript types
 type StatItem = {
@@ -127,18 +129,7 @@ const Dashboard: React.FC = () => {
   useUserTracking(user || null);
   
   // Initialize activity service
-  const activityService = {
-    logActivity: async (activity: { type: string; action: string; details: string }) => {
-      console.log('Activity logged:', activity);
-      // In a real app, this would save to a database
-      return { success: true };
-    },
-    logTaskAction: async (taskId: string, action: string, details: Record<string, any> = {}) => {
-      console.log(`Task action logged - Task ID: ${taskId}, Action: ${action}`, details);
-      // In a real app, this would save to a database
-      return { success: true };
-    }
-  };
+  // Using centralized activityService from services
 
   // State for the new task modal
   // Task management state
@@ -168,18 +159,6 @@ const Dashboard: React.FC = () => {
   });
 
   // Derive companyId similar to Accounting page
-  const getCompanyId = () => {
-    try {
-      const companyDetails = localStorage.getItem('companyDetails');
-      if (companyDetails) {
-        const parsed = JSON.parse(companyDetails);
-        return `company_${parsed.companyName?.replace(/\s+/g, '_').toLowerCase() || 'default'}`;
-      }
-    } catch (error) {
-      console.error('Error getting company details:', error);
-    }
-    return 'current-company-id';
-  };
   const [companyId] = useState<string>(getCompanyId());
 
   // Load saved dashboard tasks from localStorage on mount
@@ -535,7 +514,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex relative overflow-hidden">
+    <div className="min-h-screen bg-background flex relative overflow-x-hidden">
       {/* Animated Pulsating Balls Background */}
       <DashboardBackground />
 

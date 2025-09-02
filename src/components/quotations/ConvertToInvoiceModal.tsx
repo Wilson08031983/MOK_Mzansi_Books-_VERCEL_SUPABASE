@@ -14,6 +14,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { Quotation } from '@/services/quotationService';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 import { useLocalization } from '@/hooks/useLocalization';
 
 interface ConvertToInvoiceModalProps {
@@ -53,6 +54,7 @@ const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { isTrial, getLimit } = useSubscriptionAccess();
 
   useEffect(() => {
     if (quotation) {
@@ -78,6 +80,33 @@ const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
 
     setLoading(true);
     setError('');
+
+    // Trial gating: enforce monthly invoice cap before converting
+    try {
+      if (isTrial) {
+        const limit = getLimit('invoicesPerMonth');
+        const allInvoicesRaw = localStorage.getItem('invoices') || '[]';
+        const parsed = JSON.parse(allInvoicesRaw);
+        const allInvoices: any[] = Array.isArray(parsed) ? parsed : [];
+        const now = new Date();
+        const thisMonthCount = allInvoices.filter((inv) => {
+          if (!inv) return false;
+          const dStr = inv.invoiceDate || inv.date || inv.createdAt;
+          if (!dStr) return false;
+          const d = new Date(dStr);
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+        }).length;
+
+        if (thisMonthCount >= limit) {
+          setError(`Trial limit reached: You can create up to ${limit} invoices per month on the trial. Upgrade to unlock unlimited invoices.`);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Subscription gating check failed:', e);
+      // Fail open
+    }
 
     try {
       // Simulate API call to create invoice

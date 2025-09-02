@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useLocalization } from '@/hooks/useLocalization';
 import { generateDeliveryNotePdf } from '@/utils/deliveryNotePdfGenerator';
 import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 
 // Use the imported Client type as ClientType
 
@@ -110,6 +111,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
     phone: ''
   });
   const { toast } = useToast();
+const { isTrial, getLimit } = useSubscriptionAccess();
 
   // Derived selected client from id for safer access in JSX and printing sections
   const selectedClient = useMemo(() => {
@@ -521,6 +523,40 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
 
   // Handle send to invoice action
   const handleSendToInvoice = () => {
+    // Trial gating: enforce monthly invoice cap for trial/basic tiers
+    try {
+      if (isTrial) {
+        const limit = getLimit('invoicesPerMonth');
+        const allInvoicesRaw = localStorage.getItem('invoices') || '[]';
+        const parsed = JSON.parse(allInvoicesRaw);
+        const allInvoices: any[] = Array.isArray(parsed) ? parsed : [];
+        const now = new Date();
+        const thisMonthCount = allInvoices.filter((inv) => {
+          if (!inv) return false;
+          const dStr = inv.invoiceDate || inv.date || inv.createdAt;
+          if (!dStr) return false;
+          const d = new Date(dStr);
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+        }).length;
+
+        if (thisMonthCount >= limit) {
+          toast({
+            title: "Trial limit reached",
+            description: `You can create up to ${limit} invoices per month on the trial. Upgrade to unlock unlimited invoices.`,
+            variant: "destructive"
+          });
+          try {
+            logDocument('Create invoice blocked - trial limit', 'invoice', 'N/A', undefined);
+          } catch (err) {
+            console.warn('Failed to log blocked create due to trial limit:', err);
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Subscription gating check failed:', e);
+      // Fail open to avoid blocking legitimate users
+    }
     if (salesItems.length === 0) {
       toast({
         title: "No items to send",
@@ -1032,7 +1068,7 @@ const SalesModal: React.FC<SalesModalProps> = ({ isOpen, onClose }) => {
               {/* Customer Details */}
               <div className="border p-2 mb-3 text-xs">
                 <h3 className="font-bold mb-1">Customer Details:</h3>
-                <p><span className="font-medium">Name:</span> {selectedClient?.name || deliveryNote.customerName || 'Walk-in Customer'}</p>
+                <p><span className="font-medium">Name:</span> {selectedClient?.companyName || selectedClient?.contactPerson || deliveryNote.customerName || 'Walk-in Customer'}</p>
                 {(selectedClient?.contactPerson || deliveryNote.contactPerson) && (
                   <p><span className="font-medium">Contact:</span> {selectedClient?.contactPerson || deliveryNote.contactPerson}</p>
                 )}

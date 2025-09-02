@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import AuthVerificationModal from '@/components/company/AuthVerificationModal';
 
 
 
@@ -41,6 +42,8 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
   const [isEditEmployeeModalOpen, setIsEditEmployeeModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingEditEmployee, setPendingEditEmployee] = useState<Employee | null>(null);
   
   // Helper function to check if this is the synced admin user
   const isSyncedAdminUser = (emp: Employee): boolean => {
@@ -157,9 +160,10 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
       toast.error(editCheck.reason || 'Cannot edit this user');
       return;
     }
-    
-    setEditingEmployee(employee);
-    setIsEditEmployeeModalOpen(true);
+
+    // Require admin verification before opening the edit modal
+    setPendingEditEmployee(employee);
+    setIsAuthModalOpen(true);
   };
 
   // Handle delete employee
@@ -497,6 +501,26 @@ const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ employees, setE
         isOpen={viewingEmployee !== null}
         onClose={() => setViewingEmployee(null)}
         employee={viewingEmployee}
+      />
+
+      {/* Admin Verification Modal for Edit Employee */}
+      <AuthVerificationModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setPendingEditEmployee(null);
+        }}
+        onVerified={() => {
+          if (pendingEditEmployee) {
+            setEditingEmployee(pendingEditEmployee);
+            setIsEditEmployeeModalOpen(true);
+          }
+          setIsAuthModalOpen(false);
+          setPendingEditEmployee(null);
+        }}
+        actionType="update"
+        targetEntityName="employee"
+        adminScope="extended"
       />
     </div>
   );

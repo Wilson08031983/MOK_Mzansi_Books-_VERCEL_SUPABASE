@@ -41,6 +41,13 @@ const GeneralSettingsTab = () => {
   const [banner, setBanner] = useState<{ message: string; language: string; timezone: string; currency: string } | null>(null);
   const [previousSettings, setPreviousSettings] = useState<{ language: string; timezone: string; currency: string } | null>(null);
 
+  // Refs to control autosave and prevent loops
+  const initialLoadRef = React.useRef(true);
+  const saveTimeoutRef = React.useRef<number | null>(null);
+  const isEditingRef = React.useRef(isEditing);
+const displaySaveTimeoutRef = React.useRef<number | null>(null);
+  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
+
   // Load settings from localStorage on component mount
   useEffect(() => {
     const loadSettings = () => {
@@ -78,18 +85,23 @@ const GeneralSettingsTab = () => {
     loadSettings();
     
     // Set up periodic sync status updates
-    const statusInterval = setInterval(() => {
+    const statusInterval = window.setInterval(() => {
+      // Poll less frequently to reduce CPU usage
       setSyncStatus(workingCompanySync.getSyncStatus());
-    }, 1000);
+    }, 3000);
 
     // Listen for sync events
     const handleSyncSuccess = () => {
-      toast.success('Company information synchronized successfully!');
+      if (isEditingRef.current) {
+        toast.success('Company information synchronized successfully!');
+      }
       setSyncStatus(workingCompanySync.getSyncStatus());
     };
 
     const handleSyncError = () => {
-      toast.error('Failed to synchronize company information');
+      if (isEditingRef.current) {
+        toast.error('Failed to synchronize company information');
+      }
     };
 
     // Listen for logo updates from Company page
@@ -121,7 +133,7 @@ const GeneralSettingsTab = () => {
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      clearInterval(statusInterval);
+      window.clearInterval(statusInterval);
       window.removeEventListener('syncSuccess', handleSyncSuccess);
       window.removeEventListener('syncError', handleSyncError);
       window.removeEventListener('companyLogoUpdated', handleLogoUpdate);
@@ -129,9 +141,22 @@ const GeneralSettingsTab = () => {
     };
   }, []);
 
-  // Auto-save and sync when company info changes
+  // Auto-save settings when company info changes (debounced, only while editing, skip initial load)
   useEffect(() => {
-    const saveSettings = () => {
+    // Only save while in edit mode
+    if (!isEditing) return;
+
+    // Skip first run after mount
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
       try {
         const settings = {
           companyInfo,
@@ -140,18 +165,18 @@ const GeneralSettingsTab = () => {
         };
         localStorage.setItem('generalSettings', JSON.stringify(settings));
         localStorage.setItem('generalSettings_timestamp', Date.now().toString());
-        
-        // Trigger sync to company page
-        setTimeout(() => {
-          workingCompanySync.syncSettingsToCompany();
-        }, 500);
+        // Do not force immediate sync here; explicit save will trigger sync.
       } catch (error) {
         console.error('Error saving settings:', error);
       }
-    };
+    }, 800);
 
-    saveSettings();
-  }, [companyInfo]);
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [companyInfo, isEditing]);
 
   // Function to handle authentication with the modal
   const handleAuthenticate = async (email: string, password: string): Promise<boolean> => {
@@ -230,10 +255,14 @@ const GeneralSettingsTab = () => {
         localStorage.setItem('companyAssets', JSON.stringify(assets));
       }
       
-      // Trigger sync to company page
+      // Trigger sync to company page (explicit save only)
       setTimeout(() => {
-        workingCompanySync.syncSettingsToCompany();
-      }, 500);
+        try {
+          workingCompanySync.syncSettingsToCompany();
+        } catch (e) {
+          console.error('Sync to company failed:', e);
+        }
+      }, 300);
       
       setIsEditing(false);
       toast.success('Company settings saved and synchronized successfully!');
@@ -420,21 +449,26 @@ const GeneralSettingsTab = () => {
   }, [theme]);
 
   const persistDisplaySettings = (patch: Partial<typeof displaySettings>) => {
-    try {
-      const saved = localStorage.getItem('generalSettings');
-      const existing = saved ? JSON.parse(saved) : {};
-      const updated = {
-        ...existing,
-        displaySettings: {
-          ...(existing.displaySettings || {}),
-          ...patch,
-        },
-      };
-      localStorage.setItem('generalSettings', JSON.stringify(updated));
-      localStorage.setItem('generalSettings_timestamp', Date.now().toString());
-    } catch (e) {
-      console.error('Failed to persist display settings', e);
+    if (displaySaveTimeoutRef.current) {
+      window.clearTimeout(displaySaveTimeoutRef.current);
     }
+    displaySaveTimeoutRef.current = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem('generalSettings');
+        const existing = saved ? JSON.parse(saved) : {};
+        const updated = {
+          ...existing,
+          displaySettings: {
+            ...(existing.displaySettings || {}),
+            ...patch,
+          },
+        };
+        localStorage.setItem('generalSettings', JSON.stringify(updated));
+        localStorage.setItem('generalSettings_timestamp', Date.now().toString());
+      } catch (e) {
+        console.error('Failed to persist display settings', e);
+      }
+    }, 500);
   };
 
 
@@ -457,6 +491,15 @@ const GeneralSettingsTab = () => {
       auditService.logSettings('Changed Font Size', 'Settings', 'Display', { fontSize: displaySettings.fontSize }, { fontSize: value });
     } catch {}
   };
+  
+  // Cleanup any pending debounced display settings save on unmount
+  useEffect(() => {
+    return () => {
+      if (displaySaveTimeoutRef.current) {
+        window.clearTimeout(displaySaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="space-y-6">

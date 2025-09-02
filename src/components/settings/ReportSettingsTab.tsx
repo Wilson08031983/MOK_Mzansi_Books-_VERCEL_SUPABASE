@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -114,6 +114,11 @@ const ReportSettingsTab = () => {
   const [testFilters, setTestFilters] = useState<TestFilters>(defaultTestFilters);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
+  // Debounce timer and toast throttle for settings persistence
+  const saveTimeoutRef = useRef<number | null>(null);
+  const lastToastTimeRef = useRef<number>(0);
+  // Add a separate debounce timer for notification schedule saves
+  const notifSaveTimeoutRef = useRef<number | null>(null);
 
   // Load settings and reports on mount
   useEffect(() => {
@@ -121,6 +126,20 @@ const ReportSettingsTab = () => {
     loadReports();
     calculateStorageInfo();
     loadNotificationSettings();
+  }, []);
+
+  // Ensure timers are cleared on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (notifSaveTimeoutRef.current) {
+        window.clearTimeout(notifSaveTimeoutRef.current);
+        notifSaveTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // Recalculate storage info when dependencies change
@@ -139,21 +158,42 @@ const ReportSettingsTab = () => {
   };
 
   const saveSettings = (newSettings: ReportSettings) => {
+    // Update local state immediately for responsive UI
     setSettings(newSettings);
-    safeLocalStorage.setItem('reportSettings', newSettings);
-    toast.success(t('common.success'));
-    try {
-      auditService.logAudit({
-        category: 'reports',
-        action: 'Report Settings Updated',
-        page: 'Settings',
-        section: 'Reports',
-        entityType: 'report_settings',
-        changeType: 'update',
-        newValues: newSettings,
-        description: 'User updated report settings',
-      });
-    } catch {/* noop */}
+
+    // Debounce actual persistence to avoid storage storms during rapid toggles/changes
+    if (saveTimeoutRef.current) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      try {
+        safeLocalStorage.setItem('reportSettings', newSettings);
+
+        // Throttle success toast to avoid spam when user flips multiple controls
+        const now = Date.now();
+        if (now - lastToastTimeRef.current > 1500) {
+          toast.success(t('common.success'));
+          lastToastTimeRef.current = now;
+        }
+
+        try {
+          auditService.logAudit({
+            category: 'reports',
+            action: 'Report Settings Updated',
+            page: 'Settings',
+            section: 'Reports',
+            entityType: 'report_settings',
+            changeType: 'update',
+            newValues: newSettings,
+            description: 'User updated report settings (debounced)',
+          });
+        } catch {/* noop */}
+      } catch (error) {
+        console.error('Error saving report settings:', error);
+        toast.error(t('common.error'));
+      }
+    }, 300);
   };
 
   const loadReports = () => {
@@ -353,20 +393,35 @@ const ReportSettingsTab = () => {
     };
     
     setNotificationSettings(updatedSettings);
-    saveNotificationSettings(updatedSettings);
-    toast.success(t('common.success'));
-    try {
-      auditService.logAudit({
-        category: 'reports',
-        action: 'Report Schedule Updated',
-        page: 'Settings',
-        section: 'Reports',
-        entityType: 'report_schedule',
-        changeType: 'update',
-        description: `Updated schedule field ${field}`,
-        newValues: { [field]: value }
-      });
-    } catch {/* noop */}
+
+    // Debounce persistence to avoid rapid successive writes and toast spam
+    if (notifSaveTimeoutRef.current) {
+      window.clearTimeout(notifSaveTimeoutRef.current);
+    }
+
+    notifSaveTimeoutRef.current = window.setTimeout(() => {
+      saveNotificationSettings(updatedSettings);
+
+      // Throttle success toast similar to report settings
+      const now = Date.now();
+      if (now - lastToastTimeRef.current > 1500) {
+        toast.success(t('common.success'));
+        lastToastTimeRef.current = now;
+      }
+
+      try {
+        auditService.logAudit({
+          category: 'reports',
+          action: 'Report Schedule Updated',
+          page: 'Settings',
+          section: 'Reports',
+          entityType: 'report_schedule',
+          changeType: 'update',
+          description: `Updated schedule field ${field}`,
+          newValues: { [field]: value }
+        });
+      } catch {/* noop */}
+    }, 300);
   };
 
   const clearOldReports = () => {

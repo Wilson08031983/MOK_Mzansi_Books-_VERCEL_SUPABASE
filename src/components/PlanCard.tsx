@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check } from 'lucide-react';
+import { Check, Info } from 'lucide-react';
 import { SUBSCRIPTION_PLANS, formatPrice } from '@/lib/paystack';
 
 interface PlanCardProps {
@@ -60,6 +60,15 @@ const PlanCard = ({ planKey, plan, onSelectPlan }: PlanCardProps) => {
             </li>
           ))}
         </ul>
+
+        {planKey === 'trial' && (
+          <div className="mb-6 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-start">
+            <Info className="h-4 w-4 text-gray-500 mr-2 mt-0.5" />
+            <span>
+              Trial includes limited usage: invoices and quotations are capped monthly; clients, projects, inventory items, suppliers, and storage locations are capped in total. Upgrade anytime to remove limits.
+            </span>
+          </div>
+        )}
 
         <Button
           className={`w-full h-12 font-semibold transition-all duration-300 ${

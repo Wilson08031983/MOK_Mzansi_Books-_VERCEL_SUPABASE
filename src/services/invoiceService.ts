@@ -1,6 +1,7 @@
 import { safeLocalStorage, safeString, safeGet } from '@/utils/safeAccess';
 import { withCrashPrevention } from '@/utils/crashPrevention';
 import { Invoice, InvoiceInput, InvoiceResponse, InvoiceItem, InvoiceStatus, isValidInvoiceStatus } from '@/types/invoice';
+import { getCompanyId } from '@/services/companyService';
 
 // Define a type for the client object that can be either string or object
 type ClientRef = string | { id: string; name: string; email?: string };
@@ -91,11 +92,13 @@ const mapToInvoice = (data: InvoiceInput, existingInvoice?: Invoice): InvoiceRes
 };
 
 const STORAGE_KEY = 'invoices';
+const getInvoiceStorageKey = (): string => `${STORAGE_KEY}_${getCompanyId()}`;
 
 // Get all invoices from localStorage
 export const getInvoices = withCrashPrevention((): InvoiceResponse[] => {
   try {
-    const invoicesData = safeLocalStorage.getItem(STORAGE_KEY, null);
+    const key = getInvoiceStorageKey();
+    const invoicesData = safeLocalStorage.getItem(key, null);
     if (!invoicesData) {
       return [];
     }
@@ -103,7 +106,7 @@ export const getInvoices = withCrashPrevention((): InvoiceResponse[] => {
     // Check if data is corrupted (contains '[object Object]')
     if (typeof invoicesData === 'string' && invoicesData.includes('[object Object]')) {
       console.warn('Corrupted invoice data detected, clearing localStorage');
-      safeLocalStorage.removeItem(STORAGE_KEY);
+      safeLocalStorage.removeItem(key);
       return [];
     }
     
@@ -117,7 +120,7 @@ export const getInvoices = withCrashPrevention((): InvoiceResponse[] => {
   } catch (error) {
     console.error('Error loading invoices:', error);
     // Clear corrupted data
-    safeLocalStorage.removeItem(STORAGE_KEY);
+    safeLocalStorage.removeItem(getInvoiceStorageKey());
     return [];
   }
 }, []);
@@ -125,7 +128,8 @@ export const getInvoices = withCrashPrevention((): InvoiceResponse[] => {
 // Save invoices to localStorage
 export const saveInvoices = withCrashPrevention((invoices: InvoiceResponse[]): boolean => {
   try {
-    safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+    const key = getInvoiceStorageKey();
+    safeLocalStorage.setItem(key, JSON.stringify(invoices));
     return true;
   } catch (error) {
     console.error('Error saving invoices:', error);
@@ -201,52 +205,24 @@ export const updateInvoice = withCrashPrevention(async (id: string, updates: Par
         discount: Number(it.discount) || 0,
         taxRate: Number(it.taxRate) || 0,
       }))
-    : existingInvoice.items.map((item, idx) => ({
-        itemNo: item.itemNo ?? idx + 1,
-        description: item.description,
-        quantity: Number(item.quantity) || 0,
-        unitPrice: Number(item.unitPrice ?? item.rate) || 0,
-        rate: Number(item.rate ?? item.unitPrice) || 0,
-        markupPercent: Number(item.markupPercent) || 0,
-        discount: Number(item.discount) || 0,
-        taxRate: Number(item.taxRate) || 0,
+    : (existingInvoice.items as any[]).map((it: any, idx) => ({
+        itemNo: it.itemNo ?? idx + 1,
+        description: it.description ?? '',
+        quantity: Number(it.quantity) || 0,
+        unitPrice: Number(it.unitPrice ?? it.rate) || 0,
+        rate: Number(it.rate ?? it.unitPrice) || 0,
+        markupPercent: Number(it.markupPercent) || 0,
+        discount: Number(it.discount) || 0,
+        taxRate: Number(it.taxRate) || 0,
       }))
-  );
+  ) as InputItem[];
 
-  // Create a proper InvoiceInput object from existing invoice and updates
   const invoiceInput: InvoiceInput = {
-    // Ensure client is a string id
-    client: (typeof updates.client === 'string' && updates.client)
-      || existingInvoice.clientId
-      || (typeof existingInvoice.client === 'string' ? existingInvoice.client : existingInvoice.clientId),
-    // Include mandatory identity/name fields for InvoiceInput
-    clientId: updates.clientId || existingInvoice.clientId,
-    clientName: updates.clientName || existingInvoice.clientName,
-    number: updates.number || existingInvoice.number,
-    date: updates.date || existingInvoice.date,
-    // Keep invoiceDate in sync with date unless explicitly provided in updates
-    invoiceDate: (updates as any).invoiceDate || existingInvoice.invoiceDate || (updates.date || existingInvoice.date),
-    dueDate: updates.dueDate || existingInvoice.dueDate,
-    amount: updates.amount || existingInvoice.amount,
-    total: updates.total || existingInvoice.total,
-    paidAmount: updates.paidAmount || existingInvoice.paidAmount,
-    status: updates.status || existingInvoice.status,
-    currency: updates.currency || existingInvoice.currency,
-    vatRate: updates.vatRate || existingInvoice.vatRate,
-    reference: updates.reference || existingInvoice.reference,
-    project: updates.project || existingInvoice.project,
-    salesperson: updates.salesperson || existingInvoice.salesperson,
-    salespersonId: updates.salespersonId || existingInvoice.salespersonId,
-    tags: updates.tags || existingInvoice.tags,
-    // Use typed items
+    ...existingInvoice,
+    ...updates,
+    client: (updates.client as any) || existingInvoice.clientId,
     items: inputItems,
-    notes: updates.notes || existingInvoice.notes,
-    terms: updates.terms || existingInvoice.terms,
-    clientEmail: updates.clientEmail || existingInvoice.clientEmail,
-    subtotal: updates.subtotal || existingInvoice.subtotal,
-    vatTotal: updates.vatTotal || existingInvoice.vatTotal,
-    companyDetails: updates.companyDetails || existingInvoice.companyDetails,
-  };
+  } as unknown as InvoiceInput;
   
   const updatedInvoice = mapToInvoice(invoiceInput, existingInvoice);
   

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { PAYSTACK_CONFIG, SUBSCRIPTION_PLANS } from '@/lib/paystack';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from './useSubscription';
 import { toast } from '@/hooks/use-toast';
 
@@ -63,7 +63,7 @@ export const usePayment = () => {
     // Show toast notification for payment failure
     toast({
       title: "Payment Failed",
-      description: "Your payment was not successful. We'll retry automatically for the next 7 days.",
+      description: "Your payment was not successful. We'll retry automatically for the next 5 days.",
       variant: "destructive",
     });
   };

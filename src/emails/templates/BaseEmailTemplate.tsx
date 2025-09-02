@@ -1,4 +1,5 @@
 import React from 'react';
+import emailConfig from '../config/emailConfig';
 
 interface BaseEmailTemplateProps {
   title: string;
@@ -16,6 +17,9 @@ interface BaseEmailTemplateProps {
   logoUrl?: string;
   stampUrl?: string;
   signatureUrl?: string;
+  companyAddress?: string;
+  senderName?: string;
+  senderSignature?: string;
 }
 
 export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
@@ -33,13 +37,19 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
   logoUrl,
   stampUrl,
   signatureUrl,
+  companyAddress,
+  senderName,
+  senderSignature,
 }) => {
-  // Fallbacks to maintain backward compatibility with existing templates
-  const fallbackCompanyName = 'MOK Mzansi Books';
-  const effectiveCompanyName = companyName || fallbackCompanyName;
-  const effectiveLogo = logoUrl || 'https://mokmzansibooks.com/logo.png';
-  const effectiveSignature = signatureUrl || 'https://mokmzansibooks.com/signature.png';
-  const effectiveWebsite = companyWebsite || 'https://mokmzansibooks.com';
+  // Use emailConfig as default, allow props to override
+  const effectiveCompanyName = companyName || emailConfig.company.name;
+  const effectiveLogo = logoUrl || emailConfig.company.logo;
+  const effectiveSignature = signatureUrl || emailConfig.sender.signature;
+  const effectiveWebsite = companyWebsite || emailConfig.company.website;
+  const effectiveCompanyEmail = companyEmail || emailConfig.company.email;
+  const effectiveCompanyPhone = companyPhone || emailConfig.company.phone;
+  const effectiveCompanyAddress = companyAddress || emailConfig.company.address;
+  const effectiveSenderName = senderName || emailConfig.sender.name;
 
   return (
     <html>
@@ -65,7 +75,7 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
               box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             }
             .header {
-              background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+              background: linear-gradient(135deg, ${emailConfig.templates.colors.primary} 0%, ${emailConfig.templates.colors.secondary} 100%);
               padding: 30px 20px;
               text-align: center;
               color: white;
@@ -88,7 +98,7 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
             .button {
               display: inline-block;
               padding: 12px 24px;
-              background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+              background: linear-gradient(135deg, ${emailConfig.templates.colors.primary} 0%, ${emailConfig.templates.colors.secondary} 100%);
               color: white;
               text-decoration: none;
               border-radius: 4px;
@@ -151,8 +161,9 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
               </div>
               <p>
                 <strong>{effectiveCompanyName}</strong><br />
-                {companyEmail && (<><a href={`mailto:${companyEmail}`} style={{color: '#4f46e5'}}>{companyEmail}</a><br /></>)}
-                {companyPhone && (<><a href={`tel:${companyPhone}`} style={{color: '#4f46e5'}}>{companyPhone}</a><br /></>)}
+                {effectiveCompanyEmail && (<><a href={`mailto:${effectiveCompanyEmail}`} style={{color: '#4f46e5'}}>{effectiveCompanyEmail}</a><br /></>)}
+                {effectiveCompanyPhone && (<><a href={`tel:${effectiveCompanyPhone}`} style={{color: '#4f46e5'}}>{effectiveCompanyPhone}</a><br /></>)}
+                {effectiveCompanyAddress && (<>{effectiveCompanyAddress}<br /></>)}
                 {addressLine1 && (<>{addressLine1}<br /></>)}
                 {addressLine2 && (<>{addressLine2}<br /></>)}
                 {addressLine3 && (<>{addressLine3}<br /></>)}
@@ -162,20 +173,10 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
           </div>
           
           <div className="footer">
+            <p>If you have any questions, please don't hesitate to contact us at <a href={`mailto:${effectiveCompanyEmail}`} style={{color: '#4f46e5'}}>{effectiveCompanyEmail}</a>.</p>
+            <p>{effectiveCompanyAddress}</p>
             <p>© {new Date().getFullYear()} {effectiveCompanyName}. All rights reserved.</p>
-            <p>
-              {companyWebsite ? (
-                <>
-                  <a href={companyWebsite} style={{color: '#4f46e5', textDecoration: 'none'}}>Website</a>
-                </>
-              ) : (
-                <>
-                  <a href={effectiveWebsite} style={{color: '#4f46e5', textDecoration: 'none'}}>Website</a> |
-                  <a href="/privacy" style={{color: '#4f46e5', textDecoration: 'none'}}> Privacy Policy</a> |
-                  <a href="/terms" style={{color: '#4f46e5', textDecoration: 'none'}}> Terms of Service</a>
-                </>
-              )}
-            </p>
+            <p><a href={effectiveWebsite} style={{color: '#4f46e5', textDecoration: 'none'}}>Website</a></p>
           </div>
         </div>
       </body>

@@ -401,6 +401,7 @@ const UserManagementTab = () => {
                 onClick={handleRefresh}
                 variant="outline"
                 size="sm"
+                className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
                 disabled={isLoading}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />

@@ -1,8 +1,10 @@
 import { useAuth } from '@/hooks/useAuthHook';
-import { hasReadPermission, hasWritePermission, isAdminRole } from '@/services/permissionService';
+import { hasReadPermission, hasWritePermission, isAdminRole, ALWAYS_ACCESSIBLE_PAGES } from '@/services/permissionService';
+import { useSubscription } from '@/hooks/useSubscription';
 
 export const usePermissions = () => {
   const { user } = useAuth();
+  const { subscription } = useSubscription();
   
   // Helper function to get user role from either location
   const getUserRole = () => {
@@ -20,10 +22,25 @@ export const usePermissions = () => {
     
     return null;
   };
+
+  const hasValidSubscription = () => {
+    if (!subscription) return false;
+    return subscription.status === 'active' || subscription.status === 'trialing';
+  };
   
   const canAccessPage = (pageName: string): boolean => {
     // If no user is logged in, no access
     if (!user) return false;
+
+    // Always allow access to certain pages regardless of subscription
+    if (ALWAYS_ACCESSIBLE_PAGES.includes(pageName) || pageName === 'Settings') {
+      return true;
+    }
+
+    // Check subscription status first
+    if (!hasValidSubscription()) {
+      return false;
+    }
     
     // Get user role from either location
     const userRole = getUserRole();
@@ -40,6 +57,11 @@ export const usePermissions = () => {
   const canEditPage = (pageName: string): boolean => {
     // If no user is logged in, no access
     if (!user) return false;
+
+    // Check subscription status first
+    if (!hasValidSubscription()) {
+      return false;
+    }
     
     // Get user role from either location
     const userRole = getUserRole();

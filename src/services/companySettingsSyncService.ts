@@ -334,7 +334,8 @@ class CompanySettingsSyncService {
 // Create and export singleton instance
 export const companySettingsSyncService = new CompanySettingsSyncService();
 
-// Auto-initialize when module is loaded
-companySettingsSyncService.initialize();
+// Note: Auto-initialization disabled to prevent duplicate sync loops with workingCompanySync.
+// Initialize explicitly in the rare case this service is used.
+// companySettingsSyncService.initialize();
 
 export default companySettingsSyncService;

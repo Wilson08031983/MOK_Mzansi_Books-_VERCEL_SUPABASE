@@ -5,6 +5,9 @@ import { WelcomeEmail } from '../templates/WelcomeEmail';
 import { InvoiceEmail } from '../templates/InvoiceEmail';
 import { QuotationEmail } from '../templates/QuotationEmail';
 import { InvitationEmail } from '../templates/InvitationEmail';
+import { TrialEndingEmail } from '../templates/TrialEndingEmail';
+import { PaymentReminderEmail } from '../templates/PaymentReminderEmail';
+import { OverdueInvoiceEmail } from '../templates/OverdueInvoiceEmail';
 
 // Define the props type for WelcomeEmail
 interface WelcomeEmailProps {
@@ -215,6 +218,166 @@ class EmailService {
       return await this.storeEmailLocally(email);
     } catch (error) {
       console.error('Error sending welcome email:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send a trial ending reminder or expiration email
+   */
+  static async sendTrialEndingEmail(params: {
+    to: string;
+    userName: string;
+    daysLeft: number; // <=0 means expired
+    upgradeLink?: string;
+  }): Promise<boolean> {
+    try {
+      const subject = params.daysLeft <= 0
+        ? 'Your MOK Mzansi Books trial has ended'
+        : `Your MOK Mzansi Books trial ends in ${params.daysLeft} day${Math.abs(params.daysLeft) === 1 ? '' : 's'}`;
+      const TrialEndingEmailComponent = TrialEndingEmail as any;
+
+      const html = renderToStaticMarkup(
+        React.createElement(TrialEndingEmailComponent, {
+          userName: params.userName,
+          daysLeft: params.daysLeft,
+          upgradeLink: params.upgradeLink ?? 'https://app.mokmzansibooks.com/pricing',
+          supportEmail: 'support@mokmzansibooks.com'
+        })
+      );
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('=== TRIAL ENDING EMAIL ===');
+        console.log(`To: ${params.to}`);
+        console.log(`Subject: ${subject}`);
+        console.log('HTML Content:', html);
+        console.log('==========================');
+      }
+
+      return await this.storeEmailLocally({
+        to: params.to,
+        subject,
+        html,
+        text: this.htmlToText(html),
+        metadata: {
+          type: 'trial_ending',
+          daysLeft: params.daysLeft,
+          userName: params.userName,
+        }
+      });
+    } catch (error) {
+      console.error('Error sending trial ending email:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send an invoice payment reminder email (before due date)
+   */
+  static async sendInvoicePaymentReminderEmail(params: {
+    to: string;
+    clientName: string;
+    invoiceNumber: string;
+    dueDate: string;
+    amountDue: string;
+    invoiceLink: string;
+    daysUntilDue?: number;
+  }): Promise<boolean> {
+    try {
+      const subject = params.daysUntilDue && params.daysUntilDue > 0
+        ? `Reminder: Invoice #${params.invoiceNumber} due in ${params.daysUntilDue} day${params.daysUntilDue === 1 ? '' : 's'}`
+        : `Payment Reminder: Invoice #${params.invoiceNumber} due ${params.dueDate}`;
+
+      const PaymentReminderEmailComponent = PaymentReminderEmail as any;
+      const html = renderToStaticMarkup(
+        React.createElement(PaymentReminderEmailComponent, {
+          clientName: params.clientName,
+          invoiceNumber: params.invoiceNumber,
+          dueDate: params.dueDate,
+          amountDue: params.amountDue,
+          invoiceLink: params.invoiceLink
+        })
+      );
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('=== INVOICE PAYMENT REMINDER EMAIL ===');
+        console.log(`To: ${params.to}`);
+        console.log(`Subject: ${subject}`);
+        console.log('HTML Content:', html);
+        console.log('=====================================');
+      }
+
+      return await this.storeEmailLocally({
+        to: params.to,
+        subject,
+        html,
+        text: this.htmlToText(html),
+        metadata: {
+          type: 'invoice_payment_reminder',
+          invoiceNumber: params.invoiceNumber,
+          clientName: params.clientName,
+          amountDue: params.amountDue,
+          dueDate: params.dueDate,
+          daysUntilDue: params.daysUntilDue ?? null
+        }
+      });
+    } catch (error) {
+      console.error('Failed to send invoice payment reminder email:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send an overdue invoice email (after due date)
+   */
+  static async sendOverdueInvoiceEmail(params: {
+    to: string;
+    clientName: string;
+    invoiceNumber: string;
+    dueDate: string;
+    amountDue: string;
+    invoiceLink: string;
+    daysOverdue: number;
+  }): Promise<boolean> {
+    try {
+      const subject = `Overdue: Invoice #${params.invoiceNumber} is ${params.daysOverdue} day${Math.abs(params.daysOverdue) === 1 ? '' : 's'} overdue`;
+
+      const OverdueInvoiceEmailComponent = OverdueInvoiceEmail as any;
+      const html = renderToStaticMarkup(
+        React.createElement(OverdueInvoiceEmailComponent, {
+          clientName: params.clientName,
+          invoiceNumber: params.invoiceNumber,
+          dueDate: params.dueDate,
+          amountDue: params.amountDue,
+          invoiceLink: params.invoiceLink,
+          daysOverdue: params.daysOverdue
+        })
+      );
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('=== OVERDUE INVOICE EMAIL ===');
+        console.log(`To: ${params.to}`);
+        console.log(`Subject: ${subject}`);
+        console.log('HTML Content:', html);
+        console.log('============================');
+      }
+
+      return await this.storeEmailLocally({
+        to: params.to,
+        subject,
+        html,
+        text: this.htmlToText(html),
+        metadata: {
+          type: 'overdue_invoice',
+          invoiceNumber: params.invoiceNumber,
+          clientName: params.clientName,
+          amountDue: params.amountDue,
+          dueDate: params.dueDate,
+          daysOverdue: params.daysOverdue
+        }
+      });
+    } catch (error) {
+      console.error('Failed to send overdue invoice email:', error);
       return false;
     }
   }

@@ -1,8 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { safeLocalStorage, safeGet, safeArray, safeString } from '@/utils/safeAccess';
+import { getCompanyId } from '@/services/companyService';
 
 export interface Client {
   id: string;
+  companyId?: string;
   clientType: string;
   companyName: string;
   contactPerson: string;
@@ -41,7 +43,7 @@ export interface Client {
   createdAt?: string;
 }
 
-export type ClientFormData = Omit<Client, 'id' | 'avatar' | 'status' | 'type' | 'totalValue' | 'lastActivity'> & {
+export type ClientFormData = Omit<Client, 'id' | 'companyId' | 'avatar' | 'status' | 'type' | 'totalValue' | 'lastActivity'> & {
   clientType: string;
   companyName: string;
   contactPerson: string;
@@ -74,11 +76,14 @@ export type ClientFormData = Omit<Client, 'id' | 'avatar' | 'status' | 'type' | 
   referralSource: string;
 }
 
-// Get all clients from localStorage
+// Get all clients for the current company from localStorage
 export function getClients(): Client[] {
   try {
-    const clientsData = safeLocalStorage.getItem('clients', null);
-    return safeArray(clientsData) as Client[];
+    const allClientsData = safeLocalStorage.getItem('clients', null);
+    const allClients = safeArray(allClientsData) as Client[];
+    const companyId = getCompanyId();
+    // Include legacy records without companyId as belonging to current company
+    return allClients.filter((c: Client) => !c.companyId || c.companyId === companyId);
   } catch (error) {
     console.error('Error getting clients:', error);
     return [];
@@ -91,10 +96,21 @@ export function getClientById(id: string): Client | undefined {
   return clients.find((client: Client) => client.id === id);
 }
 
-// Save all clients to localStorage
+// Save all clients for the current company to localStorage (merge safely)
 export function saveClients(clients: Client[]): void {
   try {
-    safeLocalStorage.setItem('clients', clients);
+    const companyId = getCompanyId();
+    const allClientsData = safeLocalStorage.getItem('clients', null);
+    const allClients = safeArray(allClientsData) as Client[];
+
+    // Normalize incoming clients with companyId
+    const scopedClients = clients.map((c) => ({ ...c, companyId }));
+
+    // Remove existing entries for this company (including legacy without companyId)
+    const remaining = allClients.filter((c) => c.companyId && c.companyId !== companyId);
+
+    const merged = [...remaining, ...scopedClients];
+    safeLocalStorage.setItem('clients', merged);
   } catch (error) {
     console.error('Error saving clients:', error);
   }
@@ -116,6 +132,7 @@ export function addClient(clientData: ClientFormData): Client {
   // Create new client object
   const newClient: Client = {
     id: uuidv4(),
+    companyId: getCompanyId(),
     ...clientData,
     status: 'Active',
     type: clientData.clientType === 'individual' ? 'Individual' : 'Business',
@@ -151,7 +168,7 @@ export function updateClient(id: string, clientData: Partial<Client>): Client | 
   const index = clients.findIndex((client: Client) => client.id === id);
   
   if (index !== -1) {
-    clients[index] = { ...clients[index], ...clientData };
+    clients[index] = { ...clients[index], ...clientData, companyId: clients[index].companyId || getCompanyId() };
     saveClients(clients);
     
     // Notify application about client update

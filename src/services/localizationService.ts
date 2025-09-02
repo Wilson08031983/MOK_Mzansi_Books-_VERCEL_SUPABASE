@@ -55,12 +55,8 @@ class LocalizationService {
   private saveSettings(): void {
     try {
       localStorage.setItem('app.settings.localization', JSON.stringify(this.settings));
-      // Dispatch storage event for cross-tab sync
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'app.settings.localization',
-        newValue: JSON.stringify(this.settings),
-        storageArea: localStorage
-      }));
+      // Intentionally avoid dispatching synthetic 'storage' events here to prevent event storms
+      // Cross-tab synchronization is handled by the browser's native 'storage' event
       
       // Log localization change as required
       console.log({

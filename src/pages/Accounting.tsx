@@ -14,6 +14,7 @@ import EditIncomeModal from '@/components/accounting/EditIncomeModal';
 import { financialSummaryService, FinancialSummary } from '../services/financialSummaryService';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import { addNotification } from '@/services/notificationService';
+import { getCompanyId } from '@/services/companyService';
 
 const Accounting = () => {
   const { t, formatCurrency, getCurrencySymbol } = useLocalization();
@@ -29,20 +30,7 @@ const Accounting = () => {
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [initialExpenseCategoryFilter, setInitialExpenseCategoryFilter] = useState<string | null>(null);
   
-  // Get or generate company ID
-  const getCompanyId = () => {
-    try {
-      const companyDetails = localStorage.getItem('companyDetails');
-      if (companyDetails) {
-        const parsed = JSON.parse(companyDetails);
-        return `company_${parsed.companyName?.replace(/\s+/g, '_').toLowerCase() || 'default'}`;
-      }
-    } catch (error) {
-      console.error('Error getting company details:', error);
-    }
-    return 'current-company-id';
-  };
-  
+  // Remove local getCompanyId implementation; use centralized service import
   const [companyId] = useState(getCompanyId());
 
   // Load financial summary on component mount and when data changes

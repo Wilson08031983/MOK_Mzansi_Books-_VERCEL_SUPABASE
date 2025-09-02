@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import EmailService from '../emails/services/EmailService';
+import { addNotification } from '@/services/notificationService';
 
 const USER_FIRST_VISIT_KEY = 'mokmzansibooks_first_visit';
 
@@ -25,6 +26,17 @@ export const useUserTracking = (user: { email?: string; name?: string } | null) 
             console.warn('Failed to queue welcome email');
           }
         });
+      }
+
+      // Add a welcome in-app notification
+      try {
+        addNotification({
+          title: 'Welcome to MOK Mzansi Books',
+          message: 'Thanks for joining! Explore your dashboard, create your first invoice or quotation, and set up your company details in Settings.',
+          type: 'system',
+        });
+      } catch (e) {
+        console.warn('Failed to add welcome notification:', e);
       }
     }
   }, [user]);

@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Shield, Lock, AlertCircle } from 'lucide-react';
-import { verifyAdminPermission } from '@/services/localAuthService';
+import { authenticateUser } from '@/services/localAuthService';
+import { isAdminRole as localIsAdminRole } from '@/services/localAuthService';
+import { isAdminRole as permissionIsAdminRole, ADMIN_ROLES as PERMISSION_ADMIN_ROLES } from '@/services/permissionService';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthVerificationModalProps {
@@ -20,6 +22,8 @@ interface AuthVerificationModalProps {
   onVerified: () => void;
   actionType: 'delete' | 'update';
   targetEntityName?: string;
+  // New: scope for admin role validation. 'primary' uses local auth roles; 'extended' uses permissionService roles
+  adminScope?: 'primary' | 'extended';
 }
 
 /**
@@ -31,7 +35,8 @@ const AuthVerificationModal: React.FC<AuthVerificationModalProps> = ({
   onClose,
   onVerified,
   actionType,
-  targetEntityName = 'user'
+  targetEntityName = 'user',
+  adminScope = 'primary'
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,13 +54,23 @@ const AuthVerificationModal: React.FC<AuthVerificationModalProps> = ({
       setIsVerifying(true);
       setError('');
       
-      // Verify admin credentials
-      const isAdmin = await verifyAdminPermission(email, password);
-      if (isAdmin) {
+      // Authenticate credentials first
+      const result = await authenticateUser(email, password);
+      const user = result.user;
+      if (!user) {
+        setError(result.error || 'Invalid credentials or insufficient permissions');
+        return;
+      }
+
+      // Determine role to check
+      const detectedRole = (user.user_metadata?.role as string) || (user.role as unknown as string) || '';
+      const isAllowed = adminScope === 'extended' ? permissionIsAdminRole(detectedRole) : localIsAdminRole(detectedRole);
+
+      if (isAllowed) {
         toast({
-          title: "Verification Successful",
-          description: "Your admin status has been verified.",
-          variant: "default"
+          title: 'Verification Successful',
+          description: 'Your admin status has been verified.',
+          variant: 'default'
         });
         onVerified();
         onClose();
@@ -97,6 +112,10 @@ const AuthVerificationModal: React.FC<AuthVerificationModalProps> = ({
         return 'This action requires admin verification.';
     }
   };
+
+  const rolesLabel = adminScope === 'extended'
+    ? PERMISSION_ADMIN_ROLES.join(', ')
+    : 'CEO, Manager, Bookkeeper, Director, Founder';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -146,7 +165,7 @@ const AuthVerificationModal: React.FC<AuthVerificationModalProps> = ({
 
           <div className="flex items-center space-x-2 text-xs text-slate-500 mt-2">
             <Shield className="h-4 w-4" />
-            <span>Only admins (CEO, Manager, Bookkeeper, Director, Founder) can perform this action</span>
+            <span>Only admins ({rolesLabel}) can perform this action</span>
           </div>
         </div>
 
