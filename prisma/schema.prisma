@@ -21,6 +21,7 @@ model User {
   updatedAt       DateTime  @updatedAt
   trialEndsAt     DateTime?
   isActive        Boolean   @default(true)
+  auditLogs       AuditLog[]
 }
 
 model Account {
@@ -59,24 +60,57 @@ model VerificationToken {
 }
 
 model Subscription {
-  id                 String    @id @default(cuid())
-  userId             String    @unique
-  user               User      @relation(fields: [userId], references: [id])
-  tier               String
-  status             String
-  currentPeriodEnd   DateTime
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id])
+  tier                String
+  status              String
+  currentPeriodStart  DateTime?
+  currentPeriodEnd    DateTime
+  cancelAtPeriodEnd   Boolean   @default(false)
+  canceledAt          DateTime?
+  graceEnd            DateTime?
   paymentDeclinedDate DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  payments            Payment[]
+
+  @@index([status])
+  @@index([currentPeriodEnd])
 }
 
 model Payment {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id])
-  amount        Float
-  currency      String
-  status        String
-  reference     String   @unique
-  createdAt     DateTime @default(now())
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id])
+  subscriptionId     String?
+  subscription       Subscription? @relation(fields: [subscriptionId], references: [id])
+  amount             Float         // ZAR major units (legacy)
+  amountMinor        Int?          // ZAR in minor units (kobo/cents)
+  currency           String
+  status             String
+  reference          String        @unique
+  providerPaymentId  String?
+  createdAt          DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  payload   Json?
+  createdAt DateTime @default(now())
+}
+
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  provider   String
+  eventType  String
+  eventId    String
+  payload    Json
+  processedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([provider, eventId])
 }

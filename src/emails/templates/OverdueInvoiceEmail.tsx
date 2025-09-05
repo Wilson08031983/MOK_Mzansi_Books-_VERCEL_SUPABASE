@@ -1,5 +1,6 @@
 import React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 interface OverdueInvoiceEmailProps {
   clientName: string;
@@ -18,7 +19,7 @@ export const OverdueInvoiceEmail: React.FC<OverdueInvoiceEmailProps> = ({
   amountDue,
   invoiceLink,
   daysOverdue,
-  supportEmail = 'support@mokmzansibooks.com',
+  supportEmail = emailConfig.company.email,
 }) => {
   const title = `Overdue Notice: Invoice #${invoiceNumber}`;
   const previewText = `Invoice #${invoiceNumber} for ${clientName} is ${daysOverdue} day${Math.abs(daysOverdue) === 1 ? '' : 's'} overdue. Amount due: ${amountDue}.`;

@@ -9,7 +9,7 @@ import { Mail, Shield, AlertCircle, UserPlus, Lock, CheckCircle, Link, Eye, Edit
 import { useAuth } from '@/hooks/useAuthHook';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import EmailService from '@/emails/services/EmailService';
+// Removed EmailService import
 import { verifyAdminPermission } from '@/services/localAuthService';
 import { createInvitation, generateInvitationLink } from '@/services/invitationService';
 import { PERMISSION_PAGES, UserPermissions, isAdminRole, getAdminPermissions, getDefaultPermissions } from '@/services/permissionService';
@@ -174,8 +174,27 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
         signatureUrl: companyAssets?.Signature?.dataUrl || companyAssets?.signature,
       };
       
-      // Send invitation email using the new dynamic template
-      const emailSent = await EmailService.sendTeamInvitationEmail(emailParams);
+      // Send invitation email via secure server API route
+      let emailSent = false;
+      try {
+        const res = await fetch('/api/emails/invitation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: emailParams.to,
+            inviterName: emailParams.inviterName,
+            email: emailParams.recipientEmail || emailParams.to,
+            role: emailParams.role,
+            invitationLink: emailParams.invitationLink,
+            companyName: emailParams.companyName,
+            subject: `You've been invited to join ${emailParams.companyName}`,
+          }),
+        });
+        emailSent = res.ok;
+      } catch (sendErr) {
+        console.error('Failed to send invitation email via API:', sendErr);
+        emailSent = false;
+      }
       
       if (!emailSent) {
         // Even if email fails, the invitation is still created

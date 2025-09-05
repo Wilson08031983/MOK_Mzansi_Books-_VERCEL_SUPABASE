@@ -24,6 +24,26 @@ export const usePayment = () => {
     email: email || user?.email || 'user@example.com',
     amount: selectedPlan ? SUBSCRIPTION_PLANS[selectedPlan as keyof typeof SUBSCRIPTION_PLANS].price : 0,
     publicKey: PAYSTACK_CONFIG.publicKey,
+    currency: 'ZAR' as const,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: 'User ID',
+          variable_name: 'user_id',
+          value: user?.id || 'guest',
+        },
+        {
+          display_name: 'Subscription Tier',
+          variable_name: 'subscription_tier',
+          value: selectedPlan || 'unknown',
+        },
+        {
+          display_name: 'Email',
+          variable_name: 'email',
+          value: email || user?.email || 'user@example.com',
+        },
+      ],
+    },
   });
 
   const handlePaymentSuccess = async (reference: any) => {

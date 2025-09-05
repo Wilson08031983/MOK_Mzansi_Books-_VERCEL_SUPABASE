@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 interface QuotationEmailProps {
   clientName: string;
@@ -30,6 +31,7 @@ export const QuotationEmail: React.FC<Readonly<QuotationEmailProps>> = ({
   amount,
   quotationLink,
   companyName,
+  companyEmail,
   items,
   subtotal,
   tax,
@@ -49,12 +51,10 @@ export const QuotationEmail: React.FC<Readonly<QuotationEmailProps>> = ({
             <h3 style={styles.sectionTitle}>From</h3>
             <p style={styles.text}>
               <strong>{companyName}</strong><br />
-              Wilson Mokgethwa Moabelo<br />
-              81 Monokane Street<br />
-              Atterigeville x17<br />
-              Pretoria, Gauteng 0006<br />
-              Email: support@mokmzansibooks.com<br />
-              Phone: +27 64 550 4029
+              {emailConfig.sender.name}<br />
+              {emailConfig.company.address}<br />
+              Email: {emailConfig.company.email}<br />
+              Phone: {emailConfig.company.phone}
             </p>
           </div>
           <div style={styles.column}>
@@ -160,7 +160,7 @@ export const QuotationEmail: React.FC<Readonly<QuotationEmailProps>> = ({
         </p>
         <p style={styles.footerText}>
           This email was sent to {clientName}. If you believe you received this in error, 
-          please contact us at support@mokmzansibooks.com
+          please contact us at <a href={`mailto:${emailConfig.company.email}`} style={styles.link}>{emailConfig.company.email}</a>
         </p>
       </div>
     </div>

@@ -12,6 +12,8 @@ import { sendConfirmationEmail } from '@/services/emailService';
 import { useLocalization } from '@/hooks/useLocalization';
 import { userLinkingService } from '@/services/userLinkingService';
 import { addNotification } from '@/services/notificationService';
+import { autoSyncCompanyEmployee, companyEmployeeSyncService } from '@/services/companyEmployeeSyncService';
+import { updatePrimaryUserInTeamMembers, createEmailVerificationToken } from '@/services/localAuthService';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -31,7 +33,10 @@ const Signup = () => {
     lastName: '',
     email: invitationData?.invited_email || '',
     password: invitationPassword || '',
-    confirmPassword: invitationPassword || ''
+    confirmPassword: invitationPassword || '',
+    // New fields for normal signup
+    companyName: '',
+    position: 'CEO'
   });
   
   // State for terms agreement checkbox
@@ -45,10 +50,47 @@ const Signup = () => {
         ...prev,
         email: invitationData.invited_email,
         password: invitationPassword,
-        confirmPassword: invitationPassword
+        confirmPassword: invitationPassword,
+        // For invited signups, position is from the invitation role if available
+        position: invitationData.role || 'Staff'
       }));
     }
   }, [invitationData, invitationPassword, isInvitationSignup]);
+
+  // Helper: check duplicate email in local storage registry
+  const emailExists = (email: string): boolean => {
+    try {
+      const raw = localStorage.getItem('userCredentials');
+      if (!raw) return false;
+      const creds = JSON.parse(raw);
+      return Object.values<any>(creds).some((c: any) => String(c.email).toLowerCase() === String(email).toLowerCase());
+    } catch (_) {
+      return false;
+    }
+  };
+
+  // Helper: check duplicate company name
+  const companyNameExists = (name: string): boolean => {
+    try {
+      // Check companyDetails store
+      const detailsRaw = localStorage.getItem('companyDetails');
+      if (detailsRaw) {
+        const details = JSON.parse(detailsRaw);
+        const existing = (details.companyName || details.name || '').toString();
+        if (existing && existing.trim().toLowerCase() === name.trim().toLowerCase()) return true;
+      }
+      // Check typed company store
+      const typedRaw = localStorage.getItem('mokMzansiBooks_company');
+      if (typedRaw) {
+        const company = JSON.parse(typedRaw);
+        const existing = (company.name || '').toString();
+        if (existing && existing.trim().toLowerCase() === name.trim().toLowerCase()) return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +106,26 @@ const Signup = () => {
       return;
     }
 
+    // Additional validations for normal signup
+    if (!isInvitationSignup) {
+      if (!formData.companyName || !formData.companyName.trim()) {
+        alert('Please enter your Company Name');
+        return;
+      }
+      if (!formData.position || !formData.position.trim()) {
+        alert('Please select your Position');
+        return;
+      }
+      if (emailExists(formData.email)) {
+        alert('An account with this email already exists. Please sign in or use a different email.');
+        return;
+      }
+      if (companyNameExists(formData.companyName)) {
+        alert('This company name is already registered on this device. Please sign in or use a different company name.');
+        return;
+      }
+    }
+
     setLoading(true);
     
     try {
@@ -72,8 +134,10 @@ const Signup = () => {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email, // Store email in metadata as well for easy access
-        invitation_token: invitationData?.invitation_token || null
-      };
+        invitation_token: invitationData?.invitation_token || null,
+        // Link company fields for normal signup
+        ...(isInvitationSignup ? {} : { company_name: formData.companyName, role: formData.position })
+      } as Record<string, any>;
       
       // Pass complete user data to signUp
       await signUp(formData.email, formData.password, userData);
@@ -104,6 +168,38 @@ const Signup = () => {
         alert(t('auth.signup.accountCreatedSuccess'));
         navigate('/dashboard');
       } else {
+        // Persist company details for the new account owner
+        try {
+          const detailsToSave = {
+            companyName: formData.companyName,
+            email: formData.email,
+            phone: '',
+            website: '',
+            ownerName: formData.firstName,
+            ownerSurname: formData.lastName,
+            ownerPosition: formData.position,
+            addressLine1: '',
+            addressLine2: '',
+            addressLine3: '',
+            addressLine4: ''
+          };
+          companyEmployeeSyncService.saveCompanyDetails(detailsToSave as any);
+          // Broadcast update for listeners
+          window.dispatchEvent(new Event('companyDetailsUpdated'));
+          // Update primary user in team members with owner info
+          updatePrimaryUserInTeamMembers({
+            ownerName: formData.firstName,
+            ownerSurname: formData.lastName,
+            ownerPosition: formData.position,
+            email: formData.email,
+            phone: ''
+          });
+          // Auto-sync to HR employees
+          autoSyncCompanyEmployee();
+        } catch (persistErr) {
+          console.warn('Could not persist company details during signup:', persistErr);
+        }
+
         // Add a welcome notification for new trial users
         addNotification({
           title: t('auth.signup.welcomeNotificationTitle'),
@@ -112,11 +208,20 @@ const Signup = () => {
         });
 
         // Send confirmation email using Resend
+        const tokenResult = createEmailVerificationToken(formData.email);
+        let verifyLink: string | undefined = undefined;
+        if (tokenResult.success && tokenResult.token) {
+          const baseUrl = window.location.origin;
+          verifyLink = `${baseUrl}/verify-email?token=${tokenResult.token}&email=${encodeURIComponent(formData.email)}`;
+          // Helpful for local testing when email sending may be disabled
+          console.log('Email verification link:', verifyLink);
+        }
         const emailSent = await sendConfirmationEmail({
           to: formData.email,
           subject: 'Confirm Your MOK Mzansi Books Account',
           firstName: formData.firstName,
-          lastName: formData.lastName
+          lastName: formData.lastName,
+          verifyLink
         });
         
         if (emailSent) {
@@ -124,7 +229,8 @@ const Signup = () => {
         } else {
           alert(t('auth.signup.accountCreatedPartial'));
         }
-        window.location.reload();
+        // Redirect to login so user can sign in with the new account
+        navigate('/login');
       }
     } catch (error: any) {
       console.error(t('auth.signup.signupError'), error);
@@ -133,6 +239,8 @@ const Signup = () => {
       setLoading(false);
     }
   };
+
+  const positionOptions = ['CEO', 'Director', 'Founder', 'Manager', 'Bookkeeper', 'Staff'];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50 flex items-center justify-center p-4 relative overflow-hidden">
@@ -201,6 +309,21 @@ const Signup = () => {
                 </div>
               </div>
 
+              {!isInvitationSignup && (
+                <div className="space-y-2">
+                  <Label htmlFor="companyName" className="text-foreground font-medium">Company Name</Label>
+                  <Input
+                    id="companyName"
+                    type="text"
+                    value={formData.companyName}
+                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                    className="h-12 bg-background border-border focus:border-primary focus:ring-primary"
+                    placeholder="e.g. Morwa Moabelo (PTY) Ltd"
+                    required={!isInvitationSignup}
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-foreground font-medium">{t('auth.signup.emailLabel')}</Label>
                 <Input
@@ -217,6 +340,20 @@ const Signup = () => {
 
               {!isInvitationSignup && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="position" className="text-foreground font-medium">Position</Label>
+                    <Select value={formData.position} onValueChange={(val) => setFormData({ ...formData, position: val })}>
+                      <SelectTrigger className="h-12 bg-background border-border focus:border-primary focus:ring-primary">
+                        <SelectValue placeholder="Select position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {positionOptions.map((opt) => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="password" className="text-foreground font-medium">{t('common.password')}</Label>
                     <div className="relative">
@@ -238,6 +375,11 @@ const Signup = () => {
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {!isInvitationSignup && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword" className="text-foreground font-medium">{t('auth.signup.confirmPasswordLabel')}</Label>
                     <Input
@@ -298,11 +440,9 @@ const Signup = () => {
             </form>
 
             {!isInvitationSignup && (
-              <div className="text-center">
-                <span className="text-muted-foreground">{t('auth.signup.alreadyHaveAccount')} </span>
-                <Link to="/login" className="text-primary hover:text-primary/80 font-semibold">
-                  {t('auth.signup.signIn')}
-                </Link>
+              <div className="text-center text-sm text-muted-foreground">
+                Already have an account?{' '}
+                <Link to="/login" className="text-primary hover:text-primary/80 font-medium">Log in</Link>
               </div>
             )}
           </CardContent>

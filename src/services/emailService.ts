@@ -1,25 +1,5 @@
-import { Resend } from 'resend';
-
-// Initialize Resend with API key from environment variables
-const resend = new Resend(import.meta.env.VITE_RESEND_API_KEY || 're_AkPz7nFU_JCaJi8MwrTy2TUga9nqkMogU');
-
-// Domain for sending emails
-const domain = import.meta.env.VITE_RESEND_DOMAIN || 'mokmzansibooks.com';
-
-// Function to safely convert data to Uint8Array
-const toUint8Array = async (data: string | ArrayBuffer): Promise<Uint8Array> => {
-  if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data);
-  }
-  
-  if (typeof data === 'string') {
-    // For strings, use TextEncoder which is available in all modern browsers
-    return new TextEncoder().encode(data);
-  }
-  
-  // Fallback for other types (shouldn't happen with our current usage)
-  return new Uint8Array(0);
-};
+// Client-side email service that delegates to secure server API routes
+// No API keys are used on the client. All emails are sent by server handlers under /api/emails/*
 
 interface QuotationEmailOptions {
   to: string;
@@ -32,14 +12,15 @@ interface QuotationEmailOptions {
 
 interface EmailOptions {
   to: string;
-  subject: string;
+  subject?: string;
   firstName?: string;
   lastName?: string;
+  verifyLink?: string;
 }
 
 interface PasswordResetEmailOptions {
   to: string;
-  subject: string;
+  subject?: string;
   resetToken: string;
   firstName?: string;
 }
@@ -61,7 +42,6 @@ interface DeletionEmailOptions {
   companyName?: string;
 }
 
-// Add login notification options
 interface LoginNotificationOptions {
   to: string;
   deviceName: string;
@@ -70,89 +50,83 @@ interface LoginNotificationOptions {
   timestamp: string;
 }
 
-/**
- * Send an email confirmation to a newly registered user
- */
+interface GracePeriodReminderOptions {
+  to: string;
+  userName: string;
+  companyName?: string;
+  daysRemaining: number;
+  gracePeriodEndDate: string;
+  paymentLink?: string;
+  accountManagementLink?: string;
+  lastPaymentAttempt?: string;
+  amountDue: number;
+  currency?: string;
+  subject?: string;
+}
+
+interface AccountLockoutOptions {
+  to: string;
+  userName: string;
+  companyName?: string;
+  lockoutDate: string;
+  gracePeriodEndDate: string;
+  amountDue: number;
+  currency?: string;
+  paymentLink?: string;
+  accountManagementLink?: string;
+  supportEmail?: string;
+  supportPhone?: string;
+  daysPastDue: number;
+  subject?: string;
+}
+
+const API_BASE = '/api/emails';
+
+async function postJson<T = any>(path: string, body: any): Promise<T> {
+  const res = await fetch(`${API_BASE}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Email API error ${res.status}: ${text || res.statusText}`);
+  }
+  // Some routes may return no JSON body
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  // btoa expects binary string
+  return btoa(binary);
+}
+
 export const sendConfirmationEmail = async (options: EmailOptions): Promise<boolean> => {
   try {
-    const { to, subject, firstName = 'there', lastName = '' } = options;
-    const fullName = firstName && lastName ? `${firstName} ${lastName}` : firstName;
-    
-    const { data, error } = await resend.emails.send({
-      from: `MOK Mzansi Books <no-reply@${domain}>`,
-      to: [to],
-      subject: subject || 'Confirm Your Email Address',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
-          </div>
-          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">Welcome to MOK Mzansi Books!</h1>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello ${fullName},</p>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Thanks for signing up! Please confirm your email address to start using your MOK Mzansi Books account and access your free trial.</p>
-          <div style="text-align: center; margin: 32px 0;">
-            <a href="http://localhost:8084/login" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Confirm My Email & Go to Login</a>
-          </div>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 8px;">If you didn't create an account, you can safely ignore this email.</p>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">This link will expire in 24 hours.</p>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
-        </div>
-      `,
-    });
+    const { to, subject, firstName = 'there', lastName = '', verifyLink } = options;
+    if (!to) throw new Error('Missing recipient email');
 
-    if (error) {
-      console.error('Failed to send email:', error);
-      return false;
-    }
-    
-    console.log('Email sent successfully with ID:', data?.id);
+    await postJson('confirmation', { to, subject, firstName, lastName, verifyLink });
     return true;
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending confirmation email:', error);
     return false;
   }
 };
 
-/**
- * Send a password reset email to a user
- */
 export const sendPasswordResetEmail = async (options: PasswordResetEmailOptions): Promise<boolean> => {
   try {
     const { to, subject, resetToken, firstName = 'there' } = options;
-    
-    // Create reset link with token and email
-    const resetLink = `http://localhost:8084/reset-password?token=${resetToken}&email=${encodeURIComponent(to)}`;
-    
-    const { data, error } = await resend.emails.send({
-      from: `MOK Mzansi Books <no-reply@${domain}>`,
-      to: [to],
-      subject: subject || 'Reset Your Password',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
-          </div>
-          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">Password Reset Request</h1>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello ${firstName},</p>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">We received a request to reset your password for your MOK Mzansi Books account. Click the button below to create a new password:</p>
-          <div style="text-align: center; margin: 32px 0;">
-            <a href="${resetLink}" style="background: linear-gradient(to right, #ec4899, #8b5cf6); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Reset My Password</a>
-          </div>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 8px;">If you didn't request this password reset, you can safely ignore this email.</p>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">This link will expire in 1 hour for your security.</p>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
-        </div>
-      `,
-    });
+    if (!to || !resetToken) throw new Error('Missing required parameters');
 
-    if (error) {
-      console.error('Failed to send password reset email:', error);
-      return false;
-    }
-    
-    console.log('Password reset email sent successfully with ID:', data?.id);
+    await postJson('password-reset', { to, subject, resetToken, firstName });
     return true;
   } catch (error) {
     console.error('Error sending password reset email:', error);
@@ -160,54 +134,12 @@ export const sendPasswordResetEmail = async (options: PasswordResetEmailOptions)
   }
 };
 
-/**
- * Send an invitation email to a new team member
- */
 export const sendInvitationEmail = async (options: InvitationEmailOptions): Promise<boolean> => {
   try {
-    const { 
-      to, 
-      subject, 
-      inviterName = 'Admin', 
-      email,
-      role,
-      invitationLink,
-      companyName = 'MOK Mzansi Books'
-    } = options;
-    
-    const { data, error } = await resend.emails.send({
-      from: `${companyName} <no-reply@${domain}>`,
-      to: [to],
-      subject: subject || `You've been invited to join ${companyName}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://mokmzansibooks.com/logo.png" alt="${companyName}" style="width: 120px; height: auto;" />
-          </div>
-          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">You've Been Invited!</h1>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello,</p>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">${inviterName} has invited you to join ${companyName} as a <strong>${role}</strong>.</p>
-          <div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-            <p style="color: #374151; font-size: 16px; margin-bottom: 8px;"><strong>Your account details:</strong></p>
-            <p style="color: #374151; font-size: 16px; margin-bottom: 0;"><strong>Email:</strong> ${email}</p>
-          </div>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">To complete your registration and set up your password, click the button below:</p>
-          <div style="text-align: center; margin: 32px 0;">
-            <a href="${invitationLink}" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Complete Your Registration</a>
-          </div>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;"><strong>Note:</strong> This invitation link will expire in 24 hours.</p>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
-        </div>
-      `,
-    });
+    const { to, subject, inviterName = 'Admin', email, role, invitationLink, companyName = 'MOK Mzansi Books' } = options;
+    if (!to || !email || !role || !invitationLink) throw new Error('Missing required parameters');
 
-    if (error) {
-      console.error('Failed to send invitation email:', error);
-      return false;
-    }
-    
-    console.log('Invitation email sent successfully with ID:', data?.id);
+    await postJson('invitation', { to, subject, inviterName, email, role, invitationLink, companyName });
     return true;
   } catch (error) {
     console.error('Error sending invitation email:', error);
@@ -215,39 +147,12 @@ export const sendInvitationEmail = async (options: InvitationEmailOptions): Prom
   }
 };
 
-/**
- * Send an account deletion notification email
- */
 export const sendAccountDeletionEmail = async (options: DeletionEmailOptions): Promise<boolean> => {
   try {
     const { to, subject, firstName = 'there', companyName = 'MOK Mzansi Books' } = options;
-    
-    const { data, error } = await resend.emails.send({
-      from: `${companyName} <no-reply@${domain}>`,
-      to: [to],
-      subject: subject || 'Your Account Has Been Removed',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://mokmzansibooks.com/logo.png" alt="${companyName}" style="width: 120px; height: auto;" />
-          </div>
-          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">Account Removed</h1>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">Hello ${firstName},</p>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
-            Your user account has been removed from ${companyName}. If you believe this was a mistake, please contact your administrator.
-          </p>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
-        </div>
-      `,
-    });
+    if (!to) throw new Error('Missing recipient email');
 
-    if (error) {
-      console.error('Failed to send account deletion email:', error);
-      return false;
-    }
-    
-    console.log('Account deletion email sent successfully with ID:', data?.id);
+    await postJson('account-deletion', { to, subject, firstName, companyName });
     return true;
   } catch (error) {
     console.error('Error sending account deletion email:', error);
@@ -255,70 +160,17 @@ export const sendAccountDeletionEmail = async (options: DeletionEmailOptions): P
   }
 };
 
-/**
- * Send a quotation email with PDF attachment
- */
 export const sendQuotationEmail = async (options: QuotationEmailOptions): Promise<boolean> => {
   try {
-    const { 
-      to, 
-      subject = `Quotation ${options.quotationNumber} from MOK Mzansi Books`,
-      clientName,
-      pdfAttachment,
-      pdfFileName
-    } = options;
+    const { to, subject, quotationNumber, clientName, pdfAttachment, pdfFileName } = options;
+    if (!to || !quotationNumber || !clientName || !pdfAttachment || !pdfFileName) {
+      throw new Error('Missing required parameters for quotation email');
+    }
 
-    // Convert File/Blob to base64 for email attachment
     const arrayBuffer = await pdfAttachment.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const buffer = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
-    const base64Pdf = btoa(buffer);
-    
-    if (!base64Pdf) {
-      throw new Error('Failed to convert PDF to base64');
-    }
+    const pdfBase64 = arrayBufferToBase64(arrayBuffer);
 
-    const { data, error } = await resend.emails.send({
-      from: `MOK Mzansi Books <quotations@${domain}>`,
-      to: [to],
-      subject,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
-          <div style="text-align: center; margin-bottom: 24px;">
-            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
-          </div>
-          <h1 style="color: #4c1d95; font-size: 20px; font-weight: 600; margin-bottom: 16px;">Dear ${clientName},</h1>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
-            Thank you for your interest in our services. Please find your quotation attached for your reference.
-          </p>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
-            Quotation Number: <strong>${options.quotationNumber}</strong>
-          </p>
-          <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 32px;">
-            If you have any questions or need further clarification, please don't hesitate to contact us.
-          </p>
-          <div style="text-align: center; margin: 32px 0;">
-            <a href="mailto:support@mokmzansibooks.com" style="background: linear-gradient(to right, #8b5cf6, #6366f1); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Contact Us</a>
-          </div>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center; margin-bottom: 8px;">This is an automated message, please do not reply directly to this email.</p>
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
-        </div>
-      `,
-      attachments: [
-        {
-          filename: pdfFileName,
-          content: base64Pdf,
-        },
-      ],
-    });
-
-    if (error) {
-      console.error('Failed to send quotation email:', error);
-      return false;
-    }
-    
-    console.log('Quotation email sent successfully with ID:', data?.id);
+    await postJson('quotation', { to, subject, quotationNumber, clientName, pdfBase64, pdfFileName });
     return true;
   } catch (error) {
     console.error('Error sending quotation email:', error);
@@ -326,44 +178,45 @@ export const sendQuotationEmail = async (options: QuotationEmailOptions): Promis
   }
 };
 
-// Send a login notification email
 export const sendLoginNotificationEmail = async (options: LoginNotificationOptions): Promise<boolean> => {
   try {
     const { to, deviceName, browser, location, timestamp } = options;
+    if (!to || !deviceName || !browser || !location || !timestamp) throw new Error('Missing required parameters');
 
-    const { data, error } = await resend.emails.send({
-      from: `MOK Mzansi Books <no-reply@${domain}>`,
-      to: [to],
-      subject: 'New Login to Your Account',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="https://mokmzansibooks.com/logo.png" alt="MOK Mzansi Books" style="width: 120px; height: auto;" />
-          </div>
-          <h1 style="color: #4c1d95; font-size: 24px; margin-bottom: 16px;">New Login Detected</h1>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 16px;">A new login to your MOK Mzansi Books account was detected with the following details:</p>
-          <ul style="color: #374151; font-size: 16px; margin-bottom: 16px;">
-            <li><strong>Device:</strong> ${deviceName}</li>
-            <li><strong>Browser:</strong> ${browser}</li>
-            <li><strong>Location:</strong> ${location}</li>
-            <li><strong>Time:</strong> ${new Date(timestamp).toLocaleString()}</li>
-          </ul>
-          <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">If this was you, you can safely ignore this email. If you didn't sign in, please secure your account immediately by changing your password.</p>
-          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-          <p style="color: #6b7280; font-size: 14px; text-align: center;">&copy; ${new Date().getFullYear()} MOK Mzansi Books. All rights reserved.</p>
-        </div>
-      `,
-    });
-
-    if (error) {
-      console.error('Failed to send login notification email:', error);
-      return false;
-    }
-
-    console.log('Login notification email sent successfully with ID:', data?.id);
+    await postJson('login-notification', { to, deviceName, browser, location, timestamp });
     return true;
   } catch (error) {
     console.error('Error sending login notification email:', error);
+    return false;
+  }
+};
+
+export const sendGracePeriodReminderEmail = async (options: GracePeriodReminderOptions): Promise<boolean> => {
+  try {
+    const { to, userName, daysRemaining, gracePeriodEndDate, amountDue } = options;
+    if (!to || !userName || daysRemaining === undefined || !gracePeriodEndDate || amountDue === undefined) {
+      throw new Error('Missing required parameters for grace period reminder email');
+    }
+
+    await postJson('grace-period-reminder', options);
+    return true;
+  } catch (error) {
+    console.error('Error sending grace period reminder email:', error);
+    return false;
+  }
+};
+
+export const sendAccountLockoutEmail = async (options: AccountLockoutOptions): Promise<boolean> => {
+  try {
+    const { to, userName, lockoutDate, gracePeriodEndDate, amountDue, daysPastDue } = options;
+    if (!to || !userName || !lockoutDate || !gracePeriodEndDate || amountDue === undefined || daysPastDue === undefined) {
+      throw new Error('Missing required parameters for account lockout email');
+    }
+
+    await postJson('account-lockout', options);
+    return true;
+  } catch (error) {
+    console.error('Error sending account lockout email:', error);
     return false;
   }
 };
@@ -374,6 +227,7 @@ export default {
   sendInvitationEmail,
   sendQuotationEmail,
   sendAccountDeletionEmail,
-  // expose login notification in default export too
-  sendLoginNotificationEmail
+  sendLoginNotificationEmail,
+  sendGracePeriodReminderEmail,
+  sendAccountLockoutEmail,
 };

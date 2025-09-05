@@ -19,7 +19,7 @@ interface BaseEmailTemplateProps {
   signatureUrl?: string;
   companyAddress?: string;
   senderName?: string;
-  senderSignature?: string;
+  senderSignature?: string; // textual signature fallback
 }
 
 export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
@@ -44,12 +44,25 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
   // Use emailConfig as default, allow props to override
   const effectiveCompanyName = companyName || emailConfig.company.name;
   const effectiveLogo = logoUrl || emailConfig.company.logo;
-  const effectiveSignature = signatureUrl || emailConfig.sender.signature;
   const effectiveWebsite = companyWebsite || emailConfig.company.website;
   const effectiveCompanyEmail = companyEmail || emailConfig.company.email;
   const effectiveCompanyPhone = companyPhone || emailConfig.company.phone;
   const effectiveCompanyAddress = companyAddress || emailConfig.company.address;
   const effectiveSenderName = senderName || emailConfig.sender.name;
+  const effectiveSenderSignatureText = senderSignature || emailConfig.sender.signature;
+
+  // Ensure absolute URLs for assets in email clients
+  const baseUrl = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) || effectiveWebsite;
+  const absolutize = (url?: string) => {
+    if (!url) return undefined as string | undefined;
+    if (/^https?:\/\//i.test(url)) return url;
+    const normalizedBase = (baseUrl || '').replace(/\/$/, '');
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    return `${normalizedBase}${normalizedPath}`;
+  };
+  const absoluteLogo = absolutize(effectiveLogo);
+  const absoluteSignature = absolutize(signatureUrl); // only use if a URL was provided
+  const absoluteStamp = absolutize(stampUrl);
 
   return (
     <html>
@@ -132,7 +145,7 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
         <div className="container">
           <div className="header">
             <img 
-              src={effectiveLogo}
+              src={absoluteLogo}
               alt={effectiveCompanyName}
               className="logo"
             />
@@ -145,20 +158,26 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
             
             <div className="signature">
               <div className="brand-row">
-                {effectiveSignature && (
+                {absoluteSignature && (
                   <img 
-                    src={effectiveSignature}
+                    src={absoluteSignature}
                     alt="Authorized Signature"
                   />
                 )}
-                {stampUrl && (
+                {absoluteStamp && (
                   <img 
-                    src={stampUrl}
+                    src={absoluteStamp}
                     alt="Company Stamp"
                     className="stamp"
                   />
                 )}
               </div>
+              {(effectiveSenderName || effectiveSenderSignatureText) && (
+                <p style={{ textAlign: 'center', color: '#6b7280' }}>
+                  {effectiveSenderName && (<><strong>{effectiveSenderName}</strong><br /></>)}
+                  {effectiveSenderSignatureText}
+                </p>
+              )}
               <p>
                 <strong>{effectiveCompanyName}</strong><br />
                 {effectiveCompanyEmail && (<><a href={`mailto:${effectiveCompanyEmail}`} style={{color: '#4f46e5'}}>{effectiveCompanyEmail}</a><br /></>)}

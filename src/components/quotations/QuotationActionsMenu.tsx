@@ -85,6 +85,7 @@ import { toast } from 'sonner';
 import { safeLocalStorage } from '@/utils/safeAccess';
 import { generateInvoiceNumber, saveInvoice, createInvoice } from '@/services/invoiceService';
 import { Invoice } from '@/types/invoice';
+import { sendQuotationEmail } from '@/services/emailService';
 
 // Import the PDF generator and QuotationPreviewModal
 import { generateQuotationPdf, Quotation } from '@/utils/quotationPdfGenerator';
@@ -155,10 +156,11 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
   const [isConverting, setIsConverting] = useState(false);
   const [clientData, setClientData] = useState<ExtendedClient | null>(null);
   const [companyData, setCompanyData] = useState<CompanyDetails | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
   const handleView = () => {
     try {
-      logDocument('Quotation', 'View', { id: quotation.id, number: quotation.number });
+      logDocument('View', 'Quotation', quotation.number, quotation.id);
     } catch (e) {
       console.warn('Audit logging (view quotation) failed:', e);
     }
@@ -319,7 +321,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
 
   const handleEdit = () => {
     try {
-      logDocument('Quotation', 'Open Edit', { id: quotation.id, number: quotation.number });
+      logDocument('Open Edit', 'Quotation', quotation.number, quotation.id);
     } catch (e) {
       console.warn('Audit logging (open edit) failed:', e);
     }
@@ -336,30 +338,58 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
     setIsSendDialogOpen(true);
   };
 
-  const confirmSend = () => {
+  const confirmSend = async () => {
+    setIsSending(true);
     try {
-      // Mark as sent in storage
-      markQuotationAsSent(quotation.id);
-      
-      toast.success(t('quotations.toasts.sent', { email: (quotation as ExtendedQuotation & { clientEmail?: string }).clientEmail || '' }));
-      setIsSendDialogOpen(false);
-      
-      // Trigger parent refresh to update the UI state without full page reload
-      if (onRefresh) {
-        onRefresh();
-      }
-      try {
-        logDocument('Quotation', 'Send', {
-          id: quotation.id,
-          number: quotation.number,
-          email: (quotation as ExtendedQuotation & { clientEmail?: string }).clientEmail || ''
-        });
-      } catch (e) {
-        console.warn('Audit logging (send quotation) failed:', e);
+      // Prepare PDF data and generate as Blob (without downloading)
+      const pdfQuotation = {
+        ...quotation,
+        validUntil: quotation.validUntil || quotation.dueDate || new Date().toISOString().split('T')[0],
+      };
+      const result = await generateQuotationPdf(pdfQuotation as Quotation, { output: 'blob' });
+      const pdfBlob = result as Blob;
+      if (!(pdfBlob instanceof Blob)) throw new Error('Failed to generate PDF blob');
+
+      // Resolve recipient and client display name
+      const toEmail = (quotation as ExtendedQuotation & { clientEmail?: string }).clientEmail || '';
+      if (!toEmail) throw new Error('Missing client email');
+      const displayClientName = typeof quotation.client === 'string'
+        ? (quotation.client as string)
+        : typeof quotation.client === 'object' && quotation.client
+          ? ((quotation.client as { name?: string }).name) || 'Valued Customer'
+          : 'Valued Customer';
+
+      // Send via secure server API
+      const subject = `Quotation ${quotation.number}`;
+      const success = await sendQuotationEmail({
+        to: toEmail,
+        subject,
+        quotationNumber: quotation.number,
+        clientName: displayClientName,
+        pdfAttachment: pdfBlob,
+        pdfFileName: `Quotation-${quotation.number}.pdf`,
+      });
+
+      if (success) {
+        // Mark as sent in storage and update UI
+        markQuotationAsSent(quotation.id);
+        toast.success(t('quotations.toasts.sent', { email: toEmail }));
+        setIsSendDialogOpen(false);
+        if (onRefresh) onRefresh();
+        try {
+          logDocument('Send', 'Quotation', quotation.number, quotation.id);
+          logSystem('Email Sent', `Sent quotation ${quotation.number} to ${toEmail}`, { quotationId: quotation.id, toEmail });
+        } catch (e) {
+          console.warn('Audit logging (send quotation) failed:', e);
+        }
+      } else {
+        toast.error('Failed to send quotation. Please try again.');
       }
     } catch (error) {
-      console.error('Error marking quotation as sent:', error);
-      toast.error('Failed to update quotation status');
+      console.error('Error sending quotation:', error);
+      toast.error('Failed to send quotation.');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -383,7 +413,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       
       // Success is handled by the PDF generator
       try {
-        logDocument('Quotation', 'Download PDF', { id: quotation.id, number: quotation.number });
+        logDocument('Download PDF', 'Quotation', quotation.number, quotation.id);
       } catch (e) {
         console.warn('Audit logging (download quotation pdf) failed:', e);
       }
@@ -401,7 +431,7 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
 
   const confirmDelete = () => {
     try {
-      logDocument('Quotation', 'Delete Confirmed', { id: quotation.id, number: quotation.number });
+      logDocument('Delete Confirmed', 'Quotation', quotation.number, quotation.id);
     } catch (e) {
       console.warn('Audit logging (delete confirmed) failed:', e);
     }
@@ -497,7 +527,8 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
       // Show success message
       toast.success(t('quotations.toasts.convertedToInvoice'));
       try {
-        logDocument('Quotation', 'Convert To Invoice', { id: quotation.id, number: quotation.number, invoiceNumber });
+        logDocument('Convert To Invoice', 'Quotation', quotation.number, quotation.id);
+        logSystem('Convert To Invoice', `Converted quotation ${quotation.number} to invoice ${invoiceNumber}`, { quotationId: quotation.id, invoiceNumber });
       } catch (e) {
         console.warn('Audit logging (convert to invoice) failed:', e);
       }
@@ -598,9 +629,17 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
             <AlertDialogCancel>{t('quotations.dialogs.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmSend}
+              disabled={isSending}
               className="bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600 text-white"
             >
-              {t('quotations.dialogs.sendConfirm')}
+              {isSending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                t('quotations.dialogs.sendConfirm')
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

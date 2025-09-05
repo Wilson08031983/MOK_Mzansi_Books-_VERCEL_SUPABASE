@@ -7,7 +7,8 @@ import { Loader2, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Quotation } from '@/types/quotation';
-import EmailService from '@/emails/services/EmailService';
+import { sendQuotationEmail } from '@/services/emailService';
+import { generateQuotationPdf } from '@/utils/quotationPdfGenerator';
 
 interface SendQuotationModalProps {
   isOpen: boolean;
@@ -28,9 +29,9 @@ const SendQuotationModal: React.FC<SendQuotationModalProps> = ({
 }) => {
   const [isSending, setIsSending] = useState(false);
   const [emailData, setEmailData] = useState({
-    to: quotation.client?.email || '',
+    to: (typeof quotation.client === 'object' && quotation.client?.email) ? (quotation.client as any).email : quotation.clientEmail || '',
     subject: `Quotation #${quotation.quotationNumber} from ${companyName}`,
-    message: `Dear ${quotation.client?.name || 'Valued Customer'},\n\nPlease find attached your quotation #${quotation.quotationNumber} from ${companyName}.\n\nThis quotation is valid until: ${quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString('en-ZA') : '30 days from today'}\n\nTotal Amount: ${quotation.currency || 'R'} ${quotation.total?.toFixed(2) || '0.00'}\n\nShould you have any questions or require any clarification, please don't hesitate to contact us.\n\nWe look forward to your business!\n\nBest regards,\n${companyName}`,
+    message: `Dear ${(typeof quotation.client === 'object' && (quotation.client as any)?.name) || quotation.clientName || 'Valued Customer'},\n\nPlease find attached your quotation #${quotation.quotationNumber} from ${companyName}.\n\nThis quotation is valid until: ${quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString('en-ZA') : '30 days from today'}\n\nTotal Amount: ${quotation.currency || 'R'} ${quotation.total?.toFixed(2) || '0.00'}\n\nShould you have any questions or require any clarification, please don't hesitate to contact us.\n\nWe look forward to your business!\n\nBest regards,\n${companyName}`,
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -50,45 +51,50 @@ const SendQuotationModal: React.FC<SendQuotationModalProps> = ({
     setIsSending(true);
 
     try {
-      // Format quotation items for the email template
-      const items = quotation.items?.map(item => ({
-        description: item.description || 'No description',
-        quantity: item.quantity || 1,
-        unitPrice: `${quotation.currency || 'R'} ${(item.unitPrice || 0).toFixed(2)}`,
-        amount: `${quotation.currency || 'R'} ${((item.quantity || 1) * (item.unitPrice || 0)).toFixed(2)}`,
-      })) || [];
+      // Build a PDF-friendly quotation shape for the generator util
+      const pdfQuotation = {
+        id: quotation.id,
+        number: quotation.quotationNumber,
+        date: quotation.quotationDate || (quotation as any).date,
+        validUntil: quotation.validUntil || quotation.quotationDate || new Date().toISOString().split('T')[0],
+        clientId: quotation.clientId,
+        clientName: quotation.clientName,
+        clientEmail: quotation.clientEmail,
+        client: quotation.client as any,
+        items: (quotation.items || []).map(item => ({
+          id: item.id,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.unitPrice,
+          unitPrice: item.unitPrice,
+          amount: item.amount,
+        })),
+        subtotal: quotation.subtotal,
+        vatRate: quotation.taxRate,
+        vatTotal: quotation.taxAmount,
+        total: quotation.total,
+        amount: quotation.total,
+        notes: quotation.notes,
+        terms: quotation.terms,
+        reference: (quotation as any).reference,
+        status: quotation.status,
+        currency: quotation.currency,
+      } as any;
 
-      // Format dates
-      const formatDate = (dateString?: string) => {
-        if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-ZA', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        });
-      };
+      // Generate PDF as Blob (without downloading)
+      const result = await generateQuotationPdf(pdfQuotation, { output: 'blob' });
+      const pdfBlob = result as Blob;
+      if (!(pdfBlob instanceof Blob)) throw new Error('Failed to generate PDF blob');
 
-      // For local development, we'll use a placeholder link
-      const quotationLink = `${window.location.origin}/quotations/${quotation.id}`;
-
-      // Send the email using our EmailService
-      const success = await EmailService.sendQuotationEmail(
-        emailData.to,
-        quotation.client?.name || 'Valued Customer',
-        quotation.quotationNumber || '',
-        formatDate(quotation.quotationDate) || 'N/A',
-        formatDate(quotation.validUntil) || '30 days from date of issue',
-        `${quotation.currency || 'R'} ${quotation.total?.toFixed(2) || '0.00'}`,
-        quotationLink,
-        companyName,
-        companyEmail,
-        items,
-        `${quotation.currency || 'R'} ${quotation.subtotal?.toFixed(2) || '0.00'}`,
-        `${quotation.currency || 'R'} ${(quotation.taxAmount || 0).toFixed(2)}`,
-        `${quotation.currency || 'R'} ${quotation.total?.toFixed(2) || '0.00'}`,
-        emailData.message
-      );
+      // Send via secure server API
+      const success = await sendQuotationEmail({
+        to: emailData.to,
+        subject: emailData.subject,
+        quotationNumber: quotation.quotationNumber,
+        clientName: (typeof quotation.client === 'object' && (quotation.client as any)?.name) || quotation.clientName || 'Valued Customer',
+        pdfAttachment: pdfBlob,
+        pdfFileName: `Quotation-${quotation.quotationNumber}.pdf`,
+      });
 
       if (success) {
         toast.success('Quotation sent successfully!');
@@ -111,7 +117,7 @@ const SendQuotationModal: React.FC<SendQuotationModalProps> = ({
         <DialogHeader>
           <DialogTitle>Send Quotation #{quotation.quotationNumber}</DialogTitle>
           <DialogDescription>
-            Send this quotation to {quotation.client?.name || 'the client'} via email.
+            Send this quotation to {(typeof quotation.client === 'object' && (quotation.client as any)?.name) || 'the client'} via email.
           </DialogDescription>
         </DialogHeader>
 

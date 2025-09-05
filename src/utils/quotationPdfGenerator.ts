@@ -148,7 +148,7 @@ const formatDate = (dateString: string): string => {
 };
 
 // Main PDF generation function
-export const generateQuotationPdf = async (quotation: Quotation): Promise<void> => {
+export const generateQuotationPdf = async (quotation: Quotation, options: { output?: 'download' | 'blob' } = {}): Promise<void | Blob> => {
   // Constants for page layout and pagination
   const PAGE_HEIGHT = 297; // A4 height in mm
   const FOOTER_RESERVED_HEIGHT = 70; // Space reserved for footer elements
@@ -804,13 +804,18 @@ export const generateQuotationPdf = async (quotation: Quotation): Promise<void> 
     // Return to the last page
     doc.setPage(totalPages - 1);
     
-    // Save the PDF
-    doc.save(`Quotation-${quotation.number}.pdf`);
-    
-    // Show success toast
-    toast.success('PDF generated successfully!');
-    
-    console.log('PDF generation completed successfully');
+    // Save or return the PDF depending on output option
+    if ((options.output ?? 'download') === 'download') {
+      doc.save(`Quotation-${quotation.number}.pdf`);
+      // Show success toast only when downloading
+      toast.success('PDF generated successfully!');
+      
+      console.log('PDF generation completed successfully');
+    } else {
+      // Return a Blob for emailing as attachment
+      const arrayBuffer = doc.output('arraybuffer') as ArrayBuffer;
+      return new Blob([arrayBuffer], { type: 'application/pdf' });
+    }
     
   } catch (error) {
     console.error('Error generating PDF:', error);

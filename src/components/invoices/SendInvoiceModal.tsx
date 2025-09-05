@@ -7,7 +7,6 @@ import { Loader2, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Invoice, Client } from '@/types/invoice';
-import EmailService from '@/emails/services/EmailService';
 
 interface SendInvoiceModalProps {
   isOpen: boolean;
@@ -86,29 +85,34 @@ const SendInvoiceModal: React.FC<SendInvoiceModalProps> = ({
       // Generate invoice link
       const invoiceLink = `${window.location.origin}/invoices/view/${invoice.id}`;
 
-      // Send the email using our EmailService
-      const success = await EmailService.sendInvoiceEmail(
-        emailData.to,
-        getClientName(),
-        invoice.number,
-        formatDate(invoice.date),
-        invoice.dueDate ? formatDate(invoice.dueDate) : 'Upon receipt',
-        `${invoice.currency || 'R'} ${invoice.total?.toFixed(2) || '0.00'}`,
-        invoiceLink,
-        companyName,
-        items,
-        `${invoice.currency || 'R'} ${invoice.subtotal?.toFixed(2) || '0.00'}`,
-        `${invoice.currency || 'R'} ${(invoice.vatTotal || 0).toFixed(2)}`,
-        `${invoice.currency || 'R'} ${invoice.total?.toFixed(2) || '0.00'}`,
-        emailData.message
-      );
+      // Call secure server route to send invoice email
+      const response = await fetch('/api/emails/invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: emailData.to,
+          clientName: getClientName(),
+          invoiceNumber: invoice.number,
+          invoiceDate: formatDate(invoice.date),
+          dueDate: invoice.dueDate ? formatDate(invoice.dueDate) : 'Upon receipt',
+          amountDue: `${invoice.currency || 'R'} ${invoice.total?.toFixed(2) || '0.00'}`,
+          invoiceLink,
+          companyName,
+          items,
+          subtotal: `${invoice.currency || 'R'} ${invoice.subtotal?.toFixed(2) || '0.00'}`,
+          tax: `${invoice.currency || 'R'} ${(invoice.vatTotal || 0).toFixed(2)}`,
+          total: `${invoice.currency || 'R'} ${invoice.total?.toFixed(2) || '0.00'}`,
+          notes: emailData.message,
+        }),
+      });
 
-      if (success) {
+      if (response.ok) {
         toast.success('Invoice sent successfully!');
-        if (onSuccess) onSuccess();
+        onSuccess?.();
         onClose();
       } else {
-        toast.error('Failed to send invoice. Please try again.');
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.message || 'Failed to send invoice. Please try again.');
       }
     } catch (error) {
       console.error('Error sending invoice:', error);

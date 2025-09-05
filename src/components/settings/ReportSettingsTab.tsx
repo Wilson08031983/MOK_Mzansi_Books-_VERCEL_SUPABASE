@@ -589,7 +589,7 @@ const ReportSettingsTab = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t('clients.allStatus')}</SelectItem>
-                      <SelectItem value="paid">{t('billing.paid')}</SelectItem>
+                      <SelectItem value="paid">{t('invoices.statusLabels.paid')}</SelectItem>
                       <SelectItem value="pending">{t('clients.pending')}</SelectItem>
                       <SelectItem value="overdue">{t('clients.overdue')}</SelectItem>
                     </SelectContent>

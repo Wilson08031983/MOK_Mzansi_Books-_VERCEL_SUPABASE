@@ -54,8 +54,20 @@ const Login = () => {
       }
       
       await signIn(formData.email, formData.password);
-      // 2FA removed: proceed directly
-      navigate('/welcome-back');
+
+      // Determine first-time vs returning based on user-specific flag
+      try {
+        const stored = localStorage.getItem('mokUser');
+        const parsed = stored ? JSON.parse(stored) : null;
+        const userId = parsed?.id || 'anonymous';
+        const firstSeenKey = `user_first_login_seen_${userId}`;
+        const hasSeen = !!localStorage.getItem(firstSeenKey);
+        // First-time users go straight to dashboard (which sets the flag via WelcomeSection)
+        navigate(hasSeen ? '/welcome-back' : '/dashboard');
+      } catch {
+        // Fallback to previous behavior
+        navigate('/welcome-back');
+      }
     } catch (error: unknown) {
       console.error(t('auth.login.loginError'), error);
       const errorMessage = error instanceof Error ? error.message : t('auth.login.loginError');

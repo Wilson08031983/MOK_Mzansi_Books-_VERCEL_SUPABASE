@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 export interface LowStockItem {
   name: string;
@@ -21,6 +22,11 @@ export const LowStockEmail: React.FC<LowStockEmailProps> = ({
   companyName,
   inventoryLink,
 }) => {
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
+  const effectiveInventoryLink = /^https?:\/\//i.test(inventoryLink)
+    ? inventoryLink
+    : `${appBase}${inventoryLink.startsWith('/') ? inventoryLink : '/' + inventoryLink}`;
+
   return (
     <BaseEmailTemplate
       title="Low Stock Alert"
@@ -67,7 +73,7 @@ export const LowStockEmail: React.FC<LowStockEmailProps> = ({
 
         <div style={styles.buttonContainer}>
           <a
-            href={inventoryLink}
+            href={effectiveInventoryLink}
             style={styles.button}
             target="_blank"
             rel="noopener noreferrer"
@@ -80,8 +86,11 @@ export const LowStockEmail: React.FC<LowStockEmailProps> = ({
           Please take the necessary action to restock these items to avoid any potential stockouts.
         </p>
 
-        <p style={styles.footer}>
-          This is an automated notification from {companyName}. Please do not reply to this email.
+        <p style={styles.paragraph}>
+          Need help? Contact our support team at{' '}
+          <a href={`mailto:${emailConfig.company.email}`} style={{ color: '#4f46e5' }}>
+            {emailConfig.company.email}
+          </a>.
         </p>
       </div>
     </BaseEmailTemplate>

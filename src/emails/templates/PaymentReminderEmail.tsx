@@ -1,5 +1,6 @@
 import React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 interface PaymentReminderEmailProps {
   clientName: string;
@@ -16,7 +17,7 @@ export const PaymentReminderEmail: React.FC<PaymentReminderEmailProps> = ({
   dueDate,
   amountDue,
   invoiceLink,
-  supportEmail = 'support@mokmzansibooks.com',
+  supportEmail = emailConfig.company.email,
 }) => {
   const title = `Payment Reminder: Invoice #${invoiceNumber}`;
   const previewText = `Invoice #${invoiceNumber} for ${clientName} is due on ${dueDate}. Amount due: ${amountDue}.`;

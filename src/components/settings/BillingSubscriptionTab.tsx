@@ -1,203 +1,181 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Calendar, 
+  // Calendar, 
   CreditCard, 
   Check, 
   AlertTriangle, 
   Clock, 
   X, 
   ArrowRight, 
-  Shield 
+  // Shield 
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useLocalization } from '@/hooks/useLocalization';
 import { auditService } from '@/services/auditService';
+import { SUBSCRIPTION_PLANS, formatPrice } from '@/lib/paystack';
+import { usePayment } from '@/hooks/usePayment';
+import PaymentModal from '@/components/PaymentModal';
+import { useSubscription } from '@/hooks/useSubscription';
 
 const BillingSubscriptionTab = () => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const { t, formatCurrency } = useLocalization();
+  const { t } = useLocalization();
+  const {
+    selectedPlan,
+    showPaymentModal,
+    isProcessing,
+    handleSelectPlan,
+    initiatePayment,
+    setShowPaymentModal,
+  } = usePayment();
 
-  // Mock subscription data for demonstration
-  const mockSubscription = {
-    status: 'active',
-    tier: 'premium',
-    trialDaysLeft: null,
-    startDate: '2025-01-01',
-    currentPeriodEnd: '2025-07-01',
-    paymentDeclinedDate: null
-  };
 
-  const currentSubscription = mockSubscription;
 
-  // Format date from ISO string
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString(undefined, {
+  const { subscription, loading, fetchPaymentHistory, cancelSubscriptionAtPeriodEnd, refreshSubscription } = useSubscription();
+  const [paymentHistory, setPaymentHistory] = useState<Array<{ date: string | Date; amount: number; status: string; description?: string }>>([]);
+
+  useEffect(() => {
+    if (!loading) {
+      fetchPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
+    }
+  }, [loading, fetchPaymentHistory]);
+
+  const currentSubscription = subscription || { tier: 'trial', status: 'trial', currentPeriodEnd: new Date() } as any;
+
+  // Format date from ISO string or Date
+  const formatDate = (dateInput: string | Date | null) => {
+    if (!dateInput) return 'N/A';
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (Number.isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
   };
 
+  // --- Next billing date helpers ---
+  const safeDate = (val: any): Date | null => {
+    if (!val) return null;
+    const d = val instanceof Date ? val : new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const addDays = (date: Date, days: number): Date => {
+    return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+  };
+
+  const isFarFutureSentinel = (date: Date | null): boolean => {
+    if (!date) return false;
+    return date.getFullYear() >= 2099; // treat 2099-12-31 (and beyond) as invalid sentinel
+  };
+
+  const getPlanDurationDays = (tier: string): number => {
+    const key = (tier || '').toLowerCase() as keyof typeof SUBSCRIPTION_PLANS;
+    const plan = SUBSCRIPTION_PLANS[key as keyof typeof SUBSCRIPTION_PLANS];
+    if (plan?.duration) return plan.duration;
+    // sensible defaults
+    if (key === 'annual') return 365;
+    return 31;
+  };
+
+  const computeNextBillingDate = (sub: any): Date | null => {
+    const now = new Date();
+    const status = (sub?.status || '').toString().toLowerCase();
+    const tier = (sub?.tier || 'monthly').toString().toLowerCase();
+    const duration = getPlanDurationDays(tier);
+
+    const end = safeDate(sub?.currentPeriodEnd);
+
+    // If canceled: show end of access if valid and not a sentinel; otherwise no next billing
+    if (status === 'canceled') {
+      if (end && !isFarFutureSentinel(end)) return end;
+      return null;
+    }
+
+    // If we have a valid, reasonable future end date, use it directly
+    if (end && !isFarFutureSentinel(end)) {
+      if (end > now) return end;
+      // If end date is in the past, roll forward by whole periods until in the future
+      let rolled = end;
+      // Prevent infinite loops with a hard cap of 48 cycles
+      let guard = 0;
+      while (rolled <= now && guard < 48) {
+        rolled = addDays(rolled, duration);
+        guard++;
+      }
+      return rolled > now ? rolled : addDays(now, duration);
+    }
+
+    // Otherwise compute from createdAt (or now) using plan duration
+    const created = safeDate(sub?.createdAt) || now;
+    let next = created;
+    let guard = 0;
+    while (next <= now && guard < 48) {
+      next = addDays(next, duration);
+      guard++;
+    }
+    return next > now ? next : addDays(now, duration);
+  };
+
+  const nextBillingDate = computeNextBillingDate(currentSubscription);
+
+  const daysLeft = (() => {
+    const end = safeDate(currentSubscription?.currentPeriodEnd);
+    if (!end || isFarFutureSentinel(end)) return null;
+    const ms = end.getTime() - Date.now();
+    return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+  })();
+
   // Get subscription status badge
   const getStatusBadge = () => {
-    switch (currentSubscription.status) {
-      case 'trial':
-        return <Badge className="bg-emerald-500 hover:bg-emerald-600">{t('settings.billing.status.trial')}</Badge>;
-      case 'active':
-        return <Badge className="bg-blue-500 hover:bg-blue-600">{t('settings.billing.status.active')}</Badge>;
-      case 'payment_failed':
-        return <Badge className="bg-amber-500 hover:bg-amber-600">{t('settings.billing.status.paymentIssue')}</Badge>;
-      case 'expired':
-        return <Badge className="bg-red-500 hover:bg-red-600">{t('settings.billing.status.expired')}</Badge>;
-      case 'canceled':
-        return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.status.canceled')}</Badge>;
-      default:
-        return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.tiers.free')}</Badge>;
+    const status = (currentSubscription?.status || '').toString().toLowerCase();
+    if (status === 'trial' || status === 'trialing') {
+      return <Badge className="bg-emerald-500 hover:bg-emerald-600">{t('settings.billing.status.trial')}</Badge>;
     }
+    if (status === 'active') {
+      return <Badge className="bg-blue-500 hover:bg-blue-600">{t('settings.billing.status.active')}</Badge>;
+    }
+    if (status === 'past_due' || status === 'unpaid' || status === 'incomplete') {
+      return <Badge className="bg-amber-500 hover:bg-amber-600">{t('settings.billing.status.paymentIssue')}</Badge>;
+    }
+    if (status === 'canceled') {
+      return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.status.canceled')}</Badge>;
+    }
+    return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.tiers.free')}</Badge>;
   };
 
   // Get tier badge
   const getTierBadge = () => {
-    switch (currentSubscription.tier) {
-      case 'free':
-        return <Badge variant="outline" className="border-gray-400 text-gray-600">{t('settings.billing.tiers.free')}</Badge>;
-      case 'basic':
-        return <Badge variant="outline" className="border-blue-400 text-blue-600">{t('settings.billing.tiers.basic')}</Badge>;
-      case 'premium':
-        return <Badge variant="outline" className="border-purple-400 text-purple-600">{t('settings.billing.tiers.premium')}</Badge>;
-      case 'enterprise':
-        return <Badge variant="outline" className="border-amber-400 text-amber-600">{t('settings.billing.tiers.enterprise')}</Badge>;
-      default:
-        return <Badge variant="outline" className="border-gray-400 text-gray-600">{t('settings.billing.tiers.free')}</Badge>;
+    const tier = (currentSubscription?.tier || '').toString().toLowerCase();
+    if (tier === 'trial') {
+      return <Badge variant="outline" className="border-emerald-400 text-emerald-500">{SUBSCRIPTION_PLANS.trial.name}</Badge>;
     }
+    if (tier === 'monthly') {
+      return <Badge variant="outline" className="border-blue-400 text-blue-600">{SUBSCRIPTION_PLANS.monthly.name}</Badge>;
+    }
+    if (tier === 'annual') {
+      return <Badge variant="outline" className="border-purple-400 text-purple-600">{SUBSCRIPTION_PLANS.annual.name}</Badge>;
+    }
+    return <Badge variant="outline" className="border-gray-400 text-gray-600">{t('settings.billing.tiers.free')}</Badge>;
   };
 
-  // Mock payment history
-  const paymentHistory = [
-    {
-      date: '2025-05-01',
-      amount: 299,
-      status: 'succeeded',
-      description: t('settings.billing.planFeatureDescription', { tier: t('settings.billing.tiers.premium') })
-    },
-    {
-      date: '2025-04-01',
-      amount: 299,
-      status: 'succeeded',
-      description: t('settings.billing.planFeatureDescription', { tier: t('settings.billing.tiers.premium') })
-    },
-    {
-      date: '2025-03-01',
-      amount: 299,
-      status: 'failed',
-      description: t('settings.billing.planFeatureDescription', { tier: t('settings.billing.tiers.premium') })
-    }
-  ];
-
-  // Mock plan details
-  const plans = [
-    {
-      id: 'free',
-      name: t('settings.billing.tiers.free'),
-      price: `${formatCurrency(0)} / ${t('settings.billing.monthly')}`,
-      description: t('settings.billing.planDescriptions.free'),
-      features: [
-        t('settings.billing.features.free.basicInvoicing'),
-        t('settings.billing.features.free.upToClients'),
-        t('settings.billing.features.free.upToDocuments')
-      ],
-      isCurrent: currentSubscription.tier === 'free'
-    },
-    {
-      id: 'basic',
-      name: t('settings.billing.tiers.basic'),
-      price: `${formatCurrency(149)} / ${t('settings.billing.monthly')}`,
-      description: t('settings.billing.planDescriptions.basic'),
-      features: [
-        t('settings.billing.features.basic.unlimitedInvoices'),
-        t('settings.billing.features.basic.upToClients'),
-        t('settings.billing.features.basic.upToDocuments'),
-        t('settings.billing.features.basic.exportReports'),
-        t('settings.billing.features.basic.bulkInvoicing')
-      ],
-      isCurrent: currentSubscription.tier === 'basic'
-    },
-    {
-      id: 'premium',
-      name: t('settings.billing.tiers.premium'),
-      price: `${formatCurrency(299)} / ${t('settings.billing.monthly')}`,
-      description: t('settings.billing.planDescriptions.premium'),
-      features: [
-        t('settings.billing.features.premium.everythingInBasic'),
-        t('settings.billing.features.premium.unlimitedClients'),
-        t('settings.billing.features.premium.unlimitedDocuments'),
-        t('settings.billing.features.premium.advancedReporting'),
-        t('settings.billing.features.premium.customBranding'),
-        t('settings.billing.features.premium.teamMembersUpTo3')
-      ],
-      isCurrent: currentSubscription.tier === 'premium'
-    },
-    {
-      id: 'enterprise',
-      name: t('settings.billing.tiers.enterprise'),
-      price: `${formatCurrency(599)} / ${t('settings.billing.monthly')}`,
-      description: t('settings.billing.planDescriptions.enterprise'),
-      features: [
-        t('settings.billing.features.enterprise.everythingInPremium'),
-        t('settings.billing.features.enterprise.apiAccess'),
-        t('settings.billing.features.enterprise.unlimitedTeamMembers'),
-        t('settings.billing.features.enterprise.prioritySupport'),
-        t('settings.billing.features.enterprise.customIntegrations')
-      ],
-      isCurrent: currentSubscription.tier === 'enterprise'
-    }
-  ];
-
-  const handleUpgrade = (tier: string) => {
-    toast({
-      title: t('settings.billing.toasts.upgradeRequestedTitle'),
-      description: t('settings.billing.toasts.upgradeRequestedDesc', { tier }),
-    });
-    setIsPaymentModalOpen(true);
+  const handleCancelSubscription = async () => {
     try {
-      auditService.logAudit({
-        category: 'financial',
-        action: 'Subscription Upgrade Requested',
-        page: 'Settings',
-        section: 'Billing > Plans',
-        entityType: 'subscription',
-        changeType: 'update',
-        oldValues: { tier: currentSubscription.tier },
-        newValues: { tier },
-        description: `User requested upgrade to ${tier} plan`,
+      await cancelSubscriptionAtPeriodEnd();
+      toast({
+        title: t('settings.billing.toasts.canceledTitle'),
+        description: t('settings.billing.toasts.canceledDesc'),
       });
-    } catch {/* noop */}
-  };
-
-  const handleCancelSubscription = () => {
-    toast({
-      title: t('settings.billing.toasts.canceledTitle'),
-      description: t('settings.billing.toasts.canceledDesc'),
-    });
-    try {
-      auditService.logAudit({
-        category: 'financial',
-        action: 'Subscription Cancellation Requested',
-        page: 'Settings',
-        section: 'Billing > Overview',
-        entityType: 'subscription',
-        changeType: 'delete',
-        oldValues: { status: currentSubscription.status, tier: currentSubscription.tier },
-        description: 'User requested to cancel the current subscription',
-      });
-    } catch {/* noop */}
+      await refreshSubscription?.();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to cancel subscription' });
+    }
   };
 
   const handleRetryPayment = () => {
@@ -205,19 +183,40 @@ const BillingSubscriptionTab = () => {
       title: t('settings.billing.toasts.retryTitle'),
       description: t('settings.billing.toasts.retryDesc'),
     });
-    setIsPaymentModalOpen(true);
+    setShowPaymentModal(true);
     try {
       auditService.logAudit({
         category: 'financial',
-        action: 'Payment Method Update Requested',
+        action: 'Retry Payment',
         page: 'Settings',
         section: 'Billing > Overview',
-        entityType: 'payment_method',
+        entityType: 'subscription',
         changeType: 'update',
-        description: 'User initiated payment method update from payment issue banner',
+        description: 'User initiated retry payment from billing overview',
       });
     } catch {/* noop */}
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card className="glass backdrop-blur-xl bg-slate-900/60 border-white/10 shadow-business">
+          <CardHeader>
+            <CardTitle className="flex items-center font-sf-pro text-slate-100">
+              <CreditCard className="h-5 w-5 mr-2" />
+              {t('settings.billing.title')}
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              {t('settings.billing.subtitle')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-slate-400">Loading subscription...</div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -233,10 +232,9 @@ const BillingSubscriptionTab = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-3 w-full max-w-md">
+            <TabsList className="grid grid-cols-2 w-full max-w-md">
               <TabsTrigger value="overview">{t('settings.billing.tabs.overview')}</TabsTrigger>
               <TabsTrigger value="plans">{t('settings.billing.tabs.plans')}</TabsTrigger>
-              <TabsTrigger value="billing">{t('settings.billing.tabs.billing')}</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
@@ -255,21 +253,20 @@ const BillingSubscriptionTab = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {currentSubscription.status === 'trial' && currentSubscription.trialDaysLeft && (
+                  {(currentSubscription.status === 'trial' || currentSubscription.status === 'trialing') && daysLeft !== null && (
                     <div className="rounded-md p-4 flex items-start bg-emerald-900/20 border border-emerald-800/40">
                       <Clock className="h-5 w-5 text-emerald-300 mr-3 mt-0.5" />
                       <div>
                         <h3 className="font-medium text-emerald-200">{t('settings.billing.trialPeriod')}</h3>
                         <p className="text-emerald-300">
-                          {t('settings.billing.trialDaysLeft', { days: currentSubscription.trialDaysLeft })}
-                          {currentSubscription.trialDaysLeft <= 3 && 
-                            ` ${t('settings.billing.trialEndingSoon')}`}
+                          {t('settings.billing.trialDaysLeft', { days: daysLeft || 0 })}
+                          {!!daysLeft && daysLeft <= 3 && ` ${t('settings.billing.trialEndingSoon')}`}
                         </p>
                       </div>
                     </div>
                   )}
 
-                  {currentSubscription.status === 'payment_failed' && (
+                  {(currentSubscription.status === 'past_due' || currentSubscription.status === 'unpaid' || currentSubscription.status === 'incomplete') && (
                     <div className="rounded-md p-4 flex items-start bg-amber-900/20 border border-amber-800/40">
                       <AlertTriangle className="h-5 w-5 text-amber-300 mr-3 mt-0.5" />
                       <div>
@@ -289,30 +286,42 @@ const BillingSubscriptionTab = () => {
                     </div>
                   )}
 
+                  {currentSubscription.status === 'canceled' && daysLeft !== null && daysLeft > 0 && (
+                    <div className="rounded-md p-4 flex items-start bg-red-900/20 border border-red-800/40">
+                      <AlertTriangle className="h-5 w-5 text-red-300 mr-3 mt-0.5" />
+                      <div>
+                        <h3 className="font-medium text-red-200">{t('settings.billing.toasts.canceledTitle')}</h3>
+                        <p className="text-red-300">
+                          {t('settings.billing.trialCanceledDaysLeft', { days: daysLeft })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.currentPlan')}</h3>
                       <p className="text-lg font-semibold capitalize text-slate-100">
-                        {t(`settings.billing.tiers.${currentSubscription.tier}` as any)}
+                        {SUBSCRIPTION_PLANS[(currentSubscription.tier as keyof typeof SUBSCRIPTION_PLANS)]?.name || (currentSubscription.tier as string)}
                       </p>
                     </div>
 
                     <div>
                       <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.billingCycle')}</h3>
-                      <p className="text-lg font-semibold text-slate-100">{t('settings.billing.monthly')}</p>
+                      <p className="text-lg font-semibold text-slate-100">{currentSubscription.tier === 'annual' ? 'Annual' : 'Monthly'}</p>
                     </div>
 
-                    {currentSubscription.startDate && (
+                    {(currentSubscription as any).createdAt && (
                       <div>
                         <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.startDate')}</h3>
-                        <p className="text-lg font-semibold text-slate-100">{formatDate(currentSubscription.startDate)}</p>
+                        <p className="text-lg font-semibold text-slate-100">{formatDate((currentSubscription as any).createdAt as any)}</p>
                       </div>
                     )}
 
-                    {currentSubscription.currentPeriodEnd && (
+                    {nextBillingDate && (
                       <div>
                         <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.nextBillingDate')}</h3>
-                        <p className="text-lg font-semibold text-slate-100">{formatDate(currentSubscription.currentPeriodEnd)}</p>
+                        <p className="text-lg font-semibold text-slate-100">{formatDate(nextBillingDate)}</p>
                       </div>
                     )}
                   </div>
@@ -335,37 +344,39 @@ const BillingSubscriptionTab = () => {
                 </CardFooter>
               </Card>
 
-              <Card className="glass bg-slate-900/40 border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-slate-100">{t('settings.billing.paymentMethod')}</CardTitle>
-                  <CardDescription className="text-slate-400">{t('settings.billing.managePayment')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {currentSubscription.tier !== 'free' ? (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="bg-slate-800/60 p-2 rounded-md mr-4 border border-white/10">
-                          <CreditCard className="h-6 w-6 text-slate-300" />
+              {currentSubscription.status !== 'canceled' && (
+                <Card className="glass bg-slate-900/40 border-white/10">
+                  <CardHeader>
+                    <CardTitle className="text-slate-100">{t('settings.billing.paymentMethod')}</CardTitle>
+                    <CardDescription className="text-slate-400">{t('settings.billing.managePayment')}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {currentSubscription.tier !== 'trial' ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="bg-slate-800/60 p-2 rounded-md mr-4 border border-white/10">
+                            <CreditCard className="h-6 w-6 text-slate-300" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-100">{`•••• •••• •••• 4242`}</p>
+                            <p className="text-sm text-slate-400">{`Exp 12/25`}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-slate-100">{t('settings.billing.cardMasked', { last4: '4242' })}</p>
-                          <p className="text-sm text-slate-400">{t('settings.billing.cardExpires', { expiry: '12/25' })}</p>
-                        </div>
+                        <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => { setShowPaymentModal(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal from Payment Method card', }); } catch {/* noop */} }}>
+                          {t('settings.billing.update')}
+                        </Button>
                       </div>
-                      <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => { setIsPaymentModalOpen(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal from Payment Method card', }); } catch {/* noop */} }}>
-                        {t('settings.billing.update')}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-center py-6">
-                      <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
-                      <Button onClick={() => { setIsPaymentModalOpen(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal to add a new payment method', }); } catch {/* noop */} }}>
-                        {t('settings.billing.addPaymentMethod')}
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
+                        <Button onClick={() => { setShowPaymentModal(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal to add a new payment method', }); } catch {/* noop */} }}>
+                          {t('settings.billing.addPaymentMethod')}
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
@@ -388,8 +399,8 @@ const BillingSubscriptionTab = () => {
                           paymentHistory.map((payment, index) => (
                             <tr key={index} className="border-b border-white/10 last:border-0">
                               <td className="py-3 px-4 text-slate-100">{formatDate(payment.date)}</td>
-                              <td className="py-3 px-4 text-slate-100">{payment.description}</td>
-                              <td className="py-3 px-4 font-medium text-slate-100">{formatCurrency(payment.amount)}</td>
+                              <td className="py-3 px-4 text-slate-100">{payment.description || 'Subscription payment'}</td>
+                              <td className="py-3 px-4 font-medium text-slate-100">{formatPrice(payment.amount)}</td>
                               <td className="py-3 px-4">
                                 {payment.status === 'succeeded' ? (
                                   <span className="inline-flex items-center text-green-400 text-sm">
@@ -416,101 +427,122 @@ const BillingSubscriptionTab = () => {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Plans Tab */}
+            <TabsContent value="plans" className="space-y-6">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-slate-100 mb-4">
+                  Choose Your Plan
+                </h2>
+                <p className="text-xl text-slate-400 max-w-3xl mx-auto">
+                  Select the perfect plan for your South African business
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => {
+                  const isPopular = key === 'monthly';
+                  const isCurrent = (currentSubscription.tier as string) === key;
+
+                  return (
+                    <Card
+                      key={key}
+                      className={`relative transition-all duration-300 hover:shadow-xl cursor-pointer ${
+                        isPopular
+                          ? 'border-purple-500 bg-gradient-to-br from-purple-900/20 to-blue-900/20 shadow-lg scale-105'
+                          : isCurrent
+                          ? 'border-emerald-500 bg-gradient-to-br from-emerald-900/20 to-teal-900/20'
+                          : 'glass bg-slate-900/40 border-white/10 hover:border-purple-200/30'
+                      }`}
+                      onClick={() => !isCurrent && handleSelectPlan(key)}
+                    >
+                      {isPopular && (
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <span className="bg-gradient-to-r from-purple-600 to-blue-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                            Most Popular
+                          </span>
+                        </div>
+                      )}
+                      
+                      {isCurrent && (
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <span className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                            Current Plan
+                          </span>
+                        </div>
+                      )}
+                      
+                      <CardHeader className="text-center">
+                        <CardTitle className="text-2xl font-bold text-slate-100">
+                          {plan.name}
+                        </CardTitle>
+                        <div className="mt-4">
+                          <span className="text-4xl font-bold text-slate-100">
+                            {plan.price === 0 ? 'Free' : formatPrice(plan.price)}
+                          </span>
+                          {plan.price > 0 && (
+                            <span className="text-slate-400">
+                              /{key === 'annual' ? 'year' : 'month'}
+                            </span>
+                          )}
+                        </div>
+                        {key === 'annual' && (
+                          <div className="text-sm text-green-400 font-semibold">
+                            Save 5% annually
+                          </div>
+                        )}
+                      </CardHeader>
+
+                      <CardContent>
+                        <ul className="space-y-3 mb-8">
+                          {plan.features.map((feature, index) => (
+                            <li key={index} className="flex items-center">
+                              <Check className="h-5 w-5 text-green-400 mr-3" />
+                              <span className="text-slate-300">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+
+                        {key === 'trial' && (
+                          <div className="mb-6 text-xs text-slate-400 bg-slate-800/40 border border-slate-700/40 rounded-lg p-3 flex items-start">
+                            <AlertTriangle className="h-4 w-4 text-amber-400 mr-2 mt-0.5" />
+                            <span>
+                              Trial includes limited usage: invoices and quotations are capped monthly; clients, projects, inventory items, suppliers, and storage locations are capped in total. Upgrade anytime to remove limits.
+                            </span>
+                          </div>
+                        )}
+
+                        <Button
+                          className={`w-full h-12 font-semibold transition-all duration-300 ${
+                            isCurrent
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-default'
+                              : isPopular
+                              ? 'bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white'
+                              : 'bg-slate-700 text-slate-100 hover:bg-slate-600 border-white/10'
+                          }`}
+                          disabled={isCurrent}
+                          onClick={() => !isCurrent && handleSelectPlan(key)}
+                        >
+                          {isCurrent ? 'Current Plan' : plan.price === 0 ? 'Start Free Trial' : 'Choose Plan'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
-      {/* Mock Payment Modal */}
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-900/80 border border-white/10 rounded-lg p-6 max-w-md w-full mx-4 backdrop-blur-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-slate-100">{t('settings.billing.updatePaymentMethod')}</h2>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setIsPaymentModalOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.cardNumber')}</label>
-                <input 
-                  type="text" 
-                  placeholder="4242 4242 4242 4242" 
-                  className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
-                  defaultValue="4242 4242 4242 4242"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.expiryDate')}</label>
-                  <input 
-                    type="text" 
-                    placeholder="MM/YY" 
-                    className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
-                    defaultValue="12/25"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.cvc')}</label>
-                  <input 
-                    type="text" 
-                    placeholder="123" 
-                    className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
-                    defaultValue="123"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1 text-slate-100">{t('settings.billing.nameOnCard')}</label>
-                <input 
-                  type="text" 
-                  placeholder="Wilson Moabelo" 
-                  className="w-full p-2 border rounded-md bg-slate-800/60 border-white/10 text-slate-100 placeholder-slate-400"
-                  defaultValue="Wilson Moabelo"
-                />
-              </div>
-              
-              <div className="pt-4">
-                <Button 
-                  className="w-full bg-gradient-to-r from-mokm-orange-500 via-mokm-pink-500 to-mokm-purple-500 hover:from-mokm-orange-600 hover:via-mokm-pink-600 hover:to-mokm-purple-600" 
-                  onClick={() => {
-                    toast({
-                      title: t('settings.billing.toasts.paymentUpdatedTitle'),
-                      description: t('settings.billing.toasts.paymentUpdatedDesc'),
-                    });
-                    setIsPaymentModalOpen(false);
-                    try {
-                      auditService.logAudit({
-                        category: 'financial',
-                        action: 'Payment Method Updated',
-                        page: 'Settings',
-                        section: 'Billing > Payment Modal',
-                        entityType: 'payment_method',
-                        changeType: 'update',
-                        description: 'User saved/updated payment method in modal',
-                      });
-                    } catch {/* noop */}
-                  }}
-                >
-                  <Shield className="h-4 w-4 mr-2" />
-                  {t('settings.billing.savePaymentMethod')}
-                </Button>
-              </div>
-              
-              <p className="text-xs text-slate-400 text-center">
-                {t('settings.billing.paymentSecurityNote')}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        selectedPlan={selectedPlan}
+        onPayment={initiatePayment}
+        isProcessing={isProcessing}
+      />
     </div>
   );
 };

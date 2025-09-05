@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 export interface BirthdayEmailProps {
   employeeName: string;
@@ -19,6 +20,9 @@ export const BirthdayEmail: React.FC<BirthdayEmailProps> = ({
       title="Happy Birthday! 🎉"
       previewText={`Wishing ${employeeName} a wonderful birthday!`}
       companyName={companyName}
+      companyEmail={emailConfig.company.email}
+      companyPhone={emailConfig.company.phone}
+      companyAddress={emailConfig.company.address}
     >
       <div style={styles.container}>
         <div style={styles.header}>
@@ -52,12 +56,6 @@ export const BirthdayEmail: React.FC<BirthdayEmailProps> = ({
         <div style={styles.footer}>
           <p style={styles.footerText}>
             This is an automated message. Please do not reply to this email.
-          </p>
-          <p style={styles.footerContact}>
-            {companyName} • support@mokmzansibooks.com • +27 64 550 4029
-          </p>
-          <p style={styles.footerAddress}>
-            81 Monokane Street, Atterigeville x17, Pretoria, Gauteng, 0006
           </p>
         </div>
       </div>
@@ -144,12 +142,5 @@ const styles = {
   },
   footerText: {
     margin: '0 0 10px 0',
-  },
-  footerContact: {
-    margin: '0 0 5px 0',
-    fontWeight: 'bold' as const,
-  },
-  footerAddress: {
-    margin: '0',
   },
 };

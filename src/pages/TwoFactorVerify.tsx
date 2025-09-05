@@ -25,6 +25,21 @@ const TwoFactorVerify: React.FC = () => {
   const [code, setCode] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
+  // Helper: compute where to go based on first-time flag
+  const computeRedirect = () => {
+    try {
+      const mokUserRaw = localStorage.getItem('mokUser');
+      const mokUser = mokUserRaw ? JSON.parse(mokUserRaw) : null;
+      const fallbackUser = getCurrentUser();
+      const userId = mokUser?.id || fallbackUser?.id || 'anonymous';
+      const firstSeenKey = `user_first_login_seen_${userId}`;
+      const hasSeen = !!localStorage.getItem(firstSeenKey);
+      return hasSeen ? '/welcome-back' : '/dashboard';
+    } catch {
+      return '/welcome-back';
+    }
+  };
+
   useEffect(() => {
     const passedEmail = location?.state?.email || getCurrentUser()?.email || '';
     setEmail(passedEmail);
@@ -32,7 +47,7 @@ const TwoFactorVerify: React.FC = () => {
     // If 2FA is not enabled, skip page safely
     const settings = getSecuritySettings();
     if (!settings.twoFactorEnabled) {
-      navigate('/welcome-back', { replace: true });
+      navigate(computeRedirect(), { replace: true });
       return;
     }
 
@@ -67,7 +82,7 @@ const TwoFactorVerify: React.FC = () => {
       }
       if (validateTwoFactorCode(code, expected)) {
         toast({ title: 'Two-Factor Verified', description: 'Login verification completed.' });
-        navigate('/welcome-back', { replace: true });
+        navigate(computeRedirect(), { replace: true });
       } else {
         toast({ title: 'Invalid Code', description: 'Please check the code and try again.', variant: 'destructive' });
       }

@@ -59,9 +59,14 @@ const normalizeTier = (info: SubscriptionInfoLike | null): string => {
 
 const calcDaysLeft = (info: SubscriptionInfoLike | null): number | null => {
   if (!info?.end_date) return null;
+  const date = new Date(info.end_date);
+  if (isNaN(date.getTime())) return null;
+  // Ignore far-future sentinel or clearly invalid years
+  const year = date.getFullYear();
+  if (year >= 2099 || year < 2000) return null;
+
   const now = Date.now();
-  const end = new Date(info.end_date).getTime();
-  if (isNaN(end)) return null;
+  const end = date.getTime();
   const diffMs = end - now;
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 };
@@ -113,7 +118,7 @@ export const useSubscriptionAccess = () => {
   // Lock UI if subscription exists with a past end_date
   const locked = useMemo(() => {
     if (!user) return false; // don't lock for signed-out view
-    if (daysLeft === null) return false; // no end date specified
+    if (daysLeft === null) return false; // no end date specified or sentinel filtered out
     return daysLeft <= 0 && !hasFullAccess;
   }, [user, daysLeft, hasFullAccess]);
 

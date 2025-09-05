@@ -13,6 +13,9 @@ interface StoredUserCredential {
   fullName?: string;
   role: UserRole;
   permissions?: UserPermissions;
+  emailVerified?: boolean;
+  verifyToken?: string;
+  verifyTokenExpiresAt?: number;
 }
 
 type StoredCredentials = Record<string, StoredUserCredential>;
@@ -158,7 +161,8 @@ export const initializeDefaultUsers = (): void => {
       password: 'admin123',
       fullName: 'Admin User',
       role: 'Manager',
-      permissions: getAdminPermissions()
+      permissions: getAdminPermissions(),
+      emailVerified: true
     };
     
     console.log('🔧 initializeDefaultUsers: Creating initial admin user:', adminUser);
@@ -174,6 +178,8 @@ export const initializeDefaultUsers = (): void => {
       if (user.email === 'admin@mokmzansibooks.com') {
         adminExists = true;
         existingAdminId = id;
+        // Ensure seeded admin is verified
+        credentials[id] = { ...user, emailVerified: true } as StoredUserCredential;
       }
     });
     
@@ -186,12 +192,16 @@ export const initializeDefaultUsers = (): void => {
         password: 'admin123',
         fullName: 'Admin User',
         role: 'Manager',
-        permissions: getAdminPermissions()
+        permissions: getAdminPermissions(),
+        emailVerified: true
       };
       console.log('🔧 initializeDefaultUsers: Creating missing admin user:', adminUser);
       credentials['default-admin'] = adminUser;
       safeSet<StoredCredentials>('userCredentials', credentials);
       existingAdminId = 'default-admin';
+    } else {
+      // Persist potential verification flag update
+      safeSet<StoredCredentials>('userCredentials', credentials);
     }
   }
   
@@ -353,7 +363,8 @@ export const addUser = (
     password,
     fullName,
     role,
-    permissions: userPermissions
+    permissions: userPermissions,
+    emailVerified: false
   };
   
   credentials[userId] = newUser;
@@ -388,7 +399,8 @@ export const initializeLocalAuth = (): void => {
       password: 'admin123',
       fullName: 'Admin User',
       role: 'Manager',
-      permissions: getAdminPermissions()
+      permissions: getAdminPermissions(),
+      emailVerified: true
     };
     
     credentials['admin-user'] = adminUser;
@@ -557,6 +569,11 @@ export const getUserCredentialsByEmail = (email: string, password: string): { su
       console.error('Invalid password for email:', email);
       return { success: false, error: 'Invalid email or password' };
     }
+
+    // Enforce email verification
+    if (userCreds.emailVerified !== true) {
+      return { success: false, error: 'Please verify your email address before signing in.' };
+    }
     
     // Return user data with proper typing
     const userData: AuthUser = {
@@ -618,27 +635,6 @@ export const deleteUser = (userId: string): { success: boolean; error?: string }
   }
 };
 
-// Export the localAuthService object with all functions
-export const localAuthService = {
-  initializeAuth,
-  authenticateUser,
-  getCurrentUser,
-  signOut,
-  isAdmin,
-  addUser,
-  verifyAdminPermission,
-  initializeLocalAuth,
-  resetAuthState,
-  addNewUser,
-  getAllTeamMembers,
-  ensureWilsonHasCEOAccess,
-  getUserCredentialsByEmail,
-  deleteUser,
-  updateUserRole
-};
-
-// Re-export as default for backward compatibility
-export default localAuthService;
 
 // Update primary user information in team members table
 export const updatePrimaryUserInTeamMembers = (companyDetails: {
@@ -741,3 +737,121 @@ export const updatePrimaryUserInTeamMembers = (companyDetails: {
     return { success: false, error: 'Failed to update primary user information' };
   }
 };
+
+// Email verification helpers
+const generateRandomToken = (): string => {
+  try {
+    const bytes = new Uint8Array(16);
+    (window.crypto || (window as any).msCrypto).getRandomValues(bytes);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  }
+};
+
+export const createEmailVerificationToken = (email: string): { success: boolean; token?: string; error?: string } => {
+  try {
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const entry = Object.entries(credentials).find(([_id, cred]) => cred.email.toLowerCase() === email.toLowerCase());
+    if (!entry) return { success: false, error: 'User not found' };
+    const [userId, user] = entry;
+
+    const token = generateRandomToken();
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24h
+
+    credentials[userId] = {
+      ...user,
+      emailVerified: false,
+      verifyToken: token,
+      verifyTokenExpiresAt: expiresAt
+    };
+    safeSet<StoredCredentials>('userCredentials', credentials);
+
+    return { success: true, token };
+  } catch (e) {
+    console.error('Failed to create verification token:', e);
+    return { success: false, error: 'Failed to create verification token' };
+  }
+};
+
+export const verifyEmailByToken = (token: string): { success: boolean; email?: string; error?: string } => {
+  try {
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const entry = Object.entries(credentials).find(([_id, cred]) => cred.verifyToken === token);
+    if (!entry) return { success: false, error: 'Invalid verification link' };
+    const [userId, user] = entry;
+
+    if (!user.verifyTokenExpiresAt || user.verifyTokenExpiresAt < Date.now()) {
+      return { success: false, error: 'This verification link has expired' };
+    }
+
+    credentials[userId] = {
+      ...user,
+      emailVerified: true,
+      verifyToken: undefined,
+      verifyTokenExpiresAt: undefined
+    } as StoredUserCredential;
+
+    safeSet<StoredCredentials>('userCredentials', credentials);
+    return { success: true, email: user.email };
+  } catch (e) {
+    console.error('Failed to verify email by token:', e);
+    return { success: false, error: 'Verification failed' };
+  }
+};
+
+export const isEmailVerified = (email: string): boolean => {
+  try {
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const entry = Object.values(credentials).find(cred => cred.email.toLowerCase() === email.toLowerCase());
+    return !!entry && entry.emailVerified === true;
+  } catch {
+    return false;
+  }
+};
+
+export const setEmailVerifiedByEmail = (email: string, verified: boolean): { success: boolean; error?: string } => {
+  try {
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const entry = Object.entries(credentials).find(([_id, cred]) => cred.email.toLowerCase() === email.toLowerCase());
+    if (!entry) return { success: false, error: 'User not found' };
+    const [userId, user] = entry;
+    credentials[userId] = {
+      ...user,
+      emailVerified: verified,
+      // Clear tokens when setting verified to true
+      ...(verified ? { verifyToken: undefined, verifyTokenExpiresAt: undefined } : {})
+    } as StoredUserCredential;
+    safeSet<StoredCredentials>('userCredentials', credentials);
+    return { success: true };
+  } catch (e) {
+    console.error('Failed to set email verified:', e);
+    return { success: false, error: 'Failed to update verification status' };
+  }
+};
+
+// Export the localAuthService object with all functions
+export const localAuthService = {
+  initializeAuth,
+  authenticateUser,
+  getCurrentUser,
+  signOut,
+  isAdmin,
+  addUser,
+  verifyAdminPermission,
+  initializeLocalAuth,
+  resetAuthState,
+  addNewUser,
+  getAllTeamMembers,
+  ensureWilsonHasCEOAccess,
+  getUserCredentialsByEmail,
+  deleteUser,
+  updateUserRole,
+  createEmailVerificationToken,
+  verifyEmailByToken,
+  isEmailVerified,
+  setEmailVerifiedByEmail
+};
+
+// Re-export as default for backward compatibility
+export default localAuthService;

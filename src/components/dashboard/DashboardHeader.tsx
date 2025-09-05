@@ -47,7 +47,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     .slice(0, 2)
     .toUpperCase();
   return (
-    <header className="liquid-glass glow-hover border-b border-white/10 shadow-business animate-slide-up">
+    <header className="liquid-glass glow-hover border-b border-white/10 shadow-business animate-slide-up relative z-50">
       {subscription && (subscription.status === 'trial' || subscription.status === 'past_due' || subscription.status === 'canceled') && (
         <div className={`w-full py-2 text-center text-sm font-medium ${subscription.status === 'trial' ? 'bg-yellow-500 text-yellow-900' : 'bg-red-500 text-white'}`}>
           <div className="container mx-auto flex items-center justify-center space-x-2">

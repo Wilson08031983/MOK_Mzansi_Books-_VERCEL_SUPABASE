@@ -883,6 +883,8 @@ export const translations = {
         trialPeriod: 'Trial Period',
         trialDaysLeft: '{{days}} days left',
         trialEndingSoon: 'Trial ending soon',
+        trialCanceled: 'You Cancelled the Trial',
+        trialCanceledDaysLeft: '{{days}} days left',
         paymentIssue: 'Payment Issue',
         paymentIssueDesc: 'We had trouble processing your last payment. Please update your payment method.',
         updatePaymentMethod: 'Update payment method',

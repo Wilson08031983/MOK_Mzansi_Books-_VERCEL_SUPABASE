@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 interface InvoiceEmailProps {
   clientName: string;
@@ -34,7 +35,13 @@ export const InvoiceEmail: React.FC<Readonly<InvoiceEmailProps>> = ({
   tax,
   total,
   notes,
-}) => (
+}) => {
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
+  const effectiveInvoiceLink = /^https?:\/\//i.test(invoiceLink)
+    ? invoiceLink
+    : `${appBase}${invoiceLink.startsWith('/') ? invoiceLink : '/' + invoiceLink}`;
+
+  return (
   <BaseEmailTemplate
     title={`Invoice #${invoiceNumber} from ${companyName}`}
     previewText={`Your invoice #${invoiceNumber} is ready. Amount due: ${amountDue}`}
@@ -48,12 +55,12 @@ export const InvoiceEmail: React.FC<Readonly<InvoiceEmailProps>> = ({
             <h3 style={styles.sectionTitle}>From</h3>
             <p style={styles.text}>
               <strong>{companyName}</strong><br />
-              Wilson Mokgethwa Moabelo<br />
+              {emailConfig.sender.name}<br />
               81 Monokane Street<br />
               Atterigeville x17<br />
               Pretoria, Gauteng 0006<br />
-              Email: support@mokmzansibooks.com<br />
-              Phone: +27 64 550 4029
+              Email: {emailConfig.company.email}<br />
+              Phone: {emailConfig.company.phone}
             </p>
           </div>
           <div style={styles.column}>
@@ -133,7 +140,7 @@ export const InvoiceEmail: React.FC<Readonly<InvoiceEmailProps>> = ({
 
       <div style={styles.section}>
         <a
-          href={invoiceLink}
+          href={effectiveInvoiceLink}
           style={styles.button}
           target="_blank"
           rel="noopener noreferrer"
@@ -142,8 +149,8 @@ export const InvoiceEmail: React.FC<Readonly<InvoiceEmailProps>> = ({
         </a>
         <p style={styles.text}>
           Or copy and paste this link into your browser:<br />
-          <a href={invoiceLink} style={styles.link}>
-            {invoiceLink}
+          <a href={effectiveInvoiceLink} style={styles.link}>
+            {effectiveInvoiceLink}
           </a>
         </p>
       </div>
@@ -154,12 +161,13 @@ export const InvoiceEmail: React.FC<Readonly<InvoiceEmailProps>> = ({
         </p>
         <p style={styles.footerText}>
           This email was sent to {clientName}. If you believe you received this in error, 
-          please contact us at support@mokmzansibooks.com
+          please contact us at <a href={`mailto:${emailConfig.company.email}`} style={styles.link}>{emailConfig.company.email}</a>
         </p>
       </div>
     </div>
   </BaseEmailTemplate>
-);
+  );
+};
 
 const styles = {
   container: {

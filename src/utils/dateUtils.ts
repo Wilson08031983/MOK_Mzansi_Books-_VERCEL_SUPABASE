@@ -134,3 +134,67 @@ export const getCurrentDate = (): string => {
 export const getCurrentDateISO = (): string => {
   return formatDateISO(new Date());
 };
+
+/**
+ * Africa/Johannesburg timezone helpers (no DST in ZA).
+ */
+const ZA_OFFSET_MS = 2 * 60 * 60 * 1000; // UTC+2, no DST
+
+/**
+ * Check if a date is invalid or a sentinel far-future date (e.g., >= 2099)
+ */
+export const isSentinelDate = (date: Date | string | null | undefined): boolean => {
+  if (!date) return true;
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return true;
+  const year = d.getUTCFullYear();
+  return year >= 2099;
+};
+
+/**
+ * Compute the UTC timestamp corresponding to 23:59:59.999 of the same calendar day
+ * in Africa/Johannesburg for a given date/time.
+ *
+ * Implementation detail:
+ * - Shift the instant by +02:00 to read ZA calendar components via UTC getters
+ * - Build the local end-of-day at 23:59:59.999 using those components
+ * - Convert back to UTC by subtracting the fixed offset (02:00)
+ */
+export const endOfDayZAToUTC = (date: Date | string): Date => {
+  const dt = typeof date === 'string' ? new Date(date) : date;
+  const shifted = new Date(dt.getTime() + ZA_OFFSET_MS);
+  const y = shifted.getUTCFullYear();
+  const m = shifted.getUTCMonth(); // 0-indexed
+  const d = shifted.getUTCDate();
+  const endLocalMs = Date.UTC(y, m, d, 23, 59, 59, 999);
+  return new Date(endLocalMs - ZA_OFFSET_MS);
+};
+
+/**
+ * Compute remaining whole days until end-of-day in ZA timezone.
+ * Uses Math.ceil to count partial days as a full day per product requirement.
+ * Returns null when the end date is invalid or sentinel.
+ */
+export const daysRemainingZA = (
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): number | null => {
+  if (!endDate) return null;
+  if (isSentinelDate(endDate)) return null;
+  const end = endOfDayZAToUTC(endDate);
+  const diffMs = end.getTime() - now.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.ceil(diffMs / dayMs);
+};
+
+/**
+ * Whether to show the "days left" line per requirements.
+ * True only when we have a non-sentinel endDate and daysRemaining >= 1.
+ */
+export const shouldShowDaysLeft = (
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): boolean => {
+  const days = daysRemainingZA(endDate, now);
+  return typeof days === 'number' && days >= 1;
+};

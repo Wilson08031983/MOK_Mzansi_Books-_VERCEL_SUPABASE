@@ -1,7 +1,11 @@
 
 // PayStack configuration
 export const PAYSTACK_CONFIG = {
-  publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string,
+  publicKey: (
+    import.meta.env.MODE !== 'production'
+      ? (import.meta.env.VITE_PAYSTACK_PUBLIC_KEY_TEST || import.meta.env.VITE_PAYSTACK_PUBLIC_KEY)
+      : import.meta.env.VITE_PAYSTACK_PUBLIC_KEY
+  ) as string,
 };
 
 export const SUBSCRIPTION_PLANS = {

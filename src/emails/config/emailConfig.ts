@@ -2,21 +2,21 @@
 export const emailConfig = {
   company: {
     name: 'MOK Mzansi Books',
-    email: 'support@mokmzansibooks.com',
+    email: 'support@mokmzansibooks.co.za',
     phone: '+27 64 550 4029',
     address: '81 Monokane Street, Atterigeville X17, Pretoria, Gauteng, 0006',
-    website: 'https://mokmzansibooks.com',
+    website: 'https://mokmzansibooks.co.za',
     logo: '/logo.png', // Path to your logo in the public folder
   },
   sender: {
     name: 'Wilson Mokgethwa Moabelo',
-    email: 'support@mokmzansibooks.com',
+    email: 'support@mokmzansibooks.co.za',
     signature: 'Wilson Mokgethwa Moabelo\nMOK Mzansi Books',
   },
   notifications: {
     lowStock: {
       subject: 'Low Stock Alert - Action Required',
-      recipients: ['support@mokmzansibooks.com'], // Add more recipients as needed
+      recipients: ['support@mokmzansibooks.co.za'], // Add more recipients as needed
       threshold: 5, // Number of days before restocking is needed
     },
   },

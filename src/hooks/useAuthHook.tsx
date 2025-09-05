@@ -1,11 +1,25 @@
 import { useContext } from 'react';
 import { AuthContext, AuthContextType } from './useAuth';
+import { SupabaseAuthContext, SupabaseAuthContextType } from './useSupabaseAuth';
+import { useAuthProvider } from './useAuthProvider';
 
-// Separate file for the hook to avoid fast refresh issues
+// Unified hook that selects the correct provider's auth context
 export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
+  const { providerType } = useAuthProvider();
+
+  if (providerType === 'supabase') {
+    const supa = useContext(SupabaseAuthContext);
+    if (supa === undefined) {
+      throw new Error('useAuth (supabase) must be used within a SupabaseAuthProvider');
+    }
+    // The SupabaseAuthContextType is structurally compatible with AuthContextType
+    return supa as unknown as AuthContextType;
+  }
+
+  // Default to mock/local auth provider
+  const mock = useContext(AuthContext);
+  if (mock === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  return mock;
 };

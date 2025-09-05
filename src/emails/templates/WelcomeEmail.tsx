@@ -1,5 +1,6 @@
 import React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 interface WelcomeEmailProps {
   userName: string;
@@ -9,8 +10,8 @@ interface WelcomeEmailProps {
 
 export const WelcomeEmail: React.FC<WelcomeEmailProps> = ({
   userName = 'Valued Customer',
-  loginLink = 'https://app.mokmzansibooks.com/login',
-  supportEmail = 'support@mokmzansibooks.com',
+  loginLink = `${(process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '')}/login`,
+  supportEmail = emailConfig.company.email,
 }) => {
   return (
     <BaseEmailTemplate
@@ -45,7 +46,7 @@ export const WelcomeEmail: React.FC<WelcomeEmailProps> = ({
         </a>
       </div>
 
-      <p>If you have any questions or need assistance, our support team is here to help. You can reach us at <a href={`mailto:${supportEmail}`} style={{color: '#4f46e5'}}>{supportEmail}</a> or call us at <a href="tel:+27645504029" style={{color: '#4f46e5'}}>+27 64 550 4029</a>.</p>
+      <p>If you have any questions or need assistance, our support team is here to help. You can reach us at <a href={`mailto:${supportEmail}`} style={{color: '#4f46e5'}}>{supportEmail}</a> or call us at <a href={`tel:${emailConfig.company.phone}`} style={{color: '#4f46e5'}}>{emailConfig.company.phone}</a>.</p>
       
       <p>Once again, welcome to the MOK Mzansi Books family!</p>
       

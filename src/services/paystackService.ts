@@ -1,7 +1,11 @@
 import Paystack from 'paystack';
 import { env } from '@/env.mjs';
 
-const paystack = new Paystack(env.PAYSTACK_SECRET_KEY);
+const secretKey = (process.env.NODE_ENV !== 'production'
+  ? (env.PAYSTACK_SECRET_KEY_TEST || env.PAYSTACK_SECRET_KEY)
+  : env.PAYSTACK_SECRET_KEY);
+
+const paystack = new Paystack(secretKey);
 
 export const paystackService = {
   verifyTransaction: async (reference: string) => {

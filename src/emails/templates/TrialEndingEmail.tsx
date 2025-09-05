@@ -1,5 +1,6 @@
 import React from 'react';
 import { BaseEmailTemplate } from './BaseEmailTemplate';
+import emailConfig from '../config/emailConfig';
 
 interface TrialEndingEmailProps {
   userName: string;
@@ -11,11 +12,16 @@ interface TrialEndingEmailProps {
 export const TrialEndingEmail: React.FC<TrialEndingEmailProps> = ({
   userName = 'Valued Customer',
   daysLeft,
-  upgradeLink = 'https://app.mokmzansibooks.com/pricing',
-  supportEmail = 'support@mokmzansibooks.com',
+  upgradeLink,
+  supportEmail,
 }) => {
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
+  const effectiveUpgradeLink = upgradeLink || `${appBase}/pricing`;
+  const effectiveSupportEmail = supportEmail || emailConfig.company.email;
+  const companyName = emailConfig.company.name;
+
   const expired = daysLeft <= 0;
-  const title = expired ? 'Your MOK Mzansi Books trial has ended' : `Your trial ends in ${daysLeft} day${Math.abs(daysLeft) === 1 ? '' : 's'}`;
+  const title = expired ? `Your ${companyName} trial has ended` : `Your trial ends in ${daysLeft} day${Math.abs(daysLeft) === 1 ? '' : 's'}`;
   const previewText = expired
     ? 'Your access is now limited. Upgrade to continue with full features.'
     : `Keep your momentum going—upgrade now to keep full access after your ${daysLeft}-day trial ends.`;
@@ -26,9 +32,9 @@ export const TrialEndingEmail: React.FC<TrialEndingEmailProps> = ({
 
       {expired ? (
         <>
-          <p>Your free trial has ended. You can continue to use MOK Mzansi Books with limited access, but to unlock all features—including full invoicing, quotations, inventory, HR, and accounting—you'll need to upgrade.</p>
+          <p>Your free trial has ended. You can continue to use {companyName} with limited access, but to unlock all features—including full invoicing, quotations, inventory, HR, and accounting—you'll need to upgrade.</p>
           <div style={{textAlign: 'center', margin: '30px 0'}}>
-            <a href={upgradeLink} className="button" style={{
+            <a href={effectiveUpgradeLink} className="button" style={{
               display: 'inline-block',
               padding: '12px 24px',
               background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
@@ -52,7 +58,7 @@ export const TrialEndingEmail: React.FC<TrialEndingEmailProps> = ({
             <li>• Priority support</li>
           </ul>
           <div style={{textAlign: 'center', margin: '30px 0'}}>
-            <a href={upgradeLink} className="button" style={{
+            <a href={effectiveUpgradeLink} className="button" style={{
               display: 'inline-block',
               padding: '12px 24px',
               background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
@@ -68,9 +74,9 @@ export const TrialEndingEmail: React.FC<TrialEndingEmailProps> = ({
         </>
       )}
 
-      <p>If you have any questions, reply to this email or contact us at <a href={`mailto:${supportEmail}`} style={{color: '#4f46e5'}}>{supportEmail}</a>.</p>
+      <p>If you have any questions, reply to this email or contact us at <a href={`mailto:${effectiveSupportEmail}`} style={{color: '#4f46e5'}}>{effectiveSupportEmail}</a>.</p>
 
-      <p>Thank you for choosing MOK Mzansi Books!</p>
+      <p>Thank you for choosing {companyName}!</p>
     </BaseEmailTemplate>
   );
 };

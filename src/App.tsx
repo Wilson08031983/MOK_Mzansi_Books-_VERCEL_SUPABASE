@@ -58,6 +58,7 @@ import AuthDebug from "./pages/AuthDebug";
 import ServiceTestPanel from "./components/ServiceTestPanel";
 // TwoFactorVerify removed
 import SessionTimeoutWatcher from "@/components/auth/SessionTimeoutWatcher";
+import VerifyEmail from "./pages/VerifyEmail";
 
 // Initialize global error handlers
 safeExecute(() => {
@@ -167,6 +168,7 @@ const App = () => {
                     <Route path="/thank-you" element={<ThankYou />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/auth-reset" element={<AuthReset />} />
                     <Route path="/auth-debug" element={<AuthDebug />} />
                     <Route path="/service-test" element={<ServiceTestPanel />} />

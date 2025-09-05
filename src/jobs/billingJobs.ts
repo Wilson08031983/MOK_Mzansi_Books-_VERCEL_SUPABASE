@@ -1,6 +1,44 @@
 import { CronJob } from 'cron';
 import { db } from '@/lib/db';
 import { emailService } from '@/services/email/emailService';
+import emailServiceClient from '@/services/emailService';
+// Function to find users in grace period (payment failed, but within 5 days)
+const findUsersInGracePeriod = async () => {
+  const now = new Date();
+  const gracePeriodStart = new Date();
+  gracePeriodStart.setDate(gracePeriodStart.getDate() - 5);
+
+  return db.subscription.findMany({
+    where: {
+      status: 'past_due',
+      paymentDeclinedDate: {
+        gte: gracePeriodStart,
+        lt: now,
+      },
+    },
+    include: {
+      user: true,
+    },
+  });
+};
+
+// Function to find users whose accounts should be locked (grace period expired)
+const findUsersForAccountLockout = async () => {
+  const gracePeriodEnd = new Date();
+  gracePeriodEnd.setDate(gracePeriodEnd.getDate() - 5);
+
+  return db.subscription.findMany({
+    where: {
+      status: 'past_due',
+      paymentDeclinedDate: {
+        lt: gracePeriodEnd,
+      },
+    },
+    include: {
+      user: true,
+    },
+  });
+};
 
 // Function to find users whose trial is ending in 5 days
 const findUsersWithExpiringTrials = async () => {
@@ -106,10 +144,10 @@ const processSubscriptionRenewals = async () => {
         },
       });
     } else {
-      const gracePeriodEnd = new Date();
-      gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 5);
+      const gracePeriodEndDate = new Date(subscription.paymentDeclinedDate || now);
+      gracePeriodEndDate.setDate(gracePeriodEndDate.getDate() + 5);
 
-      if (subscription.paymentDeclinedDate && now > subscription.paymentDeclinedDate) {
+      if (subscription.paymentDeclinedDate && now > gracePeriodEndDate) {
          await db.subscription.update({
           where: { id: subscription.id },
           data: { status: 'canceled' },
@@ -127,11 +165,139 @@ const processSubscriptionRenewals = async () => {
   }
 };
 
+// Cron job to send grace period reminder emails
+export const gracePeriodReminderJob = new CronJob(
+  '0 10 * * *', // Runs every day at 10:00 AM
+  async () => {
+    try {
+      const subscriptionsInGracePeriod = await findUsersInGracePeriod();
+      
+      for (const subscription of subscriptionsInGracePeriod) {
+        if (subscription.user.email && subscription.user.name) {
+          const plan = SUBSCRIPTION_PLANS[subscription.tier as keyof typeof SUBSCRIPTION_PLANS];
+          if (!plan) continue;
+
+          const gracePeriodEnd = new Date(subscription.paymentDeclinedDate!);
+          gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 5);
+          
+          const daysRemaining = Math.ceil((gracePeriodEnd.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+          
+          await emailServiceClient.sendGracePeriodReminderEmail({
+            to: subscription.user.email,
+            userName: subscription.user.name,
+            companyName: subscription.user.name, // Fallback to user name
+            daysRemaining,
+            amountDue: plan.price,
+            currency: 'ZAR',
+            gracePeriodEndDate: gracePeriodEnd.toISOString(),
+            paymentLink: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
+            accountManagementLink: `${process.env.NEXT_PUBLIC_APP_URL}/settings`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error in grace period reminder cron job:', error);
+    }
+  },
+  null,
+  true,
+  'Africa/Johannesburg'
+);
+
+// Cron job to send account lockout emails and lock accounts
+export const accountLockoutJob = new CronJob(
+  '0 11 * * *', // Runs every day at 11:00 AM
+  async () => {
+    try {
+      const subscriptionsForLockout = await findUsersForAccountLockout();
+      
+      for (const subscription of subscriptionsForLockout) {
+        if (subscription.user.email && subscription.user.name) {
+          const plan = SUBSCRIPTION_PLANS[subscription.tier as keyof typeof SUBSCRIPTION_PLANS];
+          if (!plan) continue;
+
+          const gracePeriodEnd = new Date(subscription.paymentDeclinedDate!);
+          gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 5);
+          
+          const daysPastDue = Math.ceil((new Date().getTime() - gracePeriodEnd.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Send lockout email before locking the account
+          await emailServiceClient.sendAccountLockoutEmail({
+            to: subscription.user.email,
+            userName: subscription.user.name,
+            companyName: subscription.user.name, // Fallback to user name
+            lockoutDate: new Date().toISOString(),
+            gracePeriodEndDate: gracePeriodEnd.toISOString(),
+            amountDue: plan.price,
+            currency: 'ZAR',
+            daysPastDue,
+            paymentLink: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
+            accountManagementLink: `${process.env.NEXT_PUBLIC_APP_URL}/settings`,
+          });
+
+          // Lock the account by setting status to canceled
+          await db.subscription.update({
+            where: { id: subscription.id },
+            data: { status: 'canceled' },
+          });
+
+          // Optionally deactivate the user
+          await db.user.update({
+            where: { id: subscription.user.id },
+            data: { isActive: false },
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error in account lockout cron job:', error);
+    }
+  },
+  null,
+  true,
+  'Africa/Johannesburg'
+);
+
+// Add helper to perform daily transitions (cancel_at_period_end)
+export const runBillingDailyTransitions = async () => {
+  const now = new Date();
+  // Flip subscriptions that reached the end of period with cancelAtPeriodEnd flag
+  const toCancel = await db.subscription.findMany({
+    where: {
+      cancelAtPeriodEnd: true,
+      status: { in: ['trial', 'active', 'past_due'] },
+      currentPeriodEnd: { lte: now },
+    },
+    select: { id: true, userId: true },
+  });
+
+  if (toCancel.length > 0) {
+    const ids = toCancel.map((s) => s.id);
+    await db.subscription.updateMany({
+      where: { id: { in: ids } },
+      data: { status: 'canceled', canceledAt: now },
+    });
+
+    // Write audit logs
+    for (const sub of toCancel) {
+      await db.auditLog.create({
+        data: {
+          userId: sub.userId,
+          action: 'subscription.canceled_at_period_end',
+          payload: { reason: 'period_end_reached' },
+        },
+      });
+    }
+  }
+};
+
 // Cron job for subscription renewals
 export const subscriptionRenewalJob = new CronJob(
   '0 0 * * *', // Runs every day at midnight
   async () => {
     try {
+      // First perform daily transitions (e.g., cancel_at_period_end flips)
+      await runBillingDailyTransitions();
+      // Then process renewals for active/past_due subscriptions
       await processSubscriptionRenewals();
     } catch (error) {
       console.error('Error in subscription renewal cron job:', error);
