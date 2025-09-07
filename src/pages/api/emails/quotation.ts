@@ -1,9 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { Resend } from 'resend';
+import Mailjet from 'node-mailjet';
 import emailConfig from '@/emails/config/emailConfig';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const domain = process.env.RESEND_DOMAIN || new URL(emailConfig.company.website).hostname;
+const mailjet = Mailjet.apiConnect(
+  process.env.VITE_MAILJET_API_KEY!,
+  process.env.VITE_MAILJET_SECRET_KEY!
+);
+const domain = process.env.VITE_MAILJET_DOMAIN || new URL(emailConfig.company.website).hostname;
 const logoUrl = `${new URL(emailConfig.company.website).origin}${emailConfig.company.logo.startsWith('/') ? emailConfig.company.logo : `/${emailConfig.company.logo}`}`;
 const supportEmail = emailConfig.company.email || emailConfig.sender.email;
 

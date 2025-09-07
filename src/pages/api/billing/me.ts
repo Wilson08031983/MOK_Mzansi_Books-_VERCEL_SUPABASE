@@ -1,8 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '@/lib/db';
-import { SUBSCRIPTION_PLANS } from '@/lib/paystack';
-import { getUserId } from '@/middleware/trialLimitMiddleware';
-import { daysRemainingZA, isSentinelDate, endOfDayZAToUTC } from '@/utils/dateUtils';
+import { db } from '../../../lib/db';
+import { SUBSCRIPTION_PLANS } from '../../../lib/paystack';
+import { getUserId } from '../../../middleware/trialLimitMiddleware';
+import { daysRemainingZA, isSentinelDate, endOfDayZAToUTC } from '../../../utils/dateUtils';
 
 // Helper to build snapshot consistently
 function buildSnapshot(params: {

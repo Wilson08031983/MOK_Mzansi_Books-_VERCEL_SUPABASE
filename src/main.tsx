@@ -176,3 +176,11 @@ if (!rootElement) {
     fallbackUI.style.display = 'block'
   }
 }
+
+// Silence noisy console logs when desired (keep console.error and console.warn intact)
+if (import.meta.env.DEV && import.meta.env.VITE_SILENCE_DEBUG_LOGS !== 'false') {
+  // eslint-disable-next-line no-console
+  console.log = () => {};
+  // eslint-disable-next-line no-console
+  console.debug = () => {};
+}

@@ -38,13 +38,14 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 
     switch (event.event) {
       case 'charge.success': {
-        const { reference, amount, customer } = event.data;
+        const { reference, amount, customer, authorization } = event.data;
         const { email } = customer;
 
         // Metadata may come either as flat keys or inside custom_fields array
         const metadata = event.data?.metadata || {};
         let user_id: string | undefined = metadata.user_id;
         let subscription_tier: string | undefined = metadata.subscription_tier;
+        const save_payment_method = Boolean(metadata.save_payment_method);
 
         if ((!user_id || !subscription_tier) && Array.isArray(metadata.custom_fields)) {
           for (const field of metadata.custom_fields) {
@@ -100,6 +101,26 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
             subscription: { connect: { userId: user_id } },
           },
         });
+
+        // If user opted to save card and we received authorization, persist minimal details for later use
+        if (save_payment_method && authorization?.authorization_code) {
+          await db.auditLog.create({
+            data: {
+              userId: user_id,
+              action: 'payment_method.saved',
+              payload: {
+                provider: 'paystack',
+                authorization_code: authorization.authorization_code,
+                last4: authorization.last4,
+                bin: authorization.bin,
+                brand: authorization.brand,
+                exp_month: authorization.exp_month,
+                exp_year: authorization.exp_year,
+                reusable: authorization.reusable,
+              },
+            },
+          });
+        }
 
         await db.auditLog.create({
           data: {

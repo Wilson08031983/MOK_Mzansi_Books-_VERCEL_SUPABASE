@@ -3,8 +3,18 @@
 export const PAYSTACK_CONFIG = {
   publicKey: (
     import.meta.env.MODE !== 'production'
-      ? (import.meta.env.VITE_PAYSTACK_PUBLIC_KEY_TEST || import.meta.env.VITE_PAYSTACK_PUBLIC_KEY)
-      : import.meta.env.VITE_PAYSTACK_PUBLIC_KEY
+      ? (
+          // Prefer explicit test key, with multiple fallbacks to accommodate different env variable names
+          import.meta.env.VITE_PAYSTACK_PUBLIC_KEY_TEST ||
+          import.meta.env.VITE_PAYSTACK_TEST_PUBLIC_KEY ||
+          import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ||
+          import.meta.env.VITE_PAYSTACK_LIVE_PUBLIC_KEY // last resort in dev
+        )
+      : (
+          // In production prefer the generic public key, but also support LIVE-specific name
+          import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ||
+          import.meta.env.VITE_PAYSTACK_LIVE_PUBLIC_KEY
+        )
   ) as string,
 };
 

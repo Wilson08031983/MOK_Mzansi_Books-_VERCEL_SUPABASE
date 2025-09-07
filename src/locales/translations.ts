@@ -894,7 +894,11 @@ export const translations = {
         startDate: 'Start date',
         nextBillingDate: 'Next billing date',
         cancelSubscription: 'Cancel subscription',
+        resumeSubscription: 'Resume subscription',
         viewPlans: 'View plans',
+        cancellationScheduled: 'Cancellation scheduled',
+        cancellationScheduledDesc: 'Your subscription will end on {{date}}. You will retain access until then.',
+        cancellationScheduledNoDate: 'Your subscription will be canceled. You will retain access until the end of your current billing period.',
 
         // Payment method card
         paymentMethod: 'Payment Method',
@@ -946,7 +950,19 @@ export const translations = {
           retryTitle: 'Retry payment',
           retryDesc: 'Please try your payment again',
           paymentUpdatedTitle: 'Payment method updated',
-          paymentUpdatedDesc: 'Your payment method has been updated successfully'
+          paymentUpdatedDesc: 'Your payment method has been updated successfully',
+          resumedTitle: 'Subscription resumed',
+          resumedDesc: 'Your subscription will continue beyond the current period.',
+          paymentSuccessTitle: 'Payment Successful',
+          paymentSuccessDesc: 'Your subscription has been activated.',
+          paymentFailedTitle: 'Payment Failed',
+          paymentFailedDesc: "Your payment was not successful. We'll retry automatically for the next 5 days.",
+          verifyFailedDesc: 'Payment successful but verification failed. Please contact support.',
+          trialStartedTitle: 'Trial Started',
+          trialStartedDesc: 'Your 30-day free trial has been activated.',
+          trialErrorDesc: 'Error starting trial. Please try again.',
+          emailRequiredTitle: 'Email Required',
+          emailRequiredDesc: 'Please enter your email address'
         },
 
         // Plans and History tabs

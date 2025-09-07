@@ -13,6 +13,7 @@ import {
   X, 
   ArrowRight, 
   // Shield 
+  Trash2,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useLocalization } from '@/hooks/useLocalization';
@@ -21,6 +22,10 @@ import { SUBSCRIPTION_PLANS, formatPrice } from '@/lib/paystack';
 import { usePayment } from '@/hooks/usePayment';
 import PaymentModal from '@/components/PaymentModal';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
+import { paymentsStorageService, SavedPaymentMethod } from '@/services/paymentsStorageService';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+// Removed test payment imports as they are no longer needed
 
 const BillingSubscriptionTab = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -32,20 +37,65 @@ const BillingSubscriptionTab = () => {
     handleSelectPlan,
     initiatePayment,
     setShowPaymentModal,
+    openPaymentModalForPlan,
+    openPaymentModalForCardManagement,
+    modalMode,
   } = usePayment();
 
 
 
-  const { subscription, loading, fetchPaymentHistory, cancelSubscriptionAtPeriodEnd, refreshSubscription } = useSubscription();
+  const { subscription, loading, fetchPaymentHistory, cancelSubscriptionAtPeriodEnd, refreshSubscription, resumeSubscription } = useSubscription();
   const [paymentHistory, setPaymentHistory] = useState<Array<{ date: string | Date; amount: number; status: string; description?: string }>>([]);
+  const { user } = useAuth();
+  const [savedCards, setSavedCards] = useState<SavedPaymentMethod[]>([]);
+  const savedCard = (savedCards.find(c => c.isDefault) || savedCards[0]) || null;
+  const [chargingDefault, setChargingDefault] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && activeTab !== 'overview') {
       fetchPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
     }
-  }, [loading, fetchPaymentHistory]);
+  }, [loading, activeTab, fetchPaymentHistory]);
+  
+  // Refresh payment history and subscription data when tab becomes active
+  // Using a ref to prevent unnecessary refreshes that might cause flickering
+  const refreshedRef = React.useRef(false);
+  useEffect(() => {
+    if (activeTab === 'overview' && !loading) {
+      // Only refresh if we haven't already done so
+      if (!refreshedRef.current) {
+        fetchPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
+        // Removed proactive refreshSubscription call here to avoid a second loading cycle that caused UI flicker
+        refreshedRef.current = true;
+      }
+    } else if (activeTab !== 'overview') {
+      // Reset the ref when switching away from overview tab
+      refreshedRef.current = false;
+    }
+  }, [activeTab, loading, fetchPaymentHistory]);
+
+  const refreshSavedCards = () => {
+    const key = (user?.id || user?.email || '') as string;
+    if (!key) {
+      setSavedCards([]);
+      return;
+    }
+    setSavedCards(paymentsStorageService.getAll(key));
+  };
+
+  useEffect(() => {
+    refreshSavedCards();
+  }, [user]);
+  
+  // Refresh saved cards when tab becomes active
+  useEffect(() => {
+    if (activeTab === 'overview') {
+      refreshSavedCards();
+    }
+  }, [activeTab]);
 
   const currentSubscription = subscription || { tier: 'trial', status: 'trial', currentPeriodEnd: new Date() } as any;
+  const isCancelScheduled = Boolean((currentSubscription as any)?.cancelAtPeriodEnd);
 
   // Format date from ISO string or Date
   const formatDate = (dateInput: string | Date | null) => {
@@ -72,7 +122,9 @@ const BillingSubscriptionTab = () => {
 
   const isFarFutureSentinel = (date: Date | null): boolean => {
     if (!date) return false;
-    return date.getFullYear() >= 2099; // treat 2099-12-31 (and beyond) as invalid sentinel
+    // Treat dates in 2099 or beyond as special admin/sentinel values
+    // This prevents showing 2099-12-31 as the cancellation date for admin users
+    return date.getFullYear() >= 2099;
   };
 
   const getPlanDurationDays = (tier: string): number => {
@@ -125,6 +177,38 @@ const BillingSubscriptionTab = () => {
 
   const nextBillingDate = computeNextBillingDate(currentSubscription);
 
+  const handleSetDefault = (cardId: string) => {
+    const key = (user?.id || user?.email || '') as string;
+    if (!key) return;
+    paymentsStorageService.setDefault(key, cardId);
+    refreshSavedCards();
+  };
+
+  const handleRemoveCard = (card: SavedPaymentMethod) => {
+    try {
+      const key = (user?.id || user?.email || '') as string;
+      if (!key) return;
+      const confirmMsg = `Remove card •••• ${card.last4}?`;
+      if (!window.confirm(confirmMsg)) return;
+      paymentsStorageService.remove(key, card.id);
+      refreshSavedCards();
+      try {
+        auditService.logAudit({
+          category: 'financial',
+          action: 'Remove Payment Method',
+          page: 'Settings',
+          section: 'Billing > Overview',
+          entityType: 'payment_method',
+          changeType: 'delete',
+          description: `Removed card ending ${card.last4}${card.isDefault ? ' (was default)' : ''}`,
+        });
+      } catch { /* noop */ }
+      toast({ title: 'Card removed', description: `The card ending ${card.last4} has been removed.` });
+    } catch (e) {
+      toast({ title: 'Failed to remove card', description: 'Please try again.', variant: 'destructive' });
+    }
+  };
+
   const daysLeft = (() => {
     const end = safeDate(currentSubscription?.currentPeriodEnd);
     if (!end || isFarFutureSentinel(end)) return null;
@@ -173,8 +257,37 @@ const BillingSubscriptionTab = () => {
         description: t('settings.billing.toasts.canceledDesc'),
       });
       await refreshSubscription?.();
+      // Refresh saved cards to maintain visibility after cancellation
+      refreshSavedCards();
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to cancel subscription' });
+      toast({ title: t('common.error'), description: e?.message || 'Failed to cancel subscription' });
+    }
+  };
+
+  // New: allow user to resume/uncancel if already scheduled
+  const handleResumeSubscription = async () => {
+    try {
+      await resumeSubscription?.();
+      toast({
+        title: t('settings.billing.toasts.resumedTitle'),
+        description: t('settings.billing.toasts.resumedDesc'),
+      });
+      try {
+        auditService.logAudit({
+          category: 'financial',
+          action: t('settings.billing.resumeSubscription'),
+          page: 'Settings',
+          section: 'Billing > Overview',
+          entityType: 'subscription',
+          changeType: 'update',
+          description: 'User rescinded scheduled cancellation',
+        });
+      } catch { /* noop */ }
+      await refreshSubscription?.();
+      // Refresh saved cards to maintain visibility after resuming
+      refreshSavedCards();
+    } catch (e: any) {
+      toast({ title: t('common.error'), description: e?.message || 'Failed to resume subscription' });
     }
   };
 
@@ -184,6 +297,8 @@ const BillingSubscriptionTab = () => {
       description: t('settings.billing.toasts.retryDesc'),
     });
     setShowPaymentModal(true);
+    // Refresh saved cards to ensure they're visible
+    refreshSavedCards();
     try {
       auditService.logAudit({
         category: 'financial',
@@ -195,6 +310,58 @@ const BillingSubscriptionTab = () => {
         description: 'User initiated retry payment from billing overview',
       });
     } catch {/* noop */}
+  };
+
+  const handleChargeDefault = async () => {
+    if (!user?.id) {
+      toast({ title: 'Not signed in', description: 'Please sign in to continue.', variant: 'destructive' });
+      return;
+    }
+    if (!savedCards || savedCards.length === 0) {
+      toast({ title: 'No saved card', description: 'Please add a card first.', variant: 'destructive' });
+      return;
+    }
+    setChargingDefault(true);
+    try {
+      const tier = (currentSubscription?.tier as string) || 'monthly';
+      const res = await fetch('/api/billing/charge-default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'Charge failed');
+
+      toast({ title: 'Payment succeeded', description: 'Your subscription has been updated.' });
+      try {
+        auditService.logAudit({
+          category: 'financial',
+          action: 'Charge Default Card',
+          page: 'Settings',
+          section: 'Billing > Overview',
+          entityType: 'payment',
+          changeType: 'create',
+          description: `Manual charge via default card${savedCard?.last4 ? ' •••• ' + savedCard.last4 : ''}`,
+        });
+      } catch { /* noop */ }
+      await refreshSubscription?.();
+      fetchPaymentHistory().then(setPaymentHistory).catch(() => {});
+    } catch (e: any) {
+      toast({ title: 'Payment failed', description: e?.message || 'We could not charge your default card.', variant: 'destructive' });
+      try {
+        auditService.logAudit({
+          category: 'financial',
+          action: 'Charge Default Card Failed',
+          page: 'Settings',
+          section: 'Billing > Overview',
+          entityType: 'payment',
+          changeType: 'none',
+          description: String(e?.message || e),
+        });
+      } catch { /* noop */ }
+    } finally {
+      setChargingDefault(false);
+    }
   };
 
   if (loading) {
@@ -211,7 +378,12 @@ const BillingSubscriptionTab = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-slate-400">Loading subscription...</div>
+            <div className="flex justify-center items-center py-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <div className="text-slate-400">Loading subscription information...</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -232,13 +404,23 @@ const BillingSubscriptionTab = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-2 w-full max-w-md">
-              <TabsTrigger value="overview">{t('settings.billing.tabs.overview')}</TabsTrigger>
-              <TabsTrigger value="plans">{t('settings.billing.tabs.plans')}</TabsTrigger>
+            <TabsList className="grid grid-cols-2 w-full max-w-md bg-slate-800/40 border border-white/10 p-1 rounded-md">
+              <TabsTrigger 
+                value="overview"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+              >
+                {t('settings.billing.tabs.overview')}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="plans"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-mokm-orange-500 data-[state=active]:via-mokm-pink-500 data-[state=active]:to-mokm-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+              >
+                {t('settings.billing.tabs.plans')}
+              </TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
+            <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-5 duration-300">
               <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
                   <div className="flex justify-between items-start">
@@ -274,14 +456,23 @@ const BillingSubscriptionTab = () => {
                         <p className="text-amber-300">
                           {t('settings.billing.paymentIssueDesc')}
                         </p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-2 border-white/10 text-slate-100 hover:bg-white/10"
-                          onClick={handleRetryPayment}
-                        >
-                          {t('settings.billing.updatePaymentMethod')}
-                        </Button>
+                        <div className="flex gap-2 flex-wrap mt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="border-white/10 text-slate-100 hover:bg-white/10"
+                            onClick={handleRetryPayment}
+                          >
+                            {t('settings.billing.updatePaymentMethod')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleChargeDefault}
+                            disabled={chargingDefault || !savedCards || savedCards.length === 0}
+                          >
+                            {chargingDefault ? 'Charging…' : 'Charge default card'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -298,6 +489,19 @@ const BillingSubscriptionTab = () => {
                     </div>
                   )}
 
+                  {isCancelScheduled && currentSubscription.status !== 'canceled' && (
+                    <div className="rounded-md p-4 flex items-start bg-amber-900/20 border border-amber-800/40">
+                      <Clock className="h-5 w-5 text-amber-300 mr-3 mt-0.5" />
+                      <div>
+                        <h3 className="font-medium text-amber-200">{t('settings.billing.cancellationScheduled')}</h3>
+                        <p className="text-amber-300">
+                          {nextBillingDate && !isFarFutureSentinel(nextBillingDate)
+                            ? t('settings.billing.cancellationScheduledDesc', { date: formatDate(nextBillingDate) })
+                            : t('settings.billing.cancellationScheduledNoDate')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.currentPlan')}</h3>
@@ -324,17 +528,34 @@ const BillingSubscriptionTab = () => {
                         <p className="text-lg font-semibold text-slate-100">{formatDate(nextBillingDate)}</p>
                       </div>
                     )}
+                    {isCancelScheduled && (
+                      <div>
+                        <h3 className="text-sm font-medium text-slate-400">End of access</h3>
+                        <p className="text-lg font-semibold text-slate-100">{formatDate(currentSubscription.currentPeriodEnd)}</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-between">
                   {currentSubscription.status !== 'canceled' && (
                     <Button 
                       variant="outline" 
-                      className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-300 dark:border-red-800/40 dark:hover:bg-red-900/20"
-                      onClick={handleCancelSubscription}
+                      className={`border-red-300 hover:bg-red-50 dark:border-red-800/40 dark:hover:bg-red-900/20 ${isCancelScheduled ? 'opacity-60 cursor-not-allowed text-slate-400' : 'text-red-600 dark:text-red-300'}`}
+                      onClick={!isCancelScheduled ? handleCancelSubscription : undefined}
+                      disabled={isCancelScheduled}
                     >
                       <X className="h-4 w-4 mr-2" />
-                      {t('settings.billing.cancelSubscription')}
+                      {isCancelScheduled ? t('settings.billing.cancellationScheduled') : t('settings.billing.cancelSubscription')}
+                    </Button>
+                  )}
+                  {isCancelScheduled && currentSubscription.status !== 'canceled' && (
+                    <Button 
+                      variant="outline"
+                      className="border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/40 dark:hover:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300"
+                      onClick={handleResumeSubscription}
+                    >
+                      <Check className="h-4 w-4 mr-2" />
+                      {t('settings.billing.resumeSubscription')}
                     </Button>
                   )}
                   <Button onClick={() => setActiveTab('plans')}>
@@ -344,44 +565,172 @@ const BillingSubscriptionTab = () => {
                 </CardFooter>
               </Card>
 
-              {currentSubscription.status !== 'canceled' && (
-                <Card className="glass bg-slate-900/40 border-white/10">
+              <Card className="glass bg-slate-900/40 border-white/10">
                   <CardHeader>
                     <CardTitle className="text-slate-100">{t('settings.billing.paymentMethod')}</CardTitle>
                     <CardDescription className="text-slate-400">{t('settings.billing.managePayment')}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {currentSubscription.tier !== 'trial' ? (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="bg-slate-800/60 p-2 rounded-md mr-4 border border-white/10">
-                            <CreditCard className="h-6 w-6 text-slate-300" />
+                    {true ? (
+                      <div className="space-y-4">
+                        {savedCards && savedCards.length > 0 ? (
+                          <div className="space-y-3">
+                            <RadioGroup
+                              value={(savedCards.find(c => c.isDefault)?.id) || (savedCards[0]?.id ?? '')}
+                              onValueChange={(val) => {
+                                if (!val) return;
+                                handleSetDefault(val);
+                              }}
+                            >
+                              {savedCards.map((card) => (
+                                <label key={card.id} className="flex items-center justify-between w-full p-3 rounded-lg border border-white/10 bg-slate-800/40 hover:bg-slate-800/60 transition">
+                                  <div className="flex items-center gap-3">
+                                    <RadioGroupItem value={card.id} id={`card-${card.id}`} />
+                                    <div className="bg-slate-800/60 p-2 rounded-md border border-white/10">
+                                      <CreditCard className="h-5 w-5 text-slate-300" />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-slate-100">
+                                        {card.brand ? `${card.brand} • ` : ''}•••• •••• •••• {card.last4}
+                                      </p>
+                                      <p className="text-sm text-slate-400">{card.expMonth && card.expYear ? `Exp ${card.expMonth}/${String(card.expYear).slice(-2)}` : ''}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {card.isDefault && (
+                                      <Badge variant="secondary" className="bg-emerald-600/20 text-emerald-300 border-emerald-600/30">Default</Badge>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="hover:bg-red-900/20"
+                                      aria-label="Remove card"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveCard(card); }}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-400" />
+                                    </Button>
+                                  </div>
+                                </label>
+                              ))}
+                            </RadioGroup>
+
+                            <Button
+                              size="sm"
+                              onClick={handleChargeDefault}
+                              disabled={chargingDefault || savedCards.length === 0}
+                              className="border-emerald-700/40 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300"
+                            >
+                              {chargingDefault ? 'Charging…' : 'Charge default card'}
+                            </Button>
+
+                            <div className="flex items-center justify-between">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => {
+                                  openPaymentModalForCardManagement();
+                                  try {
+                                    auditService.logAudit({
+                                      category: 'financial',
+                                      action: 'Open Payment Method Modal',
+                                      page: 'Settings',
+                                      section: 'Billing > Overview',
+                                      entityType: 'payment_method',
+                                      changeType: 'read',
+                                      description: 'User opened payment method modal to manage saved cards',
+                                    });
+                                  } catch { /* noop */ }
+                                }}
+                              >
+                                {t('settings.billing.update')}
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={savedCards.length >= 3}
+                                className="border-border text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+                                onClick={() => {
+                                  if (savedCards.length >= 3) return;
+                                  openPaymentModalForCardManagement();
+                                  try {
+                                    auditService.logAudit({
+                                      category: 'financial',
+                                      action: 'Open Payment Method Modal',
+                                      page: 'Settings',
+                                      section: 'Billing > Overview',
+                                      entityType: 'payment_method',
+                                      changeType: 'create',
+                                      description: 'User clicked Add Card button',
+                                    });
+                                  } catch { /* noop */ }
+                                }}
+                              >
+                                Add Card
+                              </Button>
+                            </div>
+                            {savedCards.length >= 3 && (
+                              <p className="text-xs text-slate-400">You can store up to 3 cards. Remove one to add another.</p>
+                            )}
                           </div>
-                          <div>
-                            <p className="font-medium text-slate-100">{`•••• •••• •••• 4242`}</p>
-                            <p className="text-sm text-slate-400">{`Exp 12/25`}</p>
-                          </div>
+                          ) : (
+                            <div className="text-center py-6">
+                              <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
+                              <Button onClick={() => {
+                                openPaymentModalForCardManagement();
+                                try {
+                                  auditService.logAudit({
+                                    category: 'financial',
+                                    action: 'Open Payment Method Modal',
+                                    page: 'Settings',
+                                    section: 'Billing > Overview',
+                                    entityType: 'payment_method',
+                                    changeType: 'read',
+                                    description: 'User opened payment method modal to add a new payment method',
+                                  });
+                                } catch { /* noop */ }
+                              }}
+                              >
+                                {t('settings.billing.addPaymentMethod')}
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => { setShowPaymentModal(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal from Payment Method card', }); } catch {/* noop */} }}>
-                          {t('settings.billing.update')}
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="text-center py-6">
-                        <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
-                        <Button onClick={() => { setShowPaymentModal(true); try { auditService.logAudit({ category: 'financial', action: 'Open Payment Method Modal', page: 'Settings', section: 'Billing > Overview', entityType: 'payment_method', changeType: 'read', description: 'User opened payment method modal to add a new payment method', }); } catch {/* noop */} }}>
-                          {t('settings.billing.addPaymentMethod')}
-                        </Button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="text-center py-6">
+                          <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
+                          <Button onClick={() => {
+                            openPaymentModalForCardManagement();
+                            try {
+                              auditService.logAudit({
+                                category: 'financial',
+                                action: 'Open Payment Method Modal',
+                                page: 'Settings',
+                                section: 'Billing > Overview',
+                                entityType: 'payment_method',
+                                changeType: 'read',
+                                description: 'User opened payment method modal to add a new payment method',
+                              });
+                            } catch { /* noop */ }
+                          }}
+                          >
+                            {t('settings.billing.addPaymentMethod')}
+                          </Button>
+                        </div>
+                      )}
                   </CardContent>
                 </Card>
-              )}
 
               <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
-                  <CardTitle className="text-slate-100">{t('settings.billing.paymentHistory')}</CardTitle>
-                  <CardDescription className="text-slate-400">{t('settings.billing.viewRecentPayments')}</CardDescription>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-slate-100">{t('settings.billing.paymentHistory')}</CardTitle>
+                      <CardDescription className="text-slate-400">{t('settings.billing.viewRecentPayments')}</CardDescription>
+                    </div>
+
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -429,7 +778,7 @@ const BillingSubscriptionTab = () => {
             </TabsContent>
 
             {/* Plans Tab */}
-            <TabsContent value="plans" className="space-y-6">
+            <TabsContent value="plans" className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-5 duration-300">
               <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-slate-100 mb-4">
                   Choose Your Plan
@@ -538,10 +887,17 @@ const BillingSubscriptionTab = () => {
       {/* Payment Modal */}
       <PaymentModal
         isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
+        onClose={() => {
+          setShowPaymentModal(false);
+          try {
+            refreshSavedCards();
+          } catch {}
+        }}
         selectedPlan={selectedPlan}
         onPayment={initiatePayment}
         isProcessing={isProcessing}
+        modalMode={modalMode}
+        onCardSaved={refreshSavedCards}
       />
     </div>
   );

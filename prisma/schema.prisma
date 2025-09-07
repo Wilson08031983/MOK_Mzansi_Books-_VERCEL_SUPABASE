@@ -114,3 +114,54 @@ model WebhookEvent {
 
   @@unique([provider, eventId])
 }
+
+model EmailEvent {
+  id              String   @id @default(cuid())
+  messageId       String   // Mailjet MessageID
+  eventType       String   // sent, open, click, bounce, blocked, spam, unsub
+  email           String
+  campaignId      String?
+  customId        String?
+  
+  // Event-specific data
+  ip              String?
+  geo             String?
+  userAgent       String?
+  url             String?   // For click events
+  
+  // Bounce/Block specific
+  isHardBounce    Boolean?
+  errorType       String?
+  errorMessage    String?
+  
+  // Spam specific
+  spamSource      String?
+  
+  // Timestamps
+  eventTime       DateTime
+  createdAt       DateTime @default(now())
+  
+  @@index([email])
+  @@index([messageId])
+  @@index([eventType])
+  @@index([eventTime])
+}
+
+model EmailStatus {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  isValid         Boolean  @default(true)
+  bounceCount     Int      @default(0)
+  lastBounceAt    DateTime?
+  isBlacklisted   Boolean  @default(false)
+  blacklistedAt   DateTime?
+  blacklistReason String?
+  isUnsubscribed  Boolean  @default(false)
+  unsubscribedAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([isValid])
+  @@index([isBlacklisted])
+  @@index([isUnsubscribed])
+}

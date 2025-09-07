@@ -1,6 +1,8 @@
 // Client-side email service that delegates to secure server API routes
 // No API keys are used on the client. All emails are sent by server handlers under /api/emails/*
 
+import mockEmailService from './mockEmailService';
+
 interface QuotationEmailOptions {
   to: string;
   subject?: string;
@@ -115,8 +117,18 @@ export const sendConfirmationEmail = async (options: EmailOptions): Promise<bool
 
     await postJson('confirmation', { to, subject, firstName, lastName, verifyLink });
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending confirmation email:', error);
+    // Dev fallback: use mock email service if API route isn't available locally
+    if (import.meta?.env?.DEV) {
+      console.warn('Dev fallback: using mock email service for confirmation email');
+      try {
+        await mockEmailService.sendConfirmationEmail(options as any);
+        return true;
+      } catch (e) {
+        console.error('Mock confirmation email failed:', e);
+      }
+    }
     return false;
   }
 };
@@ -128,8 +140,17 @@ export const sendPasswordResetEmail = async (options: PasswordResetEmailOptions)
 
     await postJson('password-reset', { to, subject, resetToken, firstName });
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending password reset email:', error);
+    if (import.meta?.env?.DEV) {
+      console.warn('Dev fallback: using mock email service for password reset');
+      try {
+        await mockEmailService.sendPasswordResetEmail(options as any);
+        return true;
+      } catch (e) {
+        console.error('Mock password reset email failed:', e);
+      }
+    }
     return false;
   }
 };
@@ -141,8 +162,17 @@ export const sendInvitationEmail = async (options: InvitationEmailOptions): Prom
 
     await postJson('invitation', { to, subject, inviterName, email, role, invitationLink, companyName });
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending invitation email:', error);
+    if (import.meta?.env?.DEV) {
+      console.warn('Dev fallback: using mock email service for invitation email');
+      try {
+        await mockEmailService.sendInvitationEmail(options as any);
+        return true;
+      } catch (e) {
+        console.error('Mock invitation email failed:', e);
+      }
+    }
     return false;
   }
 };
@@ -172,8 +202,17 @@ export const sendQuotationEmail = async (options: QuotationEmailOptions): Promis
 
     await postJson('quotation', { to, subject, quotationNumber, clientName, pdfBase64, pdfFileName });
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending quotation email:', error);
+    if (import.meta?.env?.DEV) {
+      console.warn('Dev fallback: using mock email service for quotation email');
+      try {
+        await mockEmailService.sendQuotationEmail(options as any);
+        return true;
+      } catch (e) {
+        console.error('Mock quotation email failed:', e);
+      }
+    }
     return false;
   }
 };
@@ -185,8 +224,20 @@ export const sendLoginNotificationEmail = async (options: LoginNotificationOptio
 
     await postJson('login-notification', { to, deviceName, browser, location, timestamp });
     return true;
-  } catch (error) {
-    console.error('Error sending login notification email:', error);
+  } catch (error: any) {
+    // In dev, this route may not exist under Vite; prefer a warning and fallback
+    const log = import.meta?.env?.DEV ? console.warn : console.error;
+    log('Error sending login notification email:', error);
+    // Dev fallback: use the local mock service when API routes are not available in Vite dev
+    if (import.meta?.env?.DEV) {
+      console.warn('Dev fallback: using mock email service for login notification');
+      try {
+        await mockEmailService.sendLoginNotificationEmail(options as any);
+        return true;
+      } catch (e) {
+        console.error('Mock login notification email failed:', e);
+      }
+    }
     return false;
   }
 };

@@ -1,0 +1,46 @@
+{
+  "apiConnectivity": {
+    "status": "passed",
+    "message": "API connectivity successful",
+    "responseTime": 1757066079040
+  },
+  "paymentProcessing": {
+    "status": "passed",
+    "message": "Payment initialization successful",
+    "transactionReference": "test_1757066079041",
+    "authorizationUrl": "https://checkout.paystack.com/tmiuqrltbwxberc"
+  },
+  "webhookSecurity": {
+    "status": "passed",
+    "message": "Webhook signature validation working correctly",
+    "tests": {
+      "validSignature": {
+        "payload": "{\"event\":\"charge.success\",\"data\":{\"id\":123456789,\"reference\":\"test_webhook_1757066079576\",\"amount\":50000,\"currency\":\"ZAR\",\"status\":\"success\",\"customer\":{\"email\":\"test@example.com\"}}}",
+        "signature": "588d87a9e7d0c517633dbbf51f7ce87383f2330b3d49d0707e3e207e34d6331f959d016bcc91a90a2cd99a018ea801b5085c75e26d498892056df08481c88119",
+        "expected": "valid"
+      },
+      "invalidSignature": {
+        "payload": "{\"event\":\"charge.success\",\"data\":{\"id\":123456789,\"reference\":\"test_webhook_1757066079576\",\"amount\":50000,\"currency\":\"ZAR\",\"status\":\"success\",\"customer\":{\"email\":\"test@example.com\"}}}",
+        "signature": "invalid_signature_12345",
+        "expected": "invalid"
+      }
+    }
+  },
+  "errorHandling": {
+    "status": "partial",
+    "message": "1/2 error handling tests passed",
+    "tests": [
+      {
+        "test": "Invalid API Key",
+        "status": "failed",
+        "statusCode": 200
+      },
+      {
+        "test": "Malformed Request",
+        "status": "passed",
+        "statusCode": 400
+      }
+    ]
+  },
+  "overallStatus": "failed"
+}

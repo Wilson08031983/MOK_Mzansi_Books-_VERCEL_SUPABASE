@@ -298,7 +298,7 @@ export const subscriptionRenewalJob = new CronJob(
       // First perform daily transitions (e.g., cancel_at_period_end flips)
       await runBillingDailyTransitions();
       // Then process renewals for active/past_due subscriptions
-      await processSubscriptionRenewals();
+      await processRenewals();
     } catch (error) {
       console.error('Error in subscription renewal cron job:', error);
     }
@@ -307,3 +307,67 @@ export const subscriptionRenewalJob = new CronJob(
   true,
   'Africa/Johannesburg'
 );
+
+export const processRenewals = async () => {
+  const due = await db.subscription.findMany({
+    where: { status: 'active', currentPeriodEnd: { lte: new Date() } },
+    include: { user: true },
+  });
+
+  for (const sub of due) {
+    try {
+      const plan = SUBSCRIPTION_PLANS[sub.tier as keyof typeof SUBSCRIPTION_PLANS];
+      if (!plan) continue;
+
+      // Find latest saved payment method (temporary via AuditLog payload)
+      const lastSaved = await db.auditLog.findFirst({
+        where: { userId: sub.userId, action: 'payment_method.saved' },
+        orderBy: { createdAt: 'desc' },
+      });
+      const authCode = (lastSaved?.payload as any)?.authorization_code as string | undefined;
+      if (!authCode) {
+        console.warn(`No saved authorization for user ${sub.userId}, skipping auto-renew.`);
+        continue;
+      }
+
+      const charge = await paystackService.chargeAuthorization(sub.user.email || '', plan.price, authCode, {
+        reason: 'subscription_renewal',
+        subscription_tier: sub.tier,
+        user_id: sub.userId,
+      });
+
+      await db.payment.create({
+        data: {
+          userId: sub.userId,
+          amount: plan.price / 100,
+          amountMinor: plan.price,
+          currency: 'ZAR',
+          status: 'succeeded',
+          reference: charge?.reference || `renewal_${Date.now()}`,
+          providerPaymentId: String(charge?.id ?? ''),
+          subscriptionId: sub.id,
+        },
+      });
+
+      const now = new Date();
+      const newEnd = new Date(now.getTime() + plan.duration * 24 * 60 * 60 * 1000);
+      await db.subscription.update({
+        where: { id: sub.id },
+        data: { currentPeriodStart: now, currentPeriodEnd: newEnd },
+      });
+
+      await db.auditLog.create({
+        data: {
+          userId: sub.userId,
+          action: 'subscription.renewed',
+          payload: { provider: 'paystack', chargeId: charge?.id, reference: charge?.reference },
+        },
+      });
+    } catch (e) {
+      console.error('Renewal failed for', sub.userId, e);
+      await db.auditLog.create({
+        data: { userId: sub.userId, action: 'subscription.renewal_failed', payload: { error: String(e) } },
+      });
+    }
+  }
+};

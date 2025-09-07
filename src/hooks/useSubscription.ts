@@ -12,6 +12,7 @@ export interface SubscriptionInfo {
   currentPeriodEnd: string | Date;
   createdAt?: string | Date;
   updatedAt?: string | Date;
+  cancelAtPeriodEnd?: boolean;
 }
 
 // Helpers
@@ -45,7 +46,8 @@ export const useSubscription = () => {
           if (parsed.status === 'canceled') {
             setSubscription({
               ...parsed,
-              currentPeriodEnd: toDate(parsed.currentPeriodEnd || parsed.validUntil)
+              currentPeriodEnd: toDate(parsed.currentPeriodEnd || parsed.validUntil),
+              cancelAtPeriodEnd: Boolean(parsed.cancelAtPeriodEnd),
             });
             setLoading(false);
             return;
@@ -77,7 +79,38 @@ export const useSubscription = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // Try Supabase first
+      // Prefer server snapshot as single source of truth
+      const resp = await fetch('/api/billing/me');
+      if (resp.ok) {
+        const snap = await resp.json();
+        const sub: SubscriptionInfo = {
+          userId: (user as any).id,
+          tier: (snap?.plan?.code || snap?.planCode || 'trial').toString().toLowerCase(),
+          status: (snap?.status || 'trial').toString().toLowerCase(),
+          currentPeriodEnd: snap?.current_period_end || snap?.currentPeriodEnd || new Date(),
+          createdAt: snap?.current_period_start || undefined,
+          updatedAt: new Date().toISOString(),
+          cancelAtPeriodEnd: Boolean(snap?.cancel_at_period_end ?? snap?.cancelAtPeriodEnd ?? false),
+        };
+        setSubscription(sub);
+        try {
+          localStorage.setItem('mokSubscription', JSON.stringify({
+            tier: sub.tier,
+            status: sub.status,
+            end_date: toDate(sub.currentPeriodEnd).toISOString(),
+            validUntil: toDate(sub.currentPeriodEnd).toISOString(),
+            cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false,
+          }));
+        } catch {}
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch /api/billing/me, falling back to Supabase/localStorage:', e);
+    }
+
+    try {
+      // Try Supabase next
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
@@ -93,6 +126,7 @@ export const useSubscription = () => {
           currentPeriodEnd: data.end_date || data.current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           createdAt: data.created_at || undefined,
           updatedAt: data.updated_at || undefined,
+          cancelAtPeriodEnd: Boolean((data as any).cancel_at_period_end ?? (data as any).cancelAtPeriodEnd ?? false),
         };
         setSubscription(sub);
         localStorage.setItem('mokSubscription', JSON.stringify({
@@ -100,11 +134,17 @@ export const useSubscription = () => {
           status: sub.status,
           end_date: toDate(sub.currentPeriodEnd).toISOString(),
           validUntil: toDate(sub.currentPeriodEnd).toISOString(),
+          cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false,
         }));
+        setLoading(false);
         return;
       }
+    } catch (error) {
+      console.error('Error fetching subscription from Supabase:', error);
+    }
 
-      // Fallback to localStorage
+    // Fallback to localStorage or default trial
+    try {
       const storedSub = localStorage.getItem('mokSubscription');
       if (storedSub) {
         const parsed = JSON.parse(storedSub);
@@ -112,30 +152,34 @@ export const useSubscription = () => {
           tier: parsed.tier || parsed.plan_type || 'trial',
           status: (parsed.status || 'trial').toString().toLowerCase(),
           currentPeriodEnd: parsed.end_date || parsed.validUntil || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          userId: (user as any).id
+          userId: (user as any).id,
+          cancelAtPeriodEnd: Boolean(parsed.cancelAtPeriodEnd),
         });
-      } else {
-        // Default to trial subscription
-        const defaultEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        const defaultSub: SubscriptionInfo = {
-          tier: 'trial',
-          status: 'trial',
-          currentPeriodEnd: defaultEnd,
-          userId: (user as any).id
-        };
-        setSubscription(defaultSub);
-        localStorage.setItem('mokSubscription', JSON.stringify({
-          tier: 'trial',
-          status: 'trial',
-          validUntil: defaultEnd.toISOString(),
-          end_date: defaultEnd.toISOString(),
-        }));
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching subscription:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch {}
+
+    // Default to trial subscription
+    const defaultEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const defaultSub: SubscriptionInfo = {
+      tier: 'trial',
+      status: 'trial',
+      currentPeriodEnd: defaultEnd,
+      userId: (user as any).id
+    };
+    setSubscription(defaultSub);
+    try {
+      localStorage.setItem('mokSubscription', JSON.stringify({
+        tier: 'trial',
+        status: 'trial',
+        validUntil: defaultEnd.toISOString(),
+        end_date: defaultEnd.toISOString(),
+        cancelAtPeriodEnd: false,
+      }));
+    } catch {}
+    
+    setLoading(false);
   };
 
   const createSubscription = async (planType: string, paystackReference?: string) => {
@@ -267,40 +311,138 @@ export const useSubscription = () => {
   };
 
   const cancelSubscriptionAtPeriodEnd = async () => {
-    if (!user || !subscription) throw new Error('User or subscription not found');
+    if (!user) throw new Error('User not authenticated');
 
-    // Always update localStorage to ensure persistence
-    const updateLocalStorage = () => {
-      try {
-        const stored = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
-        stored.status = 'canceled';
-        if (!stored.end_date && subscription.currentPeriodEnd) {
-          stored.end_date = toDate(subscription.currentPeriodEnd).toISOString();
-        }
-        if (!stored.validUntil && subscription.currentPeriodEnd) {
-          stored.validUntil = toDate(subscription.currentPeriodEnd).toISOString();
-        }
-        localStorage.setItem('mokSubscription', JSON.stringify(stored));
-      } catch (e) {
-        console.error('Failed to update localStorage:', e);
+    try {
+      const resp = await fetch('/api/billing/cancel', { method: 'POST' });
+      if (resp.ok) {
+        const snap = await resp.json();
+        const sub: SubscriptionInfo = {
+          userId: (user as any).id,
+          tier: (snap?.plan?.code || snap?.planCode || subscription?.tier || 'trial').toString().toLowerCase(),
+          status: (snap?.status || subscription?.status || 'trial').toString().toLowerCase(),
+          currentPeriodEnd: snap?.current_period_end || subscription?.currentPeriodEnd || new Date(),
+          createdAt: snap?.current_period_start || subscription?.createdAt,
+          updatedAt: new Date().toISOString(),
+          cancelAtPeriodEnd: Boolean(snap?.cancel_at_period_end ?? true),
+        };
+        setSubscription(sub);
+        try {
+          const stored = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
+          stored.cancelAtPeriodEnd = true;
+          stored.end_date = toDate(sub.currentPeriodEnd).toISOString();
+          stored.validUntil = toDate(sub.currentPeriodEnd).toISOString();
+          stored.tier = sub.tier;
+          stored.status = sub.status;
+          localStorage.setItem('mokSubscription', JSON.stringify(stored));
+        } catch {}
+        return;
       }
-    };
+      // If backend returns non-OK, fall through to Supabase/local fallback
+    } catch (e) {
+      console.warn('Failed to cancel via /api/billing/cancel, trying Supabase/local fallback:', e);
+    }
 
+    if (!subscription) throw new Error('Subscription not found');
+
+    // Supabase fallback
     try {
       const { error } = await supabase
         .from('subscriptions')
-        .update({ status: 'canceled' })
+        .update({ cancel_at_period_end: true })
         .eq('user_id', (user as any).id);
       if (error) throw error;
-      
-      // Update localStorage even when Supabase succeeds
-      updateLocalStorage();
-    } catch (e) {
-      console.warn('Supabase cancel update failed, falling back to localStorage:', e);
-      updateLocalStorage();
+    } catch (e1) {
+      console.warn('Supabase update cancel_at_period_end failed, trying camelCase:', e1);
+      try {
+        const { error } = await supabase
+          .from('subscriptions')
+          .update({ cancelAtPeriodEnd: true as any })
+          .eq('user_id', (user as any).id);
+        if (error) throw error;
+      } catch (e2) {
+        console.warn('Supabase update cancelAtPeriodEnd failed, falling back to localStorage only:', e2);
+      }
     }
 
-    setSubscription(prev => prev ? { ...prev, status: 'canceled' } : prev);
+    // Local fallback
+    try {
+      const stored = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
+      stored.cancelAtPeriodEnd = true;
+      if (!stored.end_date && subscription.currentPeriodEnd) {
+        stored.end_date = toDate(subscription.currentPeriodEnd).toISOString();
+      }
+      if (!stored.validUntil && subscription.currentPeriodEnd) {
+        stored.validUntil = toDate(subscription.currentPeriodEnd).toISOString();
+      }
+      localStorage.setItem('mokSubscription', JSON.stringify(stored));
+    } catch {}
+
+    setSubscription(prev => (prev ? { ...prev, cancelAtPeriodEnd: true } : prev));
+  };
+
+  // New: allow user to rescind a scheduled cancellation
+  const resumeSubscription = async () => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const resp = await fetch('/api/billing/resume', { method: 'POST' });
+      if (resp.ok) {
+        const snap = await resp.json();
+        const sub: SubscriptionInfo = {
+          userId: (user as any).id,
+          tier: (snap?.plan?.code || snap?.planCode || subscription?.tier || 'trial').toString().toLowerCase(),
+          status: (snap?.status || subscription?.status || 'trial').toString().toLowerCase(),
+          currentPeriodEnd: snap?.current_period_end || subscription?.currentPeriodEnd || new Date(),
+          createdAt: snap?.current_period_start || subscription?.createdAt,
+          updatedAt: new Date().toISOString(),
+          cancelAtPeriodEnd: Boolean(snap?.cancel_at_period_end ?? false),
+        };
+        setSubscription(sub);
+        try {
+          const stored = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
+          stored.cancelAtPeriodEnd = false;
+          stored.end_date = toDate(sub.currentPeriodEnd).toISOString();
+          stored.validUntil = toDate(sub.currentPeriodEnd).toISOString();
+          stored.tier = sub.tier;
+          stored.status = sub.status;
+          localStorage.setItem('mokSubscription', JSON.stringify(stored));
+        } catch {}
+        return;
+      }
+      // If backend returns non-OK, fall through to Supabase/local fallback
+    } catch (e) {
+      console.warn('Failed to resume via /api/billing/resume, trying Supabase/local fallback:', e);
+    }
+
+    // Supabase fallback (snake then camel)
+    try {
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ cancel_at_period_end: false })
+        .eq('user_id', (user as any).id);
+      if (error) throw error;
+    } catch (e1) {
+      console.warn('Supabase update cancel_at_period_end=false failed, trying camelCase:', e1);
+      try {
+        const { error } = await supabase
+          .from('subscriptions')
+          .update({ cancelAtPeriodEnd: false as any })
+          .eq('user_id', (user as any).id);
+        if (error) throw error;
+      } catch (e2) {
+        console.warn('Supabase update cancelAtPeriodEnd=false failed, proceeding with localStorage only:', e2);
+      }
+    }
+
+    // Local fallback
+    try {
+      const stored = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
+      stored.cancelAtPeriodEnd = false;
+      localStorage.setItem('mokSubscription', JSON.stringify(stored));
+    } catch {}
+
+    setSubscription(prev => (prev ? { ...prev, cancelAtPeriodEnd: false } : prev));
   };
 
   const fetchPaymentHistory = useCallback(async () => {
@@ -342,6 +484,7 @@ export const useSubscription = () => {
     createPayment,
     upgradeToAnnualPlan,
     cancelSubscriptionAtPeriodEnd,
+    resumeSubscription,
     fetchPaymentHistory,
     refreshSubscription: fetchSubscription
   };

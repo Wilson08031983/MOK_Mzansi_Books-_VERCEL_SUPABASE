@@ -10,8 +10,17 @@ export default defineConfig({
     }
   },
   server: {
+    port: 8082,
     host: '::',
-    port: 8082
+    strictPort: true,
+    proxy: process.env.VITE_API_PROXY_TARGET
+      ? {
+          '/api': {
+            target: process.env.VITE_API_PROXY_TARGET,
+            changeOrigin: true,
+          },
+        }
+      : undefined,
   },
   optimizeDeps: {
     include: ['react', 'react-dom']

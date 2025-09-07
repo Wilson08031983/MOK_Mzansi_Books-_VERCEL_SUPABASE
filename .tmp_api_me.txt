@@ -1,0 +1,14 @@
+HTTP/1.1 500 Internal Server Error
+cache-control: public, max-age=0, must-revalidate
+server: Vercel
+x-vercel-id: dev1::dev1::9rc62-1757264493142-9d489b673cfb
+x-vercel-cache: MISS
+content-type: text/plain; charset=utf-8
+Date: Sun, 07 Sep 2025 17:01:33 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Content-Length: 56
+
+A server error has occurred
+
+FUNCTION_INVOCATION_FAILED
