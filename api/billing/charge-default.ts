@@ -1,1 +1,0 @@
-export { default } from '../../src/pages/api/billing/charge-default';
