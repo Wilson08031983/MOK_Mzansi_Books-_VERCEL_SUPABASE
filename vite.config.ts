@@ -10,9 +10,9 @@ export default defineConfig({
     }
   },
   server: {
-    port: 8082,
+    port: 8081,
     host: '::',
-    strictPort: true,
+    strictPort: false,
     proxy: process.env.VITE_API_PROXY_TARGET
       ? {
           '/api': {

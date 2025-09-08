@@ -28,6 +28,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       code === '0' ||
       Boolean(paidAt);
 
+    // Check for pending/processing states
+    const isPending =
+      status === 'pending' ||
+      status === 'processing' ||
+      status === 'ongoing' ||
+      gateway.includes('pending') ||
+      gateway.includes('processing') ||
+      (!status && !gateway && !code); // No clear status yet
+
     if (!isSuccess) {
       // Log snapshot to help diagnose mismatches without leaking secrets
       console.warn('Paystack verify not successful', {
@@ -36,7 +45,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         charge_response_code: data?.charge_response_code,
         paidAt: (data as any)?.paidAt || (data as any)?.paid_at,
         reference,
+        isPending,
       });
+      
+      if (isPending) {
+        // Return pending status instead of failure for processing transactions
+        return res.status(202).json({
+          verified: false,
+          status: 'pending',
+          message: 'Transaction is still being processed',
+          data,
+        });
+      }
+      
       return res.status(400).json({
         verified: false,
         message: 'Transaction not successful',

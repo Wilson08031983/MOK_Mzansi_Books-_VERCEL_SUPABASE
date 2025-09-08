@@ -89,74 +89,120 @@ export const usePayment = () => {
     setShowPaymentModal(false);
     setIsProcessing(true);
 
-    try {
-      let verified = false;
-
-      // Server-side verification
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const resp = await fetch('/api/paystack-verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reference: reference?.reference || reference }),
-        });
+        console.log(`Payment verification attempt ${attempt}/${maxRetries}`);
+        let verified = false;
 
-        if (resp.ok) {
-          const body = await resp.json().catch(() => ({}));
-          verified = !!body?.verified;
-        } else {
-          // In dev, Vite does not serve Next-style API routes; treat 404 as success for local testing
-          if (import.meta?.env?.DEV && resp.status === 404) {
-            console.warn('Dev fallback: /api/paystack-verify not available; assuming verification success for local testing');
+        // Server-side verification
+        try {
+          const resp = await fetch('/api/paystack-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference: reference?.reference || reference }),
+          });
+
+          if (resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            verified = !!body?.verified;
+            
+            // Handle pending status - continue retrying
+            if (body?.status === 'pending' || body?.message?.includes('pending')) {
+              console.log(`Payment verification pending, attempt ${attempt}/${maxRetries}`);
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                continue;
+              } else {
+                // Final attempt failed, but payment might still be processing
+                toast({
+                  title: t('settings.billing.toasts.paymentProcessingTitle') || 'Payment Processing',
+                  description: t('settings.billing.toasts.paymentProcessingDesc') || 'Your payment is being processed. Please check your email for confirmation.',
+                });
+                setIsProcessing(false);
+                navigate('/thank-you');
+                return;
+              }
+            }
+          } else {
+            // In dev, Vite does not serve Next-style API routes; treat 404 as success for local testing
+            if (import.meta?.env?.DEV && resp.status === 404) {
+              console.warn('Dev fallback: /api/paystack-verify not available; assuming verification success for local testing');
+              verified = true;
+            } else {
+              const err = await resp.json().catch(() => ({}));
+              if (attempt < maxRetries) {
+                console.log(`Verification failed, retrying in ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                continue;
+              } else {
+                throw new Error(err?.message || 'Verification failed');
+              }
+            }
+          }
+        } catch (verifyErr: any) {
+          if (import.meta?.env?.DEV) {
+            console.warn('Dev fallback: verification request failed; assuming success for local testing:', verifyErr?.message || verifyErr);
             verified = true;
           } else {
-            const err = await resp.json().catch(() => ({}));
-            throw new Error(err?.message || 'Verification failed');
+            if (attempt < maxRetries) {
+              console.log(`Network error, retrying in ${retryDelay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              continue;
+            } else {
+              throw verifyErr;
+            }
           }
         }
-      } catch (verifyErr: any) {
-        if (import.meta?.env?.DEV) {
-          console.warn('Dev fallback: verification request failed; assuming success for local testing:', verifyErr?.message || verifyErr);
-          verified = true;
-        } else {
-          throw verifyErr;
+
+        if (!verified) {
+          if (attempt < maxRetries) {
+            console.log(`Verification failed, retrying in ${retryDelay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            continue;
+          } else {
+            throw new Error('Verification failed');
+          }
+        }
+
+        // If only updating card, conclude after verify without creating subscription
+        if (modalMode === 'update') {
+          setIsProcessing(false);
+          toast({
+            title: t('settings.billing.toasts.paymentUpdatedTitle'),
+            description: t('settings.billing.toasts.paymentUpdatedDesc'),
+          });
+          return;
+        }
+
+        // For subscriptions, rely on webhook to persist activation; poll server snapshot briefly
+        const activated = await waitForServerActivation(selectedPlan);
+        if (!activated) {
+          console.warn('Subscription not yet active on server after verify; proceeding while webhook completes');
+        }
+
+        toast({
+          title: t('settings.billing.toasts.paymentSuccessTitle'),
+          description: t('settings.billing.toasts.paymentSuccessDesc'),
+        });
+
+        setIsProcessing(false);
+        navigate('/thank-you');
+        return; // Success, exit retry loop
+        
+      } catch (error: any) {
+        console.error(`Error completing payment flow (attempt ${attempt}):`, error);
+        if (attempt >= maxRetries) {
+          setIsProcessing(false);
+          toast({
+            title: t('common.error'),
+            description: error?.message || t('settings.billing.toasts.verifyFailedDesc') || 'Unable to verify payment. Please contact support if payment was deducted.',
+            variant: 'destructive',
+          });
         }
       }
-
-      if (!verified) {
-        throw new Error('Verification failed');
-      }
-
-      // If only updating card, conclude after verify without creating subscription
-      if (modalMode === 'update') {
-        setIsProcessing(false);
-        toast({
-          title: t('settings.billing.toasts.paymentUpdatedTitle'),
-          description: t('settings.billing.toasts.paymentUpdatedDesc'),
-        });
-        return;
-      }
-
-      // For subscriptions, rely on webhook to persist activation; poll server snapshot briefly
-      const activated = await waitForServerActivation(selectedPlan);
-      if (!activated) {
-        console.warn('Subscription not yet active on server after verify; proceeding while webhook completes');
-      }
-
-      toast({
-        title: t('settings.billing.toasts.paymentSuccessTitle'),
-        description: t('settings.billing.toasts.paymentSuccessDesc'),
-      });
-
-      setIsProcessing(false);
-      navigate('/thank-you');
-    } catch (error: any) {
-      console.error('Error completing payment flow:', error);
-      setIsProcessing(false);
-      toast({
-        title: t('common.error'),
-        description: error?.message || t('settings.billing.toasts.verifyFailedDesc'),
-        variant: 'destructive',
-      });
     }
   };
 
