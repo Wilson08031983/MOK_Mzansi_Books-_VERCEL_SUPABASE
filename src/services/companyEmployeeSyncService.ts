@@ -68,6 +68,20 @@ const findOwnerEmployeeRecord = (): Employee | null => {
   ) || null;
 };
 
+// Helper: ensure we generate a unique ID number (avoid collisions in demo data)
+const generateUniqueIdNumber = (): string => {
+  const employees = getAllEmployees();
+  let attempts = 0;
+  let generated: string;
+  do {
+    generated = generateDefaultIdNumber();
+    attempts++;
+    // Safety cap to avoid infinite loops
+    if (attempts > 10) break;
+  } while (employees.some(e => e.idValue === generated));
+  return generated;
+};
+
 // Sync company details to employee record
 export const syncCompanyDetailsToEmployee = (): {
   success: boolean;
@@ -86,7 +100,10 @@ export const syncCompanyDetailsToEmployee = (): {
       };
     }
 
-    let ownerEmployee = findOwnerEmployeeRecord();
+    // Prefer to match existing employee by the company email first to avoid duplicate creation
+    const normalizedEmail = companyDetails.email?.toLowerCase();
+    const employees = getAllEmployees();
+    let ownerEmployee = employees.find(emp => emp.email.toLowerCase() === normalizedEmail) || findOwnerEmployeeRecord();
     console.log('Sync Debug - Found owner employee:', ownerEmployee);
     
     if (!ownerEmployee) {
@@ -109,7 +126,7 @@ export const syncCompanyDetailsToEmployee = (): {
         
         // Default values
         idType: 'ID Number' as const,
-        idValue: generateDefaultIdNumber(),
+        idValue: generateUniqueIdNumber(),
         dateOfBirth: '1980-01-01',
         employmentType: 'Full Time' as const,
         startDate: new Date().toISOString().split('T')[0],
@@ -135,13 +152,43 @@ export const syncCompanyDetailsToEmployee = (): {
         flexibleShift: false,
       };
 
-      ownerEmployee = addEmployee(newEmployeeData);
-      
-      return {
-        success: true,
-        message: 'Company owner added as new employee record',
-        updatedEmployee: ownerEmployee
-      };
+      try {
+        ownerEmployee = addEmployee(newEmployeeData);
+        return {
+          success: true,
+          message: 'Company owner added as new employee record',
+          updatedEmployee: ownerEmployee
+        };
+      } catch (err) {
+        // Graceful fallback: if duplicate error, update existing by email instead of failing
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg && errMsg.toLowerCase().includes('already exists')) {
+          const existing = employees.find(emp => emp.email.toLowerCase() === normalizedEmail);
+          if (existing) {
+            const updatedEmployee = updateEmployee(existing.id, {
+              firstName: companyDetails.ownerName,
+              surname: companyDetails.ownerSurname,
+              email: companyDetails.email,
+              contactNumber: companyDetails.phone,
+              position: companyDetails.ownerPosition,
+              department: getPositionDepartment(companyDetails.ownerPosition),
+              addressLine1: companyDetails.addressLine1,
+              addressLine2: companyDetails.addressLine2 || existing.addressLine2,
+              addressLine3: companyDetails.addressLine3 || existing.addressLine3,
+              addressLine4: companyDetails.addressLine4 || existing.addressLine4,
+            });
+            if (updatedEmployee) {
+              return {
+                success: true,
+                message: 'Existing owner employee found; details updated',
+                updatedEmployee
+              };
+            }
+          }
+        }
+        // If not a duplicate scenario, rethrow
+        throw err;
+      }
     } else {
       // Update existing employee record
       const updatedData = {
@@ -242,26 +289,26 @@ const getPositionDepartment = (position: string): string => {
 
 // Get salary based on position
 const getPositionSalary = (position: string): number => {
-  // Guard against undefined/null positions
+  // Basic salary ranges based on position
   const positionLower = (position || '').toLowerCase();
   
   if (positionLower.includes('ceo') || positionLower.includes('chief executive')) {
     return 150000;
-  } else if (positionLower.includes('founder')) {
-    return 200000;
   } else if (positionLower.includes('director')) {
     return 120000;
+  } else if (positionLower.includes('founder')) {
+    return 200000;
   } else if (positionLower.includes('manager')) {
     return 80000;
   } else if (positionLower.includes('bookkeeper') || positionLower.includes('accountant')) {
     return 45000;
   } else {
-    return 50000; // Default for owner/admin
+    return 35000;
   }
 };
 
-// Generate a default ID number (for demo purposes)
 const generateDefaultIdNumber = (): string => {
+  // Generate a synthetic SA ID-like number (YYMMDDSSSSCCG)
   const year = Math.floor(Math.random() * 30) + 70; // 70-99 (1970-1999)
   const month = Math.floor(Math.random() * 12) + 1;
   const day = Math.floor(Math.random() * 28) + 1;
@@ -272,48 +319,36 @@ const generateDefaultIdNumber = (): string => {
   return `${year.toString().padStart(2, '0')}${month.toString().padStart(2, '0')}${day.toString().padStart(2, '0')}${sequence}0${citizenship}${gender}`;
 };
 
-// Initialize company details if they don't exist
 export const initializeCompanyDetails = (): void => {
-  const existingDetails = getCompanyDetails();
-  
-  if (!existingDetails) {
-    const defaultCompanyDetails: CompanyDetails = {
-      companyName: 'Morwa Moabelo (PTY) Ltd',
-      email: 'admin@mokmzansibooks.com',
-      phone: '+27 64 550 4029',
-      website: 'www.mokmzansibooks.com',
-      ownerName: 'Admin',
-      ownerSurname: 'User',
-      ownerPosition: 'CEO',
-      addressLine1: '81 Monokane Street',
-      addressLine2: 'Soshanguve',
-      addressLine3: 'Pretoria, Gauteng',
-      addressLine4: '0152, South Africa',
-    };
-    
-    saveCompanyDetails(defaultCompanyDetails);
-    console.log('DEBUG: Initialized default company details');
-  } else {
-    console.log('DEBUG: Company details already exist, not overwriting:', existingDetails);
+  try {
+    const existing = getCompanyDetails();
+    if (!existing) {
+      const defaults: CompanyDetails = {
+        companyName: 'Morwa Moabelo (PTY) Ltd',
+        email: 'admin@mokmzansibooks.com',
+        phone: '+27 000 000 0000',
+        website: 'www.mokmzansibooks.com',
+        ownerName: 'System',
+        ownerSurname: 'Admin',
+        ownerPosition: 'Administrator',
+        addressLine1: '123 Business Street',
+        addressLine2: 'Business District',
+        addressLine3: 'Johannesburg, Gauteng',
+        addressLine4: '2000, South Africa'
+      };
+      saveCompanyDetails(defaults);
+    }
+  } catch (error) {
+    console.error('Error initializing company details:', error);
   }
 };
 
-// Auto-sync function to be called when company details or employee records change
 export const autoSyncCompanyEmployee = (): void => {
   try {
-    // Initialize company details if needed
-    initializeCompanyDetails();
-    
-    // Sync company details to employee record
-    const syncResult = syncCompanyDetailsToEmployee();
-    
-    if (syncResult.success) {
-      console.log('Auto-sync completed:', syncResult.message);
-    } else {
-      console.warn('Auto-sync warning:', syncResult.message);
-    }
+    const result = syncCompanyDetailsToEmployee();
+    console.log('Auto-sync result:', result);
   } catch (error) {
-    console.error('Auto-sync error:', error);
+    console.error('Auto-sync failed:', error);
   }
 };
 
