@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import useAuditLogger from '@/hooks/useAuditLogger';
+import { getCompanyAssets as getScopedCompanyAssets, saveCompanyAssets as saveScopedCompanyAssets } from '@/services/companyService';
 
 interface AssetType {
   name: string;
@@ -18,22 +19,24 @@ const CompanyAssetsUpload = () => {
   const [assets, setAssets] = useState<Record<string, AssetType>>({});
   const { logDocument, logDelete, logSystem } = useAuditLogger();
   
-  // Load assets from localStorage on component mount
+  // Load assets from scoped storage on component mount
   useEffect(() => {
     try {
-      const savedAssets = localStorage.getItem('companyAssets');
+      const savedAssets = getScopedCompanyAssets();
       if (savedAssets) {
-        setAssets(JSON.parse(savedAssets));
+        setAssets(savedAssets as any);
       }
     } catch (error) {
-      console.error('Error loading assets from localStorage:', error);
+      console.error('Error loading assets:', error);
     }
   }, []);
   
-  // Save assets to localStorage whenever they change
+  // Save assets to scoped storage whenever they change
   useEffect(() => {
-    if (Object.keys(assets).length > 0) {
-      localStorage.setItem('companyAssets', JSON.stringify(assets));
+    try {
+      saveScopedCompanyAssets(assets as any);
+    } catch (error) {
+      console.error('Error saving assets:', error);
     }
   }, [assets]);
 

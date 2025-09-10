@@ -4,15 +4,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { SUBSCRIPTION_PLANS } from '@/lib/paystack';
 import { supabase } from '@/integrations/supabase';
 
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
+
 export interface SubscriptionInfo {
   id?: string;
   userId?: string;
   tier: string;
-  status: 'trial' | 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
+  status: SubscriptionStatus;
   currentPeriodEnd: string | Date;
   createdAt?: string | Date;
   updatedAt?: string | Date;
   cancelAtPeriodEnd?: boolean;
+  graceEnd?: string | Date;
 }
 
 // Helpers
@@ -31,6 +34,23 @@ const normalizeTier = (row: any): string => {
   return raw;
 };
 
+const normalizeStatus = (value: any): SubscriptionStatus => {
+  const v = String(value ?? 'trial').toLowerCase();
+  switch (v) {
+    case 'trial':
+    case 'active':
+    case 'past_due':
+    case 'canceled':
+    case 'incomplete':
+    case 'incomplete_expired':
+    case 'trialing':
+    case 'unpaid':
+      return v as SubscriptionStatus;
+    default:
+      return 'trial';
+  }
+};
+
 export const useSubscription = () => {
   const { user } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -43,10 +63,12 @@ export const useSubscription = () => {
       if (localData) {
         try {
           const parsed = JSON.parse(localData);
-          if (parsed.status === 'canceled') {
+          const email = user?.email?.toLowerCase?.() || '';
+          const ownerOk = (parsed?.ownerEmail?.toLowerCase?.() === email) || (email === 'admin@mokmzansibooks.com');
+          if (ownerOk && parsed.status === 'canceled') {
             setSubscription({
               ...parsed,
-              currentPeriodEnd: toDate(parsed.currentPeriodEnd || parsed.validUntil),
+              currentPeriodEnd: toDate(parsed.currentPeriodEnd || parsed.validUntil || parsed.end_date),
               cancelAtPeriodEnd: Boolean(parsed.cancelAtPeriodEnd),
             });
             setLoading(false);
@@ -57,17 +79,21 @@ export const useSubscription = () => {
         }
       }
       
-      // If the user is an admin and no cancelled status in localStorage, provide a full-access subscription
-      if ((user as any).role && ['Manager', 'CEO', 'Admin'].includes((user as any).role)) {
+      // Special-case: treat the primary admin email as an active monthly subscriber
+      const email = user?.email?.toLowerCase?.() || '';
+      if (email === 'admin@mokmzansibooks.com') {
         setSubscription({
-          tier: 'business',
+          tier: 'monthly',
           status: 'active',
           currentPeriodEnd: new Date('2099-12-31'),
-          userId: (user as any).id
+          userId: (user as any).id,
+          cancelAtPeriodEnd: false,
         });
         setLoading(false);
         return;
       }
+      
+      // Removed role-based auto-full access; non-admin users must be trial until payment
       fetchSubscription();
     } else {
       setSubscription(null);
@@ -86,31 +112,59 @@ export const useSubscription = () => {
         const sub: SubscriptionInfo = {
           userId: (user as any).id,
           tier: (snap?.plan?.code || snap?.planCode || 'trial').toString().toLowerCase(),
-          status: (snap?.status || 'trial').toString().toLowerCase(),
+          status: normalizeStatus(snap?.status),
           currentPeriodEnd: snap?.current_period_end || snap?.currentPeriodEnd || new Date(),
           createdAt: snap?.current_period_start || undefined,
           updatedAt: new Date().toISOString(),
           cancelAtPeriodEnd: Boolean(snap?.cancel_at_period_end ?? snap?.cancelAtPeriodEnd ?? false),
+          graceEnd: snap?.grace_end || snap?.graceEnd || undefined,
         };
-        setSubscription(sub);
+
+        // Non-downgrade guard: if server says trial-ish but local shows a valid active subscription, prefer local
         try {
-          localStorage.setItem('mokSubscription', JSON.stringify({
-            tier: sub.tier,
-            status: sub.status,
-            end_date: toDate(sub.currentPeriodEnd).toISOString(),
-            validUntil: toDate(sub.currentPeriodEnd).toISOString(),
-            cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false,
-          }));
-        } catch {}
-        setLoading(false);
-        return;
-      }
+          const email = (user as any)?.email?.toLowerCase?.() || '';
+          const localRaw = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
+          const localOwnerOk = (localRaw?.ownerEmail?.toLowerCase?.() || '') === email || email === 'admin@mokmzansibooks.com';
+          const localEnd = toDate(localRaw?.end_date || localRaw?.validUntil);
+          const localActive = localOwnerOk && (localRaw?.status === 'active') && localEnd.getTime() > Date.now();
+          const serverTrialish = ['trial','trialing','incomplete','incomplete_expired','unpaid'].includes(sub.status);
+          if (localActive && serverTrialish) {
+            setSubscription({
+              userId: (user as any).id,
+              tier: (localRaw?.tier || localRaw?.plan_type || sub.tier || 'monthly').toString().toLowerCase(),
+              status: 'active',
+              currentPeriodEnd: localEnd,
+              createdAt: sub.createdAt,
+              updatedAt: new Date().toISOString(),
+              cancelAtPeriodEnd: Boolean(localRaw?.cancelAtPeriodEnd ?? sub.cancelAtPeriodEnd ?? false),
+            });
+          } else {
+            setSubscription(sub);
+          }
+        } catch {
+          setSubscription(sub);
+        }
+
+        try {
+          localStorage.setItem('mokSubscription', JSON.stringify({ 
+            tier: sub.tier, 
+            status: sub.status, 
+            end_date: toDate(sub.currentPeriodEnd).toISOString(), 
+            validUntil: toDate(sub.currentPeriodEnd).toISOString(), 
+            cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false, 
+            ownerEmail: (user as any)?.email || '', 
+            grace_end: sub.graceEnd ? toDate(sub.graceEnd).toISOString() : null, 
+          })); 
+        } catch {} 
+        setLoading(false); 
+        return; 
+      } 
     } catch (e) {
       console.warn('Failed to fetch /api/billing/me, falling back to Supabase/localStorage:', e);
     }
 
+    // Try Supabase next
     try {
-      // Try Supabase next
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
@@ -122,7 +176,7 @@ export const useSubscription = () => {
           id: data.id || undefined,
           userId: data.user_id || (user as any).id,
           tier: normalizeTier(data),
-          status: (data.status || 'trial').toString().toLowerCase(),
+          status: normalizeStatus(data.status),
           currentPeriodEnd: data.end_date || data.current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           createdAt: data.created_at || undefined,
           updatedAt: data.updated_at || undefined,
@@ -135,6 +189,8 @@ export const useSubscription = () => {
           end_date: toDate(sub.currentPeriodEnd).toISOString(),
           validUntil: toDate(sub.currentPeriodEnd).toISOString(),
           cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false,
+          ownerEmail: (user as any)?.email || '',
+          userId: (user as any)?.id,
         }));
         setLoading(false);
         return;
@@ -148,15 +204,20 @@ export const useSubscription = () => {
       const storedSub = localStorage.getItem('mokSubscription');
       if (storedSub) {
         const parsed = JSON.parse(storedSub);
-        setSubscription({
-          tier: parsed.tier || parsed.plan_type || 'trial',
-          status: (parsed.status || 'trial').toString().toLowerCase(),
-          currentPeriodEnd: parsed.end_date || parsed.validUntil || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          userId: (user as any).id,
-          cancelAtPeriodEnd: Boolean(parsed.cancelAtPeriodEnd),
-        });
-        setLoading(false);
-        return;
+        const email = (user as any)?.email?.toLowerCase?.() || '';
+        const ownerOk = (parsed?.ownerEmail?.toLowerCase?.() === email) || (email === 'admin@mokmzansibooks.com');
+        if (ownerOk) {
+          setSubscription({
+            tier: parsed.tier || parsed.plan_type || 'trial',
+            status: normalizeStatus(parsed.status),
+            currentPeriodEnd: parsed.end_date || parsed.validUntil || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            userId: (user as any).id,
+            cancelAtPeriodEnd: Boolean(parsed.cancelAtPeriodEnd),
+            graceEnd: parsed.grace_end || undefined,
+          });
+          setLoading(false);
+          return;
+        }
       }
     } catch {}
 
@@ -176,6 +237,7 @@ export const useSubscription = () => {
         validUntil: defaultEnd.toISOString(),
         end_date: defaultEnd.toISOString(),
         cancelAtPeriodEnd: false,
+        ownerEmail: (user as any)?.email || '',
       }));
     } catch {}
     
@@ -220,6 +282,8 @@ export const useSubscription = () => {
       status: newSubscription.status,
       validUntil: currentPeriodEnd.toISOString(),
       end_date: currentPeriodEnd.toISOString(),
+      ownerEmail: (user as any)?.email || '',
+      userId: (user as any)?.id,
     }));
 
     return newSubscription;
@@ -305,6 +369,8 @@ export const useSubscription = () => {
       status: 'active',
       validUntil: currentPeriodEnd.toISOString(),
       end_date: currentPeriodEnd.toISOString(),
+      ownerEmail: (user as any)?.email || '',
+      userId: (user as any)?.id,
     }));
 
     return updatedSubscription;
@@ -320,7 +386,7 @@ export const useSubscription = () => {
         const sub: SubscriptionInfo = {
           userId: (user as any).id,
           tier: (snap?.plan?.code || snap?.planCode || subscription?.tier || 'trial').toString().toLowerCase(),
-          status: (snap?.status || subscription?.status || 'trial').toString().toLowerCase(),
+          status: normalizeStatus(snap?.status ?? subscription?.status),
           currentPeriodEnd: snap?.current_period_end || subscription?.currentPeriodEnd || new Date(),
           createdAt: snap?.current_period_start || subscription?.createdAt,
           updatedAt: new Date().toISOString(),
@@ -334,6 +400,7 @@ export const useSubscription = () => {
           stored.validUntil = toDate(sub.currentPeriodEnd).toISOString();
           stored.tier = sub.tier;
           stored.status = sub.status;
+          stored.ownerEmail = stored.ownerEmail || ((user as any)?.email || '');
           localStorage.setItem('mokSubscription', JSON.stringify(stored));
         } catch {}
         return;
@@ -375,6 +442,7 @@ export const useSubscription = () => {
       if (!stored.validUntil && subscription.currentPeriodEnd) {
         stored.validUntil = toDate(subscription.currentPeriodEnd).toISOString();
       }
+      stored.ownerEmail = stored.ownerEmail || ((user as any)?.email || '');
       localStorage.setItem('mokSubscription', JSON.stringify(stored));
     } catch {}
 
@@ -392,7 +460,7 @@ export const useSubscription = () => {
         const sub: SubscriptionInfo = {
           userId: (user as any).id,
           tier: (snap?.plan?.code || snap?.planCode || subscription?.tier || 'trial').toString().toLowerCase(),
-          status: (snap?.status || subscription?.status || 'trial').toString().toLowerCase(),
+          status: normalizeStatus(snap?.status ?? subscription?.status),
           currentPeriodEnd: snap?.current_period_end || subscription?.currentPeriodEnd || new Date(),
           createdAt: snap?.current_period_start || subscription?.createdAt,
           updatedAt: new Date().toISOString(),
@@ -406,6 +474,7 @@ export const useSubscription = () => {
           stored.validUntil = toDate(sub.currentPeriodEnd).toISOString();
           stored.tier = sub.tier;
           stored.status = sub.status;
+          stored.ownerEmail = stored.ownerEmail || ((user as any)?.email || '');
           localStorage.setItem('mokSubscription', JSON.stringify(stored));
         } catch {}
         return;

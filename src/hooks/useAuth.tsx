@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getUserCredentialsByEmail, addUser } from '@/services/localAuthService';
 import { getCurrentDeviceSession, addDeviceSession, sendLoginNotification } from '@/services/securityService';
 import { getAdminPermissions, getDefaultPermissions, saveUserPermissions, isAdminRole as isAdminRolePermission } from '@/services/permissionService';
+import { migrateLegacyCompanyKeys } from '@/services/companyService';
 
 // Properly typed user interface without Supabase dependency
 export interface User {
@@ -91,6 +92,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       localStorage.setItem('mokUser', JSON.stringify(newUser));
       setUser(newUser);
+      
+      // Bootstrap: migrate any legacy unscoped keys to scoped equivalents after signup/login
+      try { migrateLegacyCompanyKeys(); } catch (e) { console.warn('Non-blocking: company migration after signUp failed', e); }
+
+      // Seed per-user trial subscription snapshot for non-admin accounts
+      try {
+        const emailLc = email.toLowerCase();
+        if (emailLc !== 'admin@mokmzansibooks.com') {
+          const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+          localStorage.setItem('mokSubscription', JSON.stringify({
+            tier: 'trial',
+            status: 'trial',
+            end_date: end.toISOString(),
+            validUntil: end.toISOString(),
+            ownerEmail: emailLc,
+            userId: lookup.user.id,
+          }));
+        }
+      } catch (e) {
+        console.warn('Failed seeding trial subscription on signUp:', e);
+      }
 
       return Promise.resolve();
     } catch (error) {
@@ -127,6 +149,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('Saving user to localStorage:', authenticatedUser);
         localStorage.setItem('mokUser', JSON.stringify(authenticatedUser));
         setUser(authenticatedUser);
+
+        // Bootstrap: migrate any legacy unscoped keys to scoped equivalents after signup/login
+        try { migrateLegacyCompanyKeys(); } catch (e) { console.warn('Non-blocking: company migration after signIn failed', e); }
+
+        // Ensure subscription snapshot is scoped to current user
+        try {
+          const emailLc = authenticatedUser.email.toLowerCase();
+          const adminEmail = 'admin@mokmzansibooks.com';
+          const existingRaw = localStorage.getItem('mokSubscription');
+          let shouldResetToTrial = false;
+          if (!existingRaw) {
+            shouldResetToTrial = emailLc !== adminEmail;
+          } else {
+            try {
+              const parsed = JSON.parse(existingRaw);
+              const ownerEmail = (parsed && typeof parsed === 'object' && parsed.ownerEmail) ? String(parsed.ownerEmail).toLowerCase() : null;
+              if (!ownerEmail || ownerEmail !== emailLc) {
+                // Cross-account contamination or unknown owner -> reset for non-admin
+                shouldResetToTrial = emailLc !== adminEmail;
+              }
+            } catch {
+              shouldResetToTrial = emailLc !== adminEmail;
+            }
+          }
+          if (shouldResetToTrial) {
+            const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            localStorage.setItem('mokSubscription', JSON.stringify({
+              tier: 'trial',
+              status: 'trial',
+              end_date: end.toISOString(),
+              validUntil: end.toISOString(),
+              ownerEmail: emailLc,
+              userId: authenticatedUser.id,
+            }));
+          }
+        } catch (e) {
+          console.warn('Failed to ensure per-user trial subscription on signIn:', e);
+        }
         
         // Device session tracking + login notification
         try {

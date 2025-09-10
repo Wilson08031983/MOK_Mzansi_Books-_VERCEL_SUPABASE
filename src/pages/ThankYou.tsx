@@ -12,6 +12,11 @@ const ThankYou = () => {
   const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
+    // Ensure billing views know to refresh payment history when user returns
+    try {
+      sessionStorage.setItem('refreshPaymentHistory', '1');
+    } catch {}
+
     refreshSubscription(); // Refresh subscription status on mount
 
     const timer = setInterval(() => {

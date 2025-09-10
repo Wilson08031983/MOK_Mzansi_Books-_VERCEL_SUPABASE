@@ -16,8 +16,9 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { InventoryItem, StockHistoryEntry } from '@/types/inventory';
-import { DeliveryNote } from '@/types/deliveryNote';
+// DeliveryNote type defined locally below to avoid missing import
 import { getAllInventoryItems, getAllStockHistory, getItemStockHistory } from '@/services/inventoryService';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 // jspdf-autotable is imported above
 
 // Define interfaces for report data
@@ -81,60 +82,70 @@ interface InventoryReportData {
 // Helper functions to get data from localStorage
 const getCompanyDetails = (): CompanyDetails => {
   try {
-    const companyData = localStorage.getItem('companyDetails');
-    if (!companyData) {
-      console.warn('No company details found in localStorage');
-      return { 
-        name: 'Company Name Not Set',
-        email: 'Email Not Set',
-        phone: 'Phone Not Set'
+    const scoped = getScopedCompany();
+    if (scoped) {
+      return {
+        name: scoped.name || 'Company Name Not Set',
+        email: (scoped as any).email,
+        phone: (scoped as any).phone,
+        addressLine1: (scoped as any).addressLine1,
+        addressLine2: (scoped as any).addressLine2,
+        addressLine3: (scoped as any).addressLine3 || (scoped as any).city,
+        addressLine4: (scoped as any).addressLine4 || [
+          (scoped as any).state,
+          (scoped as any).postalCode
+        ].filter(Boolean).join(', '),
+        vatNumber: (scoped as any).vatNumber,
+        regNumber: (scoped as any).registrationNumber || (scoped as any).regNumber,
+        taxNumber: (scoped as any).taxNumber,
+        csdNumber: (scoped as any).csdNumber,
+        contactName: (scoped as any).contactName,
+        contactSurname: (scoped as any).contactSurname,
+        position: (scoped as any).position,
+        website: (scoped as any).website
       };
     }
-    
-    // Parse company data
-    const parsedData = JSON.parse(companyData);
-    
-    // Validate minimum required fields
-    if (!parsedData.name) {
-      console.warn('Company name missing from company details');
-      parsedData.name = 'Company Name Not Set';
-    }
-    
-    return parsedData;
   } catch (error) {
-    console.error('Error getting company details:', error);
-    return { 
-      name: 'Error Loading Company Data',
-      email: 'admin@company.com',
-      phone: '+27 000 000 0000'
-    };
+    console.error('Error getting scoped company details:', error);
   }
+  // legacy fallback
+  try {
+    const companyData = localStorage.getItem('companyDetails');
+    if (companyData) {
+      const parsedData = JSON.parse(companyData);
+      if (!parsedData.name) parsedData.name = 'Company Name Not Set';
+      return parsedData;
+    }
+  } catch (error) {
+    console.error('Error getting legacy company details:', error);
+  }
+  return { name: 'Company Name Not Set', email: 'Email Not Set', phone: 'Phone Not Set' };
 };
 
 const getCompanyAssets = (): CompanyAssets => {
   try {
-    const assets = localStorage.getItem('companyAssets');
-    if (!assets) {
-      console.warn('No company assets found in localStorage');
-      return {};
-    }
-    
-    const parsedAssets = JSON.parse(assets);
-    
-    // Validate logo exists and has valid data URL
-    if (parsedAssets.Logo?.dataUrl) {
-      // Check if the dataUrl is valid by testing if it starts with data: prefix
-      if (!parsedAssets.Logo.dataUrl.startsWith('data:')) {
-        console.warn('Invalid logo data URL format');
-        delete parsedAssets.Logo;
-      }
-    }
-    
-    return parsedAssets;
+    const assets = getScopedCompanyAssets();
+    const logo = (assets as any)?.logo || (assets as any)?.Logo?.dataUrl;
+    const signature = (assets as any)?.signature || (assets as any)?.Signature?.dataUrl;
+    const stamp = (assets as any)?.stamp || (assets as any)?.Stamp?.dataUrl;
+    const normalized: CompanyAssets = {};
+    if (logo) normalized.Logo = { dataUrl: logo };
+    if (signature) normalized.Signature = { dataUrl: signature };
+    if (stamp) normalized.Stamp = { dataUrl: stamp };
+    return normalized;
   } catch (error) {
-    console.error('Error getting company assets:', error);
-    return {};
+    console.error('Error getting scoped company assets:', error);
   }
+  // legacy fallback
+  try {
+    const assets = localStorage.getItem('companyAssets');
+    if (assets) {
+      return JSON.parse(assets);
+    }
+  } catch (error) {
+    console.error('Error getting legacy company assets:', error);
+  }
+  return {};
 };
 
 const getDeliveryNotes = (): DeliveryNote[] => {
@@ -514,3 +525,6 @@ export const generateInventoryReport = (): void => {
     toast.error('Unexpected error occurred');
   });
 };
+
+interface DeliveryNoteItem { inventoryItemId: string; quantity: number; amount: number }
+interface DeliveryNote { id?: string; items?: DeliveryNoteItem[] }

@@ -3,6 +3,7 @@ import { useLocalization } from '@/hooks/useLocalization';
 import { Client as BaseClient } from '@/services/clientService';
 import { markQuotationAsSent } from '@/services/quotationService';
 import { Quotation as ServiceQuotation, QuotationItem } from '@/services/quotationService';
+import { getCompany as getScopedCompany } from '@/services/companyService';
 
 // Extended Client interface with formatted addresses
 interface ExtendedClient extends Client {
@@ -304,13 +305,12 @@ const QuotationActionsMenu: React.FC<QuotationActionsMenuProps> = ({ quotation: 
         }
       }
       
-      // Get company data from localStorage
-      const companyString = localStorage.getItem('companyDetails');
-      if (companyString) {
-        const company = JSON.parse(companyString);
-        console.log('Found company data:', company);
-        tempCompanyData = company;
-        setCompanyData(company);
+      // Get company data
+      const company = getScopedCompany();
+      if (company) {
+      console.log('Found company data:', company);
+      tempCompanyData = company as any;
+      setCompanyData(company as any);
       }
     } catch (error) {
       console.error('Error loading data:', error);

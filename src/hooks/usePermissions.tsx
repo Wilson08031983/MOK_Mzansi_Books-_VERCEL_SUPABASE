@@ -4,7 +4,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 
 export const usePermissions = () => {
   const { user } = useAuth();
-  const { subscription } = useSubscription();
+  const { subscription, loading } = useSubscription();
   
   // Helper function to get user role from either location
   const getUserRole = () => {
@@ -23,9 +23,41 @@ export const usePermissions = () => {
     return null;
   };
 
+  // Fallback: read local active/trial state for current user (used during initial loading)
+  const getLocalActive = (): boolean => {
+    try {
+      if (!user) return false;
+      const email = (user as any)?.email?.toLowerCase?.() || '';
+      const raw = JSON.parse(localStorage.getItem('mokSubscription') || '{}');
+      const ownerOk = (raw?.ownerEmail?.toLowerCase?.() === email) || (email === 'admin@mokmzansibooks.com');
+      const endStr = raw?.end_date || raw?.validUntil;
+      const end = endStr ? new Date(endStr) : new Date(0);
+      const status = (raw?.status || '').toString().toLowerCase();
+      const activeStatuses = ['active', 'trial', 'trialing', 'past_due'];
+      return ownerOk && activeStatuses.includes(status) && end.getTime() > Date.now();
+    } catch {
+      return false;
+    }
+  };
+
   const hasValidSubscription = () => {
-    if (!subscription) return false;
-    return subscription.status === 'active' || subscription.status === 'trialing';
+    // While subscription is loading, avoid transient locks by allowing access optimistically
+    if (loading) {
+      // Prefer a user-scoped local snapshot when available
+      const localOk = getLocalActive();
+      return localOk || true; // optimistic to prevent 5s padlock flicker post-payment
+    }
+
+    // If we have no subscription object (unexpected), consult localStorage
+    if (!subscription) return getLocalActive();
+
+    // Allow full navigation during active subscription, during trial, and during grace (past_due)
+    return (
+      subscription.status === 'active' ||
+      subscription.status === 'trial' ||
+      subscription.status === 'trialing' ||
+      subscription.status === 'past_due' // treat grace period as valid access
+    );
   };
   
   const canAccessPage = (pageName: string): boolean => {

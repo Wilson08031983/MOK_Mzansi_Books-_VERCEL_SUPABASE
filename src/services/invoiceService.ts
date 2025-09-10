@@ -1,7 +1,7 @@
 import { safeLocalStorage, safeString, safeGet } from '@/utils/safeAccess';
 import { withCrashPrevention } from '@/utils/crashPrevention';
 import { Invoice, InvoiceInput, InvoiceResponse, InvoiceItem, InvoiceStatus, isValidInvoiceStatus } from '@/types/invoice';
-import { getCompanyId } from '@/services/companyService';
+import { getCompanyId, getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Define a type for the client object that can be either string or object
 type ClientRef = string | { id: string; name: string; email?: string };
@@ -323,6 +323,22 @@ export const calculateInvoiceTotals = withCrashPrevention((items: InvoiceItem[])
   };
 }, { subtotal: 0, totalTax: 0, total: 0 });
 
+// Apply client-level discount to a subtotal and compute VAT and total
+export const applyClientDiscountToTotals = withCrashPrevention((
+  subtotal: number,
+  vatRate: number,
+  discountRate?: string | number
+) => {
+  const sub = Number(subtotal) || 0;
+  const vat = Number(vatRate) || 0;
+  const disc = typeof discountRate === 'string' ? parseFloat(discountRate) : Number(discountRate || 0);
+  const discountAmount = sub * ((isFinite(disc) ? disc : 0) / 100);
+  const discountedSubtotal = Math.max(0, sub - discountAmount);
+  const vatTotal = discountedSubtotal * (vat / 100);
+  const total = discountedSubtotal + vatTotal;
+  return { discountedSubtotal, vatTotal, total, discountAmount };
+}, { discountedSubtotal: 0, vatTotal: 0, total: 0, discountAmount: 0 });
+
 // Get invoice statistics
 export const getInvoiceStats = withCrashPrevention(() => {
   const invoices = getInvoices();
@@ -374,205 +390,151 @@ export const getInvoiceStats = withCrashPrevention(() => {
   overdueInvoices: 0
 });
 
-// Create invoice template with company details
-export const createInvoiceTemplate = withCrashPrevention((invoiceData: Partial<Invoice>): Invoice => {
-  try {
-    const companyDetailsData = safeLocalStorage.getItem('companyDetails', null);
-    let companyDetails = null;
-    
-    if (companyDetailsData) {
-      const parsed = typeof companyDetailsData === 'string' ? JSON.parse(companyDetailsData) : companyDetailsData;
-      companyDetails = {
-        name: safeString(safeGet(parsed, 'name', '')),
-        address: safeString(safeGet(parsed, 'address', '')),
-        phone: safeString(safeGet(parsed, 'phone', '')),
-        email: safeString(safeGet(parsed, 'email', '')),
-        website: safeString(safeGet(parsed, 'website', '')),
-        logo: safeString(safeGet(parsed, 'logo', '')),
-        taxNumber: safeString(safeGet(parsed, 'taxNumber', '')),
-        registrationNumber: safeString(safeGet(parsed, 'registrationNumber', ''))
-      };
-    }
-    
-    const template: Invoice = {
-      id: generateInvoiceId(),
-      number: generateInvoiceNumber(),
-      client: '',
-      clientId: '',
-      clientName: '',
-      clientEmail: '',
-      date: new Date().toISOString().split('T')[0],
-      invoiceDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-      amount: 0,
-      subtotal: 0,
-      vatTotal: 0,
-      total: 0,
-      paidAmount: 0,
-      balance: 0,
-      status: 'draft' as InvoiceStatus,
-      currency: 'ZAR',
-      vatRate: 0,
-      reference: '',
-      project: '',
-      salesperson: '',
-      salespersonId: '',
-      tags: [],
-      items: [],
-      notes: '',
-      terms: 'Payment is due within 30 days of invoice date.',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      companyDetails,
-      ...invoiceData
-    };
-    
-    return template;
-  } catch (error) {
-    console.error('Error creating invoice template:', error);
-    throw error;
-  }
-}, {} as Invoice);
-
-// Save invoice and return updated list
-export const saveInvoice = withCrashPrevention((invoice: Invoice): Invoice[] => {
-  const invoices = getInvoices();
-  const existingIndex = invoices.findIndex(q => q.id === invoice.id);
-  
-  if (existingIndex >= 0) {
-    // Update existing invoice
-    invoices[existingIndex] = {
-      ...invoice,
-      updatedAt: new Date().toISOString()
-    };
-  } else {
-    // Add new invoice
-    invoices.push({
-      ...invoice,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-  }
-  
-  saveInvoices(invoices);
-  return invoices;
-}, []);
-
-// Update invoice status
-export const updateInvoiceStatus = withCrashPrevention((id: string, status: InvoiceStatus): Promise<InvoiceResponse | null> => {
-  return updateInvoice(id, { status }).then(result => {
-    // Dispatch event for status change
-    try {
-      if (result && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('invoices-updated', {
-          detail: { action: 'status-changed', invoice: result, status }
-        }));
-      }
-    } catch (e) {
-      console.warn('invoices-updated dispatch failed (status):', e);
-    }
-    return result;
-  });
-}, () => Promise.resolve(null));
-
-// Record payment for an invoice
-export const recordPayment = withCrashPrevention(async (id: string, paymentAmount: number): Promise<InvoiceResponse | null> => {
-  const invoice = getInvoiceById(id);
-  if (!invoice) return null;
-  
-  const newPaidAmount = (invoice.paidAmount || 0) + paymentAmount;
-  const newBalance = invoice.amount - newPaidAmount;
-  
-  let newStatus: InvoiceStatus = invoice.status;
-  if (newBalance <= 0) {
-    newStatus = 'paid';
-  } else if (newPaidAmount > 0) {
-    newStatus = 'partial';
-  }
-  
-  const result = await updateInvoice(id, {
-    paidAmount: newPaidAmount,
-    status: newStatus
-  });
-  // Dispatch event for payment recorded
-  try {
-    if (result && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('invoices-updated', {
-        detail: { action: 'payment-recorded', invoice: result, paymentAmount: paymentAmount, newStatus }
-      }));
-    }
-  } catch (e) {
-    console.warn('invoices-updated dispatch failed (payment):', e);
-  }
-  return result;
-}, () => Promise.resolve(null));
-
-// Export invoice data for backup
-export const exportInvoices = withCrashPrevention((): string => {
-  const invoices = getInvoices();
-  return JSON.stringify(invoices, null, 2);
-}, '[]');
-
-// Import invoice data from backup
-export const importInvoices = withCrashPrevention((data: string): boolean => {
-  try {
-    const invoices = JSON.parse(data);
-    if (Array.isArray(invoices)) {
-      saveInvoices(invoices);
-      // Dispatch import event
-      try {
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('invoices-updated', {
-            detail: { action: 'imported', count: invoices.length }
-          }));
-        }
-      } catch (e) {
-        console.warn('invoices-updated dispatch failed (import):', e);
-      }
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error('Error importing invoices:', error);
-    return false;
-  }
-}, false);
-
-// Compute a client's outstanding balance (sum of balances of unpaid/non-cancelled invoices)
+// Calculate total outstanding balance for a specific client across all invoices
 export const getClientOutstandingBalance = withCrashPrevention((clientId: string): number => {
   try {
     const invoices = getInvoices();
+
     return invoices
-      .filter(inv => inv.clientId === clientId && inv.status !== 'paid' && inv.status !== 'cancelled')
+      .filter(inv => inv && (inv.clientId === clientId || (inv as any).client === clientId))
       .reduce((sum, inv) => {
-        const paid = inv.paidAmount || 0;
-        const balance = typeof inv.balance === 'number' ? inv.balance : (inv.amount - paid);
-        return sum + Math.max(0, balance);
+        const total = Number((inv as any).total ?? (inv as any).amount ?? 0);
+        const paid = Number((inv as any).paidAmount ?? 0);
+        const computedBalance = typeof (inv as any).balance === 'number'
+          ? Number((inv as any).balance)
+          : total - paid;
+        const status = (inv as any).status || 'draft';
+        // Exclude cancelled invoices entirely
+        if (status === 'cancelled') return sum;
+        // Only add positive outstanding amounts
+        return sum + Math.max(0, computedBalance);
       }, 0);
   } catch (e) {
-    console.error('Error calculating outstanding balance:', e);
     return 0;
   }
 }, 0);
 
-// Apply a client-level discount rate to a subtotal and then compute VAT and total
-export const applyClientDiscountToTotals = withCrashPrevention((subtotal: number, vatRate: number, clientDiscountRate?: number) => {
-  const dRate = Number(clientDiscountRate) || 0;
-  const discountAmount = subtotal * (dRate / 100);
-  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
-  const vatTotal = discountedSubtotal * ((Number(vatRate) || 0) / 100);
-  const total = discountedSubtotal + vatTotal;
-  return { discountedSubtotal, discountAmount, vatTotal, total, discountRate: dRate };
-}, { discountedSubtotal: 0, discountAmount: 0, vatTotal: 0, total: 0, discountRate: 0 });
-
-// Determine if a new charge can proceed under a client's credit limit
-export const canProceedWithCredit = withCrashPrevention((clientId: string, newChargeAmount: number, creditLimit: number) => {
-  const limit = Number(creditLimit) || 0;
+// Credit limit enforcement helper
+export const canProceedWithCredit = withCrashPrevention((
+  clientId: string,
+  invoiceTotal: number,
+  creditLimit?: string | number
+) => {
+  const limit = typeof creditLimit === 'string' ? parseFloat(creditLimit) : Number(creditLimit);
   const outstanding = getClientOutstandingBalance(clientId);
-  if (limit <= 0) {
-    // No limit configured -> allow
-    return { allowed: true, remaining: Infinity, outstanding } as { allowed: boolean; remaining: number; outstanding: number };
+
+  // If no valid credit limit configured, allow by default
+  if (!isFinite(limit) || limit <= 0) {
+    return { allowed: true, outstanding, remaining: Number.MAX_SAFE_INTEGER };
   }
+
   const remaining = Math.max(0, limit - outstanding);
-  return { allowed: newChargeAmount <= remaining, remaining, outstanding } as { allowed: boolean; remaining: number; outstanding: number };
-}, { allowed: true, remaining: Infinity, outstanding: 0 });
+  const allowed = (Number(invoiceTotal) || 0) <= remaining;
+  return { allowed, outstanding, remaining };
+}, { allowed: true, outstanding: 0, remaining: Number.MAX_SAFE_INTEGER });
+
+// Create invoice template with company details
+export const createInvoiceTemplate = withCrashPrevention((invoiceData: Partial<Invoice> = {} as Partial<Invoice>): Invoice => {
+  // Use scoped company details and assets (legacy fallback handled in service)
+  const company = getScopedCompany();
+  const assets = getScopedCompanyAssets();
+
+  // Build a single-line address string from available parts
+  const addressParts = [
+    company?.addressLine1,
+    company?.addressLine2,
+    company?.city,
+    company?.state,
+    company?.postalCode,
+    company?.country,
+  ].filter(Boolean).join(', ');
+
+  // Map to the Invoice.companyDetails shape if company exists
+  const companyDetails = company ? {
+    name: company.name || '',
+    address: addressParts || '',
+    city: company.city,
+    state: company.state,
+    zip: company.postalCode,
+    country: company.country,
+    phone: company.phone || '',
+    email: company.email || '',
+    website: company.website || '',
+    taxNumber: company.vatNumber || company.registrationNumber || '',
+    logo: (assets?.logo || company.logo) || ''
+  } : undefined;
+
+  // Items and totals
+  const items: InvoiceItem[] = Array.isArray(invoiceData.items) ? (invoiceData.items as InvoiceItem[]) : [];
+  const { subtotal, totalTax, total } = calculateInvoiceTotals(items);
+
+  const now = new Date().toISOString();
+  const status: InvoiceStatus = isValidInvoiceStatus((invoiceData as any).status) ? (invoiceData as any).status : 'draft';
+
+  const totalValue = invoiceData.total ?? total;
+  const paidAmount = invoiceData.paidAmount ?? 0;
+
+  return {
+    id: invoiceData.id || generateInvoiceId(),
+    number: invoiceData.number || generateInvoiceNumber(),
+    client: (invoiceData as any).client || '',
+    clientId: invoiceData.clientId || '',
+    clientName: (invoiceData as any).clientName || ((typeof (invoiceData as any).client === 'string') ? (invoiceData as any).client : ''),
+    clientEmail: invoiceData.clientEmail || '',
+    date: invoiceData.date || now,
+    invoiceDate: invoiceData.invoiceDate || invoiceData.date || now,
+    dueDate: invoiceData.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    amount: invoiceData.amount ?? totalValue,
+    subtotal: invoiceData.subtotal ?? subtotal,
+    vatTotal: invoiceData.vatTotal ?? totalTax,
+    total: totalValue,
+    paidAmount,
+    balance: totalValue - paidAmount,
+    status,
+    currency: invoiceData.currency || company?.currency || 'ZAR',
+    vatRate: typeof invoiceData.vatRate === 'number' ? invoiceData.vatRate : (company?.taxRate ?? 0),
+    reference: invoiceData.reference || '',
+    project: (invoiceData as any).project,
+    salesperson: (invoiceData as any).salesperson,
+    salespersonId: (invoiceData as any).salespersonId,
+    tags: invoiceData.tags,
+    items,
+    notes: invoiceData.notes || company?.invoiceNotes || '',
+    terms: invoiceData.terms || company?.invoiceTerms || '',
+    createdAt: invoiceData.createdAt || now,
+    updatedAt: invoiceData.updatedAt || now,
+    companyDetails,
+  };
+}, () => {
+  const now = new Date().toISOString();
+  return {
+    id: generateInvoiceId(),
+    number: generateInvoiceNumber(),
+    client: '',
+    clientId: '',
+    clientName: '',
+    clientEmail: '',
+    date: now,
+    invoiceDate: now,
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    amount: 0,
+    subtotal: 0,
+    vatTotal: 0,
+    total: 0,
+    paidAmount: 0,
+    balance: 0,
+    status: 'draft',
+    currency: 'ZAR',
+    vatRate: 0,
+    reference: '',
+    project: undefined,
+    salesperson: undefined,
+    salespersonId: undefined,
+    tags: [],
+    items: [],
+    notes: '',
+    terms: '',
+    createdAt: now,
+    updatedAt: now,
+  } as Invoice;
+});

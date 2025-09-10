@@ -8,6 +8,10 @@ import { useSubscription } from './useSubscription';
 import { toast } from '@/hooks/use-toast';
 import { useLocalization } from '@/hooks/useLocalization';
 
+// Environment helper
+const __DEV__ = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') ||
+  (typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test((window.location && window.location.hostname) || ''));
+
 export const usePayment = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -27,8 +31,7 @@ export const usePayment = () => {
     totalMs = 10000,
     intervalMs = 1000
   ): Promise<boolean> => {
-    // In Vite dev, API routes may not be active; assume activation for local testing
-    if (import.meta?.env?.DEV) return true;
+    if (__DEV__) return true; // In dev, assume activation for local testing
 
     const attempts = Math.max(1, Math.floor(totalMs / intervalMs));
     for (let i = 0; i < attempts; i++) {
@@ -50,9 +53,7 @@ export const usePayment = () => {
     return false;
   };
 
-  const generatePaymentReference = () => {
-    return new Date().getTime().toString();
-  };
+  const generatePaymentReference = () => new Date().getTime().toString();
 
   const createPaymentConfig = (email: string, savePaymentMethod?: boolean) => ({
     reference: generatePaymentReference(),
@@ -64,154 +65,164 @@ export const usePayment = () => {
     metadata: {
       save_payment_method: !!savePaymentMethod,
       custom_fields: [
-        {
-          display_name: 'User ID',
-          variable_name: 'user_id',
-          value: user?.id || 'guest',
-        },
-        {
-          display_name: 'Subscription Tier',
-          variable_name: 'subscription_tier',
-          value: selectedPlan || 'unknown',
-        },
-        {
-          display_name: 'Email',
-          variable_name: 'email',
-          value: email || user?.email || 'user@example.com',
-        },
+        { display_name: 'User ID', variable_name: 'user_id', value: user?.id || 'guest' },
+        { display_name: 'Subscription Tier', variable_name: 'subscription_tier', value: selectedPlan || 'unknown' },
+        { display_name: 'Email', variable_name: 'email', value: email || user?.email || 'user@example.com' },
       ],
     },
   });
 
   const handlePaymentSuccess = async (reference: any) => {
     console.log('Payment successful (client):', reference);
-    // Keep modal closed since inline already closed it; but don't grant value yet
     setShowPaymentModal(false);
     setIsProcessing(true);
 
     const maxRetries = 3;
-    const retryDelay = 2000; // 2 seconds
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`Payment verification attempt ${attempt}/${maxRetries}`);
-        let verified = false;
+    const retryDelay = 2000;
 
-        // Server-side verification
-        try {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let verified = false;
+      try {
+        if (__DEV__) {
+          console.log('Dev mode: Verifying via API route (preferred)');
+          // Prefer server-side verification even in dev to avoid exposing secrets
+          try {
+            const resp = await fetch('/api/paystack-verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reference: reference?.reference || reference }),
+            });
+            if (resp.ok) {
+              const body = await resp.json().catch(() => ({}));
+              verified = !!body?.verified;
+              if (!verified && (body?.status === 'pending' || body?.message?.includes('pending'))) {
+                if (attempt < maxRetries) {
+                  await new Promise(res => setTimeout(res, retryDelay));
+                  continue;
+                }
+              }
+            } else {
+              throw new Error('Server verification failed');
+            }
+          } catch (_serverErr) {
+            console.log('Dev mode: Falling back to direct Paystack verification with TEST key');
+            // Only fallback to direct verify if a TEST secret is explicitly provided on the client
+            const paystackSecretKey = (import.meta as any).env?.VITE_PAYSTACK_TEST_SECRET_KEY;
+            if (!paystackSecretKey) throw _serverErr;
+
+            const paystackResp = await fetch(`https://api.paystack.co/transaction/verify/${reference?.reference || reference}` , {
+              method: 'GET',
+              headers: { 'Authorization': `Bearer ${paystackSecretKey}`, 'Content-Type': 'application/json' },
+            });
+            if (paystackResp.ok) {
+              const paystackData = await paystackResp.json();
+              const status = paystackData?.data?.status?.toLowerCase();
+              verified = status === 'success' || status === 'successful';
+              if (!verified && (status === 'pending' || status === 'processing')) {
+                if (attempt < maxRetries) {
+                  await new Promise(res => setTimeout(res, retryDelay));
+                  continue;
+                }
+              }
+            } else {
+              throw new Error('Paystack verification failed');
+            }
+          }
+        } else {
+          // Production mode: use API route
           const resp = await fetch('/api/paystack-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reference: reference?.reference || reference }),
           });
-
           if (resp.ok) {
             const body = await resp.json().catch(() => ({}));
             verified = !!body?.verified;
-            
-            // Handle pending status - continue retrying
-            if (body?.status === 'pending' || body?.message?.includes('pending')) {
-              console.log(`Payment verification pending, attempt ${attempt}/${maxRetries}`);
+            if (!verified && (body?.status === 'pending' || body?.message?.includes('pending'))) {
               if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                await new Promise(res => setTimeout(res, retryDelay));
                 continue;
-              } else {
-                // Final attempt failed, but payment might still be processing
-                toast({
-                  title: t('settings.billing.toasts.paymentProcessingTitle') || 'Payment Processing',
-                  description: t('settings.billing.toasts.paymentProcessingDesc') || 'Your payment is being processed. Please check your email for confirmation.',
-                });
-                setIsProcessing(false);
-                navigate('/thank-you');
-                return;
               }
             }
           } else {
-            // In dev, Vite does not serve Next-style API routes; treat 404 as success for local testing
-            if (import.meta?.env?.DEV && resp.status === 404) {
-              console.warn('Dev fallback: /api/paystack-verify not available; assuming verification success for local testing');
-              verified = true;
-            } else {
-              const err = await resp.json().catch(() => ({}));
-              if (attempt < maxRetries) {
-                console.log(`Verification failed, retrying in ${retryDelay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
-                continue;
-              } else {
-                throw new Error(err?.message || 'Verification failed');
+            throw new Error('Server verification failed');
+          }
+        }
+      } catch (error) {
+        console.error('Verification error:', error);
+        if (attempt < maxRetries) {
+          await new Promise(res => setTimeout(res, retryDelay));
+          continue;
+        }
+      }
+
+      if (verified) {
+        // Persist subscription and payment history
+        try {
+          const planKey = (selectedPlan || '') as keyof typeof SUBSCRIPTION_PLANS;
+          const amount = planKey ? (SUBSCRIPTION_PLANS[planKey]?.price || 0) : 0;
+          const refStr = reference?.reference || reference;
+
+          if (modalMode === 'update') {
+            // Record payment in update mode when a charge actually occurred
+            if (amount > 0) {
+              try {
+                await createPayment('', amount, refStr);
+              } catch (e) {
+                console.warn('Failed to record payment (update mode):', e);
               }
             }
+
+            setIsProcessing(false);
+            toast({
+              title: t('settings.billing.toasts.paymentUpdatedTitle'),
+              description: t('settings.billing.toasts.paymentUpdatedDesc'),
+            });
+            return;
           }
-        } catch (verifyErr: any) {
-          if (import.meta?.env?.DEV) {
-            console.warn('Dev fallback: verification request failed; assuming success for local testing:', verifyErr?.message || verifyErr);
-            verified = true;
-          } else {
-            if (attempt < maxRetries) {
-              console.log(`Network error, retrying in ${retryDelay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, retryDelay));
-              continue;
-            } else {
-              throw verifyErr;
+
+          if (selectedPlan && selectedPlan !== 'trial') {
+            try {
+              await createSubscription(selectedPlan as any, refStr);
+            } catch (e) {
+              console.warn('Failed to create/activate subscription locally:', e);
+            }
+            try {
+              await createPayment('', amount, refStr);
+            } catch (e) {
+              console.warn('Failed to record payment:', e);
             }
           }
+        } catch (e) {
+          console.warn('Post-verify persistence warnings:', e);
         }
 
-        if (!verified) {
-          if (attempt < maxRetries) {
-            console.log(`Verification failed, retrying in ${retryDelay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-            continue;
-          } else {
-            throw new Error('Verification failed');
-          }
-        }
-
-        // If only updating card, conclude after verify without creating subscription
-        if (modalMode === 'update') {
-          setIsProcessing(false);
-          toast({
-            title: t('settings.billing.toasts.paymentUpdatedTitle'),
-            description: t('settings.billing.toasts.paymentUpdatedDesc'),
-          });
-          return;
-        }
-
-        // For subscriptions, rely on webhook to persist activation; poll server snapshot briefly
         const activated = await waitForServerActivation(selectedPlan);
-        if (!activated) {
-          console.warn('Subscription not yet active on server after verify; proceeding while webhook completes');
-        }
+        if (!activated) console.warn('Subscription not yet active on server after verify; proceeding while webhook completes');
 
         toast({
           title: t('settings.billing.toasts.paymentSuccessTitle'),
           description: t('settings.billing.toasts.paymentSuccessDesc'),
         });
-
         setIsProcessing(false);
         navigate('/thank-you');
-        return; // Success, exit retry loop
-        
-      } catch (error: any) {
-        console.error(`Error completing payment flow (attempt ${attempt}):`, error);
-        if (attempt >= maxRetries) {
-          setIsProcessing(false);
-          toast({
-            title: t('common.error'),
-            description: error?.message || t('settings.billing.toasts.verifyFailedDesc') || 'Unable to verify payment. Please contact support if payment was deducted.',
-            variant: 'destructive',
-          });
-        }
+        return;
       }
     }
+
+    // If not verified after retries, notify user gracefully
+    toast({
+      title: t('settings.billing.toasts.paymentProcessingTitle') || 'Payment Processing',
+      description: t('settings.billing.toasts.paymentProcessingDesc') || 'Your payment is being processed. Please check your email for confirmation.',
+    });
+    setIsProcessing(false);
+    navigate('/thank-you');
   };
 
   const handlePaymentClose = () => {
     console.log('Payment closed or failed');
     setIsProcessing(false);
     setShowPaymentModal(false);
-    
-    // Show toast notification for payment failure
     toast({
       title: t('settings.billing.toasts.paymentFailedTitle'),
       description: t('settings.billing.toasts.paymentFailedDesc'),
@@ -221,14 +232,13 @@ export const usePayment = () => {
 
   const handleSelectPlan = async (planKey: string) => {
     if (!user) {
-      // Redirect to signup if not authenticated
       navigate('/signup');
       return;
     }
 
     setSelectedPlan(planKey);
     setModalMode('subscribe');
-    
+
     if (planKey === 'trial') {
       try {
         const resp = await fetch('/api/billing/start-trial', { method: 'POST' });
@@ -252,7 +262,7 @@ export const usePayment = () => {
       }
       return;
     }
-    
+
     setShowPaymentModal(true);
   };
 
@@ -265,9 +275,9 @@ export const usePayment = () => {
       });
       return;
     }
-    
+
     setIsProcessing(true);
-    
+
     const config = createPaymentConfig(email, savePaymentMethod);
 
     // Close our Dialog before launching Paystack to ensure no overlay blocks clicks
@@ -275,9 +285,7 @@ export const usePayment = () => {
 
     // Defer initialization slightly so the overlay is unmounted first
     setTimeout(() => {
-      // Fix for Paystack popup buttons not working: use PaystackPop directly
       try {
-        // Ensure the Paystack script is loaded
         // @ts-ignore - PaystackPop is globally available when the script is loaded
         if (!window.PaystackPop) {
           throw new Error('Payment library failed to load. Please refresh and try again.');
@@ -294,11 +302,7 @@ export const usePayment = () => {
         const fallbackDesc = 'Failed to initialize payment';
         const translated = t('settings.billing.toasts.paymentInitError');
         const description = translated === 'settings.billing.toasts.paymentInitError' ? fallbackDesc : translated || fallbackDesc;
-        toast({
-          title: t('common.error'),
-          description,
-          variant: 'destructive',
-        });
+        toast({ title: t('common.error'), description, variant: 'destructive' });
         setIsProcessing(false);
       }
     }, 200);
@@ -308,12 +312,12 @@ export const usePayment = () => {
   const openPaymentModalForPlan = (planKey: string) => {
     setSelectedPlan(planKey);
     setModalMode('update');
-    setIsProcessing(false); // ensure button isn't stuck in Processing state on open
+    setIsProcessing(false);
     setShowPaymentModal(true);
   };
 
   const openPaymentModalForCardManagement = () => {
-    setSelectedPlan(null); // No plan needed for card management
+    setSelectedPlan(null);
     setModalMode('update');
     setIsProcessing(false);
     setShowPaymentModal(true);

@@ -18,6 +18,7 @@ import { Invoice, InvoiceItem } from '@/types/invoice';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Define interfaces
 interface Address {
@@ -122,28 +123,54 @@ const getCompanyDetails = (): CompanyDetails => {
   };
 
   try {
+    // Scoped-first
+    const scoped = getScopedCompany();
+    if (scoped) {
+      // Compose formatted address
+      const addrLines: string[] = [];
+      if ((scoped as any).addressLine1) addrLines.push((scoped as any).addressLine1);
+      if ((scoped as any).addressLine2) addrLines.push((scoped as any).addressLine2);
+      const cityLine = [
+        (scoped as any).city,
+        (scoped as any).state,
+        (scoped as any).postalCode,
+      ].filter(Boolean).join(', ');
+      if (cityLine) addrLines.push(cityLine);
+      if ((scoped as any).country) addrLines.push((scoped as any).country);
+
+      return {
+        ...defaultDetails,
+        name: (scoped as any).name || defaultDetails.name,
+        email: (scoped as any).email || defaultDetails.email,
+        phone: (scoped as any).phone || defaultDetails.phone,
+        address: addrLines.join('\n'),
+        vatNumber: (scoped as any).vatNumber || defaultDetails.vatNumber,
+        regNumber: (scoped as any).registrationNumber || defaultDetails.regNumber,
+        bankName: (scoped as any).bankName || defaultDetails.bankName,
+        accountNumber: (scoped as any).bankAccountNumber || (scoped as any).bankAccount || defaultDetails.accountNumber,
+        branchCode: (scoped as any).bankBranchCode || defaultDetails.branchCode,
+        accountType: (scoped as any).accountType || defaultDetails.accountType,
+      };
+    }
+
+    // Legacy fallback
     const stored = localStorage.getItem('companyDetails');
     if (!stored) return defaultDetails;
-    
     const parsed = JSON.parse(stored);
-    
+
     // Format the address from all address lines
     let formattedAddress = '';
     if (parsed.addressLine1) formattedAddress += parsed.addressLine1 + '\n';
     if (parsed.addressLine2) formattedAddress += parsed.addressLine2 + '\n';
     if (parsed.addressLine3) formattedAddress += parsed.addressLine3 + '\n';
     if (parsed.addressLine4) formattedAddress += parsed.addressLine4;
-    
-    // Remove trailing newline if present
     formattedAddress = formattedAddress.trim();
-    
-    // Create a complete company details object
+
     const completeDetails = { 
       ...defaultDetails, 
       ...parsed,
       address: formattedAddress || parsed.address || ''
     };
-    
     return completeDetails;
   } catch (error) {
     console.error('Error getting company details:', error);
@@ -153,6 +180,16 @@ const getCompanyDetails = (): CompanyDetails => {
 
 const getCompanyAssets = (): CompanyAssets => {
   try {
+    // Scoped-first assets
+    const assets = getScopedCompanyAssets();
+    if (assets && (assets as any)) {
+      return {
+        Logo: (assets as any).logo ? { dataUrl: (assets as any).logo } : undefined,
+        Signature: (assets as any).signature ? { dataUrl: (assets as any).signature } : undefined,
+        Stamp: (assets as any).stamp ? { dataUrl: (assets as any).stamp } : undefined,
+      } as CompanyAssets;
+    }
+
     const stored = localStorage.getItem('companyAssets');
     return stored ? JSON.parse(stored) : {};
   } catch (error) {

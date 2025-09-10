@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Link } from 'react-router-dom';
 import InvoicePreviewModal from './InvoicePreviewModal';
 import { Invoice } from '@/types/invoice';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 interface LineItem {
   id: string;
@@ -257,9 +258,9 @@ const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, onClose
 
   // Handle preview invoice
   const handlePreviewInvoice = () => {
-    // Get company details from localStorage
-    const storedCompany = JSON.parse(localStorage.getItem('companyDetails') || '{}');
-    const companyAssets = JSON.parse(localStorage.getItem('companyAssets') || '{}');
+    // Get company details via scoped service (with legacy fallback inside service)
+    const storedCompany = (getScopedCompany() as any) || {};
+    const companyAssets = getScopedCompanyAssets() as any;
     
     // Get selected client details
     const selectedClientObj = clients.find((client) => client.id === formData.clientId);

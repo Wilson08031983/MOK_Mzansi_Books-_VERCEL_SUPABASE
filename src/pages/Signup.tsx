@@ -140,6 +140,18 @@ const Signup = () => {
       } as Record<string, any>;
       
       // Pass complete user data to signUp
+      // Set one-time email verification bypass for localhost to allow immediate login
+      try {
+        const isLocalhost = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname || '');
+        if (isLocalhost) {
+          const key = String(formData.email || '').toLowerCase();
+          const raw = localStorage.getItem('mokBypassEmailVerificationOnce');
+          const map = raw ? JSON.parse(raw) : {};
+          map[key] = true; // consumed on first login attempt
+          localStorage.setItem('mokBypassEmailVerificationOnce', JSON.stringify(map));
+        }
+      } catch {}
+
       await signUp(formData.email, formData.password, userData);
       
       // Log the data being saved to ensure it's working

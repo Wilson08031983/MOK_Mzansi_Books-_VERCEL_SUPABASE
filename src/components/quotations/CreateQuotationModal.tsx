@@ -20,18 +20,19 @@ import { saveQuotation, getQuotations, Quotation as QuotationType } from '@/serv
 import { activityService } from '@/services/activityService';
 import { useLocalization } from '@/hooks/useLocalization';
 import { useAuth } from '@/hooks/useAuth';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Email functionality removed as per requirements
 // Mock company service since it's not available
-const getCompany = () => {
-  try {
-    const company = localStorage.getItem('companyDetails');
-    return company ? JSON.parse(company) : null;
-  } catch (error) {
-    console.error('Error getting company details:', error);
-    return null;
-  }
-};
+// const getCompany = () => {
+//   try {
+//     const company = localStorage.getItem('companyDetails');
+//     return company ? JSON.parse(company) : null;
+//   } catch (error) {
+//     console.error('Error getting company details:', error);
+//     return null;
+//   }
+// };
 import { toast } from 'sonner';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
@@ -488,42 +489,40 @@ const CreateQuotationModal: React.FC<CreateQuotationModalProps> = ({ isOpen, onC
   // Load company assets and client list from localStorage
   useEffect(() => {
     try {
-      // Load company assets
-      const savedAssetsString = localStorage.getItem('companyAssets');
-      if (savedAssetsString) {
-        const savedAssets = JSON.parse(savedAssetsString);
-        setCompanyAssets(savedAssets);
+      // Load company assets (scoped-first with legacy fallback handled inside service)
+      const savedAssets = getScopedCompanyAssets();
+      if (savedAssets) {
+        setCompanyAssets(savedAssets as any);
       }
-      
+
       // Load company details to supplement assets info
-      const companyDetailsString = localStorage.getItem('companyDetails');
-      if (companyDetailsString) {
-        const companyDetails = JSON.parse(companyDetailsString);
+      const companyDetails = getScopedCompany();
+      if (companyDetails) {
         setCompanyAssets(prev => ({
           ...prev,
           name: companyDetails.name,
           address: [
-            companyDetails.addressLine1,
-            companyDetails.addressLine2,
-            companyDetails.addressLine3,
-            companyDetails.addressLine4
+            (companyDetails as any).addressLine1,
+            (companyDetails as any).addressLine2,
+            (companyDetails as any).addressLine3,
+            (companyDetails as any).addressLine4
           ].filter(Boolean).join('\n'),
-          email: companyDetails.email,
-          phone: companyDetails.phone,
-          website: companyDetails.websiteNotApplicable ? '' : companyDetails.website,
-          vatNumber: companyDetails.vatNumberNotApplicable ? '' : companyDetails.vatNumber,
-          regNumber: companyDetails.regNumber
+          email: (companyDetails as any).email,
+          phone: (companyDetails as any).phone,
+          website: (companyDetails as any).websiteNotApplicable ? '' : (companyDetails as any).website,
+          vatNumber: (companyDetails as any).vatNumberNotApplicable ? '' : (companyDetails as any).vatNumber,
+          regNumber: (companyDetails as any).regNumber
         }));
       }
-      
-      // Load clients
+
+      // Load clients (legacy localStorage as clients scoping handled elsewhere)
       const clientsString = localStorage.getItem('clients');
       if (clientsString) {
         const clients = JSON.parse(clientsString);
         setClientList(clients);
       }
     } catch (error) {
-      console.error('Error loading data from localStorage:', error);
+      console.error('Error loading data:', error);
     }
   }, []);
   

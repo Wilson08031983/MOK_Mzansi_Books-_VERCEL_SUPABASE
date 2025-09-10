@@ -16,6 +16,7 @@ import { useTheme } from 'next-themes';
 import { applyFontSize } from '@/services/fontSizeService'
 import { Checkbox } from '@/components/ui/checkbox';
 import { auditService } from '@/services/auditService';
+import { getCompanyAssets as getScopedCompanyAssets, saveCompanyAssets as saveScopedCompanyAssets } from '@/services/companyService';
 
 const GeneralSettingsTab = () => {
   const { t, currentLanguage, settings, changeLanguage, updateSettings, getCurrencySymbol, getCurrencyDisplayName } = useLocalization();
@@ -63,16 +64,18 @@ const displaySaveTimeoutRef = React.useRef<number | null>(null);
           }
         }
 
-        // Load company logo from assets
-        const savedAssets = localStorage.getItem('companyAssets');
-        if (savedAssets) {
-          const assets = JSON.parse(savedAssets);
-          // Check for logo in different possible formats
-          if (assets.Logo && assets.Logo.dataUrl) {
-            setCompanyLogo(assets.Logo.dataUrl);
-          } else if (assets.logo) {
-            setCompanyLogo(assets.logo);
+        // Load company logo from assets (scoped service first, fallback retained by service)
+        try {
+          const assets = getScopedCompanyAssets();
+          if (assets) {
+            if ((assets as any).Logo && (assets as any).Logo.dataUrl) {
+              setCompanyLogo((assets as any).Logo.dataUrl);
+            } else if ((assets as any).logo) {
+              setCompanyLogo((assets as any).logo);
+            }
           }
+        } catch (e) {
+          console.error('Error loading scoped assets:', e);
         }
         
         // Update sync status
@@ -112,7 +115,7 @@ const displaySaveTimeoutRef = React.useRef<number | null>(null);
       }
     };
 
-    // Listen for storage changes (cross-tab sync)
+    // Listen for storage changes (cross-tab sync) via legacy key as fallback is handled by service writes
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === 'companyAssets' && event.newValue) {
         try {
@@ -238,21 +241,20 @@ const displaySaveTimeoutRef = React.useRef<number | null>(null);
       
       // Save company logo if changed
       if (companyLogo) {
-        // Load existing assets to preserve other assets
-        const existingAssets = localStorage.getItem('companyAssets');
-        const assets = existingAssets ? JSON.parse(existingAssets) : {};
-        
-        // Update logo in the format expected by Company page
-        assets.Logo = {
-          name: 'company-logo.png',
-          dataUrl: companyLogo,
-          lastModified: Date.now(),
-          width: 200,
-          height: 200,
-          aspectRatio: 1
-        };
-        
-        localStorage.setItem('companyAssets', JSON.stringify(assets));
+        try {
+          const existingAssets = (getScopedCompanyAssets() as any) || {};
+          existingAssets.Logo = {
+            name: 'company-logo.png',
+            dataUrl: companyLogo,
+            lastModified: Date.now(),
+            width: 200,
+            height: 200,
+            aspectRatio: 1
+          };
+          saveScopedCompanyAssets(existingAssets);
+        } catch (e) {
+          console.error('Failed to save company logo via service:', e);
+        }
       }
       
       // Trigger sync to company page (explicit save only)

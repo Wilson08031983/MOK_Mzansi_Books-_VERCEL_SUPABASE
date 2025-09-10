@@ -11,7 +11,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 
   // Use test secret in non-production if available
   const secret = process.env.NODE_ENV !== 'production'
-    ? (env.PAYSTACK_SECRET_KEY_TEST || env.PAYSTACK_SECRET_KEY)
+    ? (env.PAYSTACK_SECRET_KEY_TEST)
     : env.PAYSTACK_SECRET_KEY;
 
   const signature = req.headers['x-paystack-signature'] as string | undefined;

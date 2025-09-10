@@ -18,6 +18,7 @@ import CompanyAddressForm from './CompanyAddressForm';
 import CompanyNumbersForm from './CompanyNumbersForm';
 import BankDetailsForm from './BankDetailsForm';
 import CompanyAssetsUpload from './CompanyAssetsUpload';
+import { getCompany as getScopedCompany, saveCompany as saveScopedCompany } from '@/services/companyService';
 
 const CompanyDetails = () => {
   const { user } = useAuth();
@@ -38,7 +39,7 @@ const CompanyDetails = () => {
     companyEmployeeSyncService.initializeCompanyDetails();
     
     // Load the initialized company details immediately
-    const initializedDetails = companyEmployeeSyncService.getCompanyDetails();
+    const initializedDetails = companyEmployeeSyncService.getCompanyDetails() || (getScopedCompany() as any);
     console.log('DEBUG: Loading company details on mount:', initializedDetails);
     if (initializedDetails) {
       console.log('DEBUG: Setting company data from loaded details');
@@ -119,6 +120,19 @@ const CompanyDetails = () => {
           }
         } catch (parseError) {
           console.error('Error parsing company details:', parseError);
+        }
+        try {
+          const scopedCompany = getScopedCompany();
+          if (scopedCompany) {
+            parsedDetails = scopedCompany as any;
+          } else {
+            const savedCompanyDetails = localStorage.getItem('companyDetails');
+            if (savedCompanyDetails) {
+              parsedDetails = JSON.parse(savedCompanyDetails);
+            }
+          }
+        } catch (parseError) {
+          console.error('Error loading company details:', parseError);
         }
         
         // Load bank details if available
@@ -263,34 +277,37 @@ const CompanyDetails = () => {
       try {
         const savedCompanyDetails = localStorage.getItem('companyDetails');
         if (savedCompanyDetails) prevDetails = JSON.parse(savedCompanyDetails);
-      } catch (_) {}
-      try {
-        const savedBankDetails = localStorage.getItem('companyBankDetails');
-        if (savedBankDetails) prevBankDetails = JSON.parse(savedBankDetails);
-      } catch (_) {}
+        const existing = getScopedCompany();
+        if (existing) prevDetails = existing;
+       } catch (_) {}
+       try {
+         const savedBankDetails = localStorage.getItem('companyBankDetails');
+         if (savedBankDetails) prevBankDetails = JSON.parse(savedBankDetails);
+       } catch (_) {}
 
-      // Save bank details separately
-      localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
+       // Save bank details separately
+       localStorage.setItem('companyBankDetails', JSON.stringify(bankDetails));
+       
+       // Save complete company data (including bank details) for persistence
+       const companyDetailsToSave = {
+         companyName: companyData.name,
+         email: companyData.email,
+         phone: companyData.phone,
+         website: companyData.website,
+         ownerName: companyData.contactName,
+         ownerSurname: companyData.contactSurname,
+         ownerPosition: companyData.position,
+         addressLine1: companyData.addressLine1,
+         addressLine2: companyData.addressLine2,
+         addressLine3: companyData.addressLine3,
+         addressLine4: companyData.addressLine4,
+         lastUpdated: new Date().toISOString()
+       };
       
-      // Save complete company data (including bank details) for persistence
-      const companyDetailsToSave = {
-        companyName: companyData.name,
-        email: companyData.email,
-        phone: companyData.phone,
-        website: companyData.website,
-        ownerName: companyData.contactName,
-        ownerSurname: companyData.contactSurname,
-        ownerPosition: companyData.position,
-        addressLine1: companyData.addressLine1,
-        addressLine2: companyData.addressLine2,
-        addressLine3: companyData.addressLine3,
-        addressLine4: companyData.addressLine4,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      localStorage.setItem('companyDetails', JSON.stringify(companyDetailsToSave));
-      // Notify other parts of the app in the same tab
-      window.dispatchEvent(new Event('companyDetailsUpdated'));
+      // Write via scoped service (mirrors to legacy internally for compatibility)
+      try { saveScopedCompany(companyDetailsToSave as any); } catch (e) { console.error('Failed to save scoped company details:', e); }
+       // Notify other parts of the app in the same tab
+       window.dispatchEvent(new Event('companyDetailsUpdated'));
 
       // Audit: log settings update with diffs
       try {

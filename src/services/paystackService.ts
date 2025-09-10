@@ -1,6 +1,6 @@
 const getSecretKey = () =>
   process.env.NODE_ENV !== 'production'
-    ? (process.env.PAYSTACK_SECRET_KEY_TEST || process.env.PAYSTACK_SECRET_KEY)
+    ? (process.env.PAYSTACK_SECRET_KEY_TEST || undefined)
     : process.env.PAYSTACK_SECRET_KEY;
 
 async function getPaystack() {

@@ -1,21 +1,13 @@
 
 // PayStack configuration
+const ENV = (import.meta.env.VITE_PAYSTACK_ENV || 'test').toLowerCase();
+
+const TEST_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY_TEST || import.meta.env.VITE_PAYSTACK_TEST_PUBLIC_KEY;
+const LIVE_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || import.meta.env.VITE_PAYSTACK_LIVE_PUBLIC_KEY;
+
 export const PAYSTACK_CONFIG = {
-  publicKey: (
-    import.meta.env.MODE !== 'production'
-      ? (
-          // Prefer explicit test key, with multiple fallbacks to accommodate different env variable names
-          import.meta.env.VITE_PAYSTACK_PUBLIC_KEY_TEST ||
-          import.meta.env.VITE_PAYSTACK_TEST_PUBLIC_KEY ||
-          import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ||
-          import.meta.env.VITE_PAYSTACK_LIVE_PUBLIC_KEY // last resort in dev
-        )
-      : (
-          // In production prefer the generic public key, but also support LIVE-specific name
-          import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ||
-          import.meta.env.VITE_PAYSTACK_LIVE_PUBLIC_KEY
-        )
-  ) as string,
+  // Use LIVE only when explicitly opted in via VITE_PAYSTACK_ENV=live; otherwise TEST
+  publicKey: (ENV === 'live' ? LIVE_PUBLIC_KEY : TEST_PUBLIC_KEY) as string,
 };
 
 export const SUBSCRIPTION_PLANS = {

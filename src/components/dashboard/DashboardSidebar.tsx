@@ -93,7 +93,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ sidebarOpen, setSid
 
   const handleNavigation = (href: string, canAccess: boolean) => {
     if (!canAccess) {
-      if (subscription?.status === 'past_due' || subscription?.status === 'canceled') {
+      // Only show subscription-required toast when subscription is actually expired/canceled
+      if (subscription?.status === 'canceled' || subscription?.status === 'unpaid' || subscription?.status === 'incomplete_expired') {
         toast({
           title: "Subscription Required",
           description: "Your subscription has expired. Please update your payment information to regain access.",

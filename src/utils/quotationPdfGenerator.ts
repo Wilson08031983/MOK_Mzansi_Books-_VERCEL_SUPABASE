@@ -15,6 +15,7 @@
 
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Define interfaces
 interface Address {
@@ -232,24 +233,57 @@ export const generateQuotationPdf = async (quotation: Quotation, options: { outp
   };
 
   try {
-    // Load company details from localStorage
+    // Load company details from scoped companyService
     let companyDetails: CompanyDetails = { name: 'Company Name' };
     let companyAssets: CompanyAssets = {};
-    
+
     try {
-      const companyDetailsString = localStorage.getItem('companyDetails');
-      if (companyDetailsString) {
-        companyDetails = JSON.parse(companyDetailsString);
+      const scoped = getScopedCompany();
+      if (scoped) {
+        const addressLines: string[] = [];
+        if ((scoped as any).addressLine1) addressLines.push((scoped as any).addressLine1);
+        if ((scoped as any).addressLine2) addressLines.push((scoped as any).addressLine2);
+        const line3 = (scoped as any).addressLine3 || (scoped as any).city;
+        const line4 = (scoped as any).addressLine4 || [
+          (scoped as any).state,
+          (scoped as any).postalCode
+        ].filter(Boolean).join(', ');
+        if (line3) addressLines.push(line3);
+        if (line4) addressLines.push(line4);
+
+        companyDetails = {
+          name: scoped.name || 'Company Name',
+          email: (scoped as any).email,
+          phone: (scoped as any).phone,
+          address: addressLines.join('\n').trim(),
+          addressLine1: (scoped as any).addressLine1,
+          addressLine2: (scoped as any).addressLine2,
+          addressLine3: line3,
+          addressLine4: line4,
+          vatNumber: (scoped as any).vatNumber,
+          regNumber: (scoped as any).registrationNumber,
+          website: (scoped as any).website,
+          bankName: (scoped as any).bankName,
+          accountNumber: (scoped as any).bankAccountNumber || (scoped as any).bankAccount,
+          accountType: (scoped as any).accountType,
+          branchCode: (scoped as any).bankBranchCode,
+          accountHolder: (scoped as any).accountHolder,
+        };
       }
-      
-      const companyAssetsString = localStorage.getItem('companyAssets');
-      if (companyAssetsString) {
-        companyAssets = JSON.parse(companyAssetsString);
-      }
+
+      const assets = getScopedCompanyAssets();
+      const logo = (assets as any)?.logo || (assets as any)?.Logo?.dataUrl;
+      const stamp = (assets as any)?.stamp || (assets as any)?.Stamp?.dataUrl;
+      const signature = (assets as any)?.signature || (assets as any)?.Signature?.dataUrl;
+      const normalized: CompanyAssets = {};
+      if (logo) normalized.Logo = { dataUrl: logo };
+      if (stamp) normalized.Stamp = { dataUrl: stamp };
+      if (signature) normalized.Signature = { dataUrl: signature };
+      companyAssets = normalized;
     } catch (error) {
       console.error('Error loading company details or assets:', error);
     }
-    
+
     // Load client data from localStorage
     let clientData: Client | null = null;
     

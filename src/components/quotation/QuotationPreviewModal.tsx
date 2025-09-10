@@ -11,6 +11,7 @@ import { X, Download, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Define interface types needed for the component
 interface QuotationItem {
@@ -201,25 +202,40 @@ const QuotationPreviewModal: React.FC<QuotationPreviewModalProps> = ({
   // Load company data, bank details, and assets from localStorage
   useEffect(() => {
     try {
-      // Load company details
-      const savedCompanyDetails = localStorage.getItem('companyDetails');
-      if (savedCompanyDetails) {
-        const parsedDetails = JSON.parse(savedCompanyDetails);
-        setCompanyData(parsedDetails);
+      // Load company details (scoped-first with fallback inside service)
+      const scopedCompany = getScopedCompany();
+      if (scopedCompany) {
+        setCompanyData(scopedCompany as any);
       }
 
-      // Load bank details
-      const savedBankDetails = localStorage.getItem('companyBankDetails');
-      if (savedBankDetails) {
-        const parsedBankDetails = JSON.parse(savedBankDetails);
-        setBankDetails(parsedBankDetails);
+      // Prefer bank data from scoped company when present
+      if (scopedCompany) {
+        const scopedBank = {
+          bankName: (scopedCompany as any).bankName,
+          bankAccount: (scopedCompany as any).bankAccountNumber || (scopedCompany as any).bankAccount,
+          accountType: (scopedCompany as any).accountType,
+          branchCode: (scopedCompany as any).bankBranchCode,
+          accountHolder: (scopedCompany as any).accountHolder,
+        };
+        // Only set if at least one value exists
+        if (Object.values(scopedBank).some(Boolean)) {
+          setBankDetails(scopedBank);
+        }
       }
 
-      // Load company assets
-      const savedAssets = localStorage.getItem('companyAssets');
-      if (savedAssets) {
-        const parsedAssets = JSON.parse(savedAssets);
-        setCompanyAssets(parsedAssets);
+      // Legacy fallback for bank details
+      if (Object.keys(bankDetails).length === 0) {
+        const savedBankDetails = localStorage.getItem('companyBankDetails');
+        if (savedBankDetails) {
+          const parsedBankDetails = JSON.parse(savedBankDetails);
+          setBankDetails(parsedBankDetails);
+        }
+      }
+
+      // Load company assets (scoped-first)
+      const assets = getScopedCompanyAssets();
+      if (assets) {
+        setCompanyAssets(assets as any);
       }
     } catch (error) {
       console.error('Error loading company details, bank details, or assets:', error);

@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import { PayrollCalculation } from './payrollCalculationService';
 import { Employee } from './employeeService';
 import { employeeDeductionsService } from './employeeDeductionsService';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 interface CompanyDetails {
   name: string;
@@ -20,25 +21,53 @@ interface CompanyDetails {
 
 export class PayslipService {
   private static getCompanyDetails(): CompanyDetails {
+    // Try scoped company first
+    const scoped = getScopedCompany();
+    const assets = getScopedCompanyAssets();
+
+    let logo: string | undefined;
+    let signature: string | undefined;
+
+    if (assets) {
+      // assets in scoped service are simple strings
+      logo = (assets as any).logo || (assets as any).Logo?.dataUrl;
+      signature = (assets as any).signature || (assets as any).Signature?.dataUrl;
+    }
+
+    if (scoped) {
+      return {
+        name: (scoped as any).name || (scoped as any).companyName || 'MOK Mzansi Books',
+        email: (scoped as any).email || 'admin@mokmzansibooks.com',
+        phone: (scoped as any).phone || '+27 11 123 4567',
+        website: (scoped as any).website || 'www.mokmzansibooks.com',
+        address: {
+          line1: (scoped as any).addressLine1 || '',
+          line2: (scoped as any).addressLine2 || '',
+          line3: (scoped as any).city || (scoped as any).state || '',
+          line4: (scoped as any).postalCode || '',
+        },
+        logo,
+        signature,
+      };
+    }
+
+    // Legacy fallback
     // Get company details from localStorage or use defaults
     const companyData = localStorage.getItem('companyDetails');
     const companyAssets = localStorage.getItem('companyAssets');
-    
-    let logo: string | undefined;
-    let signature: string | undefined;
-    
+
     if (companyAssets) {
       try {
-        const assets = JSON.parse(companyAssets);
+        const parsedAssets = JSON.parse(companyAssets);
         // Assets are stored with capitalized keys and dataUrl property
-        logo = assets.Logo?.dataUrl;
-        signature = assets.Signature?.dataUrl;
+        logo = parsedAssets.Logo?.dataUrl;
+        signature = parsedAssets.Signature?.dataUrl;
         console.log('Company assets loaded:', { hasLogo: !!logo, hasSignature: !!signature });
       } catch (error) {
         console.warn('Error parsing company assets:', error);
       }
     }
-    
+
     if (companyData) {
       const parsed = JSON.parse(companyData);
       return {
@@ -56,7 +85,7 @@ export class PayslipService {
         signature
       };
     }
-    
+
     return {
       name: 'MOK Mzansi Books',
       email: 'admin@mokmzansibooks.com',

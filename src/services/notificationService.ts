@@ -37,6 +37,24 @@ export interface NotificationItem {
   type?: 'invoice' | 'payment' | 'system' | 'task' | 'client';
 }
 
+// Helper to retrieve the current user's id for scoping
+function getCurrentUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('mokUser');
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    return user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+// Compute per-user scoped storage keys to isolate data across accounts
+function scopedKey(base: string): string {
+  const userId = getCurrentUserId();
+  return userId ? `${base}:${userId}` : base; // fallback to base for unauthenticated contexts
+}
+
 const defaultSettings: NotificationSettings = {
   email: {
     enabled: true,
@@ -64,28 +82,32 @@ const defaultSettings: NotificationSettings = {
   }
 };
 
-// Get notification settings
+// Get notification settings (scoped per user)
 export const getNotificationSettings = (): NotificationSettings => {
-  const stored = safeLocalStorage.getItem<NotificationSettings>('notificationSettings', defaultSettings);
+  const key = scopedKey('notificationSettings');
+  const stored = safeLocalStorage.getItem<NotificationSettings>(key, defaultSettings);
   return { ...defaultSettings, ...stored };
 };
 
-// Save notification settings
+// Save notification settings (scoped per user)
 export const saveNotificationSettings = (settings: NotificationSettings): void => {
-  safeLocalStorage.setItem('notificationSettings', settings);
+  const key = scopedKey('notificationSettings');
+  safeLocalStorage.setItem(key, settings);
 };
 
-// Get notifications
+// Get notifications (scoped per user)
 export const getNotifications = (): NotificationItem[] => {
-  return safeLocalStorage.getItem<NotificationItem[]>('notifications', []);
+  const key = scopedKey('notifications');
+  return safeLocalStorage.getItem<NotificationItem[]>(key, []);
 };
 
-// Save notifications
+// Save notifications (scoped per user)
 export const saveNotifications = (notifications: NotificationItem[]): void => {
-  safeLocalStorage.setItem('notifications', notifications);
+  const key = scopedKey('notifications');
+  safeLocalStorage.setItem(key, notifications);
 };
 
-// Add a new notification
+// Add a new notification (scoped per user)
 export const addNotification = (notification: Omit<NotificationItem, 'id' | 'date' | 'read'>): void => {
   const settings = getNotificationSettings();
   const notifications = getNotifications();
@@ -144,7 +166,7 @@ export const addNotification = (notification: Omit<NotificationItem, 'id' | 'dat
   }
 };
 
-// Mark notification as read
+// Mark notification as read (scoped per user)
 export const markNotificationAsRead = (id: string): void => {
   const notifications = getNotifications();
   const updated = notifications.map(n => 
@@ -153,14 +175,14 @@ export const markNotificationAsRead = (id: string): void => {
   saveNotifications(updated);
 };
 
-// Mark all notifications as read
+// Mark all notifications as read (scoped per user)
 export const markAllNotificationsAsRead = (): void => {
   const notifications = getNotifications();
   const updated = notifications.map(n => ({ ...n, read: true }));
   saveNotifications(updated);
 };
 
-// Clear all notifications
+// Clear all notifications (scoped per user)
 export const clearAllNotifications = (): void => {
   saveNotifications([]);
 };

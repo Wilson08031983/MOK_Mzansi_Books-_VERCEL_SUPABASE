@@ -11,6 +11,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { formatDate } from '@/utils/formatters';
+import { getCompany as getScopedCompany } from '@/services/companyService';
 
 interface Client {
   id: string;
@@ -64,13 +65,12 @@ interface QuotationDetailInfoProps {
 const QuotationDetailInfo: React.FC<QuotationDetailInfoProps> = ({ quotation }) => {
   const [companyDetails, setCompanyDetails] = useState<CompanyDetails>({ name: 'Your Company Name' });
   const [clientDetails, setClientDetails] = useState<Client | null>(null);
-  // Fetch company details from localStorage
+  // Fetch company details
   useEffect(() => {
     try {
-      const storedCompanyDetails = localStorage.getItem('companyDetails');
-      if (storedCompanyDetails) {
-        const parsedDetails = JSON.parse(storedCompanyDetails);
-        setCompanyDetails(parsedDetails);
+      const company = getScopedCompany();
+      if (company) {
+        setCompanyDetails(company as any);
       }
     } catch (error) {
       console.error('Error loading company details:', error);

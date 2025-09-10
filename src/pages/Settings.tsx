@@ -41,12 +41,15 @@ import DataSecurityTab from '@/components/settings/DataSecurityTab';
 import SystemMaintenanceTab from '@/components/settings/SystemMaintenanceTab';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import { auditService } from '@/services/auditService';
+import GraceBanner from '@/components/common/GraceBanner';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
 
 const Settings = () => {
   const { t } = useLocalization();
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('general');
+  const { isInGrace, graceDaysLeft } = useSubscriptionAccess();
 
   // Define tabs configuration used by TabsList and TabsContent
   const settingsTabs = [
@@ -132,6 +135,10 @@ const Settings = () => {
             {t('settings.description')}
           </p>
         </div>
+
+        {activeTab === 'billing' && (
+          <GraceBanner show={isInGrace} daysLeft={graceDaysLeft ?? null} showRetryLink={false} className="mb-4" />
+        )}
 
         <div className="animate-fade-in delay-200">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">

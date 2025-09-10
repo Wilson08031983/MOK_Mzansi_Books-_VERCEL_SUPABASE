@@ -21,6 +21,7 @@ import { Invoice, InvoiceItem } from '@/types/invoice';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Define interfaces
 interface Address {
@@ -125,28 +126,51 @@ const getCompanyDetails = (): CompanyDetails => {
   };
 
   try {
-    const stored = localStorage.getItem('companyDetails');
-    if (!stored) return defaultDetails;
-    
-    const parsed = JSON.parse(stored);
-    
-    // Format the address from all address lines
-    let formattedAddress = '';
-    if (parsed.addressLine1) formattedAddress += parsed.addressLine1 + '\n';
-    if (parsed.addressLine2) formattedAddress += parsed.addressLine2 + '\n';
-    if (parsed.addressLine3) formattedAddress += parsed.addressLine3 + '\n';
-    if (parsed.addressLine4) formattedAddress += parsed.addressLine4;
-    
-    // Remove trailing newline if present
-    formattedAddress = formattedAddress.trim();
-    
-    // Create a complete company details object
-    const completeDetails = { 
-      ...defaultDetails, 
-      ...parsed,
-      address: formattedAddress || parsed.address || ''
+    const scoped = getScopedCompany();
+    if (!scoped) return defaultDetails;
+
+    // Build formatted address string similar to previous behavior
+    const addressLines: string[] = [];
+    if ((scoped as any).addressLine1) addressLines.push((scoped as any).addressLine1);
+    if ((scoped as any).addressLine2) addressLines.push((scoped as any).addressLine2);
+    // Map possible city/state/postal to lines 3 and 4 when explicit lines are absent
+    const line3 = (scoped as any).addressLine3 || (scoped as any).city;
+    const line4 = (scoped as any).addressLine4 || [
+      (scoped as any).state,
+      (scoped as any).postalCode
+    ].filter(Boolean).join(', ');
+    if (line3) addressLines.push(line3);
+    if (line4) addressLines.push(line4);
+    const formattedAddress = addressLines.join('\n').trim();
+
+    const completeDetails: CompanyDetails = {
+      ...defaultDetails,
+      name: scoped.name,
+      email: (scoped as any).email || defaultDetails.email,
+      phone: (scoped as any).phone || defaultDetails.phone,
+      address: formattedAddress,
+      vatNumber: (scoped as any).vatNumber || defaultDetails.vatNumber,
+      regNumber: (scoped as any).registrationNumber || defaultDetails.regNumber,
+      bankName: (scoped as any).bankName || defaultDetails.bankName,
+      accountNumber: (scoped as any).bankAccountNumber || (scoped as any).bankAccount || defaultDetails.accountNumber,
+      branchCode: (scoped as any).bankBranchCode || defaultDetails.branchCode,
+      accountType: (scoped as any).accountType || defaultDetails.accountType,
+      addressLine1: (scoped as any).addressLine1,
+      addressLine2: (scoped as any).addressLine2,
+      addressLine3: line3,
+      addressLine4: line4,
+      contactName: (scoped as any).contactName,
+      contactSurname: (scoped as any).contactSurname,
+      position: (scoped as any).position,
+      website: (scoped as any).website,
+      websiteNotApplicable: (scoped as any).websiteNotApplicable,
+      vatNumberNotApplicable: (scoped as any).vatNumberNotApplicable,
+      taxNumber: (scoped as any).taxNumber,
+      csdNumber: (scoped as any).csdNumber,
+      csdNumberNotApplicable: (scoped as any).csdNumberNotApplicable,
+      accountHolder: (scoped as any).accountHolder,
     };
-    
+
     return completeDetails;
   } catch (error) {
     console.error('Error getting company details:', error);
@@ -156,8 +180,18 @@ const getCompanyDetails = (): CompanyDetails => {
 
 const getCompanyAssets = (): CompanyAssets => {
   try {
-    const stored = localStorage.getItem('companyAssets');
-    return stored ? JSON.parse(stored) : {};
+    const assets = getScopedCompanyAssets();
+    // Support both typed string assets and legacy { Logo: { dataUrl } } shape
+    const logo = (assets as any)?.logo || (assets as any)?.Logo?.dataUrl;
+    const signature = (assets as any)?.signature || (assets as any)?.Signature?.dataUrl;
+    const stamp = (assets as any)?.stamp || (assets as any)?.Stamp?.dataUrl;
+
+    const normalized: CompanyAssets = {};
+    if (logo) normalized.Logo = { dataUrl: logo };
+    if (signature) normalized.Signature = { dataUrl: signature };
+    if (stamp) normalized.Stamp = { dataUrl: stamp };
+
+    return normalized;
   } catch (error) {
     console.error('Error getting company assets:', error);
     return {};

@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from '@/lib/utils';
+import { getCompany as getScopedCompany, getCompanyAssets as getScopedCompanyAssets } from '@/services/companyService';
 
 // Define a type for accessing jsPDF internal APIs that aren't properly typed
 type InternalPDFType = jsPDF & {
@@ -141,33 +142,42 @@ interface DeliveryNoteData {
 // Helper functions to get data from localStorage
 function getCompanyDetails(): CompanyDetails {
   try {
-    const companyData = localStorage.getItem('companyDetails');
-    if (companyData) {
-      const details = JSON.parse(companyData);
+    const scoped = getScopedCompany();
+    if (scoped) {
+      const addressLines: string[] = [];
+      if ((scoped as any).addressLine1) addressLines.push((scoped as any).addressLine1);
+      if ((scoped as any).addressLine2) addressLines.push((scoped as any).addressLine2);
+      const line3 = (scoped as any).addressLine3 || (scoped as any).city;
+      const line4 = (scoped as any).addressLine4 || [
+        (scoped as any).state,
+        (scoped as any).postalCode
+      ].filter(Boolean).join(', ');
+      if (line3) addressLines.push(line3);
+      if (line4) addressLines.push(line4);
       return {
-        name: details.name || 'MOK MZANSI BOOKS',
-        email: details.email || 'admin@mokmzansibooks.com',
-        phone: details.phone || '+27 11 123 4567',
-        addressLine1: details.addressLine1 || '',
-        addressLine2: details.addressLine2 || '',
-        addressLine3: details.addressLine3 || '',
-        addressLine4: details.addressLine4 || '',
-        vatNumber: details.vatNumber || '',
-        vatNotApplicable: details.vatNotApplicable || false,
-        regNumber: details.regNumber || '',
-        regNumberNotApplicable: details.regNumberNotApplicable || false,
-        taxNumber: details.taxNumber || '',
-        taxNumberNotApplicable: details.taxNumberNotApplicable || false,
-        csdNumber: details.csdNumber || '',
-        bankName: details.bankName || '',
-        accountHolder: details.accountHolder || '',
-        accountNumber: details.accountNumber || details.bankAccount || '',
-        branchCode: details.branchCode || '',
-        accountType: details.accountType || '',
-        contactName: details.contactName || '',
-        contactSurname: details.contactSurname || '',
-        position: details.position || '',
-        website: details.website || ''
+        name: scoped.name || 'MOK MZANSI BOOKS',
+        email: (scoped as any).email || 'admin@mokmzansibooks.com',
+        phone: (scoped as any).phone || '+27 11 123 4567',
+        addressLine1: (scoped as any).addressLine1 || '',
+        addressLine2: (scoped as any).addressLine2 || '',
+        addressLine3: line3 || '',
+        addressLine4: line4 || '',
+        vatNumber: (scoped as any).vatNumber || '',
+        vatNotApplicable: (scoped as any).vatNotApplicable || false,
+        regNumber: (scoped as any).registrationNumber || (scoped as any).regNumber || '',
+        regNumberNotApplicable: (scoped as any).regNumberNotApplicable || false,
+        taxNumber: (scoped as any).taxNumber || '',
+        taxNumberNotApplicable: (scoped as any).taxNumberNotApplicable || false,
+        csdNumber: (scoped as any).csdNumber || '',
+        bankName: (scoped as any).bankName || '',
+        accountHolder: (scoped as any).accountHolder || '',
+        accountNumber: (scoped as any).bankAccountNumber || (scoped as any).bankAccount || '',
+        branchCode: (scoped as any).bankBranchCode || (scoped as any).branchCode || '',
+        accountType: (scoped as any).accountType || '',
+        contactName: (scoped as any).contactName || '',
+        contactSurname: (scoped as any).contactSurname || '',
+        position: (scoped as any).position || '',
+        website: (scoped as any).website || ''
       };
     }
   } catch (error) {
@@ -187,10 +197,15 @@ function getCompanyDetails(): CompanyDetails {
 
 function getCompanyAssets(): CompanyAssets {
   try {
-    const assets = localStorage.getItem('companyAssets');
-    if (assets) {
-      return JSON.parse(assets);
-    }
+    const assets = getScopedCompanyAssets();
+    const logo = (assets as any)?.logo || (assets as any)?.Logo?.dataUrl;
+    const signature = (assets as any)?.signature || (assets as any)?.Signature?.dataUrl;
+    const stamp = (assets as any)?.stamp || (assets as any)?.Stamp?.dataUrl;
+    const normalized: CompanyAssets = {};
+    if (logo) normalized.Logo = { dataUrl: logo };
+    if (signature) normalized.Signature = { dataUrl: signature };
+    if (stamp) normalized.Stamp = { dataUrl: stamp };
+    return normalized;
   } catch (error) {
     console.error('Error parsing company assets:', error);
   }

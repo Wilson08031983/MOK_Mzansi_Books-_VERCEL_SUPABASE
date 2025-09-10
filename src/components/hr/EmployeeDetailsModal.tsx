@@ -16,6 +16,7 @@ import {
   Heart
 } from 'lucide-react';
 import { useLocalization } from '@/hooks/useLocalization';
+import { getCompany as getScopedCompany } from '@/services/companyService';
 
 interface Employee {
   id: string;
@@ -89,6 +90,16 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ isOpen, onC
   // Reads localStorage 'companyBankDetails' which CompanyDetails.tsx writes on save
   const companyBank = React.useMemo(() => {
     try {
+      const scoped = getScopedCompany();
+      if (scoped) {
+        return {
+          bankName: (scoped as any).bankName || '',
+          accountHolder: (scoped as any).accountHolder || '',
+          bankAccount: (scoped as any).bankAccountNumber || (scoped as any).bankAccount || '',
+          accountType: (scoped as any).accountType || '',
+          branchCode: (scoped as any).bankBranchCode || (scoped as any).branchCode || ''
+        };
+      }
       const raw = localStorage.getItem('companyBankDetails');
       return raw ? JSON.parse(raw) as {
         bankName?: string;

@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from './useAuthHook';
+import { useSubscription } from '@/hooks/useSubscription';
 
 // Centralized definition of feature limits for the trial tier
 export type LimitKey =
@@ -22,91 +22,48 @@ const TRIAL_LIMITS: Record<LimitKey, number> = {
   storageLocations: 5,
 };
 
-interface SubscriptionInfoLike {
-  tier?: string;
-  status?: string;
-  plan_type?: string;
-  plan?: string;
-  type?: string;
-  start_date?: string;
-  end_date?: string;
-  [key: string]: any;
-}
-
-const readSubscription = (): SubscriptionInfoLike | null => {
+const toDate = (val: any): Date | null => {
+  if (!val) return null;
   try {
-    const raw = localStorage.getItem('mokSubscription');
-    return raw ? JSON.parse(raw) : null;
+    if (val instanceof Date) return val;
+    if (typeof val === 'string') return new Date(val);
+    return null;
   } catch {
     return null;
   }
 };
 
-const normalizeTier = (info: SubscriptionInfoLike | null): string => {
-  if (!info) return 'free';
-  const raw = (
-    info.tier ||
-    info.plan_type ||
-    info.plan ||
-    info.type ||
-    info.status ||
-    'free'
-  )
-    .toString()
-    .toLowerCase();
-  return raw;
-};
-
-const calcDaysLeft = (info: SubscriptionInfoLike | null): number | null => {
-  if (!info?.end_date) return null;
-  const date = new Date(info.end_date);
-  if (isNaN(date.getTime())) return null;
-  // Ignore far-future sentinel or clearly invalid years
-  const year = date.getFullYear();
-  if (year >= 2099 || year < 2000) return null;
-
-  const now = Date.now();
-  const end = date.getTime();
-  const diffMs = end - now;
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-};
-
 export const useSubscriptionAccess = () => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [tier, setTier] = useState<string>('free');
+  const { subscription, loading } = useSubscription();
+  const [tier, setTier] = useState<string>('trial');
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    // Simulate async readiness (in real app this could be a network call)
-    const check = async () => {
-      try {
-        const info = readSubscription();
-        setTier(normalizeTier(info));
-        setDaysLeft(calcDaysLeft(info));
-      } catch (e) {
-        // Fall back to limited if anything goes wrong
-        setTier('free');
+    const t = (subscription?.tier || 'trial').toString().toLowerCase();
+    setTier(t);
+
+    const end = toDate(subscription?.currentPeriodEnd);
+    if (end) {
+      const year = end.getFullYear();
+      if (year < 2099 && year >= 2000) {
+        const diffMs = end.getTime() - Date.now();
+        setDaysLeft(Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+      } else {
         setDaysLeft(null);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    if (!user) {
-      // Not logged in -> treat as limited to avoid locking UI
-      setTier('free');
+    } else {
       setDaysLeft(null);
-      setLoading(false);
-      return;
     }
+  }, [subscription?.tier, subscription?.currentPeriodEnd]);
 
-    check();
-  }, [user]);
+  const status = (subscription?.status || 'trial').toString().toLowerCase();
 
-  // Decide access level from normalized tier
-  const isTrial = useMemo(() => tier === 'trial' || tier === 'free' || tier === 'basic', [tier]);
-  const hasFullAccess = useMemo(() => !isTrial && ['monthly', 'annual', 'premium', 'pro'].includes(tier), [isTrial, tier]);
+  // Decide access level from normalized tier + status
+  const isTrial = useMemo(() => status === 'trial' || status === 'trialing' || tier === 'trial', [status, tier]);
+  const hasFullAccess = useMemo(() => {
+    const paidTier = ['monthly', 'annual', 'premium', 'pro'].includes(tier);
+    return paidTier && status === 'active';
+  }, [tier, status]);
   const hasLimitedAccess = true; // App remains usable in limited mode for all tiers
 
   const accessLevel: 'full' | 'limited' = hasFullAccess ? 'full' : 'limited';
@@ -117,10 +74,32 @@ export const useSubscriptionAccess = () => {
 
   // Lock UI if subscription exists with a past end_date
   const locked = useMemo(() => {
-    if (!user) return false; // don't lock for signed-out view
     if (daysLeft === null) return false; // no end date specified or sentinel filtered out
     return daysLeft <= 0 && !hasFullAccess;
-  }, [user, daysLeft, hasFullAccess]);
+  }, [daysLeft, hasFullAccess]);
+
+  // New: grace period support
+  const graceEnd = useMemo(() => {
+    return toDate((subscription as any)?.graceEnd);
+  }, [subscription?.graceEnd]);
+
+  const isInGrace = useMemo(() => {
+    if (status !== 'past_due') return false;
+    if (!graceEnd) return false;
+    return Date.now() <= graceEnd.getTime();
+  }, [status, graceEnd]);
+
+  const graceDaysLeft = useMemo(() => {
+    if (!graceEnd) return null;
+    const diffMs = graceEnd.getTime() - Date.now();
+    return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+  }, [graceEnd]);
+
+  // Override lock during grace: keep app unlocked while in grace
+  const finalLocked = useMemo(() => {
+    if (isInGrace) return false;
+    return locked;
+  }, [isInGrace, locked]);
 
   return {
     // Backward-compatible fields used by AccessGuard and others
@@ -128,15 +107,17 @@ export const useSubscriptionAccess = () => {
     loading,
     hasFullAccess,
     hasLimitedAccess,
-
     // New helpers for gating
     tier,
     isTrial,
     limits,
     getLimit,
-
     // New fields for UI/billing engine
     daysLeft,
-    locked,
+    locked: finalLocked,
+    // Grace fields
+    isInGrace,
+    graceEnd,
+    graceDaysLeft,
   } as const;
 };

@@ -3,6 +3,11 @@
 
 import mockEmailService from './mockEmailService';
 
+// Environment helpers for dev/preview/local
+const isLocalhost = (typeof window !== 'undefined') && /localhost|127\.0\.0\.1/.test((window.location && window.location.hostname) || '');
+const isPreviewDomain = (typeof window !== 'undefined') && /\.vercel\.app$|\.netlify\.app$/i.test((window.location && window.location.hostname) || '');
+const __DEV__ = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') || isLocalhost || isPreviewDomain;
+
 interface QuotationEmailOptions {
   to: string;
   subject?: string;
@@ -120,7 +125,7 @@ export const sendConfirmationEmail = async (options: EmailOptions): Promise<bool
   } catch (error: any) {
     console.error('Error sending confirmation email:', error);
     // Dev fallback: use mock email service if API route isn't available locally
-    if (import.meta?.env?.DEV) {
+    if (__DEV__) {
       console.warn('Dev fallback: using mock email service for confirmation email');
       try {
         await mockEmailService.sendConfirmationEmail(options as any);
@@ -142,7 +147,7 @@ export const sendPasswordResetEmail = async (options: PasswordResetEmailOptions)
     return true;
   } catch (error: any) {
     console.error('Error sending password reset email:', error);
-    if (import.meta?.env?.DEV) {
+    if (__DEV__) {
       console.warn('Dev fallback: using mock email service for password reset');
       try {
         await mockEmailService.sendPasswordResetEmail(options as any);
@@ -164,7 +169,7 @@ export const sendInvitationEmail = async (options: InvitationEmailOptions): Prom
     return true;
   } catch (error: any) {
     console.error('Error sending invitation email:', error);
-    if (import.meta?.env?.DEV) {
+    if (__DEV__) {
       console.warn('Dev fallback: using mock email service for invitation email');
       try {
         await mockEmailService.sendInvitationEmail(options as any);
@@ -204,7 +209,7 @@ export const sendQuotationEmail = async (options: QuotationEmailOptions): Promis
     return true;
   } catch (error: any) {
     console.error('Error sending quotation email:', error);
-    if (import.meta?.env?.DEV) {
+    if (__DEV__) {
       console.warn('Dev fallback: using mock email service for quotation email');
       try {
         await mockEmailService.sendQuotationEmail(options as any);
@@ -226,10 +231,10 @@ export const sendLoginNotificationEmail = async (options: LoginNotificationOptio
     return true;
   } catch (error: any) {
     // In dev, this route may not exist under Vite; prefer a warning and fallback
-    const log = import.meta?.env?.DEV ? console.warn : console.error;
+    const log = __DEV__ ? console.warn : console.error;
     log('Error sending login notification email:', error);
     // Dev fallback: use the local mock service when API routes are not available in Vite dev
-    if (import.meta?.env?.DEV) {
+    if (__DEV__) {
       console.warn('Dev fallback: using mock email service for login notification');
       try {
         await mockEmailService.sendLoginNotificationEmail(options as any);
@@ -272,6 +277,31 @@ export const sendAccountLockoutEmail = async (options: AccountLockoutOptions): P
   }
 };
 
+export const sendTrialReminderEmail = async (to: string, name: string): Promise<boolean> => {
+  try {
+    if (!to || !name) throw new Error('Missing required parameters');
+    await postJson('send-trial-reminder', { to, name });
+    return true;
+  } catch (error: any) {
+    console.error('Error sending trial reminder email:', error);
+    // Dev fallback: use mock service to simulate delivery
+    if (__DEV__) {
+      try {
+        await mockEmailService.sendConfirmationEmail({
+          to,
+          subject: 'Your trial is ending soon',
+          firstName: name,
+          html: `<p>Hi ${name},</p><p>Your trial will expire in 5 days. Visit Settings → Billing to upgrade and keep access.</p>`,
+        } as any);
+        return true;
+      } catch (e) {
+        console.error('Mock trial reminder failed:', e);
+      }
+    }
+    return false;
+  }
+};
+
 export default {
   sendConfirmationEmail,
   sendPasswordResetEmail,
@@ -281,4 +311,5 @@ export default {
   sendLoginNotificationEmail,
   sendGracePeriodReminderEmail,
   sendAccountLockoutEmail,
+  sendTrialReminderEmail,
 };

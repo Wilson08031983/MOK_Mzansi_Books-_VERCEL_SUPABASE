@@ -25,6 +25,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { paymentsStorageService, SavedPaymentMethod } from '@/services/paymentsStorageService';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useSubscriptionAccess } from '@/hooks/useSubscriptionAccess';
+import GraceBanner from '@/components/common/GraceBanner';
 // Removed test payment imports as they are no longer needed
 
 const BillingSubscriptionTab = () => {
@@ -50,6 +52,7 @@ const BillingSubscriptionTab = () => {
   const [savedCards, setSavedCards] = useState<SavedPaymentMethod[]>([]);
   const savedCard = (savedCards.find(c => c.isDefault) || savedCards[0]) || null;
   const [chargingDefault, setChargingDefault] = useState(false);
+  const { isInGrace, graceDaysLeft } = useSubscriptionAccess();
 
   useEffect(() => {
     if (!loading && activeTab !== 'overview') {
@@ -84,15 +87,24 @@ const BillingSubscriptionTab = () => {
   };
 
   useEffect(() => {
-    refreshSavedCards();
-  }, [user]);
-  
-  // Refresh saved cards when tab becomes active
-  useEffect(() => {
     if (activeTab === 'overview') {
+      // Always refresh saved cards when tab becomes active (original behavior)
       refreshSavedCards();
+
+      // Additionally, if returning from Thank You page, auto-refresh payment history once
+      let needsRefresh = false;
+      try {
+        if (sessionStorage.getItem('refreshPaymentHistory') === '1') {
+          needsRefresh = true;
+          sessionStorage.removeItem('refreshPaymentHistory');
+        }
+      } catch {/* no-op */}
+
+      if (needsRefresh) {
+        fetchPaymentHistory().then(setPaymentHistory).catch(() => setPaymentHistory([]));
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, fetchPaymentHistory]);
 
   const currentSubscription = subscription || { tier: 'trial', status: 'trial', currentPeriodEnd: new Date() } as any;
   const isCancelScheduled = Boolean((currentSubscription as any)?.cancelAtPeriodEnd);
@@ -219,34 +231,59 @@ const BillingSubscriptionTab = () => {
   // Get subscription status badge
   const getStatusBadge = () => {
     const status = (currentSubscription?.status || '').toString().toLowerCase();
-    if (status === 'trial' || status === 'trialing') {
-      return <Badge className="bg-emerald-500 hover:bg-emerald-600">{t('settings.billing.status.trial')}</Badge>;
+    const tier = (currentSubscription?.tier || '').toString().toLowerCase();
+    
+    // Trial users should see "Free"
+    if (status === 'trial' || status === 'trialing' || tier === 'trial') {
+      return <Badge className="bg-emerald-500 hover:bg-emerald-600">Free</Badge>;
     }
-    if (status === 'active') {
-      return <Badge className="bg-blue-500 hover:bg-blue-600">{t('settings.billing.status.active')}</Badge>;
+    
+    // Active paid subscriptions
+    if (status === 'active' && (tier === 'monthly' || tier === 'annual')) {
+      return <Badge className="bg-blue-500 hover:bg-blue-600">Paid</Badge>;
     }
+    
+    // Payment issues
     if (status === 'past_due' || status === 'unpaid' || status === 'incomplete') {
-      return <Badge className="bg-amber-500 hover:bg-amber-600">{t('settings.billing.status.paymentIssue')}</Badge>;
+      return <Badge className="bg-amber-500 hover:bg-amber-600">Payment Issue</Badge>;
     }
+    
+    // Canceled subscriptions: show just "Canceled"
     if (status === 'canceled') {
-      return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.status.canceled')}</Badge>;
+      return <Badge className="bg-red-500 hover:bg-red-600">Canceled</Badge>;
     }
-    return <Badge className="bg-gray-500 hover:bg-gray-600">{t('settings.billing.tiers.free')}</Badge>;
+    
+    // Resumed state
+    if (status === 'resumed') {
+      return <Badge className="bg-green-500 hover:bg-green-600">Resume</Badge>;
+    }
+    
+    // Default: nothing, tier badge will convey plan
+    return null;
   };
 
   // Get tier badge
-  const getTierBadge = () => {
-    const tier = (currentSubscription?.tier || '').toString().toLowerCase();
-    if (tier === 'trial') {
-      return <Badge variant="outline" className="border-emerald-400 text-emerald-500">{SUBSCRIPTION_PLANS.trial.name}</Badge>;
+  const getTierBadge = (tier?: string, status?: string) => {
+    // Normalize input
+    const tTier = (tier || '').toLowerCase();
+    const tStatus = (status || '').toLowerCase();
+
+    // Monthly/Annual concise labels
+    if (tTier === 'monthly') {
+      return <Badge variant="outline" className="border-blue-400 text-blue-600">Monthly</Badge>;
     }
-    if (tier === 'monthly') {
-      return <Badge variant="outline" className="border-blue-400 text-blue-600">{SUBSCRIPTION_PLANS.monthly.name}</Badge>;
+    if (tTier === 'annual') {
+      return <Badge variant="outline" className="border-purple-400 text-purple-600">Annual</Badge>;
     }
-    if (tier === 'annual') {
-      return <Badge variant="outline" className="border-purple-400 text-purple-600">{SUBSCRIPTION_PLANS.annual.name}</Badge>;
+
+    // Trial shows remaining days, fallback to "31 Days" if unknown
+    if (tTier === 'trial' || tStatus === 'trial' || tStatus === 'trialing') {
+      const value = typeof daysLeft === 'number' && daysLeft >= 0 ? `${daysLeft} Days` : '31 Days';
+      return <Badge variant="outline" className="border-emerald-400 text-emerald-500">{value}</Badge>;
     }
-    return <Badge variant="outline" className="border-gray-400 text-gray-600">{t('settings.billing.tiers.free')}</Badge>;
+
+    // Default to Free when none of the above
+    return <Badge variant="outline" className="border-gray-400 text-gray-600">Free</Badge>;
   };
 
   const handleCancelSubscription = async () => {
@@ -355,7 +392,7 @@ const BillingSubscriptionTab = () => {
           page: 'Settings',
           section: 'Billing > Overview',
           entityType: 'payment',
-          changeType: 'none',
+          changeType: 'create',
           description: String(e?.message || e),
         });
       } catch { /* noop */ }
@@ -421,6 +458,8 @@ const BillingSubscriptionTab = () => {
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-5 duration-300">
+              {/* Removed inner GraceBanner to avoid duplicate with Settings-level banner */}
+              {/* <GraceBanner show={isInGrace} daysLeft={graceDaysLeft ?? null} /> */}
               <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>
                   <div className="flex justify-between items-start">
@@ -430,7 +469,7 @@ const BillingSubscriptionTab = () => {
                     </div>
                     <div className="flex space-x-2">
                       {getStatusBadge()}
-                      {getTierBadge()}
+                      {getTierBadge(currentSubscription?.tier as any, currentSubscription?.status as any)}
                     </div>
                   </div>
                 </CardHeader>
@@ -448,7 +487,7 @@ const BillingSubscriptionTab = () => {
                     </div>
                   )}
 
-                  {(currentSubscription.status === 'past_due' || currentSubscription.status === 'unpaid' || currentSubscription.status === 'incomplete') && (
+                  {(currentSubscription.status === 'past_due' || currentSubscription.status === 'unpaid' || currentSubscription.status === 'incomplete') && !isInGrace && (
                     <div className="rounded-md p-4 flex items-start bg-amber-900/20 border border-amber-800/40">
                       <AlertTriangle className="h-5 w-5 text-amber-300 mr-3 mt-0.5" />
                       <div>
@@ -456,24 +495,29 @@ const BillingSubscriptionTab = () => {
                         <p className="text-amber-300">
                           {t('settings.billing.paymentIssueDesc')}
                         </p>
-                        <div className="flex gap-2 flex-wrap mt-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="border-white/10 text-slate-100 hover:bg-white/10"
-                            onClick={handleRetryPayment}
-                          >
-                            {t('settings.billing.updatePaymentMethod')}
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={handleChargeDefault}
-                            disabled={chargingDefault || !savedCards || savedCards.length === 0}
-                          >
-                            {chargingDefault ? 'Charging…' : 'Charge default card'}
-                          </Button>
-                        </div>
+                        {/* Grace details hidden here since we only show this box when not in grace */}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Keep CTAs visible during grace even though amber box is hidden */}
+                  {isInGrace && (
+                    <div className="flex gap-2 flex-wrap">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="border-white/10 text-slate-100 hover:bg-white/10"
+                        onClick={handleRetryPayment}
+                      >
+                        {t('settings.billing.updatePaymentMethod')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleChargeDefault}
+                        disabled={chargingDefault || !savedCards || savedCards.length === 0}
+                      >
+                        {chargingDefault ? 'Charging…' : 'Retry Payment'}
+                      </Button>
                     </div>
                   )}
 
@@ -506,13 +550,48 @@ const BillingSubscriptionTab = () => {
                     <div>
                       <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.currentPlan')}</h3>
                       <p className="text-lg font-semibold capitalize text-slate-100">
-                        {SUBSCRIPTION_PLANS[(currentSubscription.tier as keyof typeof SUBSCRIPTION_PLANS)]?.name || (currentSubscription.tier as string)}
+                        {(() => {
+                          const tier = (currentSubscription.tier || '').toString().toLowerCase();
+                          const status = (currentSubscription.status || '').toString().toLowerCase();
+                          
+                          // For active subscriptions, show the proper plan name
+                          if (status === 'active' && tier === 'monthly') {
+                            return 'Monthly Subscription';
+                          }
+                          if (status === 'active' && tier === 'annual') {
+                            return 'Annual Subscription';
+                          }
+                          if (tier === 'trial' || status === 'trial' || status === 'trialing') {
+                            return 'Trial';
+                          }
+                          // Fallback to plan name from SUBSCRIPTION_PLANS or tier string
+                          return SUBSCRIPTION_PLANS[(tier as keyof typeof SUBSCRIPTION_PLANS)]?.name || tier || 'Free';
+                        })()
+                        }
                       </p>
                     </div>
 
                     <div>
                       <h3 className="text-sm font-medium text-slate-400">{t('settings.billing.billingCycle')}</h3>
-                      <p className="text-lg font-semibold text-slate-100">{currentSubscription.tier === 'annual' ? 'Annual' : 'Monthly'}</p>
+                      <p className="text-lg font-semibold text-slate-100">
+                        {(() => {
+                          const tier = (currentSubscription.tier || '').toString().toLowerCase();
+                          const status = (currentSubscription.status || '').toString().toLowerCase();
+                          
+                          // For active subscriptions, show proper billing cycle with emoji
+                           if (status === 'active' && tier === 'monthly') {
+                             return '🔁 Monthly';
+                           }
+                           if (status === 'active' && tier === 'annual') {
+                             return '🔁 Annual';
+                           }
+                           if (status === 'trial' || status === 'trialing' || tier === 'trial') {
+                             return 'Trial Period';
+                           }
+                           return 'N/A';
+                        })()
+                        }
+                      </p>
                     </div>
 
                     {(currentSubscription as any).createdAt && (
@@ -565,162 +644,7 @@ const BillingSubscriptionTab = () => {
                 </CardFooter>
               </Card>
 
-              <Card className="glass bg-slate-900/40 border-white/10">
-                  <CardHeader>
-                    <CardTitle className="text-slate-100">{t('settings.billing.paymentMethod')}</CardTitle>
-                    <CardDescription className="text-slate-400">{t('settings.billing.managePayment')}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {true ? (
-                      <div className="space-y-4">
-                        {savedCards && savedCards.length > 0 ? (
-                          <div className="space-y-3">
-                            <RadioGroup
-                              value={(savedCards.find(c => c.isDefault)?.id) || (savedCards[0]?.id ?? '')}
-                              onValueChange={(val) => {
-                                if (!val) return;
-                                handleSetDefault(val);
-                              }}
-                            >
-                              {savedCards.map((card) => (
-                                <label key={card.id} className="flex items-center justify-between w-full p-3 rounded-lg border border-white/10 bg-slate-800/40 hover:bg-slate-800/60 transition">
-                                  <div className="flex items-center gap-3">
-                                    <RadioGroupItem value={card.id} id={`card-${card.id}`} />
-                                    <div className="bg-slate-800/60 p-2 rounded-md border border-white/10">
-                                      <CreditCard className="h-5 w-5 text-slate-300" />
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-slate-100">
-                                        {card.brand ? `${card.brand} • ` : ''}•••• •••• •••• {card.last4}
-                                      </p>
-                                      <p className="text-sm text-slate-400">{card.expMonth && card.expYear ? `Exp ${card.expMonth}/${String(card.expYear).slice(-2)}` : ''}</p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {card.isDefault && (
-                                      <Badge variant="secondary" className="bg-emerald-600/20 text-emerald-300 border-emerald-600/30">Default</Badge>
-                                    )}
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="hover:bg-red-900/20"
-                                      aria-label="Remove card"
-                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveCard(card); }}
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-400" />
-                                    </Button>
-                                  </div>
-                                </label>
-                              ))}
-                            </RadioGroup>
-
-                            <Button
-                              size="sm"
-                              onClick={handleChargeDefault}
-                              disabled={chargingDefault || savedCards.length === 0}
-                              className="border-emerald-700/40 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300"
-                            >
-                              {chargingDefault ? 'Charging…' : 'Charge default card'}
-                            </Button>
-
-                            <div className="flex items-center justify-between">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
-                                onClick={() => {
-                                  openPaymentModalForCardManagement();
-                                  try {
-                                    auditService.logAudit({
-                                      category: 'financial',
-                                      action: 'Open Payment Method Modal',
-                                      page: 'Settings',
-                                      section: 'Billing > Overview',
-                                      entityType: 'payment_method',
-                                      changeType: 'read',
-                                      description: 'User opened payment method modal to manage saved cards',
-                                    });
-                                  } catch { /* noop */ }
-                                }}
-                              >
-                                {t('settings.billing.update')}
-                              </Button>
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={savedCards.length >= 3}
-                                className="border-border text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-                                onClick={() => {
-                                  if (savedCards.length >= 3) return;
-                                  openPaymentModalForCardManagement();
-                                  try {
-                                    auditService.logAudit({
-                                      category: 'financial',
-                                      action: 'Open Payment Method Modal',
-                                      page: 'Settings',
-                                      section: 'Billing > Overview',
-                                      entityType: 'payment_method',
-                                      changeType: 'create',
-                                      description: 'User clicked Add Card button',
-                                    });
-                                  } catch { /* noop */ }
-                                }}
-                              >
-                                Add Card
-                              </Button>
-                            </div>
-                            {savedCards.length >= 3 && (
-                              <p className="text-xs text-slate-400">You can store up to 3 cards. Remove one to add another.</p>
-                            )}
-                          </div>
-                          ) : (
-                            <div className="text-center py-6">
-                              <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
-                              <Button onClick={() => {
-                                openPaymentModalForCardManagement();
-                                try {
-                                  auditService.logAudit({
-                                    category: 'financial',
-                                    action: 'Open Payment Method Modal',
-                                    page: 'Settings',
-                                    section: 'Billing > Overview',
-                                    entityType: 'payment_method',
-                                    changeType: 'read',
-                                    description: 'User opened payment method modal to add a new payment method',
-                                  });
-                                } catch { /* noop */ }
-                              }}
-                              >
-                                {t('settings.billing.addPaymentMethod')}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-center py-6">
-                          <p className="text-slate-400 mb-4">{t('settings.billing.noPaymentMethod')}</p>
-                          <Button onClick={() => {
-                            openPaymentModalForCardManagement();
-                            try {
-                              auditService.logAudit({
-                                category: 'financial',
-                                action: 'Open Payment Method Modal',
-                                page: 'Settings',
-                                section: 'Billing > Overview',
-                                entityType: 'payment_method',
-                                changeType: 'read',
-                                description: 'User opened payment method modal to add a new payment method',
-                              });
-                            } catch { /* noop */ }
-                          }}
-                          >
-                            {t('settings.billing.addPaymentMethod')}
-                          </Button>
-                        </div>
-                      )}
-                  </CardContent>
-                </Card>
+              {/* Payment Method section hidden as requested - cards are saved directly on Paystack */}
 
               <Card className="glass bg-slate-900/40 border-white/10">
                 <CardHeader>

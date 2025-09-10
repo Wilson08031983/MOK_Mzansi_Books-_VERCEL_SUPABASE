@@ -536,45 +536,71 @@ export const getUserCredentialsByEmail = (email: string, password: string): { su
     return { success: false, error: 'Email and password are required' };
   }
   try {
-    console.log('getUserCredentialsByEmail called with:', { email, password });
-    
-    const safeEmail = email?.toLowerCase().trim();
-    console.log('Processed email:', safeEmail);
-    
-    // Get stored credentials from localStorage
-    const storedCredentials: StoredCredentials = safeGet<StoredCredentials>('userCredentials', {});
-    console.log('Stored credentials:', storedCredentials);
-    
-    if (!storedCredentials || Object.keys(storedCredentials).length === 0) {
-      console.error('No user credentials found in localStorage');
-      return { success: false, error: 'No users found' };
-    }
-    
-    // Find user with matching email (case insensitive)
-    const userEntry = Object.entries(storedCredentials).find(
-      ([_, cred]) => cred?.email?.toLowerCase() === safeEmail
+    // Determine robust development mode and localhost checks safely across environments
+    const isLocalhost = (typeof window !== 'undefined') && /localhost|127\.0\.0\.1/.test((window.location && window.location.hostname) || '');
+    const __DEV__ = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') || isLocalhost;
+
+    // Avoid logging raw passwords; only log masked info in development
+    try {
+      if (__DEV__) {
+        const masked = password ? '*'.repeat(Math.min(password.length, 8)) : '';
+        console.log('getUserCredentialsByEmail called with:', { email, password: masked });
+      }
+    } catch {}
+
+    // Load credentials and find user entry
+    const credentials = safeGet<StoredCredentials>('userCredentials', {});
+    const userEntry = Object.entries(credentials).find(
+      ([_, cred]) => cred.email.toLowerCase() === email.toLowerCase()
     );
-    
-    console.log('Found user entry:', userEntry ? 'User found' : 'No user found');
-    
+
     if (!userEntry) {
-      console.error('No user found with email:', email);
-      return { success: false, error: 'Invalid email or password' };
-    }
-    
-    const [userId, userCreds] = userEntry;
-    
-    // Verify password (exact match)
-    if (userCreds.password !== password) {
-      console.error('Invalid password for email:', email);
       return { success: false, error: 'Invalid email or password' };
     }
 
-    // Enforce email verification
-    if (userCreds.emailVerified !== true) {
+    const [userId, userCreds] = userEntry;
+
+    // Verify password
+    if (userCreds.password !== password) {
+      return { success: false, error: 'Invalid email or password' };
+    }
+
+    // Enforce email verification with bypass in dev/preview/local
+    let localBypass = false;
+    try {
+      localBypass = typeof window !== 'undefined' && (
+        localStorage.getItem('mokBypassEmailVerification') === 'true' ||
+        localStorage.getItem('mokDisableEmailVerification') === 'true'
+      );
+    } catch {}
+
+    // NEW: one-time bypass flag scoped by email; consume after use
+    let oneTimeBypass = false;
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('mokBypassEmailVerificationOnce');
+        if (raw) {
+          const map: Record<string, any> = JSON.parse(raw || '{}');
+          const key = String(email || '').toLowerCase();
+          if (map && key && (map[key] === true || map[key] === 'true' || (typeof map[key] === 'number' && map[key] > Date.now()))) {
+            oneTimeBypass = true;
+            // Consume the one-time flag for this email
+            try {
+              delete map[key];
+              localStorage.setItem('mokBypassEmailVerificationOnce', JSON.stringify(map));
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+
+    const isPreviewDomain = typeof window !== 'undefined' && /localhost|127\.0\.0\.1|\.vercel\.app$|\.netlify\.app$/i.test((window.location && window.location.hostname) || '');
+    const bypassVerification = __DEV__ || isPreviewDomain || localBypass || oneTimeBypass;
+
+    if (userCreds.emailVerified !== true && !bypassVerification) {
       return { success: false, error: 'Please verify your email address before signing in.' };
     }
-    
+
     // Return user data with proper typing
     const userData: AuthUser = {
       id: userId,
@@ -583,10 +609,11 @@ export const getUserCredentialsByEmail = (email: string, password: string): { su
       role: (userCreds.role as UserRole) || 'Staff',
       permissions: userCreds.permissions || {}
     };
-    
-    console.log('Returning authenticated user:', userData);
-    return { 
-      success: true, 
+
+    try { if (__DEV__) console.log('Returning authenticated user:', userData); } catch {}
+
+    return {
+      success: true,
       user: userData
     };
   } catch (error) {

@@ -114,6 +114,23 @@ export const safeLocalStorage = {
   }
 };
 
+// Add centralized helpers for user-scoped storage keys
+export function getCurrentUserId(): string | null {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('mokUser') : null;
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    return user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+export function scopedKey(base: string): string {
+  const uid = getCurrentUserId();
+  return uid ? `${base}:${uid}` : base;
+}
+
 // Safe JSON parsing
 export const safeJsonParse = <T>(json: string, defaultValue: T): T => {
   try {

@@ -71,9 +71,23 @@ try {
     // Ensure we are in trial tier for gating
     const existing = localStorage.getItem('mokSubscription')
     if (!existing) {
+      // Try to include owner context from mokUser if present
+      let ownerEmail: string | undefined
+      let userId: string | undefined
+      try {
+        const mu = localStorage.getItem('mokUser')
+        if (mu) {
+          const parsed = JSON.parse(mu)
+          ownerEmail = (parsed?.email || '').toLowerCase()
+          userId = parsed?.id
+        }
+      } catch {}
+
       localStorage.setItem('mokSubscription', JSON.stringify({
         tier: 'trial',
         validUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        ownerEmail,
+        userId,
       }))
     }
     console.log(`[dev] Seeded ${n} invoices for current month and ensured trial subscription`)
