@@ -52,7 +52,10 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
   const effectiveSenderSignatureText = senderSignature || emailConfig.sender.signature;
 
   // Ensure absolute URLs for assets in email clients
-  const baseUrl = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) || effectiveWebsite;
+  // Prioritize Vercel URL for development/staging, then environment variable, then fallback to website
+  const baseUrl = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) || 
+                  emailConfig.company.vercelUrl || 
+                  effectiveWebsite;
   const absolutize = (url?: string) => {
     if (!url) return undefined as string | undefined;
     if (/^https?:\/\//i.test(url)) return url;
