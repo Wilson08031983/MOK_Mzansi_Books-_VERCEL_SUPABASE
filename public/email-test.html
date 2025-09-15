@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Assets Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        img { max-width: 200px; height: auto; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Email Assets Test Results</h1>
+    
+    <div class="test-section">
+        <h2>✅ Working Logo URL (Use this in emails):</h2>
+        <p><strong>https://www.mokmzansibooks.com/mokmzansi-logo.PNG</strong></p>
+        <img src="/mokmzansi-logo.PNG" alt="MOK Mzansi Logo" />
+        <p class="success">This URL works correctly and serves the PNG image.</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>❌ Cached URL (Still returning HTML):</h2>
+        <p><strong>https://www.mokmzansibooks.com/email-assets/mokmzansi-logo.PNG</strong></p>
+        <p class="error">This URL is still cached and returns HTML instead of the image.</p>
+        <p>It should work after cache expires (24-48 hours).</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>📧 Email Template Usage:</h2>
+        <pre>&lt;img src="https://www.mokmzansibooks.com/mokmzansi-logo.PNG" alt="MOK Mzansi Books" width="150" /&gt;</pre>
+    </div>
+    
+    <div class="test-section">
+        <h2>🔧 Technical Details:</h2>
+        <ul>
+            <li>Fixed vercel.json routing configuration</li>
+            <li>Static assets now properly excluded from SPA rewrites</li>
+            <li>Logo file exists in both /public/mokmzansi-logo.PNG and /public/email-assets/mokmzansi-logo.PNG</li>
+            <li>Cache will clear automatically within 24-48 hours</li>
+        </ul>
+    </div>
+</body>
+</html>
