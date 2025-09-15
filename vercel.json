@@ -7,17 +7,12 @@
   "framework": null,
   "functions": {
     "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
-  "functions": {
-    "api/**/*.ts": {
       "runtime": "nodejs18.x"
     }
   },
   "rewrites": [
     {
-      "source": "/((?!api/|.*\\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)).*)",
+      "source": "/((?!api/|.*\\.(png|PNG|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)).*)",
       "destination": "/index.html"
     }
   ]
