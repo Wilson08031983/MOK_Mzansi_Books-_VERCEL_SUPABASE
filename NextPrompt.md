@@ -1,402 +1,399 @@
+FULLY AUTOMATE SUBSCRIPTIONS (PAYSTACK) — LOCAL DEV ONLY\*\*
+
+**Context / Goal**
+This SaaS app is subscription-based (Monthly / Annual). Implement a robust, automatic subscription system that charges customers automatically based on their selected plan (monthly or annual) without requiring manual user payments during renewal or grace. Use Paystack in test mode for all development and tests. Preserve existing Cancel/Resume and plan-change UI/UX already implemented, but make them behave exactly as defined in previous prompts (trial rules, cancel scheduling, grace, locked state, etc.). Keep everything local; do not push live keys or production data during development.
+
+**Paystack Configuration (DEV/Test)**
+
+- **Test Secret Key (DEV only):** `sk_test_[YOUR_PAYSTACK_TEST_SECRET_KEY]`
+- **Live Secret Key (production only):** `sk_live_[YOUR_PAYSTACK_LIVE_SECRET_KEY]` (do NOT use live key in dev)
+- All Paystack API calls must include: `Authorization: Bearer <SECRET_KEY>` header. Do not expose secret keys in client-side bundles. Use server-side local worker or secure local server to call Paystack. Follow Paystack docs: [https://paystack.com/docs/](https://paystack.com/docs/) and [https://paystack.com/docs/api/](https://paystack.com/docs/api/) for plan/subscription/charge/verify flows.
+
+**High-level Requirements (read carefully)**
+
+1. Use Paystack **test** key only while developing. Simulate webhooks locally or poll verify endpoints after charge attempts. Make webhook handling optional in dev but include stub and instructions for enabling real webhooks in production.
+2. Automate initial charge authorization and recurring billing:
+   - On initial subscription (user enters card), obtain and store Paystack customer & authorization details (or create subscription using Paystack plans).
+   - Use Paystack subscription/recurring charge flows so renewals are attempted automatically by Paystack where appropriate, otherwise schedule local auto-charge attempts using stored authorization (dev-only).
+
+3. Implement full subscription lifecycle: `trial` → `active` → `grace` → `locked` (or `canceled` with scheduled effective date) and `scheduled-plan-change`.
+4. Keep canonical subscription record per company/user in local DB/localStorage per previous prompt schema. No cross-company sharing.
+
+**Detailed Functional Requirements**
+
+A. **Subscription States & Canonical Object**
+Maintain a single authoritative subscription object per company (example fields — store exactly these keys in a single record):
+
 ```
-LOCATION:
-accounting & billing flows — Settings Page > Billing (settings?tab=billing), Dashboard page top bar, Signup/Verification flows, Notification system, Payment History, and subscription background worker (local only).
-
-GOAL (single copy-and-paste instruction for AI / dev environment):
-Implement and fully verify the complete subscription lifecycle and edge-case behavior described below. This must be done locally (local backend / localStorage or local DB) until development is complete. Reference existing code before changing anything; avoid duplicating files, functions, or backends. Match the site theme and keep all UX consistent.
-
-GENERAL RULES (read before executing):
-- ALWAYS inspect existing implementations first. Update only if required. Do not duplicate files/functions or create parallel backends.
-- Keep all changes local-only for now. We will migrate to Supabase later.
-- Avoid hard-coded values unless explicitly listed below. Use config/constants that can be adjusted.
-- Log all key events to console (@web-context:console-logs) with structured messages for debugging.
-- Preserve theme and styling; do not change UX patterns unless needed for this feature.
-
-CONFIG / CONSTANTS (use as reference, but keep configurable):
-- Trial length = 30 days (countdown 30 → 0)
-- Grace period length = 5 days (countdown 5 → 0)
-- Monthly billing cycle = 31 days (R60.00)
-- Annual billing cycle = 365 days (R684.00; 5% discount)
-- Payment retries: once per day during grace period (5 attempts)
-- Payment provider (test keys only for now): Paystack public test key provided in previous docs — use test environment for all dev testing.
-
-FEATURE SPEC — subscription & decline handling (detailed)
-
-1) Immediate behavior when user pays during trial
-- If user on Free 30-Day Trial initiates payment and the payment AUTHENTICATES & CONFIRMS success from Paystack:
-  - Immediately:
-    - Cancel/stop trial countdown banner and strip on Dashboard TopBar.
-    - Update user's subscription state to `active` with fields: planType (`monthly` or `annual`), startDate = paymentDate, nextBillingDate = startDate + cycleDays (31 or 365).
-    - Update UI everywhere: TopBar status, Settings > Billing Overview, Current Plan, Billing Cycle, Payment History.
-    - Remove trial feature limits immediately and grant full paid feature access (unlimited items, invoices, etc.).
-    - Create a Payment History record (local) with {id, userId, amount, currency, date, providerRef, planType, status: "successful"}.
-    - Redirect flow: Payment success → ThankYou.tsx → auto-redirect to Dashboard (or button) and confirm unlocked features.
-    - Send Confirmation Email (Payment Receipt) and Dashboard notification (Bell).
-  - If any step fails (e.g., missing confirmation or mismatch), rollback UI state to trial and surface a clear error and log console.
-
-- If the payment ATTEMPT fails (declined) while on trial:
-  - Keep the user on trial state (do NOT convert to subscriber).
-  - Do NOT decrement or change trial days except the normal daily countdown.
-  - If the trial would end with no successful payment, the next phase below applies (grace).
-
-2) Trial end → grace period behavior
-- When trial countdown reaches 0 (trial end) and there is NO successful payment:
-  - Transition user to `grace` state for 5 days. Record graceStartDate.
-  - During grace:
-    - Try to re-charge / re-initiate payment once per day automatically (attempt up to 5 times).
-    - Send an email on each retry attempt if it fails, and also show a Dashboard bell notification with “Payment retry failed — Update card or pay now” and a link to Billing → Overview → Payment Method.
-    - Show the Dashboard top strip message changed from trial text to: `"The payment was not successful. We'll retry automatically for the next X days."` where X is remaining grace days.
-    - Allow user to manually retry payment via a prominent "Pay Now" / "Update Card" CTA.
-  - If payment succeeds during grace:
-    - Immediately convert to active subscriber (monthly/annual); unlock features; stop retries; record payment history; send success email; remove padlocks/banners.
-  - If grace period expires (after 5 failed attempts):
-    - Transition user to `locked` state:
-      - Lock navigation items: My Company, Clients, Quotations, Invoices, Projects, Inventory, HR Management, Accounting — show padlock icon and disable interactions (still visible).
-      - Only Dashboard remains accessible (view-only) with a top banner: `"Please upgrade to access all pages — Upgrade Now"` and a notification bell entry: `"Update Card Details"` linking to Settings → Billing → Overview → Payment Method → Update.
-      - Stop automated retries and stop reminder emails (unless user re-initiates payment).
-      - Record final failure in Payment History and log console.
-
-3) Payment declines for existing subscribers at renewal time
-- If user is an active subscriber (monthly or annual) and scheduled auto-renewal attempt fails on billing date:
-  - Put user into grace state for 5 days, same retry policy (once per day).
-  - Show banner and bell notifications as above.
-  - If payment succeeds during grace, restore normal active state and extend nextBillingDate accordingly.
-  - If payment fails after grace, move to `locked` state as described.
-
-4) Changing plans mid-cycle
-- If active subscriber requests plan change (monthly ↔ annual) mid-cycle:
-  - Do NOT switch immediately.
-  - Schedule plan change to take effect at nextBillingDate (end of current paid period).
-  - Show UI feedback: `"Plan change scheduled — New plan will start on [nextBillingDate]"`.
-  - If user cancels scheduled change before nextBillingDate, allow cancellation.
-  - Do NOT prorate or immediately charge unless explicitly requested; for now, implement schedule-at-next-billing behavior.
-
-5) Prevent re-entry to trial after subscription
-- Users who have been paid subscribers (ever) must not be allowed to re-enter the Free 30-Day Trial again. Enforce at signup/login flows.
-
-6) UI & Dashboard visuals / status rules
-- TopBar statuses MUST reflect exact state:
-  - Trial: `Free | 30 Days` (countdown)
-  - Active monthly: `Paid | Monthly`
-  - Active annual: `Paid | Annual`
-  - Grace: `Payment retry: X days left` (or similar)
-  - Canceled: `Canceled | Monthly` (and show active until date)
-  - Locked: show padlocks and banner message instructing payment
-- Dashboard trial/strip behavior:
-  - While trial active: `"X days left in your trial — Upgrade Now"` (with CTA to pay)
-  - During grace: `"Payment was not successful. We'll retry automatically for the next X days."`
-  - Locked: `"Please upgrade to access all the pages — Upgrade Now"` (with CTA)
-- Settings → Billing Overview must always show:
-  - Current Plan (Trial/Monthly/Annual/Canceled/Locked)
-  - Billing Cycle (Trial/Monthly/Annual)
-  - Next Billing Date (calculated)
-  - Payment Method (card last4; update button)
-  - Payment History (list)
-- Payment History: each transaction logged locally including failures and retries.
-
-7) Feature access control rules
-- Trial users: enforce limits (5 invoices, 5 quotations, 5 clients, 5 projects, 5 inventory items, 5 suppliers, 5 storage locations).
-- Paid users (monthly/annual): remove limits immediately upon activation; grant full features and optional premium perks (priority support, analytics, 5% discount on certain items if applicable).
-- Canceled but still within paid period: continue paid access until end of paid cycle. Only after end of cycle and failed renewal (or user chosen cancel immediate) revert to trial/locked behavior.
-- Locked users: navigation items disabled but visible. Show information on how to restore via payment.
-
-8) Email & Notification templates (must be created and used)
-- 5 Days Left Trial Reminder (email + dashboard bell):
-  - Include company logo, signature block (Wilson Mokgethwa Moabelo ... contact details), payment CTA link to payment page.
-- 5-Day Grace Period Reminder (daily during grace) — failure notification + link to update card / pay now.
-- Payment Success Receipt (after successful charge) — include invoice/receipt, plan, amount, date, next billing date.
-- Payment Failed / Final Lock Notice (at end of grace) — instructions to restore access.
-- All templates must reuse the same design and branding (fonts, logo, signature) as existing Welcome/Invoice templates.
-- Log every email send to console with structured message.
-
-9) Data persistence & local processes
-- Store subscription state and counters in local DB/localStorage keyed to company/user (do not share across users).
-- Store trialStartDate, trialEndDate, subscription records, paymentHistory, graceStartDate, scheduledPlanChange.
-- Implement a local background worker or scheduled job (dev environment) that:
-  - Updates day-based countdowns (trial & grace) once per day (or simulate fast-forward time in tests).
-  - Attempts auto-charge each morning of grace.
-  - Updates nextBillingDate when successful charges occur.
-  - Ensures no cross-user data contamination.
-
-10) Logging & debugging
-- Every state change should log to console: `{"event":"subscription.change","user":"<email>","companyId":"<id>","from":"<oldState>","to":"<newState>","timestamp":...}`.
-- Every payment attempt should log: `{"event":"payment.attempt","user":"<email>","amount":X,"plan":"monthly/annual","providerRef":"...", "status":"success|failed", "timestamp":...}`.
-- Every retry attempt during grace must be logged.
-
-11) Testing & acceptance criteria (run these after implementation)
-- Test A: User on trial pays mid-trial and payment SUCCESS → immediately unlocked; Payment History shows transaction; trial banner gone; Settings shows Paid/Monthly (or Annual); features unlimited.
-- Test B: User on trial pays mid-trial and payment FAILS → user remains on trial; trial countdown continues; if payment not retried successfully before trial end → enters grace; retries daily.
-- Test C: Trial ends with no payment → user enters grace; retries happen daily; emails sent; if success during grace → unlock; if fail after 5 retries → locked state with padlocks and notice.
-- Test D: Active monthly user changes plan to annual mid-cycle → UI shows scheduled change; plan switch occurs only on nextBillingDate.
-- Test E: Renewal attempt for active subscriber fails → enters grace; behavior as above.
-- Test F: Locked user updates card and pays → immediate unlock; payment history records success and nextBillingDate set correctly.
-- For each test, verify console logs, Payment History entries, Settings → Billing UI, Dashboard top strip, Notification Bell messages, and actual feature access (create invoices beyond trial limits etc.).
-
-12) Edge cases & additional rules
-- Do not allow purchase actions that would produce duplicate subscriptions. If user clicks pay multiple times, handle idempotency via provider reference and record only one successful transaction.
-- When scheduling plan changes, surface both previous and next plan in UI with exact effective date.
-- If user cancels and then re-subscribes during the same paid period, reconcile dates correctly (extend subscription based on new payment).
-- Provide admin dev-only override (local only) to simulate payment success/failure for testing.
-
-13) Implementation notes for devs (non-invasive)
-- Inspect existing subscription/trial code paths and update the state machine to include states: `trial`, `active`, `grace`, `locked`, `canceled`, `scheduled-change`.
-- Use a single canonical subscription record per company stored locally; UI reads from that authoritative source.
-- Ensure notifications and company details are scoped per user/company only (no cross-company leakage).
-
-DELIVERABLE (what to return)
-- Implement the full flow locally and run acceptance tests A–F.  
-- Provide a short debug summary with:
-  - Sample console logs for 3 events: payment success, payment failure, grace retry.
-  - Payment History snapshot for test user(s).
-  - The checklist of Acceptance Criteria with ✓/✗ for each.
-  - Any edge cases found and how you resolved them.
-
----
-
-IMPORTANT: Before executing any changes, open and inspect the related files referenced by previous prompts to avoid duplication. Make changes only where needed and preserve the existing theme and UX. Local backend only until we complete development.
-```
-LOCATION:
-Entire app (local dev) — Billing/Subscriptions logic and UI:
-- Dashboard (top bar & trial strip)
-- Settings > Billing (settings?tab=billing) Overview & Plans/Payment pages
-- Notification Bell (dashboard)
-- Payment History panel
-- Navigation menu (padlock UI)
-- Local backend storage (localStorage / local DB)
-- Paystack integration (test keys)
-
-GOAL (single copy-and-paste instruction for AI / dev environment):
-Implement complete, robust subscription & trial state machine and UI behavior for 3 plans (30-day free trial, Monthly R60, Annual R684) with precise handling for: successful payments, declined payments during trial, declined payments during billing, 5-day grace period retries, scheduled plan changes (take effect next billing date), lockout after grace, immediate feature unlocking after payment, persistence (local only), email + in-app notifications, and detailed console logging for debugging. Do not duplicate existing functions/files — inspect current implementation and update only where required. All work must be local-only; later this will be copied to Supabase.
-
-IMPORTANT RULES BEFORE EXECUTION:
-1. Inspect existing billing/subscription files and flows. Update or extend; DO NOT create duplicate endpoints or services. 
-2. Keep backend local (localStorage / local DB). Use a single subscription record per company/user.
-3. Keep UI theme (Apple Sequoia style). Avoid hard-coded values; use centralized config for plan prices and intervals.
-4. Make all behavior reversible in tests—provide a checklist of completed tasks and console logs.
-5. Do full testing at the end of implementation (see acceptance tests).
-
-CORE DATA MODEL (persist locally per company / user):
-Store a `subscription` object keyed to the company (e.g., `subscription.<companyId>`) with:
 {
-  id: string,
-  userEmail: string,
-  companyId: string,
-  plan: "trial" | "monthly" | "annual",
-  planId: string, // e.g., "trial-30", "monthly-31", "annual-365"
-  price: number,
-  currency: "ZAR",
-  status: "trial" | "active" | "grace" | "locked" | "canceled" | "pending_change",
-  trialStartAt: ISODate | null,
-  trialEndsAt: ISODate | null,
-  startAt: ISODate | null, // date when paid subscription became active
-  nextBillingAt: ISODate | null,
-  billingCycleDays: number, // 31 or 365
-  pendingPlanChange: { plan:"monthly"|"annual", effectiveAt: ISODate } | null,
-  graceEndsAt: ISODate | null,
-  paymentAttempts: number, // daily attempts during grace
-  lastPaymentAttemptAt: ISODate | null,
-  paymentHistory: [ { id, amount, currency, plan, date, status, method, reference } ],
-  cancelAtPeriodEnd: boolean // if user canceled
+  companyId,
+  userId,
+  plan: "trial" | "monthly" | "annual" | "none",
+  state: "trial" | "active" | "grace" | "locked" | "canceled",
+  trialStartDate, trialEndDate,
+  startDate,
+  nextBillingDate,
+  scheduledCancel: boolean,
+  cancelEffectiveDate,           // when scheduled cancel will take effect
+  scheduledPlanChange: { newPlan, effectiveDate } | null,
+  graceStartDate,
+  paymentHistory: [ { id, providerRef, amount, currency, date, status } ],
+  providerCustomerRef,           // Paystack customer id
+  providerAuthorizationRef,      // payment method authorization id (if stored)
+  providerSubscriptionRef        // Paystack subscription id (if used)
+}
+```
+
+- This object is the only authoritative source. UI and background workers read and write only this object. No duplicate caches.
+
+B. **Trial Behavior**
+
+- New users start in `trial` (30 days). Show topbar countdown. During trial:
+  - **Cancel** must be disabled/hidden. Clicking Cancel triggers inline message: `"Cancel not available during free trial."` and console log event `subscription.cancel_attempt`.
+  - If the user **pays successfully** during trial, immediately convert to `active` — set `startDate = paymentDate`, `nextBillingDate = startDate + interval`, update `paymentHistory`, unlock all paid features, close trial banners, send receipt email + dashboard notification, and redirect to `ThankYou.tsx` then dashboard.
+  - If payment fails during trial, remain in `trial`. Do not convert and do not reduce trial days beyond normal countdown.
+
+C. **Active Subscription Behavior / Auto-Renew**
+
+- On `nextBillingDate`, automatically attempt to charge the user:
+  - Where possible: use Paystack subscriptions (server-side) so Paystack handles recurring billing.
+  - If Paystack subscription is not used, implement server-side (local worker) auto-charge using stored authorization and Paystack `charge` call, then `verify`.
+
+- On **successful** charge:
+  - Update `paymentHistory`, set `nextBillingDate += interval` (31 or 365 days), log `subscription.renewed` event, send receipt email, clear `graceStartDate` if any.
+
+- On **failed** charge:
+  - Transition to `grace` and set `graceStartDate = today` and `graceRetryCount = 0`. Log `subscription.payment_failure`. Show dashboard banner: `"The payment was not successful. We'll retry automatically for the next X days."`
+  - Retry once per day automatically (local worker) for up to 5 retries.
+
+D. **Grace Period**
+
+- During `grace`:
+  - Attempt auto-charge daily (respect Paystack idempotency).
+  - Send daily email & dashboard notification on retry failure (email template: “Payment retry failed — update card or pay now”).
+  - If a retry **succeeds** at any time: turn `state` to `active`, update `paymentHistory`, set a new `nextBillingDate`, clear `graceStartDate`, remove banners and padlocks, log `subscription.restored`.
+  - If after 5 attempts still fails: set `state` to `locked`, record in `paymentHistory` the final failure, stop retries, show locked UI and notifications.
+
+E. **Locked State**
+
+- On `locked`:
+  - Disable interaction for: My Company, Clients, Quotations, Invoices, Projects, Inventory, HR Management, Accounting pages (show padlock icons and disabled UI). Only Dashboard allowed (with view & CTA to pay/update card).
+  - Show banner: `"Please upgrade to access all pages — Upgrade Now"` and bell notification `"Update Card Details"`.
+  - Allow immediate manual payment or update card to restore subscription. On manual success, set `active`, set `nextBillingDate`, log and notify.
+
+F. **Cancel / Resume**
+
+- Cancel for `active` users must be **scheduled** (not immediate):
+  - When User clicks Cancel:
+    - Set `scheduledCancel = true`.
+    - Set `cancelEffectiveDate = nextBillingDate`.
+    - Keep access until `cancelEffectiveDate`.
+    - Update UI to show `Canceled (effective <date>)`.
+    - Log `subscription.canceled_scheduled`.
+
+  - If user clicks Resume before `cancelEffectiveDate`:
+    - Clear `scheduledCancel` and `cancelEffectiveDate`.
+    - Do NOT change `nextBillingDate`.
+    - Log `subscription.resumed`.
+
+- Edge-race handling:
+  - If renewal occurs near cancel scheduling, ensure atomic operation: if renewal went through, move `cancelEffectiveDate` to the new `nextBillingDate` and keep `scheduledCancel = true`. Avoid double charges.
+
+G. **Plan Change**
+
+- If user requests plan change mid-cycle:
+  - Do not change immediately. Create `scheduledPlanChange = { newPlan, effectiveDate: nextBillingDate }`.
+  - Show UI: `"Plan change scheduled — New plan will start on [nextBillingDate]"`.
+  - Allow cancellation of scheduled change before effective date.
+  - On `effectiveDate`, change `plan`, set `nextBillingDate` according to new plan cycle, log `subscription.plan_changed`.
+
+H. **No Re-Entry to Trial**
+
+- If a company/user has ever had `active` subscription (even if later canceled), do not allow re-entry into a Free Trial. Enforce on signup/login checks.
+
+I. **Payment Idempotency & Race Conditions**
+
+- Use Paystack idempotency for charge calls (providerRef or a local idempotency key) to prevent duplicate charges if multiple workers try same charge.
+- Ensure local worker charges are atomic: obtain a lock per-subscription when attempting charge.
+
+J. **Email / Notification Templates**
+
+- Implement these templates (local dev sends via configured dev email service; log all email sends):
+  - Trial reminder (5 days left) — includes CTA to billing & update card.
+  - Grace daily retry notice (daily) — CTA to update card / pay now.
+  - Payment success receipt — details, nextBillingDate, amount.
+  - Final lock notice — final attempt failed, instructions to restore.
+
+- All templates use company branding and signature (Wilson Mokgethwa Moabelo contact info). Log `email.sent` events.
+
+K. **Paystack Plan & Subscription Handling**
+
+- **Create or verify** Paystack Plans for Monthly and Annual during setup (dev step). Use Paystack API to create Plan objects or use local mapping if not necessary in dev.
+- On initial subscribe:
+  - Create Paystack customer if not exists.
+  - Save Paystack customer id and authorization id locally (do not expose).
+  - Option A (recommended): create Paystack subscription so Paystack recurs automatically.
+  - Option B (if subscription API not used): save authorization and schedule local worker to call Paystack `charge` endpoint each `nextBillingDate`.
+
+- Always verify charges with Paystack `verify` endpoint before marking a payment as successful.
+
+L. **Background Worker (local) — responsibilities**
+
+- Daily tasks (dev scheduler or simulated scheduler):
+  - Decrement trial days and detect trial end.
+  - On `nextBillingDate` for `active` plans, attempt charge (or rely on Paystack subscription webhooks).
+  - During `grace`, attempt daily retries and increment retry count.
+  - Apply scheduled plan changes or scheduled cancellations at their effective dates.
+
+- Worker must write structured logs for each action.
+
+M. **Logging**
+
+- All important events logged to console as structured JSON (mask emails where necessary), e.g.:
+  `{"event":"payment.attempt","companyId":"c_123","user":"m*****@domain.com","amount":60,"plan":"monthly","status":"failed","providerRef":"...", "timestamp":"..."}`
+- Provide log entries for: payment attempts, successes, failures, subscription state transitions, scheduled cancel/resume, plan-change scheduling, email sends.
+
+N. **Security & Local Dev**
+
+- Never store live secret keys in client code; in dev, secure the test key in local environment variables. Do not push secret keys to remote repos.
+- Make webhook handler stubs that can be toggled on during production, and provide instructions to enable real Paystack webhooks later.
+
+O. **Acceptance Tests & Deliverables**
+Implement and run the tests locally. Produce these deliverables (local files + reports):
+
+**Acceptance Tests (must be run and evidenced):**
+
+1. Trial user pays mid-trial and payment succeeds → becomes Active, nextBillingDate set, trial banners removed, Payment History shows success, features unlocked.
+2. Trial user pays and payment fails → stays Trial; on trial end enters Grace; banner and daily retry emails happen; upon success in grace becomes Active; upon 5 failed retries becomes Locked.
+3. Active user auto-renewal success → nextBillingDate updated, history logged.
+4. Active user auto-renewal failure → enters Grace, follows grace logic.
+5. Cancel scheduling → scheduledCancel true and cancelEffectiveDate set to nextBillingDate; access maintained until effective date.
+6. Resume before effective date → scheduledCancel cleared; nextBillingDate unchanged.
+7. Plan change mid-cycle → scheduledPlanChange set and effective on nextBillingDate.
+8. Locked user updates card and pays → become Active immediately; nextBillingDate set; padlocks removed.
+9. Idempotency: multiple payment requests for the same attempt create only 1 successful charge record.
+10. Persistence: all subscription fields persist across reloads (local storage / DB).
+
+**Evidence to deliver:**
+
+- `acceptance_checklist.md` — each test PASS/FAIL with notes.
+- `payments_history_<testuser>.json` — local payment history after tests.
+- `console_logs_sample.json` — 10 sample structured logs including payment success, failure, retry.
+- `files_inspected.txt` — list of files inspected/modified (server worker, subscription model, billing UI).
+- `remediation_notes.md` — if anything broken or conflicting was found, describe fixes & follow-ups.
+- `email_templates/` — HTML/plain templates used for test emails (local).
+- Step-by-step instructions in `final_verification.md` to re-run tests (commands to run local worker, test keys to use, how to simulate webhooks).
+
+**Important Implementation Notes / Constraints**
+
+- **Work Local Only** — do not switch to live key or production services in this task.
+- Carefully inspect existing subscription/trial code first; **do not duplicate**. If there are existing scheduled tasks or duplicate logic, consolidate into one canonical worker/service and document the change.
+- Keep UI styling intact — use existing modals and confirmation dialogs. Add helper text and tooltips as specified in previous prompts.
+- Use Paystack docs as canonical reference for endpoints, idempotency, subscriptions, and verifications: [https://paystack.com/docs/api/](https://paystack.com/docs/api/)
+- If implementing webhooks locally, provide a test harness and instructions for ngrok or similar; otherwise implement polling/verify fallback for dev.
+- For features requiring email sends, use dev email or logger (log email body + recipient to console) and save template html in `email_templates/`.
+
+**Quick Reference — Config Constants**
+
+- `TRIAL_DAYS = 30`
+- `GRACE_DAYS = 5`
+- `MONTHLY_DAYS = 31` — `MONTHLY_PRICE = 60` ZAR
+- `ANNUAL_DAYS = 365` — `ANNUAL_PRICE = 684` ZAR (5% discount applied)
+- `PAYSTACK_TEST_SECRET = sk_test_[YOUR_PAYSTACK_TEST_SECRET_KEY]`
+- `PAYSTACK_LIVE_SECRET = sk_live_[YOUR_PAYSTACK_LIVE_SECRET_KEY]` (production only)
+
+**Run this now (Dev steps)**
+
+1. Inspect existing subscription code paths and previous prompt notes. Document files.
+2. Wire Paystack test key in local env. Implement Paystack plan creation or verify mapping.
+3. Implement/extend canonical subscription object and worker.
+4. Implement charging flow + verification + retry logic.
+5. Implement UI messages, cancel/resume modals, scheduled plan change UI, banners, and padlocks.
+6. Implement email templates (local logging ok).
+7. Run acceptance tests; record evidence and deliver files above.
+
+**If any critical cross-tenant or double-charge exposure is found, stop and record exact reproduction steps in `remediation_notes.md` and escalate immediately.**
+
+**Reference:** Paystack Docs — [https://paystack.com/docs/](https://paystack.com/docs/) and [https://paystack.com/docs/api/](https://paystack.com/docs/api/) — follow subscription & charge guidelines, idempotency, verification.
+
+Subscription & Billing Integration (Paystack)
+Location
+
+Settings Page, Billing tab (Settings?tab=billing) – Overview and Payment Method sections; Dashboard topbar banner; Signup/Verification flows; Notification system (bell/alerts); Payment History page; Local background worker for scheduled billing.
+
+Goal
+
+Implement a complete recurring billing and subscription lifecycle for Monthly and Annual plans using Paystack’s API. We must automate charges based on the user’s selected plan (monthly or annual) without requiring manual payments. Leverage Paystack’s Subscriptions API and Recurring Charges so that after an initial payment authorization, the system automatically bills customers each cycle
+paystack.com
+paystack.com
+. Use the provided Paystack Test Secret Key (sk*test*[YOUR_TEST_KEY]) for all development, switching to the Live key (sk*live*[YOUR_LIVE_KEY]) only for production. Ensure Paystack calls include the Bearer token header: Authorization: Bearer <SECRET_KEY>
+paystack.com
+.
+
+Rules & Expectations
+
+Existing Code Review: Inspect current subscription/trial code paths and previous prompts before making changes. Do not duplicate files, functions, or create parallel services. Update only if required and avoid breaking existing flows (Cancel/Resume, plan changes, etc. which were partially implemented).
+
+Local-Only Implementation: All logic and data storage should remain local (e.g. localStorage or a local DB) until final migration to backend. No live billing or user account changes should be persisted externally in dev.
+
+Theming & UI: Maintain the site’s UI theme (Apple Sequoia) and consistent UX patterns. Do not introduce unrelated styling changes. All text and buttons should match existing design.
+
+Configuration & Constants: Use configurable constants for trial length (30 days), grace period (5 days), billing cycles (Monthly = 31 days, Annual = 365 days, annual price = R684.00 with 5% discount from monthly rate), and payment retry attempts. Avoid hard-coded strings or dates.
+
+Logging: Log all key events to console.log (structured JSON) for debugging. For example, on cancellation attempt: {"event":"subscription.cancel_attempt","user":"<email>","state":"trial","timestamp":...}. Include user email/ID, previous state, new state, and timestamps in logs.
+
+Referencing Documentation: Follow Paystack’s documentation for Subscriptions and Recurring Charges
+paystack.com
+paystack.com
+. Use provided Paystack docs (https://paystack.com/docs/) for API usage, and ensure the implementation matches Paystack’s expected workflow.
+
+Paystack API Keys
+
+Switch to Test Mode: Set Paystack integration to Test Mode during development
+support.paystack.com
+. Configure environment or backend with the Test Secret Key and Public Key; this ensures all transactions are sandboxed.
+
+Authorization Header: In all Paystack API calls (subscription creation, charge, verify, etc.), include the Secret Key in the Authorization: Bearer <SECRET_KEY> header
+paystack.com
+. Do not leak the keys in client-side code.
+
+Plans & Subscriptions: Ensure Paystack plans exist for Monthly and Annual billing (interval = “monthly” or “annually”
+paystack.com
+) with the correct amounts. You may create or fetch plans via the Paystack API. When a user subscribes, create a Paystack subscription for the customer using their saved authorization (or create a new customer if needed)
+paystack.com
+.
+
+Subscription Lifecycle & Business Rules
+
+Free Trial (30 days): New users start in trial state with a 30-day countdown. During trial, Cancel is disabled/hidden – cancel requests should show: “Cancel not available during free trial.” Log attempts as subscription.cancel_attempt
+paystack.com
+. If payment is made during trial and succeeds, immediately convert to active subscription (monthly/annual) as if started today. If payment fails, remain on trial (normal countdown continues). Trial users have limited features (5 items, invoices, etc.).
+
+Active Subscription (Paid): Once subscribed, set state = active, record plan = "monthly"|"annual", startDate = paymentDate, nextBillingDate = startDate + interval. Unlock all features. Log payment success and send receipt email/notification. Payment goes into Payment History (status “successful”).
+
+Cancel (Scheduled): If an Active user clicks “Cancel Subscription,” do NOT cancel immediately. Set scheduledCancel=true and cancelEffectiveDate = nextBillingDate. In UI show “Canceled (effective [cancelEffectiveDate])” and a confirmation modal explaining the subscription remains active until then. Maintain full access until effective date. Log subscription.canceled_scheduled with email and effective date. If the user clicks Resume before effective date, clear scheduledCancel and cancelEffectiveDate, keep nextBillingDate unchanged, revert status to Active. Log subscription.resumed. Handle race condition where a billing charge occurs just as cancellation is scheduled: if a renewal happens, adjust cancelEffectiveDate to the new nextBillingDate (do not double-charge).
+
+Grace Period (5 days): If trial ends without payment or an auto-renewal fails on nextBillingDate, move the user to grace state. Record graceStartDate. For 5 days, attempt to auto-charge daily. Display a dashboard banner: “Payment not successful. We’ll retry automatically for the next X days,” and a notification “Payment retry failed – Update card or pay now.” Allow a “Pay Now / Update Card” CTA at any time. Send an email each day a retry fails (e.g. “Payment attempt #2 failed”). If a retry succeeds, convert to Active subscriber (clear grace), update nextBillingDate, log success, and notify. If grace expires (5 failed attempts), transition to locked state.
+
+Locked State: After grace failure, lock most app features (show padlocks, disable navigation for invoicing, etc.) except Dashboard. Show top-banner: “Please upgrade to access all pages – Upgrade Now” with link to billing. Add a bell notification: “Update Card Details.” Stop auto-retries. Users can still pay/update card to become Active again. Log transition to locked.
+
+Renewals: For Active subscribers, on each nextBillingDate automatically charge via Paystack (using the saved authorization/subscription). If the charge fails, follow the Grace Period flow above. If it succeeds, update nextBillingDate (+31 or +365 days) and log subscription.renewed.
+
+Plan Changes: If an Active user switches plans mid-cycle (Monthly ↔ Annual), do not change immediately. Set a scheduledPlanChange to take effect on current nextBillingDate. Inform the user “Plan change scheduled – New plan starts [nextBillingDate].” Allow cancellation of schedule before it triggers. Do not prorate or immediate charge. On the effective date, switch plan, update nextBillingDate, and apply new pricing.
+
+No Re-entrance to Trial: Once a user has ever converted to paid (even if later canceled or lapsed), they cannot re-enter the free trial. Enforce in signup/login flows.
+
+Email & Notifications: Create consistent email and bell notification templates for key events:
+
+Trial Reminder: 5 days before trial end, email/bell: “5 days left in free trial – Upgrade Now.”
+
+Grace Notices: Daily email/bell during grace: “Payment failed – [X] days left, update payment method.” Include branded signature and update link.
+
+Payment Success Receipt: After any successful payment, email invoice with plan, amount, date, next billing date.
+
+Final Lock Notice: When moving to locked after grace, email: “Subscription lapsed. Please update payment details to restore access.” Include upgrade link.
+All templates use existing branding (logo, signature of Wilson Mokgethwa Moabelo, fonts). Log every email sent with payment and subscription events.
+
+Data Persistence & Worker: Maintain a single canonical subscription record per user/company locally: e.g.
+
+{
+plan: "trial"|"monthly"|"annual"|"none",
+state: "trial"|"active"|"grace"|"locked"|"canceled",
+trialStartDate, trialEndDate,
+startDate, nextBillingDate,
+scheduledCancel: bool, cancelEffectiveDate,
+scheduledPlanChange: {newPlan, effectiveDate} | null,
+paymentHistory: [...],
+graceStartDate
 }
 
-EVENTS AND BUSINESS RULES (implement exact flows):
+Read/write UI state from this object (no duplicate caches). Implement a background process (dev-only) that increments days, triggers auto-charges on nextBillingDate or daily during grace, and updates states accordingly. Ensure no cross-user data leaks.
 
-A. Trial signup
-- On verified signup (email verified), create subscription record:
-  - plan = "trial"
-  - trialStartAt = now
-  - trialEndsAt = trialStartAt + 30 days
-  - status = "trial"
-  - billingCycleDays = null until paid
-- Dashboard: show Trial Strip: “30 days left in your trial — Upgrade Now”
-- TopBar: show `❌ Free | 30 Days` (computed from trialDaysLeft)
-- Feature limits enforced (5 per category). Enforce checks on create actions server-side / local-backend.
+UI / Dashboard Requirements
 
-B. User chooses to pay during trial (immediate purchase flow)
-- When user initiates payment (Paystack) and payment is **successful**:
-  - Create payment record and append to `paymentHistory`.
-  - Set `plan` = "monthly" or "annual" per selection.
-  - Set `price` to plan price (R60 or R684).
-  - Set `startAt` = now.
-  - billingCycleDays = 31 or 365.
-  - nextBillingAt = startAt + billingCycleDays.
-  - status = "active"
-  - Remove trial banner & trial countdown.
-  - Unlock all features immediately (remove restrictions).
-  - Update UI badges: `✅ Paid | Monthly` or `✅ Paid | Annual`.
-  - Add entry in Payment History UI.
-  - Redirect user to `ThankYou.tsx` then automatically to Dashboard (ensure payment validation confirmed by Paystack before redirect).
-  - Send Welcome/Subscription Confirmation email (use same email template style).
-- If payment **fails/declines** during the trial:
-  - Do NOT switch plan or status. Keep status = "trial".
-  - Do NOT deduct trial days. Trial continues until trialEndsAt.
-  - Record the failed attempt in `paymentHistory` with status = "failed".
-  - Do not start grace period now. The grace period starts only after trial ends with no successful payment (see section D).
+TopBar status badge must reflect state: e.g. Free | 30 Days, Paid | Monthly, Paid | Annual, Grace | X days left, Canceled | Monthly (active until YYYY-MM-DD), or Locked.
 
-C. Trial end → grace & lockout
-- When `now >= trialEndsAt` and there is NO successful payment:
-  - Enter `grace` period:
-    - status = "grace"
-    - graceEndsAt = now + 5 days
-    - paymentAttempts = 0
-  - On entering `grace`, trigger:
-    - Start automated daily debit attempts (1 per day): implement a local scheduler or a retry-on-login + daily attempt mechanism.
-    - Daily email reminder (Day 1..5) with payment link (use the 5-day Grace Email Template).
-    - On UI: replace Trial Strip with “Your trial has ended — Payment retry in progress. X days left to pay or account will be limited.”
-- During `grace`:
-  - Each scheduled attempt:
-    - Attempt charge via Paystack.
-    - Log attempt timestamp and outcome in `lastPaymentAttemptAt` and `paymentAttempts`.
-    - If attempt **succeeds**:
-      - status = "active"
-      - setup subscription fields as in B (startAt=now, nextBillingAt = now + billingCycleDays)
-      - stop retries and clear grace fields
-      - unlock features and update UI
-      - send Payment Success email
-      - stop further retries
-    - If attempt **fails**:
-      - continue until `graceEndsAt` or until 5 attempts completed (whichever business logic prefers).
-- If `now >= graceEndsAt` and still no successful payment:
-  - status = "locked"
-  - lock application features: apply padlock UI to navigation items: My Company, Clients, Quotations, Invoices, Projects, Inventory, HR Management, Accounting (make these visible but disabled).
-  - Keep Dashboard accessible (read-only) — show banner: “Please upgrade to access all pages — Upgrade Now” with payment link.
-  - Notification Bell shows “Update Card Details / Pay Now” with link to Settings → Billing → Overview → Payment Method.
-  - Stop automated retries and stop reminder emails.
+Billing Overview section should display: Current Plan, Billing Cycle, Next Billing Date, Scheduled Change/Cancel if any, Payment Method (card last4, with “Update” button), and Payment History. Show trial days or grace days remaining where appropriate.
 
-D. Declined payment during an **active subscription renewal** (mid-cycle)
-- If renewal (nextBillingAt) charge fails:
-  - Immediately set status = "grace", graceEndsAt = now + 5 days, paymentAttempts = 0
-  - Do daily retry attempts as in C.
-  - During grace the user retains access until graceEndsAt (unless policy chooses to lock earlier; follow rules above).
-  - If retry succeeds within grace: restore status=active and compute nextBillingAt = attemptDate + billingCycleDays.
-  - If retry fails after grace: status="locked" and lock UI as above.
+Cancel/Resume Buttons: Visible only when appropriate. During Trial: disable Cancel (tooltip “Cancel not available during free trial”) and show message if clicked. For Active or Canceled (scheduled), show “Cancel” (which opens a confirmation modal) or “Resume” (to undo cancel). For Canceled but still-active (before effective date), allow Resume.
 
-E. Scheduled Plan Changes (user requests plan switch mid-cycle)
-- If user requests plan change from Monthly → Annual or Annual → Monthly during an active cycle:
-  - Do NOT apply immediately. Save `pendingPlanChange` with `effectiveAt = nextBillingAt` and `pendingPlanChange.plan = requestedPlan`.
-  - Set UI indicator: "Plan change scheduled — will take effect on [nextBillingAt]".
-  - At nextBillingAt, when renewal happens:
-    - If payment for pendingPlanChange succeeds, set plan to pendingPlanChange.plan, update price & billingCycleDays, set nextBillingAt = now + newCycleDays, status=active.
-    - If payment fails, follow decline/retry flow.
-  - Optional: show prorate note in UI (do not implement automatic prorating unless requested).
+Confirmation Modals: On Cancel: “Cancel subscription? Your subscription remains active until [cancelEffectiveDate].” On Resume: “Resume subscription? Your billing schedule will continue as before.” Require explicit confirm.
 
-F. Cancellation & Resumption
-- If user cancels:
-  - Set `cancelAtPeriodEnd = true` and display: `❌ Canceled | Monthly (Active until [nextBillingAt])`
-  - Do NOT revoke access immediately; allow access until nextBillingAt.
-- If user resumes before period end:
-  - Clear `cancelAtPeriodEnd` and keep status active.
-- If user resumes after cancellation & lock:
-  - Process payment to reactivate subscription; if successful set status=active and nextBillingAt accordingly.
+Feature Locking: In locked state, overlay or disable protected pages with padlock icons. The Dashboard page should have an upgrade banner and restrict other pages.
 
-G. Prevent returning to trial
-- Once a user has been on a paid plan (monthly or annual), they MUST NOT be allowed to revert to the free trial. Implement validation: if subscription has ever been active and has paymentHistory entries with a successful payment, block trial signup for that company/email.
+Logging & Debugging
 
-H. UI updates & messages (exact)
-- Dashboard TopBar statuses:
-  - Trial: `❌ Free | {daysLeft} Days` (countdown).
-  - Active monthly: `✅ Paid | Monthly`
-  - Active annual: `✅ Paid | Annual`
-  - Grace: `⚠️ Payment retry — {graceDaysLeft} days left`
-  - Locked: `🔒 Access limited — Please upgrade`
-  - Canceled (period end): `❌ Canceled | Monthly (active until [date])`
-- Dashboard Trial/Upgrade Strip:
-  - On Trial: `"{n} days left in your trial — Upgrade Now"`
-  - On Grace: `"Payment failed. We'll retry for {n} days — Upgrade Now"`
-  - On Locked: `"Please upgrade to access all pages — Upgrade Now"`
-- Settings > Billing > Overview:
-  - Current Plan: show plan label and status.
-  - Billing Cycle: show Monthly/Annual and nextBillingAt date.
-  - Payment Method: show card details (masked) and Update button.
-  - Payment History: list all payments (success/fail) with reference & date.
-  - Plans tab: show same purchase UI as Payment page.
-- Payment History UI must update immediately after payment attempts (success or fail).
-- Lock/padlock behavior: show disabled menu items with padlock icon and tooltip linking to payment page.
+Log structured console events for all key actions:
 
-I. Email templates & notifications
-- Create templates (same visual style: logo, signature, fonts):
-  - Welcome + Trial Started (on verification)
-  - 5 Days Trial Reminder (“{5 days left}”) — link to payment page
-  - Payment Success / Subscription Confirmation
-  - Payment Failed (on retry) — daily during grace with payment link
-  - Grace Period Entered — explain retries & final date
-  - Account Locked — explain how to pay & restore access
-  - Cancellation Confirmation
-- Include company signature block exactly:
-  Wilson Mokgethwa Moabelo  
-  Founder & CEO  
-  MOK Mzansi Books  
-  support@mokmzansibooks.com  
-  +27 64 550 4029  
-  81 Monokane Street  
-  Atteridgeville x17  
-  Pretoria, Gauteng 0006
+subscription.cancel_attempt (trial or no sub)
 
-J. Payment integration (local test mode)
-- Use Paystack test key for integration testing:
-  VITE_PAYSTACK_PUBLIC_KEY_TEST="pk_test_d5c14a62cfaaa02caddf47664211e275bebc4c7a"
-- Ensure server-side / local validation of Paystack success event (do not rely solely on client-side callback).
-- For idempotency: store payment reference and ignore duplicate success callbacks for same reference.
+subscription.canceled_scheduled (with effective date)
 
-K. Logging (console + local audit)
-- Log structured events to console and local audit:
-  console.log(JSON.stringify({
-    event: "subscription.change" | "payment.attempt" | "payment.success" | "payment.failed",
-    companyId, userEmail, plan, status, amount, reference?, timestamp: new Date().toISOString()
-  }))
-- Log transitions: trial->active, trial->grace, grace->locked, active->pending_change, pending_change->active.
+subscription.resumed
 
-L. Feature gating enforcement
-- Implement centrally-check function `canPerform(action, companyId)` which checks subscription.status and plan and returns allow/deny with reason. Use for creating invoices, clients, projects, inventory, suppliers, storage locations, etc.
-- On paid status -> allow all actions. On trial -> enforce 5 limit per category. On locked -> allow only dashboard read.
+subscription.renewed
 
-M. Persistence & recovery
-- Ensure subscription state persists across reloads and multiple sessions:
-  - localStorage keys: `subscription.<companyId>`, `paymentHistory.<companyId>`
-  - On app load, validate nextBillingAt/trialEndsAt/graceEndsAt and perform scheduled transitions if required (e.g., if app was offline for days, evaluate and move state forward).
+subscription.plan_change_scheduled
 
-N. Acceptance Tests / QA Scenarios (run all locally)
-1. New signup (verify email link) → subscription object created as trial with trialEndsAt = now+30d. TopBar shows Free 30 days. Notification bell shows welcome popup. (Log event)
-2. During trial: user pays Monthly successfully:
-   - Payment recorded
-   - subscription.status = active; plan=monthly; nextBillingAt = now+31d
-   - Trial strip removed; features unlocked
-   - Payment history shows success
-   - Redirect flow: Paystack success -> ThankYou.tsx -> Dashboard
-   - (Log events)
-3. During trial: user attempts payment but it fails:
-   - subscription remains trial
-   - failed payment added to paymentHistory
-   - Trial continues until trialEndsAt
-   - If user never pays, after trialEndsAt system enters grace
-4. End of trial with no payment:
-   - status -> grace, graceEndsAt = now+5d
-   - daily retry attempts simulate failing for 5 days -> after graceEndsAt status->locked and UI padlocks appear, banner shown, notification bell contains payment link.
-5. Active monthly subscription renewal fails on billing date:
-   - status -> grace, graceEndsAt now+5d
-   - daily retry attempts; if one succeeds, status->active and nextBillingAt recalculated
-   - if all fail -> locked state per rules
-6. Plan change mid-cycle:
-   - user requests monthly->annual mid-cycle -> pendingPlanChange stored with effectiveAt = current nextBillingAt; UI indicates scheduled change; nothing about pricing or limits changes until effectiveAt
-7. Cancellation:
-   - user cancels -> cancelAtPeriodEnd true and UI shows canceled until nextBillingAt (with continued access)
-8. Locked user pays via manual payment link:
-   - payment success reactivates subscription, status -> active, nextBillingAt set accordingly, padlocks removed, log events
-9. Ensure cannot re-enter trial after ever having successful paid subscription
-10. Edge cases: duplicate Paystack callback (same reference) should be idempotent; stale local state recovery after reload should process pending transitions.
+subscription.enter_grace
 
-O. Developer notes & safety
-- Do not remove or alter Admin user flows. Keep admin privileges intact.
-- Avoid duplicating backend services—extend or modify existing subscription service/file.
-- Keep all UI changes consistent with Apple Sequoia theme.
-- Provide a final checklist (A→N) with ticks and sample console logs demonstrating each major state transition for the provided test user:
-  - Test user: mokgethwamoabelo@icloud.com (use in test scenarios)
+subscription.enter_locked
 
-DELIVERABLE (after implementing)
-1. Full subscription state machine implemented locally with persistence.  
-2. All UI indicators (TopBar badge, Dashboard strip, Settings Overview, Payment History) reflect live subscription state.  
-3. Email templates created and ready for local send (Resend API key wired but use local send simulation for testing).  
-4. Console audit logs for events and sample logs for acceptance tests.  
-5. A final ticked checklist showing each acceptance test passed and a short debug summary including paymentHistory entries for the test user.
+payment.attempt (status success/failed, amount, plan)
 
-```
+subscription.payment_success
+
+subscription.payment_failure
+
+email.sent (type, user)
+Include user and company identifiers, old/new states, and timestamps. These logs help verify flow during tests.
+
+Testing & Acceptance Criteria
+
+After implementation, perform the following tests (accept ✓/✗ each):
+
+Trial Cancellation: On Trial, Cancel is disabled; clicking shows inline message; console log of attempt.
+
+Cancel Active Sub: Active Monthly user clicks Cancel → scheduledCancel=true, cancelEffectiveDate == nextBillingDate; UI shows “Canceled (effective …)”; access remains until that date.
+
+Resume Sub: User clicks Resume before cancelEffectiveDate → cancellation cleared; UI returns to “Active”; nextBillingDate unchanged; console logs resume.
+
+Mid-transaction Cancel: If renewal charge and cancel occur simultaneously, ensure only one charge and cancelEffectiveDate updates correctly.
+
+Trial Payment Success: Trial user pays → state immediately Active; features unlocked; payment history has record; UI updates (TopBar, Billing) show new plan.
+
+Trial Payment Failure → Grace: Trial user’s payment attempt fails → remains in trial until day 30, then enters Grace; retry banner appears; automated retries and emails occur for up to 5 days.
+
+Grace Success: Payment eventually succeeds in grace → user becomes Active; banner clears; payment history logs success; nextBillingDate set.
+
+Grace Expiry → Locked: After 5 failed retries, user enters Locked; padlocks appear; upgrade banner and notification exist; verify no further retries.
+
+Renewal Failure: Active user fails auto-renew on renewal date → enters grace, similar behavior.
+
+Plan Change Scheduling: Active user switches plan mid-cycle → UI shows scheduled change with effective date; upon reaching date, plan swaps and billing updates correctly.
+
+No New Trial: After any paid period, ensure user cannot re-enter trial (verify signup/login checks).
+
+Data Persistence: All states (scheduledCancel, graceStartDate, etc.) persist across page reloads/sessions in localStorage. Payment history records retries and cancellations appropriately.
+Record console log snippets and payment history outputs for each test.
+
+Deliverables
+
+At completion, provide:
+
+Checklist with each acceptance test marked ✓/✗ and notes.
+
+Sample console log entries for key events (cancel attempt, cancel scheduled, payment success, payment retry, etc.).
+
+Snippet of Payment History array after test runs (including successful and failed transactions).
+
+Summary of updated files/code (what was inspected/modified).
+
+Any issues found (duplicate logic, conflicts) and recommendations (do not delete existing code; adjust or refactor as needed).
+
+References: We rely on Paystack’s official docs for recurring billing and subscriptions
+paystack.com
+paystack.com
+, and use the standard API authentication (Bearer SECRET_KEY)
+paystack.com
+. All changes should align with these guidelines and the site’s existing backend patterns.
