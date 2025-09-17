@@ -22,13 +22,17 @@ export const OverdueInvoiceEmail: React.FC<OverdueInvoiceEmailProps> = ({
   supportEmail = emailConfig.company.email,
 }) => {
   const title = `Overdue Notice: Invoice #${invoiceNumber}`;
-  const previewText = `Invoice #${invoiceNumber} for ${clientName} is ${daysOverdue} day${Math.abs(daysOverdue) === 1 ? '' : 's'} overdue. Amount due: ${amountDue}.`;
+  const daysOverdueText =
+    typeof daysOverdue === 'string'
+      ? `${daysOverdue} days`
+      : `${daysOverdue} day${Math.abs(daysOverdue) === 1 ? '' : 's'}`;
+  const previewText = `Invoice #${invoiceNumber} for ${clientName} is ${daysOverdueText} overdue. Amount due: ${amountDue}.`;
 
   return (
     <BaseEmailTemplate title={title} previewText={previewText}>
       <p>Dear {clientName},</p>
 
-      <p>We noticed that <strong>Invoice #{invoiceNumber}</strong>, due on <strong>{dueDate}</strong>, is now <strong>{daysOverdue} day{Math.abs(daysOverdue) === 1 ? '' : 's'} overdue</strong>.</p>
+      <p>We noticed that <strong>Invoice #{invoiceNumber}</strong>, due on <strong>{dueDate}</strong>, is now <strong>{daysOverdueText} overdue</strong>.</p>
 
       <p><strong>Outstanding Amount:</strong> {amountDue}</p>
 

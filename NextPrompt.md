@@ -1,399 +1,368 @@
-FULLY AUTOMATE SUBSCRIPTIONS (PAYSTACK) — LOCAL DEV ONLY\*\*
+# Vercel Blob
 
-**Context / Goal**
-This SaaS app is subscription-based (Monthly / Annual). Implement a robust, automatic subscription system that charges customers automatically based on their selected plan (monthly or annual) without requiring manual user payments during renewal or grace. Use Paystack in test mode for all development and tests. Preserve existing Cancel/Resume and plan-change UI/UX already implemented, but make them behave exactly as defined in previous prompts (trial rules, cancel scheduling, grace, locked state, etc.). Keep everything local; do not push live keys or production data during development.
+Vercel Blob is available on [all plans](/docs/plans)
 
-**Paystack Configuration (DEV/Test)**
+Those with the [owner, member, developer](/docs/rbac/access-roles#owner, member, developer-role) role can access this feature
 
-- **Test Secret Key (DEV only):** `sk_test_[YOUR_PAYSTACK_TEST_SECRET_KEY]`
-- **Live Secret Key (production only):** `sk_live_[YOUR_PAYSTACK_LIVE_SECRET_KEY]` (do NOT use live key in dev)
-- All Paystack API calls must include: `Authorization: Bearer <SECRET_KEY>` header. Do not expose secret keys in client-side bundles. Use server-side local worker or secure local server to call Paystack. Follow Paystack docs: [https://paystack.com/docs/](https://paystack.com/docs/) and [https://paystack.com/docs/api/](https://paystack.com/docs/api/) for plan/subscription/charge/verify flows.
+## [Use cases](#use-cases)
 
-**High-level Requirements (read carefully)**
+[Vercel Blob](/storage/blob) is a great solution for storing [blobs](https://developer.mozilla.org/docs/Web/API/Blob) that need to be frequently read. Here are some examples suitable for Vercel Blob:
 
-1. Use Paystack **test** key only while developing. Simulate webhooks locally or poll verify endpoints after charge attempts. Make webhook handling optional in dev but include stub and instructions for enabling real webhooks in production.
-2. Automate initial charge authorization and recurring billing:
-   - On initial subscription (user enters card), obtain and store Paystack customer & authorization details (or create subscription using Paystack plans).
-   - Use Paystack subscription/recurring charge flows so renewals are attempted automatically by Paystack where appropriate, otherwise schedule local auto-charge attempts using stored authorization (dev-only).
+*   Files that are programmatically uploaded or generated at build time, for display and download such as avatars, screenshots, cover images and videos
+*   Large files such as videos and audios to take advantage of the global network
+*   Files that you would normally store in an external file storage solution like Amazon S3. With your project hosted on Vercel, you can readily access and manage these files with Vercel Blob
 
-3. Implement full subscription lifecycle: `trial` → `active` → `grace` → `locked` (or `canceled` with scheduled effective date) and `scheduled-plan-change`.
-4. Keep canonical subscription record per company/user in local DB/localStorage per previous prompt schema. No cross-company sharing.
+Stored files are referred to as "blobs" once they're in the storage system, following cloud storage terminology.
 
-**Detailed Functional Requirements**
-
-A. **Subscription States & Canonical Object**
-Maintain a single authoritative subscription object per company (example fields — store exactly these keys in a single record):
+## [Getting started](#getting-started)
 
 ```
-{
-  companyId,
-  userId,
-  plan: "trial" | "monthly" | "annual" | "none",
-  state: "trial" | "active" | "grace" | "locked" | "canceled",
-  trialStartDate, trialEndDate,
-  startDate,
-  nextBillingDate,
-  scheduledCancel: boolean,
-  cancelEffectiveDate,           // when scheduled cancel will take effect
-  scheduledPlanChange: { newPlan, effectiveDate } | null,
-  graceStartDate,
-  paymentHistory: [ { id, providerRef, amount, currency, date, status } ],
-  providerCustomerRef,           // Paystack customer id
-  providerAuthorizationRef,      // payment method authorization id (if stored)
-  providerSubscriptionRef        // Paystack subscription id (if used)
+import { put } from '@vercel/blob';
+ 
+const blob = await put('avatar.jpg', imageFile, {
+  access: 'public',
+});
+```
+
+You can create and manage your Vercel Blob stores from your [account dashboard](/dashboard) or the [Vercel CLI](/docs/cli/blob). You can create blob stores in any of the 19 [regions](/docs/regions#region-list) to optimize performance and meet data residency requirements. You can scope your Vercel Blob stores to your Hobby team or [team](/docs/accounts/create-a-team), and connect them to as many projects as you want.
+
+To get started, see the [server-side](/docs/storage/vercel-blob/server-upload), or [client-side](/docs/storage/vercel-blob/client-upload) quickstart guides. Or visit the full API reference for the [Vercel Blob SDK](/docs/storage/vercel-blob/using-blob-sdk).
+
+## [Using Vercel Blob in your workflow](#using-vercel-blob-in-your-workflow)
+
+If you'd like to know whether or not Vercel Blob can be integrated into your workflow, it's worth knowing the following:
+
+*   You can have one or more Vercel Blob stores per Vercel account
+*   You can use multiple Vercel Blob stores in one Vercel project
+*   Each Vercel Blob store can be accessed by multiple Vercel projects Vercel Blob URLs are publicly accessible, but you can make them [unguessable](/docs/vercel-blob/security).
+*   To add to or remove from the content of a Blob store, a valid [token](/docs/storage/vercel-blob/using-blob-sdk#read-write-token) is required
+
+### [Transferring to another project](#transferring-to-another-project)
+
+If you need to transfer your blob store from one project to another project in the same or different team, review [Transferring your store](/docs/storage#transferring-your-store).
+
+## [Viewing and downloading blobs](#viewing-and-downloading-blobs)
+
+Each Blob is served with a `content-disposition` header. Based on the MIME type of the uploaded blob, it is either set to `attachment` (force file download) or `inline` (can render in a browser tab). This is done to prevent hosting specific files on `@vercel/blob` like HTML web pages. Your browser will automatically download the blob instead of displaying it for these cases.
+
+Currently `text/plain`, `text/xml`, `application/json`, `application/pdf`, `image/*`, `audio/*` and `video/*` resolve to a `content-disposition: inline` header.
+
+All other MIME types default to `content-disposition: attachment`.
+
+If you need a blob URL that always forces a download you can use the `downloadUrl` property on the blob object. This URL always has the `content-disposition: attachment` header no matter its MIME type.
+
+```
+import { list } from '@vercel/blob';
+ 
+export default async function Page() {
+  const response = await list();
+ 
+  return (
+    <>
+      {response.blobs.map((blob) => (
+        <a key={blob.pathname} href={blob.downloadUrl}>
+          {blob.pathname}
+        </a>
+      ))}
+    </>
+  );
 }
 ```
 
-- This object is the only authoritative source. UI and background workers read and write only this object. No duplicate caches.
+Alternatively the SDK exposes a helper function called `getDownloadUrl` that returns the same URL.
 
-B. **Trial Behavior**
+## [Caching](#caching)
 
-- New users start in `trial` (30 days). Show topbar countdown. During trial:
-  - **Cancel** must be disabled/hidden. Clicking Cancel triggers inline message: `"Cancel not available during free trial."` and console log event `subscription.cancel_attempt`.
-  - If the user **pays successfully** during trial, immediately convert to `active` — set `startDate = paymentDate`, `nextBillingDate = startDate + interval`, update `paymentHistory`, unlock all paid features, close trial banners, send receipt email + dashboard notification, and redirect to `ThankYou.tsx` then dashboard.
-  - If payment fails during trial, remain in `trial`. Do not convert and do not reduce trial days beyond normal countdown.
+When you request a blob URL using a browser, the content is cached in two places:
 
-C. **Active Subscription Behavior / Auto-Renew**
+1.  Your browser's cache
+2.  Vercel's [cache](/docs/edge-cache)
 
-- On `nextBillingDate`, automatically attempt to charge the user:
-  - Where possible: use Paystack subscriptions (server-side) so Paystack handles recurring billing.
-  - If Paystack subscription is not used, implement server-side (local worker) auto-charge using stored authorization and Paystack `charge` call, then `verify`.
+Both caches store blobs for up to 1 month by default to ensure optimal performance when serving content. While both systems aim to respect this duration, blobs may occasionally expire earlier.
 
-- On **successful** charge:
-  - Update `paymentHistory`, set `nextBillingDate += interval` (31 or 365 days), log `subscription.renewed` event, send receipt email, clear `graceStartDate` if any.
+Vercel will cache blobs up to [512 MB](/docs/vercel-blob/usage-and-pricing#size-limits). Bigger blobs will always be served from the origin (your store).
 
-- On **failed** charge:
-  - Transition to `grace` and set `graceStartDate = today` and `graceRetryCount = 0`. Log `subscription.payment_failure`. Show dashboard banner: `"The payment was not successful. We'll retry automatically for the next X days."`
-  - Retry once per day automatically (local worker) for up to 5 retries.
+### [Configuring cache duration](#configuring-cache-duration)
 
-D. **Grace Period**
+You can customize the caching duration using the `cacheControlMaxAge` option in the [`put()`](/docs/storage/vercel-blob/using-blob-sdk#put) and [`handleUpload`](/docs/storage/vercel-blob/using-blob-sdk#handleupload) methods.
 
-- During `grace`:
-  - Attempt auto-charge daily (respect Paystack idempotency).
-  - Send daily email & dashboard notification on retry failure (email template: “Payment retry failed — update card or pay now”).
-  - If a retry **succeeds** at any time: turn `state` to `active`, update `paymentHistory`, set a new `nextBillingDate`, clear `graceStartDate`, remove banners and padlocks, log `subscription.restored`.
-  - If after 5 attempts still fails: set `state` to `locked`, record in `paymentHistory` the final failure, stop retries, show locked UI and notifications.
+The minimum configurable value is 60 seconds (1 minute). This represents the maximum time needed for our cache to update content behind a blob URL. For applications requiring faster updates, consider using a [Vercel function](/docs/functions) instead.
 
-E. **Locked State**
+### [Important considerations when updating blobs](#important-considerations-when-updating-blobs)
 
-- On `locked`:
-  - Disable interaction for: My Company, Clients, Quotations, Invoices, Projects, Inventory, HR Management, Accounting pages (show padlock icons and disabled UI). Only Dashboard allowed (with view & CTA to pay/update card).
-  - Show banner: `"Please upgrade to access all pages — Upgrade Now"` and bell notification `"Update Card Details"`.
-  - Allow immediate manual payment or update card to restore subscription. On manual success, set `active`, set `nextBillingDate`, log and notify.
+When you delete or update (overwrite) a blob, the changes may take up to 60 seconds to propagate through our cache. However, browser caching presents additional challenges:
 
-F. **Cancel / Resume**
+*   While our cache can update to serve the latest content, browsers will continue serving the cached version
+*   To force browsers to fetch the updated content, add a unique query parameter to the blob URL:
 
-- Cancel for `active` users must be **scheduled** (not immediate):
-  - When User clicks Cancel:
-    - Set `scheduledCancel = true`.
-    - Set `cancelEffectiveDate = nextBillingDate`.
-    - Keep access until `cancelEffectiveDate`.
-    - Update UI to show `Canceled (effective <date>)`.
-    - Log `subscription.canceled_scheduled`.
+```
+<img
+  src="https://1sxstfwepd7zn41q.public.blob.vercel-storage.com/blob-oYnXSVczoLa9yBYMFJOSNdaiiervF5.png?v=123456"
+/>
+```
 
-  - If user clicks Resume before `cancelEffectiveDate`:
-    - Clear `scheduledCancel` and `cancelEffectiveDate`.
-    - Do NOT change `nextBillingDate`.
-    - Log `subscription.resumed`.
+For more information about updating existing blobs, see the [Overwriting blobs](#overwriting-blobs) section.
 
-- Edge-race handling:
-  - If renewal occurs near cancel scheduling, ensure atomic operation: if renewal went through, move `cancelEffectiveDate` to the new `nextBillingDate` and keep `scheduledCancel = true`. Avoid double charges.
+### [Best practice: Treat blobs as immutable](#best-practice:-treat-blobs-as-immutable)
 
-G. **Plan Change**
+For optimal performance and to avoid caching issues, consider treating blobs as immutable objects:
 
-- If user requests plan change mid-cycle:
-  - Do not change immediately. Create `scheduledPlanChange = { newPlan, effectiveDate: nextBillingDate }`.
-  - Show UI: `"Plan change scheduled — New plan will start on [nextBillingDate]"`.
-  - Allow cancellation of scheduled change before effective date.
-  - On `effectiveDate`, change `plan`, set `nextBillingDate` according to new plan cycle, log `subscription.plan_changed`.
+*   Instead of updating existing blobs, create new ones with different pathnames (or use `addRandomSuffix: true` option)
+*   This approach avoids unexpected behaviors like outdated content appearing in your application
 
-H. **No Re-Entry to Trial**
+There are still valid use cases for mutable blobs with shorter cache durations, such as a single JSON file that's updated every 5 minutes with a top list of sales or other regularly refreshed data. For these scenarios, set an appropriate `cacheControlMaxAge` value and be mindful of caching behaviors.
 
-- If a company/user has ever had `active` subscription (even if later canceled), do not allow re-entry into a Free Trial. Enforce on signup/login checks.
+## [Overwriting blobs](#overwriting-blobs)
 
-I. **Payment Idempotency & Race Conditions**
+By default, Vercel Blob prevents you from accidentally overwriting existing blobs by using the same pathname twice. When you attempt to upload a blob with a pathname that already exists, the operation will throw an error.
 
-- Use Paystack idempotency for charge calls (providerRef or a local idempotency key) to prevent duplicate charges if multiple workers try same charge.
-- Ensure local worker charges are atomic: obtain a lock per-subscription when attempting charge.
+### [Using `allowOverwrite`](#using-allowoverwrite)
 
-J. **Email / Notification Templates**
+To explicitly allow overwriting existing blobs, you can use the `allowOverwrite` option:
 
-- Implement these templates (local dev sends via configured dev email service; log all email sends):
-  - Trial reminder (5 days left) — includes CTA to billing & update card.
-  - Grace daily retry notice (daily) — CTA to update card / pay now.
-  - Payment success receipt — details, nextBillingDate, amount.
-  - Final lock notice — final attempt failed, instructions to restore.
+```
+const blob = await put('user-profile.jpg', imageFile, {
+  access: 'public',
+  allowOverwrite: true, // Enable overwriting an existing blob with the same pathname
+});
+```
 
-- All templates use company branding and signature (Wilson Mokgethwa Moabelo contact info). Log `email.sent` events.
+This option is available in these methods:
 
-K. **Paystack Plan & Subscription Handling**
+*   `put()`
+*   In client uploads via the `onBeforeGenerateToken()` function
 
-- **Create or verify** Paystack Plans for Monthly and Annual during setup (dev step). Use Paystack API to create Plan objects or use local mapping if not necessary in dev.
-- On initial subscribe:
-  - Create Paystack customer if not exists.
-  - Save Paystack customer id and authorization id locally (do not expose).
-  - Option A (recommended): create Paystack subscription so Paystack recurs automatically.
-  - Option B (if subscription API not used): save authorization and schedule local worker to call Paystack `charge` endpoint each `nextBillingDate`.
+### [When to use overwriting](#when-to-use-overwriting)
 
-- Always verify charges with Paystack `verify` endpoint before marking a payment as successful.
+Overwriting blobs can be appropriate for certain use cases:
 
-L. **Background Worker (local) — responsibilities**
+1.  Regularly updated files: For files that need to maintain the same URL but contain updated content (like JSON data files or configuration files)
+2.  Content with predictable update patterns: For data that changes on a schedule and where consumers expect updates at the same URL
 
-- Daily tasks (dev scheduler or simulated scheduler):
-  - Decrement trial days and detect trial end.
-  - On `nextBillingDate` for `active` plans, attempt charge (or rely on Paystack subscription webhooks).
-  - During `grace`, attempt daily retries and increment retry count.
-  - Apply scheduled plan changes or scheduled cancellations at their effective dates.
+When overwriting blobs, be aware that due to [caching](#caching), changes won't be immediately visible. The minimum time for changes to propagate is 60 seconds, and browser caches may need to be explicitly refreshed.
 
-- Worker must write structured logs for each action.
+### [Alternatives to overwriting](#alternatives-to-overwriting)
 
-M. **Logging**
+If you want to avoid overwriting existing content (recommended for most use cases), you have two options:
 
-- All important events logged to console as structured JSON (mask emails where necessary), e.g.:
-  `{"event":"payment.attempt","companyId":"c_123","user":"m*****@domain.com","amount":60,"plan":"monthly","status":"failed","providerRef":"...", "timestamp":"..."}`
-- Provide log entries for: payment attempts, successes, failures, subscription state transitions, scheduled cancel/resume, plan-change scheduling, email sends.
+1.  Use `addRandomSuffix: true`: This automatically adds a unique random suffix to your pathnames:
 
-N. **Security & Local Dev**
+```
+const blob = await put('avatar.jpg', imageFile, {
+  access: 'public',
+  addRandomSuffix: true, // Creates a pathname like 'avatar-oYnXSVczoLa9yBYMFJOSNdaiiervF5.jpg'
+});
+```
 
-- Never store live secret keys in client code; in dev, secure the test key in local environment variables. Do not push secret keys to remote repos.
-- Make webhook handler stubs that can be toggled on during production, and provide instructions to enable real Paystack webhooks later.
+1.  Generate unique pathnames programmatically: Create unique pathnames by adding timestamps, UUIDs, or other identifiers:
 
-O. **Acceptance Tests & Deliverables**
-Implement and run the tests locally. Produce these deliverables (local files + reports):
+```
+const timestamp = Date.now();
+const blob = await put(`user-profile-${timestamp}.jpg`, imageFile, {
+  access: 'public',
+});
+```
 
-**Acceptance Tests (must be run and evidenced):**
+## [Blob Data Transfer](#blob-data-transfer)
 
-1. Trial user pays mid-trial and payment succeeds → becomes Active, nextBillingDate set, trial banners removed, Payment History shows success, features unlocked.
-2. Trial user pays and payment fails → stays Trial; on trial end enters Grace; banner and daily retry emails happen; upon success in grace becomes Active; upon 5 failed retries becomes Locked.
-3. Active user auto-renewal success → nextBillingDate updated, history logged.
-4. Active user auto-renewal failure → enters Grace, follows grace logic.
-5. Cancel scheduling → scheduledCancel true and cancelEffectiveDate set to nextBillingDate; access maintained until effective date.
-6. Resume before effective date → scheduledCancel cleared; nextBillingDate unchanged.
-7. Plan change mid-cycle → scheduledPlanChange set and effective on nextBillingDate.
-8. Locked user updates card and pays → become Active immediately; nextBillingDate set; padlocks removed.
-9. Idempotency: multiple payment requests for the same attempt create only 1 successful charge record.
-10. Persistence: all subscription fields persist across reloads (local storage / DB).
+Vercel Blob delivers content through a specialized network optimized for static assets:
 
-**Evidence to deliver:**
+*   Region-based distribution: Content is served from 19 regional hubs strategically located around the world
+*   Optimized for non-critical assets: Well-suited for content "below the fold" that isn't essential for initial page rendering metrics like First Contentful Paint (FCP) or Largest Contentful Paint (LCP)
+*   Cost-optimized for large assets: 3x more cost-efficient than [Fast Data Transfer](/docs/cdn) on average
+*   Great for media delivery: Ideal for large media files like images, videos, and documents
 
-- `acceptance_checklist.md` — each test PASS/FAIL with notes.
-- `payments_history_<testuser>.json` — local payment history after tests.
-- `console_logs_sample.json` — 10 sample structured logs including payment success, failure, retry.
-- `files_inspected.txt` — list of files inspected/modified (server worker, subscription model, billing UI).
-- `remediation_notes.md` — if anything broken or conflicting was found, describe fixes & follow-ups.
-- `email_templates/` — HTML/plain templates used for test emails (local).
-- Step-by-step instructions in `final_verification.md` to re-run tests (commands to run local worker, test keys to use, how to simulate webhooks).
+While [Fast Data Transfer](/docs/manage-cdn-usage#fast-data-transfer) provides city-level, ultra-low latency, Blob Data Transfer prioritizes cost-efficiency for larger assets where ultra-low latency isn't essential.
 
-**Important Implementation Notes / Constraints**
+Blob Data Transfer fees apply only to downloads (outbound traffic), not uploads. See [pricing documentation](/docs/vercel-blob/usage-and-pricing) for details.
 
-- **Work Local Only** — do not switch to live key or production services in this task.
-- Carefully inspect existing subscription/trial code first; **do not duplicate**. If there are existing scheduled tasks or duplicate logic, consolidate into one canonical worker/service and document the change.
-- Keep UI styling intact — use existing modals and confirmation dialogs. Add helper text and tooltips as specified in previous prompts.
-- Use Paystack docs as canonical reference for endpoints, idempotency, subscriptions, and verifications: [https://paystack.com/docs/api/](https://paystack.com/docs/api/)
-- If implementing webhooks locally, provide a test harness and instructions for ngrok or similar; otherwise implement polling/verify fallback for dev.
-- For features requiring email sends, use dev email or logger (log email body + recipient to console) and save template html in `email_templates/`.
+## [Upload charges](#upload-charges)
 
-**Quick Reference — Config Constants**
+Upload charges depend on your implementation method:
 
-- `TRIAL_DAYS = 30`
-- `GRACE_DAYS = 5`
-- `MONTHLY_DAYS = 31` — `MONTHLY_PRICE = 60` ZAR
-- `ANNUAL_DAYS = 365` — `ANNUAL_PRICE = 684` ZAR (5% discount applied)
-- `PAYSTACK_TEST_SECRET = sk_test_[YOUR_PAYSTACK_TEST_SECRET_KEY]`
-- `PAYSTACK_LIVE_SECRET = sk_live_[YOUR_PAYSTACK_LIVE_SECRET_KEY]` (production only)
+*   [Client Uploads](/docs/vercel-blob/client-upload): No data transfer charges for uploads
+*   [Server Uploads](/docs/vercel-blob/server-upload): [Fast Data Transfer](/docs/manage-cdn-usage#fast-data-transfer) transfer charges apply when your Vercel application receives the file
 
-**Run this now (Dev steps)**
+## [SEO and search engine indexing](#seo-and-search-engine-indexing)
 
-1. Inspect existing subscription code paths and previous prompt notes. Document files.
-2. Wire Paystack test key in local env. Implement Paystack plan creation or verify mapping.
-3. Implement/extend canonical subscription object and worker.
-4. Implement charging flow + verification + retry logic.
-5. Implement UI messages, cancel/resume modals, scheduled plan change UI, banners, and padlocks.
-6. Implement email templates (local logging ok).
-7. Run acceptance tests; record evidence and deliver files above.
+### [Search engine visibility of blobs](#search-engine-visibility-of-blobs)
 
-**If any critical cross-tenant or double-charge exposure is found, stop and record exact reproduction steps in `remediation_notes.md` and escalate immediately.**
+While Vercel Blob URLs can be designed to be unique and unguessable (when using `addRandomSuffix: true`), they can still be indexed by search engines under certain conditions:
 
-**Reference:** Paystack Docs — [https://paystack.com/docs/](https://paystack.com/docs/) and [https://paystack.com/docs/api/](https://paystack.com/docs/api/) — follow subscription & charge guidelines, idempotency, verification.
+*   If you link to blob URLs from public webpages
+*   If you embed blob content (images, PDFs, etc.) in indexed content
+*   If you share blob URLs publicly, even in contexts outside your application
 
-Subscription & Billing Integration (Paystack)
-Location
+By default, Vercel Blob does not provide a `robots.txt` file or other indexing controls. This means search engines like Google may discover and index your blob content if they find links to it.
 
-Settings Page, Billing tab (Settings?tab=billing) – Overview and Payment Method sections; Dashboard topbar banner; Signup/Verification flows; Notification system (bell/alerts); Payment History page; Local background worker for scheduled billing.
+### [Preventing search engine indexing](#preventing-search-engine-indexing)
 
-Goal
+If you want to prevent search engines from indexing your blob content, you need to upload a `robots.txt` file directly to your blob store:
 
-Implement a complete recurring billing and subscription lifecycle for Monthly and Annual plans using Paystack’s API. We must automate charges based on the user’s selected plan (monthly or annual) without requiring manual payments. Leverage Paystack’s Subscriptions API and Recurring Charges so that after an initial payment authorization, the system automatically bills customers each cycle
-paystack.com
-paystack.com
-. Use the provided Paystack Test Secret Key (sk*test*[YOUR_TEST_KEY]) for all development, switching to the Live key (sk*live*[YOUR_LIVE_KEY]) only for production. Ensure Paystack calls include the Bearer token header: Authorization: Bearer <SECRET_KEY>
-paystack.com
-.
+1.  Go to your [Storage page](https://vercel.com/d?to=%2F%5Bteam%5D%2F~%2Fstores&title=Go+to+Storage) and select your blob store
+2.  Upload a `robots.txt` file to the root of your blob store with appropriate directives
 
-Rules & Expectations
+Example `robots.txt` content to block all crawling of your blob store:
 
-Existing Code Review: Inspect current subscription/trial code paths and previous prompts before making changes. Do not duplicate files, functions, or create parallel services. Update only if required and avoid breaking existing flows (Cancel/Resume, plan changes, etc. which were partially implemented).
+`User-agent: * Disallow: /`
 
-Local-Only Implementation: All logic and data storage should remain local (e.g. localStorage or a local DB) until final migration to backend. No live billing or user account changes should be persisted externally in dev.
+### [Removing already indexed blob content](#removing-already-indexed-blob-content)
 
-Theming & UI: Maintain the site’s UI theme (Apple Sequoia) and consistent UX patterns. Do not introduce unrelated styling changes. All text and buttons should match existing design.
+If your blob content has already been indexed by search engines:
 
-Configuration & Constants: Use configurable constants for trial length (30 days), grace period (5 days), billing cycles (Monthly = 31 days, Annual = 365 days, annual price = R684.00 with 5% discount from monthly rate), and payment retry attempts. Avoid hard-coded strings or dates.
+1.  Verify your website ownership in [Google Search Console](https://search.google.com/search-console/)
+2.  Upload a `robots.txt` file to your blob store as described above
+3.  Use the "Remove URLs" tool in Google Search Console to request removal
 
-Logging: Log all key events to console.log (structured JSON) for debugging. For example, on cancellation attempt: {"event":"subscription.cancel_attempt","user":"<email>","state":"trial","timestamp":...}. Include user email/ID, previous state, new state, and timestamps in logs.
+## [Choosing your Blob store region](#choosing-your-blob-store-region)
 
-Referencing Documentation: Follow Paystack’s documentation for Subscriptions and Recurring Charges
-paystack.com
-paystack.com
-. Use provided Paystack docs (https://paystack.com/docs/) for API usage, and ensure the implementation matches Paystack’s expected workflow.
+You can create Blob stores in any of the 19 [regions](/docs/regions#region-list). Use the region selector in the dashboard at blob store creation time, or use the [CLI](/docs/cli/blob) with the `--region` option.
 
-Paystack API Keys
+Select a region close to your customers and functions to minimize upload time. Region selection also helps meet data regulatory requirements. Vercel Blob [pricing](/docs/vercel-blob/usage-and-pricing) is regionalized, so check the pricing for your selected region.
 
-Switch to Test Mode: Set Paystack integration to Test Mode during development
-support.paystack.com
-. Configure environment or backend with the Test Secret Key and Public Key; this ensures all transactions are sandboxed.
+You cannot change the region once the store is created.
 
-Authorization Header: In all Paystack API calls (subscription creation, charge, verify, etc.), include the Secret Key in the Authorization: Bearer <SECRET_KEY> header
-paystack.com
-. Do not leak the keys in client-side code.
+## [Simple operations](#simple-operations)
 
-Plans & Subscriptions: Ensure Paystack plans exist for Monthly and Annual billing (interval = “monthly” or “annually”
-paystack.com
-) with the correct amounts. You may create or fetch plans via the Paystack API. When a user subscribes, create a Paystack subscription for the customer using their saved authorization (or create a new customer if needed)
-paystack.com
-.
+Simple operations in Vercel Blob are specific read actions counted for billing purposes:
 
-Subscription Lifecycle & Business Rules
+*   When the [`head()`](/docs/vercel-blob/using-blob-sdk#head) method is called to retrieve blob metadata
+*   When a blob is accessed by its URL and it's a cache MISS
 
-Free Trial (30 days): New users start in trial state with a 30-day countdown. During trial, Cancel is disabled/hidden – cancel requests should show: “Cancel not available during free trial.” Log attempts as subscription.cancel_attempt
-paystack.com
-. If payment is made during trial and succeeds, immediately convert to active subscription (monthly/annual) as if started today. If payment fails, remain on trial (normal countdown continues). Trial users have limited features (5 items, invoices, etc.).
+A cache MISS occurs when the blob is accessed for the first time or when its previously cached version has expired. Note that blob URL access resulting in a cache HIT does not count as a Simple Operation.
 
-Active Subscription (Paid): Once subscribed, set state = active, record plan = "monthly"|"annual", startDate = paymentDate, nextBillingDate = startDate + interval. Unlock all features. Log payment success and send receipt email/notification. Payment goes into Payment History (status “successful”).
+## [Advanced operations](#advanced-operations)
 
-Cancel (Scheduled): If an Active user clicks “Cancel Subscription,” do NOT cancel immediately. Set scheduledCancel=true and cancelEffectiveDate = nextBillingDate. In UI show “Canceled (effective [cancelEffectiveDate])” and a confirmation modal explaining the subscription remains active until then. Maintain full access until effective date. Log subscription.canceled_scheduled with email and effective date. If the user clicks Resume before effective date, clear scheduledCancel and cancelEffectiveDate, keep nextBillingDate unchanged, revert status to Active. Log subscription.resumed. Handle race condition where a billing charge occurs just as cancellation is scheduled: if a renewal happens, adjust cancelEffectiveDate to the new nextBillingDate (do not double-charge).
+Advanced operations in Vercel Blob are write, copy, and listing actions counted for billing purposes:
 
-Grace Period (5 days): If trial ends without payment or an auto-renewal fails on nextBillingDate, move the user to grace state. Record graceStartDate. For 5 days, attempt to auto-charge daily. Display a dashboard banner: “Payment not successful. We’ll retry automatically for the next X days,” and a notification “Payment retry failed – Update card or pay now.” Allow a “Pay Now / Update Card” CTA at any time. Send an email each day a retry fails (e.g. “Payment attempt #2 failed”). If a retry succeeds, convert to Active subscriber (clear grace), update nextBillingDate, log success, and notify. If grace expires (5 failed attempts), transition to locked state.
+*   When the [`put()`](/docs/vercel-blob/using-blob-sdk#put) method is called to upload a blob
+*   When the [`upload()`](/docs/vercel-blob/using-blob-sdk#upload) method is used for client-side uploads
+*   When the [`copy()`](/docs/vercel-blob/using-blob-sdk#copy) method is called to copy an existing blob
+*   When the [`list()`](/docs/vercel-blob/using-blob-sdk#list) method is called to list blobs in your store
 
-Locked State: After grace failure, lock most app features (show padlocks, disable navigation for invoicing, etc.) except Dashboard. Show top-banner: “Please upgrade to access all pages – Upgrade Now” with link to billing. Add a bell notification: “Update Card Details.” Stop auto-retries. Users can still pay/update card to become Active again. Log transition to locked.
+### [Dashboard usage counts as operations](#dashboard-usage-counts-as-operations)
 
-Renewals: For Active subscribers, on each nextBillingDate automatically charge via Paystack (using the saved authorization/subscription). If the charge fails, follow the Grace Period flow above. If it succeeds, update nextBillingDate (+31 or +365 days) and log subscription.renewed.
+Using the Vercel Blob file browser in your dashboard will count as operations. Each time you refresh the blob list, upload files through the dashboard, or view blob details, these actions use the same API methods that count toward your usage limits and billing.
 
-Plan Changes: If an Active user switches plans mid-cycle (Monthly ↔ Annual), do not change immediately. Set a scheduledPlanChange to take effect on current nextBillingDate. Inform the user “Plan change scheduled – New plan starts [nextBillingDate].” Allow cancellation of schedule before it triggers. Do not prorate or immediate charge. On the effective date, switch plan, update nextBillingDate, and apply new pricing.
+Common dashboard actions that count as operations:
 
-No Re-entrance to Trial: Once a user has ever converted to paid (even if later canceled or lapsed), they cannot re-enter the free trial. Enforce in signup/login flows.
+*   Refreshing the file browser: Uses `list()` to display your blobs
+*   Uploading files via dashboard: Uses `put()` for each file uploaded
+*   Viewing blob details: May trigger additional API calls
+*   Navigating folders: Uses `list()` with different prefixes
 
-Email & Notifications: Create consistent email and bell notification templates for key events:
+If you notice unexpected increases in your operations count, check whether team members are browsing your blob store through the Vercel dashboard.
 
-Trial Reminder: 5 days before trial end, email/bell: “5 days left in free trial – Upgrade Now.”
+For [multipart uploads](#multipart-uploads), multiple advanced operations are counted:
 
-Grace Notices: Daily email/bell during grace: “Payment failed – [X] days left, update payment method.” Include branded signature and update link.
+*   One operation when starting the upload
+*   One operation for each part uploaded
+*   One operation for completing the upload
 
-Payment Success Receipt: After any successful payment, email invoice with plan, amount, date, next billing date.
+Delete operations using the [`del()`](/docs/vercel-blob/using-blob-sdk#del) are free of charge. They are considered advanced operations for [operation rate limits](/docs/vercel-blob/usage-and-pricing#operation-rate-limits) but not for billing.
 
-Final Lock Notice: When moving to locked after grace, email: “Subscription lapsed. Please update payment details to restore access.” Include upgrade link.
-All templates use existing branding (logo, signature of Wilson Mokgethwa Moabelo, fonts). Log every email sent with payment and subscription events.
+## [Storage calculation](#storage-calculation)
 
-Data Persistence & Worker: Maintain a single canonical subscription record per user/company locally: e.g.
+Vercel Blob measures your storage usage by taking snapshots of your blob store size every 15 minutes and averages these measurements over the entire month to calculate your GB-month usage. This approach accounts for fluctuations in storage as blobs are added and removed, ensuring you're only billed for your actual usage over time, not peak usage.
 
-{
-plan: "trial"|"monthly"|"annual"|"none",
-state: "trial"|"active"|"grace"|"locked"|"canceled",
-trialStartDate, trialEndDate,
-startDate, nextBillingDate,
-scheduledCancel: bool, cancelEffectiveDate,
-scheduledPlanChange: {newPlan, effectiveDate} | null,
-paymentHistory: [...],
-graceStartDate
-}
+The Vercel dashboard displays two metrics:
 
-Read/write UI state from this object (no duplicate caches). Implement a background process (dev-only) that increments days, triggers auto-charges on nextBillingDate or daily during grace, and updates states accordingly. Ensure no cross-user data leaks.
+*   Latest value: The most recent measurement of your blob store size
+*   Monthly average: The average of all measurements throughout the billing period (this is what you're billed for)
 
-UI / Dashboard Requirements
+Example:
 
-TopBar status badge must reflect state: e.g. Free | 30 Days, Paid | Monthly, Paid | Annual, Grace | X days left, Canceled | Monthly (active until YYYY-MM-DD), or Locked.
+1.  Day 1: Upload a 2GB file → Store size: 2GB
+2.  Day 15: Add 1GB file → Store size: 3GB
+3.  Day 25: Delete 2GB file → Store size: 1GB
 
-Billing Overview section should display: Current Plan, Billing Cycle, Next Billing Date, Scheduled Change/Cancel if any, Payment Method (card last4, with “Update” button), and Payment History. Show trial days or grace days remaining where appropriate.
+Month end billing:
 
-Cancel/Resume Buttons: Visible only when appropriate. During Trial: disable Cancel (tooltip “Cancel not available during free trial”) and show message if clicked. For Active or Canceled (scheduled), show “Cancel” (which opens a confirmation modal) or “Resume” (to undo cancel). For Canceled but still-active (before effective date), allow Resume.
+*   Latest value: 1GB
+*   Monthly average: ~2GB (billed amount)
 
-Confirmation Modals: On Cancel: “Cancel subscription? Your subscription remains active until [cancelEffectiveDate].” On Resume: “Resume subscription? Your billing schedule will continue as before.” Require explicit confirm.
+If no changes occur in the following month (no new uploads or deletions), each 15-minute measurement would consistently show 1 GB. In this case, your next month's billing would be exactly 1 GB/month, as your monthly average would equal your latest value.
 
-Feature Locking: In locked state, overlay or disable protected pages with padlock icons. The Dashboard page should have an upgrade banner and restrict other pages.
+## [Multipart uploads](#multipart-uploads)
 
-Logging & Debugging
+Vercel Blob supports [multipart uploads](/docs/vercel-blob/using-blob-sdk#multipart-uploads) for large files, which provides significant advantages when transferring substantial amounts of data.
 
-Log structured console events for all key actions:
+Multipart uploads work by splitting large files into smaller chunks (parts) that are uploaded independently and then reassembled on the server. This approach offers several key benefits:
 
-subscription.cancel_attempt (trial or no sub)
+*   Improved upload reliability: If a network issue occurs during upload, only the affected part needs to be retried instead of restarting the entire upload
+*   Better performance: Multiple parts can be uploaded in parallel, significantly increasing transfer speed
+*   Progress tracking: More granular upload progress reporting as each part completes
 
-subscription.canceled_scheduled (with effective date)
+We recommend using multipart uploads for files larger than 100 MB. Both the [`put()`](/docs/vercel-blob/using-blob-sdk#put) and [`upload()`](/docs/vercel-blob/using-blob-sdk#upload) methods handle all the complexity of splitting, uploading, and reassembling the file for you.
 
-subscription.resumed
+For billing purposes, multipart uploads count as multiple advanced operations:
 
-subscription.renewed
+*   One operation when starting the upload
+*   One operation for each part uploaded
+*   One operation for completing the upload
 
-subscription.plan_change_scheduled
+This approach ensures reliable handling of large files while maintaining the performance and efficiency expected from modern cloud storage solutions.
 
-subscription.enter_grace
+## [Durability and availability](#durability-and-availability)
 
-subscription.enter_locked
+Vercel Blob leverages [Amazon S3](https://aws.amazon.com/s3/) as its underlying storage infrastructure, providing industry-leading durability and availability:
 
-payment.attempt (status success/failed, amount, plan)
+*   Durability: Vercel Blob offers 99.999999999% (11 nines) durability. This means that even with one billion objects, you could expect to go a hundred years without losing a single one.
+*   Availability: Vercel Blob provides 99.99% (4 nines) availability in a given year, ensuring that your data is accessible when you need it.
 
-subscription.payment_success
+These guarantees are backed by [S3's robust architecture](https://docs.aws.amazon.com/AmazonS3/latest/userguide/DataDurability.html), which includes automatic replication and error correction mechanisms.
 
-subscription.payment_failure
+## [Folders and slashes](#folders-and-slashes)
 
-email.sent (type, user)
-Include user and company identifiers, old/new states, and timestamps. These logs help verify flow during tests.
+Vercel Blob has folders support to organize your blobs:
 
-Testing & Acceptance Criteria
+```
+const blob = await put('folder/file.txt', 'Hello World!', { access: 'public' });
+```
 
-After implementation, perform the following tests (accept ✓/✗ each):
+The path `folder/file.txt` creates a folder named `folder` and a blob named `file.txt`. To list all blobs within a folder, use the [`list`](/docs/storage/vercel-blob/using-blob-sdk#list-blobs) function:
 
-Trial Cancellation: On Trial, Cancel is disabled; clicking shows inline message; console log of attempt.
+```
+const listOfBlobs = await list({
+  cursor,
+  limit: 1000,
+  prefix: 'folder/',
+});
+```
 
-Cancel Active Sub: Active Monthly user clicks Cancel → scheduledCancel=true, cancelEffectiveDate == nextBillingDate; UI shows “Canceled (effective …)”; access remains until that date.
+You don't need to create folders. Upload a file with a path containing a slash `/`, and Vercel Blob will interpret the slashes as folder delimiters.
 
-Resume Sub: User clicks Resume before cancelEffectiveDate → cancellation cleared; UI returns to “Active”; nextBillingDate unchanged; console logs resume.
+In the Vercel Blob file browser on the Vercel dashboard, any pathname with a slash `/` is treated as a folder. However, these are not actual folders like in a traditional file system; they are used for organizing blobs in listings and the file browser.
 
-Mid-transaction Cancel: If renewal charge and cancel occur simultaneously, ensure only one charge and cancelEffectiveDate updates correctly.
+## [Blob sorting and organization](#blob-sorting-and-organization)
 
-Trial Payment Success: Trial user pays → state immediately Active; features unlocked; payment history has record; UI updates (TopBar, Billing) show new plan.
+Blobs are returned in lexicographical order by pathname (not creation date) when using [`list()`](/docs/vercel-blob/using-blob-sdk#list). Numbers are treated as characters, so `file10.txt` comes before `file2.txt`.
 
-Trial Payment Failure → Grace: Trial user’s payment attempt fails → remains in trial until day 30, then enters Grace; retry banner appears; automated retries and emails occur for up to 5 days.
+Sort by creation date: Include timestamps in pathnames:
 
-Grace Success: Payment eventually succeeds in grace → user becomes Active; banner clears; payment history logs success; nextBillingDate set.
+```
+const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+await put(`reports/${timestamp}-quarterly-report.pdf`, file, {
+  access: 'public',
+});
+```
 
-Grace Expiry → Locked: After 5 failed retries, user enters Locked; padlocks appear; upgrade banner and notification exist; verify no further retries.
+Use prefixes for search: Consider lowercase pathnames for consistent matching:
 
-Renewal Failure: Active user fails auto-renew on renewal date → enters grace, similar behavior.
+```
+await put('user-uploads/avatar.jpg', file, { access: 'public' });
+const userUploads = await list({ prefix: 'user-uploads/' });
+```
 
-Plan Change Scheduling: Active user switches plan mid-cycle → UI shows scheduled change with effective date; upon reaching date, plan swaps and billing updates correctly.
+For complex sorting, sort results client-side using `uploadedAt` or other properties.
 
-No New Trial: After any paid period, ensure user cannot re-enter trial (verify signup/login checks).
+## [More resources](#more-resources)
 
-Data Persistence: All states (scheduledCancel, graceStartDate, etc.) persist across page reloads/sessions in localStorage. Payment history records retries and cancellations appropriately.
-Record console log snippets and payment history outputs for each test.
-
-Deliverables
-
-At completion, provide:
-
-Checklist with each acceptance test marked ✓/✗ and notes.
-
-Sample console log entries for key events (cancel attempt, cancel scheduled, payment success, payment retry, etc.).
-
-Snippet of Payment History array after test runs (including successful and failed transactions).
-
-Summary of updated files/code (what was inspected/modified).
-
-Any issues found (duplicate logic, conflicts) and recommendations (do not delete existing code; adjust or refactor as needed).
-
-References: We rely on Paystack’s official docs for recurring billing and subscriptions
-paystack.com
-paystack.com
-, and use the standard API authentication (Bearer SECRET_KEY)
-paystack.com
-. All changes should align with these guidelines and the site’s existing backend patterns.
+*   [Client Upload Quickstart](/docs/storage/vercel-blob/client-upload)
+*   [Server Upload Quickstart](/docs/storage/vercel-blob/server-upload)
+*   [Vercel Blob SDK](/docs/storage/vercel-blob/using-blob-sdk)
+*   [Vercel Blob CLI](/docs/cli/blob)
+*   [Vercel Blob Pricing](/docs/vercel-blob/usage-and-pricing)
+*   [Vercel Blob Security](/docs/storage/vercel-blob/security)
+*   [Vercel Blob Examples](/docs/storage/vercel-blob/examples)
+*   [Observability](/docs/observability)

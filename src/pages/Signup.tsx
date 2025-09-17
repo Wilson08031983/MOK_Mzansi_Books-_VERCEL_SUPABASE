@@ -219,7 +219,7 @@ const Signup = () => {
           type: 'system'
         });
 
-        // Send confirmation email using Resend
+        // Send confirmation email using Postmark
         const tokenResult = createEmailVerificationToken(formData.email);
         let verifyLink: string | undefined = undefined;
         if (tokenResult.success && tokenResult.token) {

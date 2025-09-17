@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {{company_name}}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #ffffff;
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-message {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 30px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-weight: 600;
+            margin: 20px 0;
+            transition: transform 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .features {
+            margin: 30px 0;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 15px;
+            color: #667eea;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+        }
+        .social-icon {
+            width: 32px;
+            height: 32px;
+        }
+        .signature {
+            margin-top: 20px;
+        }
+        .signature img {
+            max-width: 200px;
+            height: auto;
+        }
+        .contact-info {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 20px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .header h1 {
+                font-size: 24px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <img src="{{company_logo}}" alt="{{company_name}} Logo" class="logo">
+            <h1>Welcome to {{company_name}}!</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="welcome-message">
+                <p>Hi {{user_name}},</p>
+                <p>Welcome to {{company_name}}! We're thrilled to have you join our community of book lovers and literary enthusiasts.</p>
+                <p>Your account has been successfully created, and you're now ready to explore our extensive collection of African literature, educational resources, and cultural content.</p>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{login_link}}" class="cta-button">Get Started</a>
+            </div>
+
+            <div class="features">
+                <h3 style="color: #333; margin-bottom: 20px;">What you can do with your account:</h3>
+                
+                <div class="feature-item">
+                    <svg class="feature-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                        <strong>Browse Our Collection</strong><br>
+                        <span style="color: #6c757d;">Discover thousands of African books, stories, and educational materials</span>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <svg class="feature-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
+                    </svg>
+                    <div>
+                        <strong>Create Your Library</strong><br>
+                        <span style="color: #6c757d;">Build your personal collection and track your reading progress</span>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <svg class="feature-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"></path>
+                    </svg>
+                    <div>
+                        <strong>Connect with Community</strong><br>
+                        <span style="color: #6c757d;">Join discussions, share reviews, and connect with fellow readers</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 30px 0;">
+                <h4 style="color: #333; margin-top: 0;">Need Help Getting Started?</h4>
+                <p style="margin-bottom: 0; color: #6c757d;">Our support team is here to help! Feel free to reach out to us at <a href="mailto:{{support_email}}" style="color: #667eea;">{{support_email}}</a> if you have any questions.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="social-links">
+                <a href="https://twitter.com/mokmzansibooks" target="_blank">
+                    <img src="{{twitter_icon}}" alt="Twitter" class="social-icon">
+                </a>
+                <a href="https://facebook.com/mokmzansibooks" target="_blank">
+                    <img src="{{facebook_icon}}" alt="Facebook" class="social-icon">
+                </a>
+                <a href="https://tiktok.com/@mokmzansibooks" target="_blank">
+                    <img src="{{tiktok_icon}}" alt="TikTok" class="social-icon">
+                </a>
+            </div>
+
+            <div class="signature">
+                <img src="{{signature_image}}" alt="{{company_name}} Signature">
+            </div>
+
+            <div class="contact-info">
+                <p><strong>{{company_name}}</strong></p>
+                <p>{{company_address}}</p>
+                <p>Email: <a href="mailto:{{company_email}}" style="color: #667eea;">{{company_email}}</a></p>
+                <p>Phone: {{company_phone}}</p>
+                <p>Website: <a href="{{company_website}}" style="color: #667eea;">{{company_website}}</a></p>
+            </div>
+
+            <div style="margin-top: 20px; font-size: 12px; color: #adb5bd;">
+                <p>You're receiving this email because you created an account with {{company_name}}.</p>
+                <p>© {{current_year}} {{company_name}}. All rights reserved.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

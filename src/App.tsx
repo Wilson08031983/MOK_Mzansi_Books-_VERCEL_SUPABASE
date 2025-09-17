@@ -59,6 +59,7 @@ import ServiceTestPanel from "./components/ServiceTestPanel";
 // TwoFactorVerify removed
 import SessionTimeoutWatcher from "@/components/auth/SessionTimeoutWatcher";
 import VerifyEmail from "./pages/VerifyEmail";
+import EmailTemplatePreview from "@/components/EmailTemplatePreview";
 
 // Initialize global error handlers
 safeExecute(() => {
@@ -174,6 +175,7 @@ const App = () => {
                     <Route path="/service-test" element={<ServiceTestPanel />} />
                     {/* Two-Factor verification route removed */}
                     <Route path="/disciplinary-test" element={<DisciplinaryTest />} />
+                    <Route path="/email-preview" element={<EmailTemplatePreview />} />
                     <Route 
                       path="/welcome-back" 
                       element={

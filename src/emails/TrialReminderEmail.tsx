@@ -20,7 +20,16 @@ interface TrialReminderEmailProps {
 }
 
 export const TrialReminderEmail = ({ name, loginUrl }: TrialReminderEmailProps) => {
-  const appBase = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
+  const getAppBase = () => {
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) 
+      ? process.env.NEXT_PUBLIC_APP_URL 
+      : emailConfig.company.website;
+  };
+  
+  const appBase = getAppBase().replace(/\/$/, '');
   const effectiveLoginUrl = loginUrl || `${appBase}/login`;
   const companyName = emailConfig.company.name;
 

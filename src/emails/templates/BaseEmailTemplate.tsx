@@ -68,141 +68,226 @@ export const BaseEmailTemplate: React.FC<BaseEmailTemplateProps> = ({
   const absoluteStamp = absolutize(stampUrl);
 
   return (
-    <html>
-      <head>
-        <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{title}</title>
-        <style>
-          {`
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              line-height: 1.6;
-              color: #333333;
-              max-width: 600px;
-              margin: 0 auto;
-              padding: 20px;
-              background-color: #f9f9f9;
+    <div style={{
+      margin: 0,
+      padding: 0,
+      width: '100%',
+      backgroundColor: '#F9FAFB',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif',
+      lineHeight: 1.6,
+      color: '#111827'
+    }}>
+      <style>
+        {`
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.05);
+          }
+          
+          .header {
+               background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #EC4899 100%);
+               padding: 4px 20px;
+               text-align: center;
+               color: white;
+               position: relative;
+             }
+          
+          .logo {
+                max-width: 188px;
+                height: auto;
+                margin-bottom: 3px;
+                display: inline-block;
+                position: relative;
+                z-index: 1;
+              }
+          
+          .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 3px;
+            letter-spacing: 1px;
+          }
+          
+          .content {
+            padding: 18px 30px;
+          }
+          
+          .footer {
+            background: #F9FAFB;
+            padding: 15px 20px;
+            text-align: center;
+            border-top: 1px solid #E5E7EB;
+          }
+          
+          .social-links {
+            margin-bottom: 20px;
+          }
+          
+          .social-link {
+            display: inline-block;
+            margin: 0 10px;
+            text-decoration: none;
             }
-            .container {
-              background-color: #ffffff;
-              border-radius: 8px;
-              overflow: hidden;
-              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            
+            .social-icon {
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
             }
-            .header {
-              background: linear-gradient(135deg, ${emailConfig.templates.colors.primary} 0%, ${emailConfig.templates.colors.secondary} 100%);
-              padding: 30px 20px;
-              text-align: center;
-              color: white;
-            }
-            .logo {
-              max-width: 180px;
-              margin-bottom: 15px;
-            }
-            .content {
-              padding: 30px;
-            }
-            .footer {
-              background-color: #f5f5f5;
-              padding: 20px;
-              text-align: center;
+            
+            .copyright {
               font-size: 12px;
-              color: #666666;
-              border-top: 1px solid #eeeeee;
+              color: #6b7280;
+              margin-bottom: 20px;
             }
+            
+            .signature {
+              margin-top: 15px;
+              padding-top: 15px;
+              border-top: 1px solid #E5E7EB;
+              background: #ffffff;
+              border-radius: 8px;
+              padding: 20px;
+              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            }
+            
+            .signature img {
+              max-width: 200px;
+              height: auto;
+              margin-bottom: 15px;
+              display: inline-block;
+            }
+            
+            .signature-name {
+              font-weight: bold;
+              font-size: 16px;
+              color: #111827;
+              margin-bottom: 5px;
+            }
+            
+            .signature-company {
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 10px;
+            }
+            
+            .signature-contact {
+              font-size: 14px;
+              color: #6b7280;
+              margin-bottom: 5px;
+            }
+            
+            .signature-contact a {
+              color: #3b82f6;
+              text-decoration: none;
+            }
+            
+            .signature-contact a:hover {
+              text-decoration: underline;
+            }
+            
             .button {
               display: inline-block;
               padding: 12px 24px;
-              background: linear-gradient(135deg, ${emailConfig.templates.colors.primary} 0%, ${emailConfig.templates.colors.secondary} 100%);
+              background: #3B82F6;
               color: white;
               text-decoration: none;
-              border-radius: 4px;
+              border-radius: 8px;
               font-weight: 600;
               margin: 20px 0;
             }
-            .signature {
-              margin-top: 30px;
-              padding-top: 20px;
-              border-top: 1px solid #eeeeee;
-            }
-            .signature img {
-              max-width: 150px;
-              margin-bottom: 10px;
-            }
-            .brand-row {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 16px;
-              flex-wrap: wrap;
-            }
-            .stamp {
-              max-width: 120px;
-              opacity: 0.9;
+            
+            @media only screen and (max-width: 600px) {
+              .email-container {
+                margin: 10px;
+                border-radius: 0;
+              }
+              
+              .content {
+                padding: 20px 15px;
+              }
+              
+              .header {
+                padding: 20px 15px;
+              }
+              
+              .footer {
+                padding: 20px 15px;
+              }
             }
           `}
-        </style>
-      </head>
-      <body>
-        <div className="container">
-          <div className="header">
-            <img 
-              src={absoluteLogo}
-              alt={effectiveCompanyName}
-              className="logo"
-            />
-            <h1>{title}</h1>
-          </div>
-          
-          <div className="content">
-            <div style={{display: 'none'}}>{previewText}</div>
-            {children}
-            
-            <div className="signature">
-              <div className="brand-row">
-                {absoluteSignature && (
-                  <img 
-                    src={absoluteSignature}
-                    alt="Authorized Signature"
-                  />
-                )}
-                {absoluteStamp && (
-                  <img 
-                    src={absoluteStamp}
-                    alt="Company Stamp"
-                    className="stamp"
-                  />
-                )}
+      </style>
+      
+      <div style={{display: 'none', fontSize: '1px', color: '#FEFEFE', lineHeight: '1px', fontFamily: 'sans-serif', maxHeight: '0px', maxWidth: '0px', opacity: 0, overflow: 'hidden'}}>
+        {previewText}
+      </div>
+      
+      <table role="presentation" cellSpacing={0} cellPadding={0} border={0} width="100%">
+        <tbody>
+          <tr>
+            <td style={{padding: '20px 0'}}>
+              <div className="email-container">
+                
+                {/* Header */}
+                  <div className="header">
+            <a href="https://www.mokmzansibooks.com" target="_blank" rel="noopener noreferrer" style={{textDecoration: 'none', display: 'inline-block'}}>
+              <img 
+                src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/logo.png" 
+                alt="MOK MZANSI BOOKS" 
+                className="logo" 
+              />
+            </a>
+                  </div>
+                
+                {/* Content */}
+                <div className="content">
+                  {children}
+                </div>
+                
+                {/* Footer */}
+                <div className="footer">
+                  <div className="social-links">
+                   <a href="https://tiktok.com/@morwa.moabelo" className="social-link">
+                     <img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/tiktok.png" alt="TikTok" className="social-icon" />
+                   </a>
+                   <a href="https://twitter.com/stmok" className="social-link">
+                     <img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/twitter.png" alt="Twitter X" className="social-icon" />
+                   </a>
+                   <a href="https://www.facebook.com/share/p/1BPLxEhpRh/" className="social-link">
+                     <img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/Facebook.png" alt="Facebook" className="social-icon" />
+                   </a>
+                 </div>
+                  <div className="copyright">© 2025 MOKMzansiBooks. All rights reserved.</div>
+                  
+                  <div className="signature" style={{marginTop: '20px'}}>
+                     <img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/signature.png" alt="Wilson Moabelo Signature" style={{maxWidth: '200px', height: 'auto', marginBottom: '15px', display: 'inline-block'}} />
+                    <div className="signature-name">Wilson Moabelo</div>
+                    <div className="signature-company">MOK MZANSI BOOKS</div>
+                    <div className="signature-contact">
+                      <a href="mailto:admin@mokmzansibooks.com">admin@mokmzansibooks.com</a>
+                    </div>
+                    <div className="signature-contact">
+                      <a href="tel:+27645504029">+27 64 550 4029</a>
+                    </div>
+                  </div>
+                </div>
+                
               </div>
-              {(effectiveSenderName || effectiveSenderSignatureText) && (
-                <p style={{ textAlign: 'center', color: '#6b7280' }}>
-                  {effectiveSenderName && (<><strong>{effectiveSenderName}</strong><br /></>)}
-                  {effectiveSenderSignatureText}
-                </p>
-              )}
-              <p>
-                <strong>{effectiveCompanyName}</strong><br />
-                {effectiveCompanyEmail && (<><a href={`mailto:${effectiveCompanyEmail}`} style={{color: '#4f46e5'}}>{effectiveCompanyEmail}</a><br /></>)}
-                {effectiveCompanyPhone && (<><a href={`tel:${effectiveCompanyPhone}`} style={{color: '#4f46e5'}}>{effectiveCompanyPhone}</a><br /></>)}
-                {effectiveCompanyAddress && (<>{effectiveCompanyAddress}<br /></>)}
-                {addressLine1 && (<>{addressLine1}<br /></>)}
-                {addressLine2 && (<>{addressLine2}<br /></>)}
-                {addressLine3 && (<>{addressLine3}<br /></>)}
-                {addressLine4 && (<>{addressLine4}</>)}
-              </p>
-            </div>
-          </div>
-          
-          <div className="footer">
-            <p>If you have any questions, please don't hesitate to contact us at <a href={`mailto:${effectiveCompanyEmail}`} style={{color: '#4f46e5'}}>{effectiveCompanyEmail}</a>.</p>
-            <p>{effectiveCompanyAddress}</p>
-            <p>© {new Date().getFullYear()} {effectiveCompanyName}. All rights reserved.</p>
-            <p><a href={effectiveWebsite} style={{color: '#4f46e5', textDecoration: 'none'}}>Website</a></p>
-          </div>
-        </div>
-      </body>
-    </html>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 };
 

@@ -1,19 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "devCommand": "npm run dev",
-  "installCommand": "pnpm install",
-  "framework": null,
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs18.x"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/((?!api)(?!.*\\.(png|PNG|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "framework": null
 }

@@ -10,9 +10,22 @@ interface WelcomeEmailProps {
 
 export const WelcomeEmail: React.FC<WelcomeEmailProps> = ({
   userName = 'Valued Customer',
-  loginLink = `${(process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '')}/login`,
+  loginLink,
   supportEmail = emailConfig.company.email,
 }) => {
+  // Browser-safe environment variable access
+  const getDefaultLoginLink = () => {
+    if (typeof window !== 'undefined') {
+      // In browser, use current origin
+      return `${window.location.origin}/login`;
+    }
+    // In server/build time, try to access env vars safely
+    const envUrl = typeof process !== 'undefined' && process.env ? process.env.NEXT_PUBLIC_APP_URL : null;
+    const baseUrl = envUrl || emailConfig.company.website;
+    return `${baseUrl.replace(/\/$/, '')}/login`;
+  };
+  
+  const effectiveLoginLink = loginLink || getDefaultLoginLink();
   return (
     <BaseEmailTemplate
       title="Welcome to MOK Mzansi Books"
@@ -32,7 +45,7 @@ export const WelcomeEmail: React.FC<WelcomeEmailProps> = ({
       </ul>
 
       <div style={{textAlign: 'center', margin: '30px 0'}}>
-        <a href={loginLink} className="button" style={{
+        <a href={effectiveLoginLink} className="button" style={{
           display: 'inline-block',
           padding: '12px 24px',
           background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',

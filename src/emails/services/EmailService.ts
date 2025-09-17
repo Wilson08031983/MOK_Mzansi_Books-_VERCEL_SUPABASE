@@ -213,7 +213,7 @@ class EmailService {
         }
       };
 
-      // In a real implementation, this would send the email via ReSend
+      // In a real implementation, this would send the email via Postmark (or your configured provider)
       // For now, we'll just store it locally
       return await this.storeEmailLocally(email);
     } catch (error) {

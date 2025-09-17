@@ -1,12 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { Resend } from 'resend';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { AccountLockoutEmail } from '@/emails/templates/AccountLockoutEmail';
 import emailConfig from '@/emails/config/emailConfig';
+import { postmarkService } from '@/services/postmarkService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const domain = process.env.RESEND_DOMAIN || new URL(emailConfig.company.website).hostname;
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
 
 interface AccountLockoutRequest {
@@ -46,7 +41,6 @@ export default async function handler(
     supportEmail = emailConfig.company.email,
     supportPhone = emailConfig.company.phone,
     daysPastDue,
-    subject
   }: AccountLockoutRequest = req.body || {};
 
   // Validate required fields
@@ -88,62 +82,26 @@ export default async function handler(
     ? accountManagementLink 
     : `${appUrl}${accountManagementLink.startsWith('/') ? accountManagementLink : '/' + accountManagementLink}`;
 
-  // Format currency for subject
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
-
-  const defaultSubject = `🔒 Account Temporarily Locked - Payment Required (${formatCurrency(amountDue)})`;
-
   try {
-    // Render the email template
-    const html = renderToStaticMarkup(
-      React.createElement(AccountLockoutEmail, {
-        userName,
-        companyName,
-        lockoutDate,
-        gracePeriodEndDate,
-        amountDue,
-        currency,
-        paymentLink: absolutePaymentLink,
-        accountManagementLink: absoluteAccountLink,
-        supportEmail,
-        supportPhone,
-        daysPastDue,
-      })
-    );
-
-    // Send the email
-    const { data, error } = await resend.emails.send({
-      from: `${companyName} <no-reply@${domain}>`,
-      to: [to],
-      subject: subject || defaultSubject,
-      html,
-      tags: [
-        { name: 'type', value: 'account-lockout' },
-        { name: 'days-past-due', value: daysPastDue.toString() },
-        { name: 'amount-due', value: amountDue.toString() },
-        { name: 'currency', value: currency }
-      ],
+    const result = await postmarkService.sendAccountLockoutEmail(to, {
+      userName,
+      companyName,
+      lockoutDate,
+      gracePeriodEndDate,
+      amountDue,
+      currency,
+      paymentLink: absolutePaymentLink,
+      accountManagementLink: absoluteAccountLink,
+      supportEmail,
+      supportPhone,
+      daysPastDue,
     });
 
-    if (error) {
-      console.error('Failed to send account lockout email:', error);
-      return res.status(500).json({ 
-        message: 'Failed to send account lockout email',
-        error: process.env.NODE_ENV === 'development' ? error : undefined
-      });
-    }
-
-    // Log successful send for monitoring
-    console.log(`Account lockout notification sent to ${to}, ${daysPastDue} days past due, email ID: ${data?.id}`);
+    console.log(`Account lockout notification sent to ${to}, ${daysPastDue} days past due, email ID: ${result.messageId}`);
 
     return res.status(200).json({ 
       message: 'Account lockout email sent successfully',
-      id: data?.id,
+      id: result.messageId,
       daysPastDue,
       amountDue,
       lockoutDate

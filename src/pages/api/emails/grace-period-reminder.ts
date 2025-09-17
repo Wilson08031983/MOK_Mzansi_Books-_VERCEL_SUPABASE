@@ -1,12 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { Resend } from 'resend';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { GracePeriodDailyReminderEmail } from '@/emails/templates/GracePeriodDailyReminderEmail';
 import emailConfig from '@/emails/config/emailConfig';
+import { postmarkService } from '@/services/postmarkService';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const domain = process.env.RESEND_DOMAIN || new URL(emailConfig.company.website).hostname;
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
 
 interface GracePeriodReminderRequest {
@@ -20,7 +15,7 @@ interface GracePeriodReminderRequest {
   lastPaymentAttempt?: string;
   amountDue: number;
   currency?: string;
-  subject?: string;
+  subject?: string; // kept for compatibility but not used; Postmark template has built-in subject
 }
 
 export default async function handler(
@@ -42,7 +37,6 @@ export default async function handler(
     lastPaymentAttempt,
     amountDue,
     currency = 'ZAR',
-    subject
   }: GracePeriodReminderRequest = req.body || {};
 
   // Validate required fields
@@ -83,56 +77,26 @@ export default async function handler(
     ? accountManagementLink 
     : `${appUrl}${accountManagementLink.startsWith('/') ? accountManagementLink : '/' + accountManagementLink}`;
 
-  // Generate dynamic subject based on urgency
-  const defaultSubject = daysRemaining <= 1 
-    ? `🚨 URGENT: Payment Grace Period Ends ${daysRemaining === 0 ? 'Today' : 'Tomorrow'}` 
-    : daysRemaining <= 3 
-      ? `⚠️ Payment Grace Period Ends in ${daysRemaining} Days` 
-      : `Payment Reminder: ${daysRemaining} Days Remaining in Grace Period`;
-
   try {
-    // Render the email template
-    const html = renderToStaticMarkup(
-      React.createElement(GracePeriodDailyReminderEmail, {
-        userName,
-        companyName,
-        daysRemaining,
-        gracePeriodEndDate,
-        paymentLink: absolutePaymentLink,
-        accountManagementLink: absoluteAccountLink,
-        lastPaymentAttempt,
-        amountDue,
-        currency,
-      })
-    );
-
-    // Send the email
-    const { data, error } = await resend.emails.send({
-      from: `${companyName} <no-reply@${domain}>`,
-      to: [to],
-      subject: subject || defaultSubject,
-      html,
-      tags: [
-        { name: 'type', value: 'grace-period-reminder' },
-        { name: 'days-remaining', value: daysRemaining.toString() },
-        { name: 'urgency', value: daysRemaining <= 1 ? 'critical' : daysRemaining <= 3 ? 'high' : 'medium' }
-      ],
+    const result = await postmarkService.sendGracePeriodReminderEmail(to, {
+      userName,
+      companyName,
+      daysRemaining,
+      gracePeriodEndDate,
+      paymentLink: absolutePaymentLink,
+      accountManagementLink: absoluteAccountLink,
+      lastPaymentAttempt,
+      amountDue,
+      currency,
+      supportEmail: emailConfig.company.email,
     });
 
-    if (error) {
-      console.error('Failed to send grace period reminder email:', error);
-      return res.status(500).json({ 
-        message: 'Failed to send grace period reminder email',
-        error: process.env.NODE_ENV === 'development' ? error : undefined
-      });
-    }
-
     // Log successful send for monitoring
-    console.log(`Grace period reminder sent to ${to}, ${daysRemaining} days remaining, email ID: ${data?.id}`);
+    console.log(`Grace period reminder sent to ${to}, ${daysRemaining} days remaining, email ID: ${result.messageId}`);
 
     return res.status(200).json({ 
       message: 'Grace period reminder email sent successfully',
-      id: data?.id,
+      id: result.messageId,
       daysRemaining,
       urgencyLevel: daysRemaining <= 1 ? 'critical' : daysRemaining <= 3 ? 'high' : 'medium'
     });

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{invoice_number}} - {{company_name}}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 700px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            padding: 30px;
+            color: white;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            max-width: 120px;
+            height: auto;
+        }
+        .invoice-title {
+            text-align: right;
+        }
+        .invoice-title h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .invoice-number {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .invoice-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+        .bill-to, .invoice-info {
+            flex: 1;
+        }
+        .bill-to {
+            margin-right: 30px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .client-info {
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .invoice-table th {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .invoice-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .invoice-table tr:last-child td {
+            border-bottom: none;
+        }
+        .invoice-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .total-section {
+            margin-top: 30px;
+            text-align: right;
+        }
+        .total-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+        .total-label {
+            width: 150px;
+            font-weight: 600;
+            color: #333;
+        }
+        .total-amount {
+            width: 120px;
+            text-align: right;
+        }
+        .grand-total {
+            border-top: 2px solid #28a745;
+            padding-top: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #28a745;
+        }
+        .payment-info {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        .due-date {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .due-date.overdue {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+        }
+        .social-icon {
+            width: 32px;
+            height: 32px;
+        }
+        .signature {
+            margin-top: 20px;
+        }
+        .signature img {
+            max-width: 200px;
+            height: auto;
+        }
+        .contact-info {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 20px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            .invoice-details {
+                flex-direction: column;
+            }
+            .bill-to {
+                margin-right: 0;
+                margin-bottom: 20px;
+            }
+            .invoice-table {
+                font-size: 14px;
+            }
+            .invoice-table th,
+            .invoice-table td {
+                padding: 10px 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <img src="{{company_logo}}" alt="{{company_name}} Logo" class="logo">
+                </div>
+                <div class="invoice-title">
+                    <h1>INVOICE</h1>
+                    <div class="invoice-number">#{{invoice_number}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="invoice-details">
+                <div class="bill-to">
+                    <div class="section-title">Bill To:</div>
+                    <div class="client-info">
+                        <strong>{{client_name}}</strong>
+                    </div>
+                </div>
+                <div class="invoice-info">
+                    <div class="section-title">Invoice Details:</div>
+                    <div class="client-info">
+                        <!-- Invoice Details: wrap optional fields -->
+                        <strong>Invoice Date:</strong> {{#if invoice_date}}{{invoice_date}}{{/if}}
+                        <strong>Due Date:</strong> {{due_date}}<br>
+                        <strong>Payment Terms:</strong> {{#if payment_terms}}{{payment_terms}}{{/if}}
+                    </div>
+                </div>
+            </div>
+
+            <div class="due-date">
+                <strong>Payment Due: {{due_date}}</strong>
+            </div>
+
+            <!-- Invoice Items Table -->
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each invoice_items}}
+                    <tr>
+                        <td>{{description}}</td>
+                        <td class="text-right">{{quantity}}</td>
+                        <td class="text-right">{{unitPrice}}</td>
+                        <td class="text-right">{{amount}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+
+            <!-- Total Section -->
+            <div class="total-section">
+                <div class="total-row">
+                    <div class="total-label">Subtotal:</div>
+                    <div class="total-amount">{{subtotal}}</div>
+                </div>
+                {{#if tax_amount}}
+                <div class="total-row">
+                    <div class="total-label">Tax ({{tax_rate}}%):</div>
+                    <div class="total-amount">{{tax_amount}}</div>
+                </div>
+                {{/if}}
+                {{#if discount_amount}}
+                <div class="total-row">
+                    <div class="total-label">Discount:</div>
+                    <div class="total-amount">-{{discount_amount}}</div>
+                </div>
+                {{/if}}
+                <div class="total-row grand-total">
+                    <div class="total-label">Total Amount:</div>
+                    <div class="total-amount">{{total_amount}}</div>
+                </div>
+            </div>
+
+            <!-- Payment Information -->
+            <div class="payment-info">
+                <h4 style="margin-top: 0; color: #333;">Payment Information</h4>
+                <p><strong>Payment Methods:</strong> Bank Transfer, Credit Card, PayPal</p>
+                <p><strong>Bank Details:</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Bank: {{bank_name}}</li>
+                    <li>Account Name: {{company_name}}</li>
+                    <li>Account Number: {{account_number}}</li>
+                    <li>Reference: Invoice {{invoice_number}}</li>
+                </ul>
+                <p style="margin-bottom: 0;"><strong>Questions?</strong> Contact us at <a href="mailto:{{company_email}}" style="color: #28a745;">{{company_email}}</a></p>
+            </div>
+
+            <div style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0; color: #155724;"><strong>Thank you for your business!</strong> We appreciate your prompt payment.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="social-links">
+                <a href="https://twitter.com/mokmzansibooks" target="_blank">
+                    <img src="{{twitter_icon}}" alt="Twitter" class="social-icon">
+                </a>
+                <a href="https://facebook.com/mokmzansibooks" target="_blank">
+                    <img src="{{facebook_icon}}" alt="Facebook" class="social-icon">
+                </a>
+                <a href="https://tiktok.com/@mokmzansibooks" target="_blank">
+                    <img src="{{tiktok_icon}}" alt="TikTok" class="social-icon">
+                </a>
+            </div>
+
+            <div class="signature">
+                <img src="{{signature_image}}" alt="{{company_name}} Signature">
+            </div>
+
+            <div class="contact-info">
+                <p><strong>{{company_name}}</strong></p>
+                <p>{{company_address}}</p>
+                <p>Email: <a href="mailto:{{company_email}}" style="color: #28a745;">{{company_email}}</a></p>
+                <p>Phone: {{company_phone}}</p>
+                <p>Website: <a href="{{company_website}}" style="color: #28a745;">{{company_website}}</a></p>
+            </div>
+
+            <div style="margin-top: 20px; font-size: 12px; color: #adb5bd;">
+                <p>This is an automated invoice from {{company_name}}.</p>
+                <p>© {{current_year}} {{company_name}}. All rights reserved.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

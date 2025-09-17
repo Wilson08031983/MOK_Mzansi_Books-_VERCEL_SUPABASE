@@ -15,7 +15,18 @@ export const TrialEndingEmail: React.FC<TrialEndingEmailProps> = ({
   upgradeLink,
   supportEmail,
 }) => {
-  const appBase = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
+  // Browser-safe environment variable access
+  const getAppUrl = () => {
+    if (typeof window !== 'undefined') {
+      // In browser, use current origin or fallback to config
+      return window.location.origin;
+    }
+    // In server/build time, try to access env vars safely
+    const envUrl = typeof process !== 'undefined' && process.env ? process.env.NEXT_PUBLIC_APP_URL : null;
+    return envUrl || emailConfig.company.website;
+  };
+  
+  const appBase = getAppUrl().replace(/\/$/, '');
   const effectiveUpgradeLink = upgradeLink || `${appBase}/pricing`;
   const effectiveSupportEmail = supportEmail || emailConfig.company.email;
   const companyName = emailConfig.company.name;

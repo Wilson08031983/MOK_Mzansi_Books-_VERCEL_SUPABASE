@@ -2,6 +2,10 @@ import { CronJob } from 'cron';
 import { db } from '@/lib/db';
 import { emailService } from '@/services/email/emailService';
 import emailServiceClient from '@/services/emailService';
+import postmarkService from '@/services/postmarkService';
+import { SUBSCRIPTION_PLANS } from '@/lib/paystack';
+import { paystackService } from '@/services/paystackService';
+import { startOfDay, differenceInCalendarDays } from 'date-fns';
 // Function to find users in grace period (payment failed, but within 5 days)
 const findUsersInGracePeriod = async () => {
   const now = new Date();
@@ -64,7 +68,17 @@ export const trialReminderJob = new CronJob(
       const users = await findUsersWithExpiringTrials();
       for (const user of users) {
         if (user.email && user.name) {
-          await emailService.sendTrialReminder(user.email, user.name);
+          const msInDay = 1000 * 60 * 60 * 24;
+          const daysLeft = user.trialEndsAt
+            ? Math.max(0, Math.ceil((new Date(user.trialEndsAt).getTime() - Date.now()) / msInDay))
+            : undefined;
+
+          await postmarkService.sendTrialReminderEmail(user.email, {
+            userName: user.name,
+            loginUrl: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
+            daysLeft,
+            upgradeLink: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`
+          });
         }
       }
     } catch (error) {
@@ -75,9 +89,6 @@ export const trialReminderJob = new CronJob(
   true,
   'Africa/Johannesburg'
 );
-
-import { SUBSCRIPTION_PLANS } from '@/lib/paystack';
-import { paystackService } from '@/services/paystackService';
 
 // Placeholder for payment processing
 const chargeCard = async (userId: string, tier: string): Promise<boolean> => {
@@ -181,9 +192,8 @@ export const gracePeriodReminderJob = new CronJob(
           gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 5);
           
           const daysRemaining = Math.ceil((gracePeriodEnd.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-          
-          await emailServiceClient.sendGracePeriodReminderEmail({
-            to: subscription.user.email,
+
+          await postmarkService.sendGracePeriodReminderEmail(subscription.user.email, {
             userName: subscription.user.name,
             companyName: subscription.user.name, // Fallback to user name
             daysRemaining,
@@ -219,11 +229,17 @@ export const accountLockoutJob = new CronJob(
           const gracePeriodEnd = new Date(subscription.paymentDeclinedDate!);
           gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 5);
           
-          const daysPastDue = Math.ceil((new Date().getTime() - gracePeriodEnd.getTime()) / (1000 * 60 * 60 * 24));
+          // Use date boundaries to avoid off-by-one from time zones/DST
+          const daysPastDue = Math.max(
+            0,
+            differenceInCalendarDays(
+              startOfDay(new Date()),
+              startOfDay(gracePeriodEnd)
+            )
+          );
           
           // Send lockout email before locking the account
-          await emailServiceClient.sendAccountLockoutEmail({
-            to: subscription.user.email,
+          await postmarkService.sendAccountLockoutEmail(subscription.user.email, {
             userName: subscription.user.name,
             companyName: subscription.user.name, // Fallback to user name
             lockoutDate: new Date().toISOString(),

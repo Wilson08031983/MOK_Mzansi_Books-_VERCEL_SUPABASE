@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotation {{quotation_number}} - {{company_name}}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 700px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
+            padding: 30px;
+            color: white;
+        }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            max-width: 120px;
+            height: auto;
+        }
+        .quotation-title {
+            text-align: right;
+        }
+        .quotation-title h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .quotation-number {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .quotation-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+        .quote-to, .quotation-info {
+            flex: 1;
+        }
+        .quote-to {
+            margin-right: 30px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .client-info {
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .quotation-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .quotation-table th {
+            background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .quotation-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .quotation-table tr:last-child td {
+            border-bottom: none;
+        }
+        .quotation-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .total-section {
+            margin-top: 30px;
+            text-align: right;
+        }
+        .total-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+        .total-label {
+            width: 150px;
+            font-weight: 600;
+            color: #333;
+        }
+        .total-amount {
+            width: 120px;
+            text-align: right;
+        }
+        .grand-total {
+            border-top: 2px solid #007bff;
+            padding-top: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #007bff;
+        }
+        .validity-info {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .validity-info.expired {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .terms-conditions {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        .cta-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
+            color: #ffffff;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-weight: 600;
+            margin: 10px;
+            transition: transform 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        .cta-button.secondary {
+            background: transparent;
+            border: 2px solid #007bff;
+            color: #007bff;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+        }
+        .social-icon {
+            width: 32px;
+            height: 32px;
+        }
+        .signature {
+            margin-top: 20px;
+        }
+        .signature img {
+            max-width: 200px;
+            height: auto;
+        }
+        .contact-info {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 20px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            .quotation-details {
+                flex-direction: column;
+            }
+            .quote-to {
+                margin-right: 0;
+                margin-bottom: 20px;
+            }
+            .quotation-table {
+                font-size: 14px;
+            }
+            .quotation-table th,
+            .quotation-table td {
+                padding: 10px 5px;
+            }
+            .cta-button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <img src="{{company_logo}}" alt="{{company_name}} Logo" class="logo">
+                </div>
+                <div class="quotation-title">
+                    <h1>QUOTATION</h1>
+                    <div class="quotation-number">#{{quotation_number}}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="quotation-details">
+                <div class="quote-to">
+                    <div class="section-title">Quote For:</div>
+                    <div class="client-info">
+                        <strong>{{client_name}}</strong>
+                    </div>
+                </div>
+                <div class="quotation-info">
+                    <div class="section-title">Quotation Details:</div>
+                    <div class="client-info">
+                        <strong>Quote Date:</strong> {{quotation_date}}<br>
+                        <strong>Valid Until:</strong> {{valid_until}}<br>
+                        <strong>Reference:</strong> {{reference_number}}
+                    </div>
+                </div>
+            </div>
+
+            <div class="validity-info">
+                <strong>This quotation is valid until: {{valid_until}}</strong>
+            </div>
+
+            <div style="margin: 30px 0; padding: 20px; background-color: #e3f2fd; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #1565c0;">Dear {{client_name}},</h3>
+                <p style="margin-bottom: 0; color: #333;">Thank you for your interest in our services. We are pleased to provide you with the following quotation for your requirements. This quote includes all the items and services discussed, and we believe it offers excellent value for your investment.</p>
+            </div>
+
+            <!-- Quotation Items Table -->
+            <table class="quotation-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each quotation_items}}
+                    <tr>
+                        <td>{{description}}</td>
+                        <td class="text-right">{{quantity}}</td>
+                        <td class="text-right">{{unitPrice}}</td>
+                        <td class="text-right">{{amount}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+
+            <!-- Total Section -->
+            <div class="total-section">
+                <div class="total-row">
+                    <div class="total-label">Subtotal:</div>
+                    <div class="total-amount">{{subtotal}}</div>
+                </div>
+                {{#if tax_amount}}
+                <div class="total-row">
+                    <div class="total-label">Tax ({{tax_rate}}%):</div>
+                    <div class="total-amount">{{tax_amount}}</div>
+                </div>
+                {{/if}}
+                {{#if discount_amount}}
+                <div class="total-row">
+                    <div class="total-label">Discount:</div>
+                    <div class="total-amount">-{{discount_amount}}</div>
+                </div>
+                {{/if}}
+                <div class="total-row grand-total">
+                    <div class="total-label">Total Amount:</div>
+                    <div class="total-amount">{{total_amount}}</div>
+                </div>
+            </div>
+
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <h3 style="color: #333; margin-bottom: 20px;">Ready to proceed?</h3>
+                <a href="{{accept_quote_link}}" class="cta-button">Accept Quotation</a>
+                <a href="{{contact_link}}" class="cta-button secondary">Discuss Details</a>
+            </div>
+
+            <!-- Terms and Conditions -->
+            <div class="terms-conditions">
+                <h4 style="margin-top: 0; color: #333;">Terms & Conditions</h4>
+                <ul style="margin: 10px 0; padding-left: 20px; color: #6c757d;">
+                    <li>This quotation is valid for {{validity_period}} days from the date of issue</li>
+                    <li>Prices are subject to change without notice after the validity period</li>
+                    <li>Payment terms: {{payment_terms}}</li>
+                    <li>Delivery timeframe: {{delivery_timeframe}}</li>
+                    <li>All prices are inclusive of applicable taxes unless otherwise stated</li>
+                    <li>This quotation does not constitute a contract until formally accepted</li>
+                </ul>
+                <p style="margin-bottom: 0; color: #6c757d;"><strong>Questions?</strong> Contact us at <a href="mailto:{{company_email}}" style="color: #007bff;">{{company_email}}</a> or call {{company_phone}}</p>
+            </div>
+
+            <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0; color: #0c5460;"><strong>Next Steps:</strong> To accept this quotation, simply click the "Accept Quotation" button above or reply to this email. We'll then send you a formal contract and begin work immediately upon your approval.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="social-links">
+                <a href="https://twitter.com/mokmzansibooks" target="_blank">
+                    <img src="{{twitter_icon}}" alt="Twitter" class="social-icon">
+                </a>
+                <a href="https://facebook.com/mokmzansibooks" target="_blank">
+                    <img src="{{facebook_icon}}" alt="Facebook" class="social-icon">
+                </a>
+                <a href="https://tiktok.com/@mokmzansibooks" target="_blank">
+                    <img src="{{tiktok_icon}}" alt="TikTok" class="social-icon">
+                </a>
+            </div>
+
+            <div class="signature">
+                <img src="{{signature_image}}" alt="{{company_name}} Signature">
+            </div>
+
+            <div class="contact-info">
+                <p><strong>{{company_name}}</strong></p>
+                <p>{{company_address}}</p>
+                <p>Email: <a href="mailto:{{company_email}}" style="color: #007bff;">{{company_email}}</a></p>
+                <p>Phone: {{company_phone}}</p>
+                <p>Website: <a href="{{company_website}}" style="color: #007bff;">{{company_website}}</a></p>
+            </div>
+
+            <div style="margin-top: 20px; font-size: 12px; color: #adb5bd;">
+                <p>This is an automated quotation from {{company_name}}.</p>
+                <p>© {{current_year}} {{company_name}}. All rights reserved.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

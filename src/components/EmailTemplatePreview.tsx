@@ -8,6 +8,10 @@ import { InvitationEmail } from '../emails/templates/InvitationEmail';
 import { LowStockEmail } from '../emails/templates/LowStockEmail';
 import { OverdueInvoiceEmail } from '../emails/templates/OverdueInvoiceEmail';
 import { PaymentReminderEmail } from '../emails/templates/PaymentReminderEmail';
+import { GenericCustomEmail } from '../emails/templates/GenericCustomEmail';
+import { InvoicePaymentReminderEmail } from '../emails/templates/InvoicePaymentReminderEmail';
+import { LoginNotificationEmail } from '../emails/templates/LoginNotificationEmail';
+import { PasswordResetEmail } from '../emails/templates/PasswordResetEmail';
 
 interface EmailTemplate {
   id: string;
@@ -69,6 +73,23 @@ const EmailTemplatePreview: React.FC = () => {
       )
     },
     {
+      id: 'invitation',
+      name: 'Team Invitation Email',
+      description: 'Professional invitation sent to new team members',
+      category: 'Authentication',
+      component: (
+        <InvitationEmail
+          recipientName="Jane Doe"
+          recipientEmail="jane.doe@example.com"
+          inviterName="Wilson Moabelo"
+          role="Accountant"
+          invitationLink="https://app.mokmzansibooks.com/accept-invitation/abc123"
+          companyName="MOK Mzansi Books"
+          companyEmail="admin@mokmzansibooks.com"
+        />
+      )
+    },
+    {
       id: 'trial-ending',
       name: 'Trial Ending Email',
       description: 'Reminder email sent when trial is about to expire',
@@ -78,6 +99,39 @@ const EmailTemplatePreview: React.FC = () => {
           userName="John Smith"
           daysLeft={5}
           upgradeLink="https://app.mokmzansibooks.com/pricing"
+          supportEmail="support@mokmzansibooks.com"
+        />
+      )
+    },
+    {
+      id: 'payment-reminder',
+      name: 'Payment Reminder Email',
+      description: 'Friendly reminder for upcoming invoice payments',
+      category: 'Billing',
+      component: (
+        <PaymentReminderEmail
+          clientName={sampleData.client.name}
+          invoiceNumber={sampleData.invoice.number}
+          dueDate={sampleData.invoice.dueDate}
+          amountDue={sampleData.invoice.total}
+          invoiceLink="https://app.mokmzansibooks.com/invoice/INV-2024-001"
+          supportEmail="support@mokmzansibooks.com"
+        />
+      )
+    },
+    {
+      id: 'overdue-invoice',
+      name: 'Overdue Invoice Email',
+      description: 'Urgent notice for overdue payments with immediate action required',
+      category: 'Billing',
+      component: (
+        <OverdueInvoiceEmail
+          clientName={sampleData.client.name}
+          invoiceNumber={sampleData.invoice.number}
+          dueDate={sampleData.invoice.dueDate}
+          amountDue={sampleData.invoice.total}
+          invoiceLink="https://app.mokmzansibooks.com/invoice/INV-2024-001"
+          daysOverdue={15}
           supportEmail="support@mokmzansibooks.com"
         />
       )
@@ -93,6 +147,22 @@ const EmailTemplatePreview: React.FC = () => {
           age={28}
           companyName="MOK Mzansi Books"
           senderName="Wilson Mokgethwa Moabelo"
+        />
+      )
+    },
+    {
+      id: 'low-stock',
+      name: 'Low Stock Alert Email',
+      description: 'Alert for inventory items running low in stock',
+      category: 'Notifications',
+      component: (
+        <LowStockEmail
+          items={[
+            { name: 'Office Paper A4', currentStock: 5, minimumStock: 20, sku: 'OFF-001' },
+            { name: 'Printer Ink Cartridge', currentStock: 2, minimumStock: 10, sku: 'INK-002' }
+          ]}
+          inventoryLink="https://app.mokmzansibooks.com/inventory"
+          companyName="MOK Mzansi Books"
         />
       )
     },
@@ -140,6 +210,75 @@ const EmailTemplatePreview: React.FC = () => {
           notes="This quotation is valid for 30 days from the date of issue."
         />
       )
+    },
+    {
+      id: 'generic-custom',
+      name: 'Generic Custom Email',
+      description: 'Customizable email template with dynamic subject and content',
+      category: 'Business',
+      component: (
+        <GenericCustomEmail
+          recipientName="John Smith"
+          emailSubject="Important Update"
+          emailContent="We wanted to inform you about some exciting updates to our services. Our team has been working hard to improve your experience with MOK Mzansi Books."
+          callToActionText="Learn More"
+          callToActionLink="https://app.mokmzansibooks.com/updates"
+          additionalInfo="If you have any questions, please don't hesitate to contact us."
+          senderName="Wilson Mokgethwa Moabelo"
+          companyName="MOK Mzansi Books"
+        />
+      )
+    },
+    {
+      id: 'invoice-payment-reminder',
+      name: 'Invoice Payment Reminder',
+      description: 'Payment reminder for specific invoices with due dates',
+      category: 'Billing',
+      component: (
+        <InvoicePaymentReminderEmail
+          clientName="John Smith"
+          invoiceNumber="INV-2024-001"
+          dueDate="2024-02-15"
+          amountDue="R7,475.00"
+          invoiceLink="https://app.mokmzansibooks.com/invoice/INV-2024-001"
+          daysUntilDue={7}
+          companyName="MOK Mzansi Books"
+          supportEmail="support@mokmzansibooks.com"
+        />
+      )
+    },
+    {
+      id: 'login-notification',
+      name: 'Login Notification',
+      description: 'Security alert for new account logins',
+      category: 'Authentication',
+      component: (
+        <LoginNotificationEmail
+          userName="John Smith"
+          loginTime="2024-01-15 14:30:25 SAST"
+          loginLocation="Cape Town, South Africa"
+          deviceInfo="Chrome on Windows 11"
+          ipAddress="196.25.1.100"
+          companyName="MOK Mzansi Books"
+          supportEmail="support@mokmzansibooks.com"
+          securityLink="https://app.mokmzansibooks.com/account/security"
+        />
+      )
+    },
+    {
+      id: 'password-reset',
+      name: 'Password Reset',
+      description: 'Secure password reset instructions for account recovery',
+      category: 'Authentication',
+      component: (
+        <PasswordResetEmail
+          userName="John Smith"
+          resetLink="https://app.mokmzansibooks.com/reset-password?token=abc123xyz"
+          expirationTime="1 hour"
+          supportEmail="support@mokmzansibooks.com"
+          companyName="MOK Mzansi Books"
+        />
+      )
     }
   ];
 
@@ -155,11 +294,11 @@ const EmailTemplatePreview: React.FC = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="mb-2">
+          <h1 className="text-xl font-bold text-gray-900 mb-0.5">
             Email Template Preview
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 text-xs">
             Review all available email templates with their design and layout
           </p>
         </div>

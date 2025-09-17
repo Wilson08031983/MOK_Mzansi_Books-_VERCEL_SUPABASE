@@ -36,7 +36,16 @@ export const InvoiceEmail: React.FC<Readonly<InvoiceEmailProps>> = ({
   total,
   notes,
 }) => {
-  const appBase = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
+  const getAppBase = () => {
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) 
+      ? process.env.NEXT_PUBLIC_APP_URL 
+      : emailConfig.company.website;
+  };
+  
+  const appBase = getAppBase().replace(/\/$/, '');
   const effectiveInvoiceLink = /^https?:\/\//i.test(invoiceLink)
     ? invoiceLink
     : `${appBase}${invoiceLink.startsWith('/') ? invoiceLink : '/' + invoiceLink}`;
