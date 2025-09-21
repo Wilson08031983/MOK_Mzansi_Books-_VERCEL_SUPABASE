@@ -7,7 +7,7 @@ export const emailConfig = {
     address: '81 Monokane Street, Atterigeville X17, Pretoria, Gauteng, 0006',
     website: 'https://mokmzansibooks.co.za',
     // Vercel deployment URL for development/staging
-    vercelUrl: 'https://mok-mzansi-books-vercel-supabase-73258745h.vercel.app',
+    vercelUrl: 'https://www.mokmzansibooks.com',
     logo: '/logo.png', // Path to your logo in the public folder
   },
   sender: {

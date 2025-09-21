@@ -980,14 +980,12 @@ const PayrollManagement: React.FC = () => {
     }
     
     try {
-      // Get employee data from localStorage
-      const employeesData = localStorage.getItem('employees');
-      if (!employeesData) {
+      // Get employee data via employeeService
+      const employees: Employee[] = getAllEmployees();
+      if (!employees || employees.length === 0) {
         toast.error('Employee data not found');
         return;
       }
-      
-      const employees: Employee[] = JSON.parse(employeesData);
       const employee = employees.find(emp => emp.id === calculation.employeeId);
       
       if (!employee) {

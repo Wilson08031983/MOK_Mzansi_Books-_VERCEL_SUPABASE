@@ -23,7 +23,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
-import { Employee } from '@/services/employeeService';
+import { Employee, setAllEmployees } from '@/services/employeeService';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { logQualificationAdded, logQualificationDeleted, logEmployeeStatusChange } from '@/services/hrAuditService';
 
@@ -99,8 +99,8 @@ const TrainingManagement: React.FC<TrainingManagementProps> = ({ employees, setE
       );
       setEmployees(updatedEmployees);
       
-      // Save to localStorage
-      localStorage.setItem('employees', JSON.stringify(updatedEmployees));
+      // Persist via centralized employee service (scoped storage + legacy mirror)
+      setAllEmployees(updatedEmployees);
 
       // Log the status change to audit log
       try {

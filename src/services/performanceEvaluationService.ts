@@ -1,4 +1,4 @@
-import { Employee } from '@/services/employeeService';
+import { Employee, getAllEmployees, getEmployeeById as getEmployeeByIdFromService } from '@/services/employeeService';
 import { Project } from '@/types/project';
 
 /**
@@ -580,10 +580,8 @@ export const generateEmployeePerformance = (employeeId: string): EmployeePerform
  */
 export const getAllEmployeePerformances = (): EmployeePerformance[] => {
   try {
-    const employeesRaw = localStorage.getItem('employees');
-    if (!employeesRaw) return [];
-
-    const employees: Employee[] = JSON.parse(employeesRaw);
+    const employees: Employee[] = getAllEmployees();
+    if (!employees || employees.length === 0) return [];
     
     // Remove duplicates based on employee ID
     const uniqueEmployees = employees.filter((employee, index, self) => 
@@ -631,11 +629,7 @@ export const savePerformanceEvaluation = (performance: EmployeePerformance): voi
  */
 const getEmployeeById = (employeeId: string): Employee | null => {
   try {
-    const employeesRaw = localStorage.getItem('employees');
-    if (!employeesRaw) return null;
-
-    const employees: Employee[] = JSON.parse(employeesRaw);
-    return employees.find(emp => emp.id === employeeId) || null;
+    return getEmployeeByIdFromService(employeeId);
   } catch (error) {
     console.error('Error getting employee by ID:', error);
     return null;

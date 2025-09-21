@@ -122,10 +122,10 @@ const App = () => {
           console.warn('Could not sync saved company details to primary admin user:', e);
         }
         
-        // Sync default users to HR Management
+        // Ensure admin is present in HR Management (no regular test user)
         const syncResult = teamEmployeeSyncService.syncDefaultUsers();
         if (syncResult.syncedCount > 0) {
-          console.log(`Synced ${syncResult.syncedCount} default users to HR Management`);
+          console.log(`Synced ${syncResult.syncedCount} primary admin to HR Management`);
         }
         
         // Auto-sync company details to employee records

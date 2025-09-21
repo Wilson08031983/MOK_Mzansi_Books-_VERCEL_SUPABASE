@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { addEmployee, EmployeeFormData, Employee } from '@/services/employeeService';
 import AuthVerificationModal from '@/components/company/AuthVerificationModal';
+import { postmarkService } from '@/services/postmarkService';
 
 interface AddEmployeeModalProps {
   isOpen: boolean;
@@ -38,7 +39,6 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
     dateOfBirth: '',
     employmentType: 'Full Time',
     startDate: new Date().toISOString().split('T')[0],
-    endDate: '',
     paymentCycle: 'Monthly',
     salary: 0,
     department: 'General',
@@ -125,11 +125,39 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
     setIsAuthModalOpen(true);
   };
 
-  const handleVerifiedSave = () => {
+  const handleVerifiedSave = async () => {
     if (!pendingData) return;
     try {
       const newEmployee = addEmployee(pendingData);
-      toast.success('Employee added successfully!');
+      
+      // Send welcome email with password creation link if employee has email
+      if (newEmployee.email) {
+        try {
+          // Generate password creation link (in a real app, this would be a secure token)
+          const passwordCreationToken = `emp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const passwordCreationLink = `${window.location.origin}/create-password?token=${passwordCreationToken}`;
+          
+          await postmarkService.sendEmployeeWelcomeEmail(newEmployee.email, {
+            employeeName: `${newEmployee.firstName} ${newEmployee.surname}`,
+            employeeEmail: newEmployee.email,
+            position: newEmployee.position || 'Employee',
+            department: newEmployee.department || 'General',
+            companyName: 'MOK Mzansi Books',
+            passwordCreationLink,
+            startDate: newEmployee.startDate || new Date().toISOString().split('T')[0],
+            managerName: 'Wilson Moabelo',
+            supportEmail: 'hr@mokmzansibooks.com'
+          });
+          
+          toast.success('Employee added successfully and welcome email sent!');
+        } catch (emailError) {
+          console.error('Error sending welcome email:', emailError);
+          toast.success('Employee added successfully, but welcome email failed to send.');
+        }
+      } else {
+        toast.success('Employee added successfully!');
+      }
+      
       if (onEmployeeAdded) {
         onEmployeeAdded(newEmployee);
       }
@@ -352,19 +380,7 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
                       required
                     />
                   </div>
-                  {formData.employmentType === 'Part Time' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="endDate" className="font-sf-pro">End Date</Label>
-                      <Input
-                        id="endDate"
-                        name="endDate"
-                        type="date"
-                        value={formData.endDate || ''}
-                        onChange={handleChange}
-                        className="font-sf-pro"
-                      />
-                    </div>
-                  )}
+                  
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">

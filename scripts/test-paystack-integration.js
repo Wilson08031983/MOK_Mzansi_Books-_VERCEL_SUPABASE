@@ -13,8 +13,8 @@ require('dotenv').config({ path: '.env.local' });
 const config = {
   secretKey: process.env.PAYSTACK_SECRET_KEY_TEST || process.env.PAYSTACK_SECRET_KEY,
   publicKey: process.env.VITE_PAYSTACK_TEST_PUBLIC_KEY || process.env.VITE_PAYSTACK_PUBLIC_KEY,
-  webhookUrl: process.env.WEBHOOK_URL || 'https://mok-mzansi-books-vercel-supabase-qgn0vjlwe.vercel.app/api/paystack-webhook',
-  callbackUrl: 'https://mok-mzansi-books-vercel-supabase-qgn0vjlwe.vercel.app/thank-you',
+  webhookUrl: process.env.WEBHOOK_URL || 'https://www.mokmzansibooks.com/api/paystack-webhook',
+  callbackUrl: 'https://www.mokmzansibooks.com/thank-you',
   webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET || 'your-webhook-secret'
 };
 

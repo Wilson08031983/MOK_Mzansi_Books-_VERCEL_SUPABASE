@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getAllTeamMembers } from './localAuthService';
-import { Employee, getAllEmployees, addEmployee } from './employeeService';
+import { Employee, getAllEmployees, addEmployee, setAllEmployees } from './employeeService';
 
 // Type for team member from getAllTeamMembers
 type TeamMember = {
@@ -237,7 +237,7 @@ export const updateEmployeeFromTeamMember = (teamMemberEmail: string): boolean =
     };
 
     // Save updated employees
-    localStorage.setItem('employees', JSON.stringify(employees));
+    setAllEmployees(employees);
     
     console.log(`Updated employee ${teamMemberEmail} from team member data`);
     return true;

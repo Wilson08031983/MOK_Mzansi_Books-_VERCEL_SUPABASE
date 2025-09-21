@@ -6,6 +6,7 @@
 import { Project } from '@/types/project';
 import PayrollExpenseIntegrationService from '@/services/payrollExpenseIntegrationService';
 import payrollCalculationService from '@/services/payrollCalculationService';
+import { getAllEmployees, setAllEmployees } from '@/services/employeeService';
 
 export interface TestEmployee {
   id: string;
@@ -116,7 +117,7 @@ class PayrollTestingScenarios {
   private async backupOriginalData(): Promise<void> {
     this.originalData = {
       projects: localStorage.getItem('projects'),
-      employees: localStorage.getItem('employees'),
+      employees: JSON.stringify(getAllEmployees()),
       salaryCalculations: localStorage.getItem('salary_calculations'),
       expenses: localStorage.getItem('expenses'),
       projectSalaryExpenses: localStorage.getItem('projectSalaryExpenses'),
@@ -129,8 +130,19 @@ class PayrollTestingScenarios {
    */
   private async restoreOriginalData(): Promise<void> {
     Object.keys(this.originalData).forEach(key => {
-      if (this.originalData[key]) {
-        localStorage.setItem(key, this.originalData[key]);
+      const value = this.originalData[key];
+      if (key === 'employees') {
+        try {
+          const employees = value ? JSON.parse(value) : [];
+          setAllEmployees(employees as any);
+        } catch (e) {
+          setAllEmployees([] as any);
+        }
+        return;
+      }
+
+      if (value) {
+        localStorage.setItem(key, value);
       } else {
         localStorage.removeItem(key);
       }
@@ -152,7 +164,7 @@ class PayrollTestingScenarios {
       status: 'active'
     }));
 
-    localStorage.setItem('employees', JSON.stringify(employees));
+    setAllEmployees(employees as any);
 
     // Setup salary calculations
     const salaryCalculations = this.testEmployees.map(emp => ({

@@ -5,6 +5,7 @@ import { getUserCredentialsByEmail, addUser } from '@/services/localAuthService'
 import { getCurrentDeviceSession, addDeviceSession, sendLoginNotification } from '@/services/securityService';
 import { getAdminPermissions, getDefaultPermissions, saveUserPermissions, isAdminRole as isAdminRolePermission } from '@/services/permissionService';
 import { migrateLegacyCompanyKeys } from '@/services/companyService';
+import { initializeEmptyEmployeeData } from '@/services/employeeService';
 
 // Properly typed user interface without Supabase dependency
 export interface User {
@@ -95,6 +96,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Bootstrap: migrate any legacy unscoped keys to scoped equivalents after signup/login
       try { migrateLegacyCompanyKeys(); } catch (e) { console.warn('Non-blocking: company migration after signUp failed', e); }
+      
+      // Initialize empty employee data for new account
+      try { initializeEmptyEmployeeData(); } catch (e) { console.warn('Non-blocking: employee data initialization failed', e); }
 
       // Seed per-user trial subscription snapshot for non-admin accounts
       try {

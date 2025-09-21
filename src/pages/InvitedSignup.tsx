@@ -22,6 +22,7 @@ const InvitedSignup = () => {
     role: '',
     token: '',
     permissions: {},
+    companyId: ''
   });
 
   const [formData, setFormData] = useState({
@@ -56,7 +57,8 @@ const InvitedSignup = () => {
         email: invitation.email,
         role: invitation.role,
         token: token,
-        permissions: invitation.permissions
+        permissions: invitation.permissions,
+        companyId: invitation.companyId
       });
     } else {
       toast({
@@ -79,7 +81,10 @@ const InvitedSignup = () => {
     setLoading(true);
 
     try {
-      const success = completeInvitation(invitedUserData.token, formData);
+      const success = completeInvitation(invitedUserData.token, {
+        ...formData,
+        companyId: invitedUserData.companyId
+      });
       
       if (success) {
         // Handle invitation acceptance workflow

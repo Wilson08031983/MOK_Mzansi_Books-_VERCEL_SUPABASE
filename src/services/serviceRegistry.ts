@@ -34,10 +34,14 @@ export const initializeServices = async (): Promise<boolean> => {
     
     // Initialize local auth service
     try {
-      // localAuthService has initializeLocalAuth()/initializeAuth(), not initialize()
-      localAuthService.initializeLocalAuth();
-      serviceStatus.localAuth.initialized = true;
-      console.log('Local auth service initialized:', true);
+      // Only initialize local auth in dev or when explicitly enabled
+      if (import.meta.env.DEV || import.meta.env.VITE_ENABLE_LOCAL_AUTH === 'true') {
+        localAuthService.initializeLocalAuth();
+        serviceStatus.localAuth.initialized = true;
+        console.log('Local auth service initialized:', true);
+      } else {
+        console.log('Local auth service initialization skipped in production');
+      }
     } catch (error) {
       serviceStatus.localAuth.error = error instanceof Error ? error.message : 'Unknown error';
       console.error('Failed to initialize local auth service:', error);

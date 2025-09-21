@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+<div style="margin:0;padding:0;width:100%;background-color:#F9FAFB;font-family:-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;line-height:1.6;color:#111827"><style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.05);
+          }
+          
+          .header {
+               background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #EC4899 100%);
+               padding: 4px 20px;
+               text-align: center;
+               color: white;
+               position: relative;
+             }
+          
+          .logo {
+                max-width: 188px;
+                height: auto;
+                margin-bottom: 3px;
+                display: inline-block;
+                position: relative;
+                z-index: 1;
+              }
+          
+          .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 3px;
+            letter-spacing: 1px;
+          }
+          
+          .content {
+            padding: 18px 30px;
+          }
+          
+          .footer {
+            background: #F9FAFB;
+            padding: 15px 20px;
+            text-align: center;
+            border-top: 1px solid #E5E7EB;
+          }
+          
+          .social-links {
+            margin-bottom: 20px;
+          }
+          
+          .social-link {
+            display: inline-block;
+            margin: 0 10px;
+            text-decoration: none;
+            }
+            
+            .social-icon {
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
+            }
+            
+            .copyright {
+              font-size: 12px;
+              color: #6b7280;
+              margin-bottom: 20px;
+            }
+            
+            .signature {
+              margin-top: 15px;
+              padding-top: 15px;
+              border-top: 1px solid #E5E7EB;
+              background: #ffffff;
+              border-radius: 8px;
+              padding: 20px;
+              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            }
+            
+            .signature img {
+              max-width: 200px;
+              height: auto;
+              margin-bottom: 15px;
+              display: inline-block;
+            }
+            
+            .signature-name {
+              font-weight: bold;
+              font-size: 16px;
+              color: #111827;
+              margin-bottom: 5px;
+            }
+            
+            .signature-company {
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 10px;
+            }
+            
+            .signature-contact {
+              font-size: 14px;
+              color: #6b7280;
+              margin-bottom: 5px;
+            }
+            
+            .signature-contact a {
+              color: #3b82f6;
+              text-decoration: none;
+            }
+            
+            .signature-contact a:hover {
+              text-decoration: underline;
+            }
+            
+            .button {
+              display: inline-block;
+              padding: 12px 24px;
+              background: #3B82F6;
+              color: white;
+              text-decoration: none;
+              border-radius: 8px;
+              font-weight: 600;
+              margin: 20px 0;
+            }
+            
+            @media only screen and (max-width: 600px) {
+              .email-container {
+                margin: 10px;
+                border-radius: 0;
+              }
+              
+              .content {
+                padding: 20px 15px;
+              }
+              
+              .header {
+                padding: 20px 15px;
+              }
+              
+              .footer {
+                padding: 20px 15px;
+              }
+            }
+          </style><div style="display:none;font-size:1px;color:#FEFEFE;line-height:1px;font-family:sans-serif;max-height:0px;max-width:0px;opacity:0;overflow:hidden">Welcome {{employee_name}}! Set up your account to get started.</div><table role="presentation" cellSpacing="0" cellPadding="0" border="0" width="100%"><tbody><tr><td style="padding:20px 0"><div class="email-container"><div class="header"><a href="https://www.mokmzansibooks.com" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:inline-block"><img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/logo.png" alt="MOK MZANSI BOOKS" class="logo"/></a></div><div class="content"><div style="font-family:Arial, sans-serif;line-height:1.6;color:#333333"><div style="text-align:center;margin-bottom:30px;padding:20px;background:linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);color:white;border-radius:8px"><h1 style="font-size:28px;font-weight:bold;margin:0 0 10px 0">Welcome to the Team! 🎉</h1><p style="font-size:16px;margin:0;opacity:0.9">We&#x27;re excited to have you join {{company_name}}</p></div><div style="padding:0 20px"><p style="font-size:16px;margin-bottom:16px;line-height:1.6">Dear {{employee_name}},</p><p style="font-size:16px;margin-bottom:16px;line-height:1.6">Welcome to <strong>{{company_name}}</strong>! We&#x27;re thrilled to have you join our team as our new {{position}} in the {{department}} department.</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0"><h3 style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#4f46e5">Your Employment Details</h3><p style="font-size:14px;margin-bottom:8px;color:#64748b"><strong>Name:</strong> {{employee_name}}</p><p style="font-size:14px;margin-bottom:8px;color:#64748b"><strong>Email:</strong> {{employee_email}}</p><p style="font-size:14px;margin-bottom:8px;color:#64748b"><strong>Position:</strong> {{position}}</p><p style="font-size:14px;margin-bottom:8px;color:#64748b"><strong>Department:</strong> {{department}}</p><p style="font-size:14px;margin-bottom:8px;color:#64748b"><strong>Start Date:</strong> {{start_date}}</p><p style="font-size:14px;margin-bottom:8px;color:#64748b"><strong>Manager:</strong> {{manager_name}}</p></div><h3 style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#4f46e5">Next Steps - Set Up Your Account</h3><p style="font-size:16px;margin-bottom:16px;line-height:1.6">To access your employee portal and company systems, you&#x27;ll need to create your secure password:</p><div style="text-align:center;margin:28px 0"><a href="{{password_creation_link}}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);color:white;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;text-align:center;margin:20px 0">Create Your Password &amp; Access Account</a><p style="font-size:12px;color:#64748b;margin-top:10px">If the button doesn&#x27;t work, copy and paste this link into your browser:</p><p style="font-size:12px;color:#4f46e5;word-break:break-all;background:#f1f5f9;padding:8px;border-radius:4px;margin:8px 0">{{password_creation_link}}</p></div><h3 style="font-size:18px;font-weight:bold;margin-bottom:12px;color:#4f46e5">What You&#x27;ll Have Access To:</h3><ol style="padding-left:20px;margin-bottom:20px"><li style="margin-bottom:8px;font-size:15px">Employee portal with your personal information</li><li style="margin-bottom:8px;font-size:15px">Company directory and team contacts</li><li style="margin-bottom:8px;font-size:15px">HR documents and policies</li><li style="margin-bottom:8px;font-size:15px">Time and attendance tracking</li><li style="margin-bottom:8px;font-size:15px">Payroll and benefits information</li><li style="margin-bottom:8px;font-size:15px">Company announcements and updates</li></ol><div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:12px;font-size:14px;color:#92400e;margin:20px 0"><strong>Important:</strong> For security reasons, this password creation link will expire in 24 hours. Please set up your account as soon as possible.</div><p style="font-size:16px;margin-bottom:16px;line-height:1.6">We&#x27;re committed to making your onboarding experience smooth and welcoming. If you have any questions or need assistance, please don&#x27;t hesitate to reach out.</p><div style="height:1px;background:#e2e8f0;margin:30px 0"></div><p style="font-size:14px;color:#64748b;text-align:center">Need help? Contact our HR team at <a href="mailto:{{support_email}}" style="color:#4f46e5;text-decoration:none">{{support_email}}</a> or call us at <a href="tel:+27 64 550 4029" style="color:#4f46e5;text-decoration:none">+27 64 550 4029</a></p><p style="font-size:16px;margin-bottom:16px;line-height:1.6">Welcome aboard, and we look forward to working with you!</p><p style="font-size:16px;margin-bottom:16px;line-height:1.6">Best regards,<br/>The {{company_name}} Team</p></div></div></div><div class="footer"><div class="social-links"><a href="https://tiktok.com/@morwa.moabelo" class="social-link"><img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/tiktok.png" alt="TikTok" class="social-icon"/></a><a href="https://twitter.com/stmok" class="social-link"><img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/twitter.png" alt="Twitter X" class="social-icon"/></a><a href="https://www.facebook.com/share/p/1BPLxEhpRh/" class="social-link"><img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/Facebook.png" alt="Facebook" class="social-icon"/></a></div><div class="copyright">© 2025 MOKMzansiBooks. All rights reserved.</div><div class="signature" style="margin-top:20px"><img src="https://gtoq3pkyemsoq0xi.public.blob.vercel-storage.com/signature.png" alt="Wilson Moabelo Signature" style="max-width:200px;height:auto;margin-bottom:15px;display:inline-block"/><div class="signature-name">Wilson Moabelo</div><div class="signature-company">MOK MZANSI BOOKS</div><div class="signature-contact"><a href="mailto:admin@mokmzansibooks.com">admin@mokmzansibooks.com</a></div><div class="signature-contact"><a href="tel:+27645504029">+27 64 550 4029</a></div></div></div></div></td></tr></tbody></table></div>
+</body>
+</html>

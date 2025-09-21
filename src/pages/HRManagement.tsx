@@ -33,7 +33,7 @@ import EmployeeProfile from '@/components/hr/EmployeeProfile';
 import DashboardBackground from '@/components/dashboard/DashboardBackground';
 import { addNotification, getNotifications } from '@/services/notificationService';
 
-import { Employee, getAllEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
+import { Employee, getAllEmployees, setAllEmployees, cleanupDuplicateEmployees, resetAndInitializeEmployees, forceCleanupDuplicates } from '@/services/employeeService';
 import { syncTeamMembersToEmployees } from '@/services/teamEmployeeSyncService';
 import { cleanupAllSampleData } from '@/services/cleanupSampleData';
 import { LeaveRequest, LeaveBalance, LeaveTypes } from '@/components/hr/LeaveManagementTypes';
@@ -370,7 +370,7 @@ const HRManagement: React.FC = () => {
         (e.position === 'Software Developer' || e.email?.toLowerCase() === 'admin.user@mokmzansibooks.com')
       ));
       if (filtered.length !== before) {
-        localStorage.setItem('employees', JSON.stringify(filtered));
+        setAllEmployees(filtered);
         console.log('🗑️ [HR] Removed legacy seeded Admin User from employees');
       }
     } catch (err) {

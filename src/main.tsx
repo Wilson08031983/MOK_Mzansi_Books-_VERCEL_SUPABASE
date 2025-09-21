@@ -47,9 +47,13 @@ logCheckpoint('before_auth_init')
 
 // Initialize authentication
 try {
-  console.log('[main.tsx] Script loaded. Initializing local authentication...')
-  initializeLocalAuth()
-  logCheckpoint('auth_initialized')
+  if (import.meta.env.DEV || import.meta.env.VITE_ENABLE_LOCAL_AUTH === 'true') {
+    console.log('[main.tsx] Initializing local authentication (dev or explicitly enabled)...')
+    initializeLocalAuth()
+    logCheckpoint('auth_initialized')
+  } else {
+    console.log('[main.tsx] Local authentication initialization skipped in production')
+  }
 } catch (error) {
   console.error('Auth initialization error:', error)
   recordStartupError('auth_init', error)

@@ -1,425 +1,388 @@
 import { v4 as uuidv4 } from 'uuid';
+import { scopedKey, getCurrentUserId } from '@/utils/safeAccess';
 
-// Lightweight HR event dispatcher for cross-component updates/notifications
-const dispatchHREvent = (detail: any) => {
-  try {
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-      window.dispatchEvent(new CustomEvent('hr-updated', { detail }));
-    }
-  } catch (err) {
-    // Non-fatal
-    console.warn('[employeeService] Failed to dispatch hr-updated event:', err);
-  }
+// Storage keys
+const EMPLOYEES_KEY_BASE = 'employees';
+const LEGACY_EMPLOYEES_KEY = 'employees';
+
+/**
+ * Get the storage key for employees, scoped to the current user
+ * This ensures each account has its own isolated employee data
+ */
+export const getEmployeesStorageKey = (): string => {
+  return scopedKey(EMPLOYEES_KEY_BASE);
 };
 
+// ID document type used in UI
+export type IdType = 'ID Number' | 'Passport Number';
+// Add stricter enums for employment, pay cycle, and employee status
+export type EmploymentType = 'Full Time' | 'Part Time';
+export type PaymentCycle = 'Daily' | 'Weekly' | 'Bi-Weekly' | 'Monthly';
+export type EmployeeStatus = 'active' | 'on-leave' | 'terminated';
+
+// Migration flag (scoped per account)
+const EMPLOYEE_MIGRATION_FLAG_BASE = 'employees_migrated_v1';
+const getEmployeeMigrationFlagKey = (): string => scopedKey(EMPLOYEE_MIGRATION_FLAG_BASE);
+
+// Validators
+const isValidEmploymentType = (val: any): val is EmploymentType => val === 'Full Time' || val === 'Part Time';
+const isValidPaymentCycle = (val: any): val is PaymentCycle => (
+  val === 'Daily' || val === 'Weekly' || val === 'Bi-Weekly' || val === 'Monthly'
+);
+const isValidEmployeeStatus = (val: any): val is EmployeeStatus => (
+  val === 'active' || val === 'on-leave' || val === 'terminated'
+);
+
+// Generators (local to avoid circular deps)
+const generateDefaultIdNumber = (): string => {
+  const year = Math.floor(Math.random() * 30) + 70; // 70-99 (1970-1999)
+  const month = Math.floor(Math.random() * 12) + 1;
+  const day = Math.floor(Math.random() * 28) + 1;
+  const sequence = Math.floor(Math.random() * 9000) + 1000;
+  const citizenship = Math.floor(Math.random() * 2); // 0 or 1
+  const gender = Math.floor(Math.random() * 10);
+  return `${year.toString().padStart(2, '0')}${month.toString().padStart(2, '0')}${day.toString().padStart(2, '0')}${sequence}0${citizenship}${gender}`;
+};
+
+/**
+ * Employee interface definition
+ */
 export interface Employee {
   id: string;
-  employeeNumber: string;
-  firstName: string;
-  surname: string;
-  contactNumber: string;
-  email: string;
-  idType: 'ID Number' | 'Passport Number';
-  idValue: string;
-  dateOfBirth: string;
-  employmentType: 'Full Time' | 'Part Time';
-  startDate: string;
-  endDate?: string;
-  paymentCycle: 'Daily' | 'Weekly' | 'Bi-Weekly' | 'Monthly';
-  salary: number;
+  employeeNumber?: string;
+  firstName?: string;
+  surname?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  contactNumber?: string;
+  position?: string;
+  department?: string;
+  startDate?: string;
+  status?: EmployeeStatus;
+  location?: string;
+  employmentType?: EmploymentType;
+  dateOfBirth?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
+  addressLine4?: string;
+  kinName?: string;
+  kinSurname?: string;
+  kinRelationship?: string;
+  kinContactNumber?: string;
+  dayShift?: boolean;
+  nightShift?: boolean;
+  flexibleShift?: boolean;
+  accountHolderName?: string;
+  salary?: number;
+  paymentCycle?: PaymentCycle;
+  bankName?: string;
+  accountNumber?: string;
+  branchCode?: string;
   taxPercentage?: number;
-  department: string;
-  position: string;
-  status: 'active' | 'on-leave' | 'terminated';
-  location: string;
-  
-  // Address fields
-  addressLine1: string;
-  addressLine2: string;
-  addressLine3: string;
-  addressLine4: string;
-  
-  // Next of kin
-  kinRelationship: string;
-  kinName: string;
-  kinSurname: string;
-  kinContactNumber: string;
-  
-  // Bank details
-  bankName: string;
-  accountHolderName: string;
-  accountNumber: string;
-  branchCode: string;
-  
-  // Shifts
-  dayShift: boolean;
-  nightShift: boolean;
-  flexibleShift: boolean;
-  
   avatar?: string;
+  // Identification fields (used across modals and sync services)
+  idType?: IdType;
+  idValue?: string;
 }
 
-// EmployeeFormData is used for the form state in AddEmployeeModal
-// It omits id, employeeNumber, and status which are generated when saving
-export type EmployeeFormData = Omit<Employee, 'id' | 'employeeNumber' | 'status'>;
+/**
+ * Employee form data interface
+ */
+export interface EmployeeFormData {
+  firstName: string;
+  surname: string;
+  email: string;
+  contactNumber: string;
+  position: string;
+  department: string;
+  startDate: string;
+  status?: EmployeeStatus;
+  location?: string;
+  employmentType?: EmploymentType;
+  dateOfBirth?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
+  addressLine4?: string;
+  kinName?: string;
+  kinSurname?: string;
+  kinRelationship?: string;
+  kinContactNumber?: string;
+  dayShift?: boolean;
+  nightShift?: boolean;
+  flexibleShift?: boolean;
+  accountHolderName?: string;
+  salary?: number;
+  paymentCycle?: PaymentCycle;
+  bankName?: string;
+  accountNumber?: string;
+  branchCode?: string;
+  taxPercentage?: number;
+  avatar?: string;
+  // Identification fields (required in form)
+  idType: IdType;
+  idValue: string;
+}
 
+// Normalize and migrate data if needed (runs once per account)
+const migrateEmployeeDataIfNeeded = (): void => {
+  try {
+    const flagKey = getEmployeeMigrationFlagKey();
+    const alreadyMigrated = localStorage.getItem(flagKey);
+    if (alreadyMigrated === 'true') return;
 
-// Generate employee number based on requirements
-export const generateEmployeeNumber = (
-  firstName: string,
-  surname: string,
-  employmentDate: string,
-  idNumber: string,
-): string => {
-  // First 3 letters of first name
-  const firstNamePart = firstName.substring(0, 3).toUpperCase();
-  
-  // First 3 letters of surname
-  const surnamePart = surname.substring(0, 3).toUpperCase();
-  
-  // Date of employment (DDMMYY)
-  const dateParts = employmentDate.split('-');
-  const day = dateParts[2];
-  const month = dateParts[1];
-  const year = dateParts[0].substring(2);
-  const datePart = `${day}${month}${year}`;
-  
-  // Last 3 digits of ID/Passport
-  const idPart = idNumber.slice(-3);
-  
-  // Auto-increment number
-  const employees = getAllEmployees();
-  const count = employees.length + 1;
-  const countPart = count.toString().padStart(3, '0');
-  
-  return `${firstNamePart}${surnamePart}-${datePart}-${idPart}-${countPart}`;
+    const key = getEmployeesStorageKey();
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      localStorage.setItem(flagKey, 'true');
+      return;
+    }
+
+    let parsed: any[];
+    try {
+      parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        localStorage.setItem(flagKey, 'true');
+        return;
+      }
+    } catch {
+      localStorage.setItem(flagKey, 'true');
+      return;
+    }
+
+    const existingIdValues = new Set<string>();
+    parsed.forEach((e) => { if (e && typeof e.idValue === 'string') existingIdValues.add(e.idValue); });
+
+    let changed = false;
+    const migrated = parsed.map((emp) => {
+      const e = { ...emp } as any;
+
+      // Ensure idType/idValue
+      if (!e.idType || (e.idType !== 'ID Number' && e.idType !== 'Passport Number')) {
+        e.idType = 'ID Number';
+        changed = true;
+      }
+      if (!e.idValue || typeof e.idValue !== 'string' || e.idValue.trim() === '') {
+        // generate unique
+        let candidate = generateDefaultIdNumber();
+        let guard = 0;
+        while (existingIdValues.has(candidate) && guard < 10) {
+          candidate = generateDefaultIdNumber();
+          guard++;
+        }
+        e.idValue = candidate;
+        existingIdValues.add(candidate);
+        changed = true;
+      }
+
+      // Coerce enums if present
+      if (e.employmentType !== undefined && !isValidEmploymentType(e.employmentType)) {
+        e.employmentType = 'Full Time';
+        changed = true;
+      }
+      if (e.paymentCycle !== undefined && !isValidPaymentCycle(e.paymentCycle)) {
+        e.paymentCycle = 'Monthly';
+        changed = true;
+      }
+      if (e.status !== undefined && !isValidEmployeeStatus(e.status)) {
+        e.status = 'active';
+        changed = true;
+      }
+
+      return e;
+    });
+
+    if (changed) {
+      localStorage.setItem(key, JSON.stringify(migrated));
+      console.log('[employeeService] Employee data migrated (idType/idValue backfilled and enums normalized)');
+    }
+
+    localStorage.setItem(flagKey, 'true');
+  } catch (err) {
+    // Non-blocking
+    console.warn('[employeeService] Migration check failed', err);
+  }
 };
 
+// Public helper to run migration manually (optional external usage)
+export const runEmployeeDataMigration = (): { migrated: boolean } => {
+  const beforeFlag = localStorage.getItem(getEmployeeMigrationFlagKey());
+  // force-clear the flag to re-run in a controlled way
+  try {
+    localStorage.removeItem(getEmployeeMigrationFlagKey());
+  } catch {}
+  migrateEmployeeDataIfNeeded();
+  const afterFlag = localStorage.getItem(getEmployeeMigrationFlagKey());
+  return { migrated: beforeFlag !== afterFlag };
+};
+
+/**
+ * Get all employees from localStorage
+ */
 export const getAllEmployees = (): Employee[] => {
-  const employees = localStorage.getItem('employees');
-  const parsedEmployees = employees ? JSON.parse(employees) : [];
-  
-  // Remove duplicates based on employee ID
-  const uniqueEmployees = parsedEmployees.filter((employee: Employee, index: number, self: Employee[]) => 
-    index === self.findIndex(e => e.id === employee.id)
-  );
-  
-  return uniqueEmployees;
+  try {
+    // Ensure one-time migration happens before reads
+    migrateEmployeeDataIfNeeded();
+    const scopedKey = getEmployeesStorageKey();
+    const employees = localStorage.getItem(scopedKey);
+    return employees ? JSON.parse(employees) : [];
+  } catch (error) {
+    console.error('Error getting employees:', error);
+    return [];
+  }
 };
 
+/**
+ * Set all employees in localStorage
+ */
+export const setAllEmployees = (employees: Employee[]): void => {
+  try {
+    const scopedKey = getEmployeesStorageKey();
+    localStorage.setItem(scopedKey, JSON.stringify(employees));
+  } catch (error) {
+    console.error('Error setting employees:', error);
+  }
+};
+
+/**
+ * Add a new employee
+ */
 export const addEmployee = (employeeData: EmployeeFormData): Employee => {
-  const employees = getAllEmployees();
-  
-  // Check for potential duplicates based on ID value and email
-  const existingEmployee = employees.find(emp => 
-    emp.idValue === employeeData.idValue || 
-    emp.email === employeeData.email
-  );
-  
-  if (existingEmployee) {
-    console.warn('Employee with same ID or email already exists:', existingEmployee);
-    throw new Error('Employee with this ID number or email already exists');
-  }
-  
-  const newEmployee: Employee = {
-    ...employeeData,
-    id: uuidv4(),
-    employeeNumber: generateEmployeeNumber(
-      employeeData.firstName,
-      employeeData.surname,
-      employeeData.startDate,
-      employeeData.idValue
-    ),
-    status: 'active'
-  };
-  
-  employees.push(newEmployee);
-  localStorage.setItem('employees', JSON.stringify(employees));
-  // Notify listeners
-  dispatchHREvent({ entity: 'employee', action: 'created', employee: newEmployee });
-  
-  return newEmployee;
-};
-
-export const updateEmployee = (id: string, employeeData: Partial<Employee>): Employee | null => {
-  const employees = getAllEmployees();
-  const index = employees.findIndex(employee => employee.id === id);
-  
-  if (index === -1) {
-    return null;
-  }
-  
-  const prev = employees[index];
-  const updatedEmployee = {
-    ...employees[index],
-    ...employeeData
-  };
-  
-  employees[index] = updatedEmployee;
-  localStorage.setItem('employees', JSON.stringify(employees));
-  // Notify listeners (status-specific action if changed)
-  const prevStatus = prev.status;
-  const newStatus = updatedEmployee.status;
-  if (prevStatus !== newStatus) {
-    let action = 'status-changed';
-    if (newStatus === 'terminated') action = 'terminated';
-    if (newStatus === 'on-leave') action = 'on-leave';
-    if (newStatus === 'active' && prevStatus === 'on-leave') action = 'returned-from-leave';
-    dispatchHREvent({ entity: 'employee', action, employee: updatedEmployee, prevStatus, newStatus });
-  } else {
-    dispatchHREvent({ entity: 'employee', action: 'updated', employee: updatedEmployee });
-  }
-  
-  return updatedEmployee;
-};
-
-export const deleteEmployee = (id: string): boolean => {
-  console.log(`🗑️ [employeeService] Starting deleteEmployee for ID: ${id}`);
-  
-  let employeeToDelete: Employee | undefined;
-  
   try {
     const employees = getAllEmployees();
-    console.log(`📋 [employeeService] Current employees count: ${employees.length}`);
+    const newEmployee: Employee = {
+      id: uuidv4(),
+      employeeNumber: `EMP${String(employees.length + 1).padStart(3, '0')}`,
+      ...employeeData
+    };
     
-    employeeToDelete = employees.find(emp => emp.id === id);
+    employees.push(newEmployee);
+    setAllEmployees(employees);
     
-    if (!employeeToDelete) {
-      console.error(`❌ [employeeService] Employee with ID ${id} not found in employees list`);
-      console.log(`📋 [employeeService] Available employee IDs:`, employees.map(e => ({ id: e.id, name: `${e.firstName} ${e.surname}` })));
-      return false;
+    return newEmployee;
+  } catch (error) {
+    console.error('Error adding employee:', error);
+    throw new Error('Failed to add employee');
+  }
+};
+
+/**
+ * Update an existing employee
+ */
+export const updateEmployee = (id: string, employeeData: Partial<Employee>): Employee => {
+  try {
+    const employees = getAllEmployees();
+    const index = employees.findIndex(emp => emp.id === id);
+    
+    if (index === -1) {
+      throw new Error(`Employee with ID ${id} not found`);
     }
     
-    console.log(`👤 [employeeService] Found employee to delete:`, {
-      id: employeeToDelete.id,
-      name: `${employeeToDelete.firstName} ${employeeToDelete.surname}`,
-      email: employeeToDelete.email,
-      position: employeeToDelete.position,
-      isRegularUser: employeeToDelete.firstName === 'Regular' && employeeToDelete.surname === 'User'
-    });
+    const updatedEmployee = { ...employees[index], ...employeeData };
+    employees[index] = updatedEmployee;
     
-    const filteredEmployees = employees.filter(employee => employee.id !== id);
+    setAllEmployees(employees);
+    return updatedEmployee;
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    throw new Error('Failed to update employee');
+  }
+};
+
+/**
+ * Delete an employee
+ */
+export const deleteEmployee = (id: string): boolean => {
+  try {
+    const employees = getAllEmployees();
+    const filteredEmployees = employees.filter(emp => emp.id !== id);
     
     if (filteredEmployees.length === employees.length) {
-      console.error(`❌ [employeeService] No employee was filtered out - ID mismatch issue`);
-      return false;
+      return false; // No employee was deleted
     }
     
-    console.log(`📊 [employeeService] Employees after filtering: ${filteredEmployees.length} (removed 1)`);
-    
-    // Clear all related data for the deleted employee
-    // Remove from employees
-    localStorage.setItem('employees', JSON.stringify(filteredEmployees));
-    
-    // Clear payroll data for this employee
-    const payrollData = localStorage.getItem('payrollCalculations');
-    if (payrollData) {
-      const parsedPayroll = JSON.parse(payrollData);
-      const filteredPayroll = parsedPayroll.filter((p: any) => p.employeeId !== id);
-      localStorage.setItem('payrollCalculations', JSON.stringify(filteredPayroll));
-    }
-    
-    // Clear attendance data for this employee
-    const attendanceData = localStorage.getItem('attendanceSummaries');
-    if (attendanceData) {
-      const parsedAttendance = JSON.parse(attendanceData);
-      const filteredAttendance = parsedAttendance.filter((a: any) => a.employeeId !== id);
-      localStorage.setItem('attendanceSummaries', JSON.stringify(filteredAttendance));
-    }
-    
-    // Clear employee deductions
-    const deductionsData = localStorage.getItem('employeeDeductions');
-    if (deductionsData) {
-      const parsedDeductions = JSON.parse(deductionsData);
-      const filteredDeductions = parsedDeductions.filter((d: any) => d.employeeId !== id);
-      localStorage.setItem('employeeDeductions', JSON.stringify(filteredDeductions));
-    }
-    
-    // Clear salary advances
-    const advancesData = localStorage.getItem('salaryAdvances');
-    if (advancesData) {
-      const parsedAdvances = JSON.parse(advancesData);
-      const filteredAdvances = parsedAdvances.filter((a: any) => a.employeeId !== id);
-      localStorage.setItem('salaryAdvances', JSON.stringify(filteredAdvances));
-    }
-    
-    // Clear EMP201 cache for this employee
-    const emp201Cache = localStorage.getItem('emp201Cache');
-    if (emp201Cache) {
-      const parsedCache = JSON.parse(emp201Cache);
-      Object.keys(parsedCache).forEach(key => {
-        if (key.includes(id)) {
-          delete parsedCache[key];
-        }
-      });
-      localStorage.setItem('emp201Cache', JSON.stringify(parsedCache));
-    }
-    
-    // Clear HR-Accounting cache
-    const hrCache = localStorage.getItem('hrAccountingCache');
-    if (hrCache) {
-      const parsedHRCache = JSON.parse(hrCache);
-      if (parsedHRCache[id]) {
-        delete parsedHRCache[id];
-        localStorage.setItem('hrAccountingCache', JSON.stringify(parsedHRCache));
-      }
-    }
-    
-    // If this is the Regular User, also clear user credentials
-    if (employeeToDelete && (
-      (employeeToDelete.firstName === 'Regular' && employeeToDelete.surname === 'User') ||
-      id === '0f043fc8-b140-48ce-ba79-56d47e21725c'
-    )) {
-      const credentials = localStorage.getItem('userCredentials');
-      if (credentials) {
-        const parsedCredentials = JSON.parse(credentials);
-        // Remove Regular User credentials
-        Object.keys(parsedCredentials).forEach(key => {
-          const user = parsedCredentials[key];
-          if (user.fullName === 'Regular User' || user.email === 'user@mokmzansibooks.com') {
-            delete parsedCredentials[key];
-          }
-        });
-        localStorage.setItem('userCredentials', JSON.stringify(parsedCredentials));
-      }
-      
-      console.log('✅ Regular User completely removed from all systems');
-    }
-    
-    console.log(`✅ Employee ${employeeToDelete?.firstName} ${employeeToDelete?.surname} and all related data deleted successfully`);
-    // Notify listeners of deletion
-    if (employeeToDelete) {
-      dispatchHREvent({ entity: 'employee', action: 'deleted', employee: employeeToDelete });
-    }
+    setAllEmployees(filteredEmployees);
     return true;
   } catch (error) {
-    console.error(`💥 [employeeService] Critical error during deleteEmployee operation:`, {
-      employeeId: id,
-      employeeName: employeeToDelete ? `${employeeToDelete.firstName} ${employeeToDelete.surname}` : 'Unknown',
-      isRegularUser: employeeToDelete ? (employeeToDelete.firstName === 'Regular' && employeeToDelete.surname === 'User') : false,
-      error: error,
-      errorMessage: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    console.error('Error deleting employee:', error);
     return false;
   }
 };
 
+/**
+ * Get an employee by ID
+ */
 export const getEmployeeById = (id: string): Employee | null => {
-  const employees = getAllEmployees();
-  const employee = employees.find(emp => emp.id === id);
-  return employee || null;
-};
-
-export const getEmployeesByBirthMonth = (month: number): Employee[] => {
-  const employees = getAllEmployees();
-  return employees.filter(emp => {
-    const birthDate = new Date(emp.dateOfBirth);
-    return birthDate.getMonth() + 1 === month;
-  });
-};
-
-export const getCurrentMonthBirthdays = (): Employee[] => {
-  const currentMonth = new Date().getMonth() + 1; // JavaScript months are 0-indexed
-  return getEmployeesByBirthMonth(currentMonth);
-};
-
-export const getUpcomingBirthdays = (days: number = 7): Employee[] => {
-  const employees = getAllEmployees();
-  const today = new Date();
-  
-  return employees.filter(emp => {
-    const birthDate = new Date(emp.dateOfBirth);
-    const thisYearBirthday = new Date(
-      today.getFullYear(),
-      birthDate.getMonth(),
-      birthDate.getDate()
-    );
-    
-    if (thisYearBirthday < today) {
-      // Birthday already passed this year, check for next year
-      thisYearBirthday.setFullYear(thisYearBirthday.getFullYear() + 1);
-    }
-    
-    const diffTime = thisYearBirthday.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays >= 0 && diffDays <= days;
-  });
-};
-
-// Function to clean up duplicate employees in localStorage
-export const cleanupDuplicateEmployees = (): void => {
   try {
-    const employees = localStorage.getItem('employees');
-    if (!employees) return;
-    
-    const parsedEmployees = JSON.parse(employees);
-    
-    // Remove duplicates based on ID first
-    let uniqueEmployees = parsedEmployees.filter((employee: Employee, index: number, self: Employee[]) => 
-      index === self.findIndex(e => e.id === employee.id)
-    );
-    
-    // Also remove duplicates based on full name and email to catch different IDs with same person
-    uniqueEmployees = uniqueEmployees.filter((employee: Employee, index: number, self: Employee[]) => {
-      const fullName = `${employee.firstName} ${employee.surname}`.toLowerCase();
-      const email = employee.email?.toLowerCase() || '';
-      
-      return index === self.findIndex(e => {
-        const eFullName = `${e.firstName} ${e.surname}`.toLowerCase();
-        const eEmail = e.email?.toLowerCase() || '';
-        return (fullName === eFullName) || (email && email === eEmail);
-      });
-    });
-    
-    // Only update localStorage if duplicates were found
-    if (uniqueEmployees.length !== parsedEmployees.length) {
-      localStorage.setItem('employees', JSON.stringify(uniqueEmployees));
-      console.log(`Removed ${parsedEmployees.length - uniqueEmployees.length} duplicate employee records`);
-    }
+    const employees = getAllEmployees();
+    return employees.find(emp => emp.id === id) || null;
   } catch (error) {
-    console.error('Error cleaning up duplicate employees:', error);
+    console.error('Error getting employee by ID:', error);
+    return null;
   }
 };
 
-// Function to completely reset and reinitialize employees (for fixing duplicate issues)
+/**
+ * Clean up duplicate employees
+ */
+export const cleanupDuplicateEmployees = (): number => {
+  try {
+    const employees = getAllEmployees();
+    const uniqueEmails = new Set<string>();
+    const uniqueEmployees: Employee[] = [];
+    let duplicatesRemoved = 0;
+    
+    employees.forEach(emp => {
+      if (emp.email && uniqueEmails.has(emp.email.toLowerCase())) {
+        duplicatesRemoved++;
+      } else {
+        if (emp.email) uniqueEmails.add(emp.email.toLowerCase());
+        uniqueEmployees.push(emp);
+      }
+    });
+    
+    if (duplicatesRemoved > 0) {
+      setAllEmployees(uniqueEmployees);
+    }
+    
+    return duplicatesRemoved;
+  } catch (error) {
+    console.error('Error cleaning up duplicate employees:', error);
+    return 0;
+  }
+};
+
+/**
+ * Reset and initialize employees
+ */
 export const resetAndInitializeEmployees = (): void => {
   try {
-    // Clear all existing employees
-    localStorage.removeItem('employees');
-    // Clear the reset flag to ensure fresh initialization
-    sessionStorage.removeItem('employeesReset');
-    console.log('Cleared all existing employee data and reset flags');
-    
-    // Initialize with fresh sample data
-    initializeEmployees();
+    setAllEmployees([]);
   } catch (error) {
     console.error('Error resetting employees:', error);
   }
 };
 
-// Function to force cleanup duplicates immediately
-export const forceCleanupDuplicates = (): void => {
-  try {
-    // Clear the reset flag to force a fresh cleanup
-    sessionStorage.removeItem('employeesReset');
-    cleanupDuplicateEmployees();
-    console.log('Forced duplicate cleanup completed');
-  } catch (error) {
-    console.error('Error in force cleanup:', error);
-  }
+/**
+ * Force cleanup of duplicates
+ */
+export const forceCleanupDuplicates = (): number => {
+  return cleanupDuplicateEmployees();
 };
 
-export const initializeEmployees = (): void => {
-  // First clean up any existing duplicates
-  cleanupDuplicateEmployees();
-  
-  const employees = getAllEmployees();
-  
-  if (employees.length === 0) {
-    // Do not seed any default employees here. HR employees should be sourced from Company Team Members
-    // via team-employee sync. Leaving empty ensures no static Admin employee appears in HR.
-    console.log('initializeEmployees: no employees present; leaving empty. Team Management will sync employees from Team Members.');
+/**
+ * Ensures a new account starts with empty employee data
+ * This should be called during account creation or when switching accounts
+ */
+export const initializeEmptyEmployeeData = (): void => {
+  try {
+    const scopedKey = getEmployeesStorageKey();
+    // Set an empty array as the initial employee data for this account
+    localStorage.setItem(scopedKey, JSON.stringify([]));
+    console.log('[employeeService] Initialized empty employee data for new account');
+  } catch (e) {
+    console.error('[employeeService] Failed to initialize empty employee data', e);
   }
 };

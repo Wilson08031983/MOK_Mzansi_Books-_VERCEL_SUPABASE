@@ -129,8 +129,17 @@ const InviteMemberModal = ({ isOpen, onClose, onInviteSuccess }: InviteMemberMod
       // Calculate admin name based on credentials (for personalization)
       const adminName = adminEmail.split('@')[0] || 'Admin';
       
+      // Get company ID from localStorage or use default
+      let companyId = 'default-company';
+      try {
+        const companyDetails = JSON.parse(localStorage.getItem('companyDetails') || '{}');
+        companyId = companyDetails.id || companyDetails.companyId || 'default-company';
+      } catch (error) {
+        console.warn('Could not retrieve company ID, using default');
+      }
+      
       // Create a secure invitation with token
-      const invitation = createInvitation(inviteEmail, selectedRole, adminEmail, permissions);
+      const invitation = createInvitation(inviteEmail, selectedRole, adminEmail, permissions, companyId);
       const inviteLink = generateInvitationLink(invitation.token);
       
       // Set the invitation link for display

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {{company_name}}!</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .header p {
+            margin: 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px;
+        }
+        .content p {
+            font-size: 16px;
+            color: #374151;
+            margin-bottom: 16px;
+        }
+        .info-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .info-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #4f46e5;
+        }
+        .info-item {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #64748b;
+        }
+        .cta-container {
+            text-align: center;
+            margin: 28px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .link-note {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 10px;
+        }
+        .raw-link {
+            font-size: 12px;
+            color: #4f46e5;
+            word-break: break-all;
+            background: #f1f5f9;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 8px 0;
+        }
+        .steps-list {
+            padding-left: 20px;
+            margin-bottom: 20px;
+        }
+        .steps-list li {
+            margin-bottom: 8px;
+            font-size: 15px;
+            color: #374151;
+        }
+        .note {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            color: #92400e;
+            margin: 20px 0;
+        }
+        .divider {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 30px 0;
+        }
+        .support-text {
+            font-size: 14px;
+            color: #64748b;
+            text-align: center;
+        }
+        .link {
+            color: #4f46e5;
+            text-decoration: none;
+        }
+        .footer {
+            background-color: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        .footer p {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .company-info {
+            margin-top: 15px;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>Welcome to the Team! 🎉</h1>
+            <p>We're excited to have you join {{company_name}}</p>
+        </div>
+
+        <div class="content">
+            <p>Dear {{employee_name}},</p>
+
+            <p>
+                Welcome to <strong>{{company_name}}</strong>! We're thrilled to have you join our team as our new {{position}} in the {{department}} department.
+            </p>
+
+            <div class="info-box">
+                <h3 class="info-title">Your Employment Details</h3>
+                <p class="info-item"><strong>Name:</strong> {{employee_name}}</p>
+                <p class="info-item"><strong>Email:</strong> {{employee_email}}</p>
+                <p class="info-item"><strong>Position:</strong> {{position}}</p>
+                <p class="info-item"><strong>Department:</strong> {{department}}</p>
+                <p class="info-item"><strong>Start Date:</strong> {{start_date}}</p>
+                {{#manager_name}}
+                <p class="info-item"><strong>Manager:</strong> {{manager_name}}</p>
+                {{/manager_name}}
+            </div>
+
+            <h3 class="info-title">Next Steps - Set Up Your Account</h3>
+            <p>
+                To access your employee portal and company systems, you'll need to create your secure password:
+            </p>
+
+            <div class="cta-container">
+                <a href="{{password_creation_link}}" class="cta-button">
+                    Create Your Password & Access Account
+                </a>
+                <p class="link-note">If the button doesn't work, copy and paste this link into your browser:</p>
+                <p class="raw-link">{{password_creation_link}}</p>
+            </div>
+
+            <h3 class="info-title">What You'll Have Access To:</h3>
+            <ol class="steps-list">
+                <li>Employee portal with your personal information</li>
+                <li>Company directory and team contacts</li>
+                <li>HR documents and policies</li>
+                <li>Time and attendance tracking</li>
+                <li>Payroll and benefits information</li>
+                <li>Company announcements and updates</li>
+            </ol>
+
+            <div class="note">
+                <strong>Important:</strong> For security reasons, this password creation link will expire in 24 hours. Please set up your account as soon as possible.
+            </div>
+
+            <p>
+                We're committed to making your onboarding experience smooth and welcoming. If you have any questions or need assistance, please don't hesitate to reach out.
+            </p>
+
+            <div class="divider"></div>
+
+            <p class="support-text">
+                Need help? Contact our HR team at 
+                <a href="mailto:{{support_email}}" class="link">{{support_email}}</a>
+                {{#company_phone}}
+                or call us at 
+                <a href="tel:{{company_phone}}" class="link">{{company_phone}}</a>
+                {{/company_phone}}
+            </p>
+
+            <p>
+                Welcome aboard, and we look forward to working with you!
+            </p>
+
+            <p>
+                Best regards,<br>
+                The {{company_name}} Team
+            </p>
+        </div>
+
+        <div class="footer">
+            <div class="company-info">
+                <p><strong>{{company_name}}</strong></p>
+                <p>{{company_email}} | {{company_phone}}</p>
+                <p>{{company_address}}</p>
+            </div>
+            <div style="margin-top: 20px; font-size: 12px; color: #adb5bd;">
+                <p>You're receiving this email because you were added as an employee at {{company_name}}.</p>
+                <p>© {{current_year}} {{company_name}}. All rights reserved.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

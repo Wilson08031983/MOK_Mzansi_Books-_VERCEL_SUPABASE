@@ -1,4 +1,4 @@
-import { getAllEmployees } from './employeeService';
+import { getAllEmployees, setAllEmployees } from './employeeService';
 
 /**
  * Clean up all sample employees and related data from localStorage
@@ -38,7 +38,7 @@ export function cleanupAllSampleData(): { success: boolean; employeesRemoved: nu
       return isAdminUser;
     });
     
-    localStorage.setItem('employees', JSON.stringify(remainingEmployees));
+    setAllEmployees(remainingEmployees);
     results.employeesRemoved = sampleEmployees.length;
     console.log(`✅ Removed ${sampleEmployees.length} sample employees`);
     

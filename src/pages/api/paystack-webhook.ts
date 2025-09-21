@@ -88,6 +88,9 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
           },
         });
 
+        // Get the subscription to link the payment
+        const subscription = await db.subscription.findUnique({ where: { userId: user_id } });
+        
         // Record payment (amount is in kobo from Paystack)
         await db.payment.create({
           data: {
@@ -98,7 +101,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
             status: 'succeeded',
             reference,
             providerPaymentId: String(event.data?.id ?? ''),
-            subscription: { connect: { userId: user_id } },
+            subscriptionId: subscription?.userId,
           },
         });
 
@@ -120,6 +123,44 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
               },
             },
           });
+        }
+
+        // Send subscription confirmation email
+        try {
+          const user = await db.user.findUnique({ where: { id: user_id } });
+          if (user) {
+            const { postmarkService } = await import('../../services/postmarkService');
+            await postmarkService.sendEmailWithTemplate({
+              to: user.email,
+              subject: 'Welcome to Your Subscription',
+              templateAlias: 'welcome-email',
+              templateModel: {
+                user_name: user.name || user.email.split('@')[0],
+                plan_name: plan.name,
+                billing_cycle: plan.duration === 30 ? 'Monthly' : 'Annual',
+                amount_charged: `R${((amount as number) / 100).toFixed(2)}`,
+                next_billing_date: newEnd.toLocaleDateString('en-ZA'),
+                company_name: 'MOK Mzansi Books'
+              },
+              tag: 'subscription-started'
+            });
+            
+            // Log email event
+            await db.auditLog.create({
+              data: {
+                userId: user_id,
+                action: 'email.subscription_started',
+                payload: {
+                  event: 'subscription_started',
+                  toMasked: user.email.replace(/(.{1,3}).*@/, '$1***@'),
+                  templateId: 'welcome-email',
+                  status: 'sent'
+                }
+              }
+            });
+          }
+        } catch (emailError) {
+          console.error('Failed to send subscription confirmation email:', emailError);
         }
 
         await db.auditLog.create({
@@ -144,6 +185,41 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
             where: { userId: failedUser.id },
             data: { status: 'past_due', paymentDeclinedDate: now, graceEnd: grace },
           });
+          
+          // Send payment failed email
+          try {
+            const subscription = await db.subscription.findUnique({ where: { userId: failedUser.id } });
+            const { postmarkService } = await import('../../services/postmarkService');
+            await postmarkService.sendGracePeriodReminderEmail(failedUser.email, {
+              userName: failedUser.name || failedUser.email.split('@')[0],
+              companyName: 'MOK Mzansi Books',
+              daysRemaining: 5,
+              gracePeriodEndDate: grace.toLocaleDateString('en-ZA'),
+              paymentLink: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
+              accountManagementLink: `${process.env.NEXT_PUBLIC_APP_URL}/settings`,
+              lastPaymentAttempt: now.toLocaleDateString('en-ZA'),
+              amountDue: event.data.amount ? (event.data.amount / 100) : 0,
+              currency: 'ZAR',
+              supportEmail: 'support@mokmzansibooks.com'
+            });
+            
+            // Log email event
+            await db.auditLog.create({
+              data: {
+                userId: failedUser.id,
+                action: 'email.payment_failed',
+                payload: {
+                  event: 'payment_failed',
+                  toMasked: failedUser.email.replace(/(.{1,3}).*@/, '$1***@'),
+                  templateId: 'grace-period-reminder',
+                  status: 'sent'
+                }
+              }
+            });
+          } catch (emailError) {
+            console.error('Failed to send payment failed email:', emailError);
+          }
+          
           await db.auditLog.create({
             data: {
               userId: failedUser.id,

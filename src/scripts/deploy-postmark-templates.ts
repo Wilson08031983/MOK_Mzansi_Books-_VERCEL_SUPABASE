@@ -31,6 +31,7 @@ import { TrialReminderEmail } from '../emails/TrialReminderEmail';
 import { GenericCustomEmail } from '../emails/templates/GenericCustomEmail';
 import { LoginNotificationEmail } from '../emails/templates/LoginNotificationEmail';
 import { PasswordResetEmail } from '../emails/templates/PasswordResetEmail';
+import { EmployeeWelcomeEmail } from '../emails/templates/EmployeeWelcomeEmail';
 
 // Load environment variables
 require('dotenv').config({ path: '.env.local' });
@@ -452,6 +453,33 @@ class PostmarkTemplateDeployer {
           request_location: 'Johannesburg, South Africa',
           support_email: 'support@mokmzansibooks.com',
           company_name: 'MOK Mzansi Books'
+        }
+      },
+      {
+        name: 'Employee Welcome',
+        alias: 'employee-welcome-email',
+        subject: 'Welcome to {{company_name}} - Set Up Your Account',
+        component: React.createElement(EmployeeWelcomeEmail, {
+          employeeName: '{{employee_name}}',
+          employeeEmail: '{{employee_email}}',
+          position: '{{position}}',
+          department: '{{department}}',
+          companyName: '{{company_name}}',
+          passwordCreationLink: '{{password_creation_link}}',
+          startDate: '{{start_date}}',
+          managerName: '{{manager_name}}',
+          supportEmail: '{{support_email}}'
+        }),
+        sampleData: {
+          employee_name: 'Sarah Johnson',
+          employee_email: 'sarah.johnson@mokmzansibooks.com',
+          position: 'Accountant',
+          department: 'Finance',
+          company_name: 'MOK Mzansi Books',
+          password_creation_link: 'https://app.mokmzansibooks.com/create-password?token=emp123xyz789',
+          start_date: '2024-02-01',
+          manager_name: 'Wilson Moabelo',
+          support_email: 'hr@mokmzansibooks.com'
         }
       }
     ];

@@ -413,6 +413,47 @@ class PostMarkService {
   }
 
   /**
+   * Send employee welcome email with password creation link
+   */
+  async sendEmployeeWelcomeEmail(
+    to: string,
+    data: {
+      employeeName: string;
+      employeeEmail: string;
+      position: string;
+      department: string;
+      companyName: string;
+      passwordCreationLink: string;
+      startDate: string;
+      managerName?: string;
+      supportEmail?: string;
+    }
+  ): Promise<PostMarkResponse> {
+    return this.sendEmailWithTemplate({
+      to,
+      subject: `Welcome to ${data.companyName} - Set Up Your Account`,
+      templateAlias: 'employee-welcome-email',
+      templateModel: {
+        employee_name: data.employeeName,
+        employee_email: data.employeeEmail,
+        position: data.position,
+        department: data.department,
+        company_name: data.companyName,
+        password_creation_link: data.passwordCreationLink,
+        start_date: data.startDate,
+        manager_name: data.managerName || 'Your Manager',
+        support_email: data.supportEmail || emailConfig.company.email
+      },
+      tag: 'employee-welcome',
+      metadata: {
+        type: 'employee-welcome',
+        employee: data.employeeName,
+        department: data.department
+      }
+    });
+  }
+
+  /**
    * Send team invitation email
    */
   async sendTeamInvitationEmail(
@@ -720,6 +761,16 @@ class PostMarkService {
    * Get email statistics
    */
   async getEmailStats(tag?: string, fromDate?: string, toDate?: string) {
+    if (POSTMARK_DRY_RUN || !this.client) {
+      // In dry-run mode or when client is unavailable, return a mock stats object
+      return {
+        Sent: 0,
+        Bounced: 0,
+        SpamComplaints: 0,
+        Tracked: 0,
+        WithClientRecorded: 0
+      } as any;
+    }
     try {
       const stats = await this.client.getOutboundOverview({
         tag,
@@ -737,6 +788,10 @@ class PostMarkService {
    * Get bounced emails
    */
   async getBouncedEmails(count = 100, offset = 0) {
+    if (POSTMARK_DRY_RUN || !this.client) {
+      // In dry-run mode or when client is unavailable, return an empty result
+      return { TotalCount: 0, Bounces: [] } as any;
+    }
     try {
       const bounces = await this.client.getBounces({
         count,
@@ -827,6 +882,9 @@ export const postmarkService = {
 
   async sendTrialReminderEmail(to: string, data: any) {
     return this.getInstance().sendTrialReminderEmail(to, data);
+  },
+  async sendEmployeeWelcomeEmail(to: string, data: any) {
+    return this.getInstance().sendEmployeeWelcomeEmail(to, data);
   }
 };
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocalization } from '@/hooks/useLocalization';
-import { useAuth } from '@/hooks/useAuthHook';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Edit, Save, X, ShieldAlert, RefreshCw } from 'lucide-react';
@@ -58,11 +58,8 @@ const CompanyDetails = () => {
       }));
     }
     
-    // Notify about the test users available
-    toast.info("Admin: admin@mokmzansibooks.com / admin123\nRegular: user@mokmzansibooks.com / user123", {
-      description: "Test Users Available",
-      duration: 5000
-    });
+    // Removed legacy test credentials popup
+    // (No longer display test users in production UI)
   }, []);
   const [companyData, setCompanyData] = useState({
     name: 'MOK Mzansi Books',

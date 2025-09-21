@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { UserPermissions } from './permissionService';
 import { safeLocalStorage, safeGet, safeArray, safeString } from '@/utils/safeAccess';
-import { UserCredentials } from './localAuthService';
+import { UserCredentials } from './resetLocalAuth';
 
 export interface InvitedUser {
   email: string;
@@ -12,6 +12,8 @@ export interface InvitedUser {
   permissions: UserPermissions;
   password?: string;
   isAccepted: boolean;
+  companyId: string; // Company-scoped isolation
+  expiresAt: number; // Explicit expiry timestamp
 }
 
 export interface InvitationDetails {
@@ -19,15 +21,31 @@ export interface InvitationDetails {
   email: string;
   role: string;
   invitedBy: string;
+  companyId: string;
+  expiresAt: number;
 }
 
 /**
- * Creates a new invitation with a secure token
+ * Creates a new invitation with a secure token and company scope
  */
-export const createInvitation = (email: string, role: string, invitedBy: string, permissions: UserPermissions): InvitationDetails => {
+export const createInvitation = (email: string, role: string, invitedBy: string, permissions: UserPermissions, companyId: string): InvitationDetails => {
   try {
     const token = uuidv4();
     const invitedUsers = getInvitedUsers();
+    const now = Date.now();
+    const expiresAt = now + (7 * 24 * 60 * 60 * 1000); // 7 days expiry
+    
+    // Check if email already has pending invitation for this company
+    const existingInvitation = Object.values(invitedUsers).find(user => 
+      user.email.toLowerCase() === email.toLowerCase() && 
+      user.companyId === companyId && 
+      !user.isAccepted && 
+      user.expiresAt > now
+    );
+    
+    if (existingInvitation) {
+      throw new Error('User already has a pending invitation for this company');
+    }
     
     // Store the invitation in localStorage
     invitedUsers[token] = {
@@ -35,9 +53,11 @@ export const createInvitation = (email: string, role: string, invitedBy: string,
       role: safeString(role),
       token,
       invitedBy: safeString(invitedBy),
-      invitedAt: Date.now(),
+      invitedAt: now,
+      expiresAt,
       permissions,
-      isAccepted: false
+      isAccepted: false,
+      companyId: safeString(companyId)
     };
     
     safeLocalStorage.setItem('invitedUsers', invitedUsers);
@@ -46,11 +66,13 @@ export const createInvitation = (email: string, role: string, invitedBy: string,
       token,
       email: safeString(email),
       role: safeString(role),
-      invitedBy: safeString(invitedBy)
+      invitedBy: safeString(invitedBy),
+      companyId: safeString(companyId),
+      expiresAt
     };
   } catch (error) {
     console.error('Error creating invitation:', error);
-    throw new Error('Failed to create invitation');
+    throw error;
   }
 };
 
@@ -68,9 +90,9 @@ export const getInvitedUsers = (): Record<string, InvitedUser> => {
 };
 
 /**
- * Validate an invitation token
+ * Validate an invitation token with company scope
  */
-export const validateInvitationToken = (token: string): { email: string; role: string; permissions: UserPermissions; } | null => {
+export const validateInvitationToken = (token: string): { email: string; role: string; permissions: UserPermissions; companyId: string; } | null => {
   const invitedUsers = getInvitedUsers();
   const invitation = invitedUsers[token];
   
@@ -82,10 +104,9 @@ export const validateInvitationToken = (token: string): { email: string; role: s
     return null; // Token already used
   }
   
-  // Check if token has expired (24 hours)
+  // Check if token has expired (7 days)
   const now = Date.now();
-  const expiryTime = invitation.invitedAt + (24 * 60 * 60 * 1000);
-  if (now > expiryTime) {
+  if (now > invitation.expiresAt) {
     return null; // Token expired
   }
   
@@ -93,7 +114,8 @@ export const validateInvitationToken = (token: string): { email: string; role: s
   return {
     email: invitation.email,
     role: invitation.role,
-    permissions: invitation.permissions
+    permissions: invitation.permissions,
+    companyId: invitation.companyId
   };
 };
 
@@ -108,6 +130,7 @@ export const completeInvitation = (token: string, userData: {
   addressLine2: string;
   addressLine3: string;
   addressLine4: string;
+  companyId: string;
 }, password?: string): boolean => {
   const invitedUsers = getInvitedUsers();
   const invitation = invitedUsers[token];
@@ -124,23 +147,17 @@ export const completeInvitation = (token: string, userData: {
   const userCredentials = safeGet(safeLocalStorage.getItem('userCredentials', null), {}) as Record<string, UserCredentials>;
   const newUserId = uuidv4();
   
+  // Validate company scope
+  if (invitation.companyId !== userData.companyId) {
+    return false; // Cross-company invitation attempt
+  }
+  
   userCredentials[newUserId] = {
     email: invitation.email,
     password: password || 'changeme123', // This should be changed by the user
     role: invitation.role,
     permissions: invitation.permissions,
-    user_metadata: {
-      first_name: userData.name,
-      last_name: userData.surname,
-      phone: userData.phoneNumber,
-      address: {
-        line1: userData.addressLine1,
-        line2: userData.addressLine2,
-        line3: userData.addressLine3,
-        line4: userData.addressLine4
-      },
-      company_name: 'MOK Mzansi Books'
-    }
+    fullName: `${userData.name} ${userData.surname}`.trim()
   };
   
   safeLocalStorage.setItem('userCredentials', userCredentials);

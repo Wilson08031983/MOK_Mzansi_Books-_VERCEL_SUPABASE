@@ -47,8 +47,11 @@ const CompanyInformationForm = ({ companyData, isEditing, onInputChange }: Compa
             <input
               type="email"
               value={companyData.email}
-              onChange={(e) => onInputChange('email', e.target.value)}
-              className="w-full px-4 py-3 glass backdrop-blur-md bg-white/10 dark:bg-black/30 text-foreground placeholder:text-slate-400 border border-white/10 rounded-xl focus:ring-2 focus:ring-mokm-purple-500/50 focus:border-mokm-purple-500/50 transition-all duration-300 font-sf-pro"
+              readOnly
+              disabled
+              aria-readonly="true"
+              title="Email is locked for security and cannot be changed"
+              className="w-full px-4 py-3 glass backdrop-blur-md bg-white/5 text-slate-500 placeholder:text-slate-400 border border-white/10 rounded-xl opacity-70 cursor-not-allowed font-sf-pro"
             />
           ) : (
             <p className="px-4 py-3 bg-white/5 dark:bg-black/20 border border-white/10 rounded-xl font-sf-pro text-foreground">{companyData.email}</p>
