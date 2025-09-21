@@ -6,12 +6,12 @@ This document provides the complete list of environment variables that need to b
 
 ### 1. Supabase Core Configuration
 ```
-VITE_PUBLIC_SUPABASE_URL=https://ulduqjddmhnwvdeeldsb.supabase.co
-NEXT_PUBLIC_SUPABASE_URL=https://ulduqjddmhnwvdeeldsb.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsZHVxamRkbWhud3ZkZWVsZHNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTg1NzEsImV4cCI6MjA3MjU3NDU3MX0.CRjFvK8kNrLD7m1n2qJsXwK0TnYuzYxxHl_YxIK1M6c
-VITE_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsZHVxamRkbWhud3ZkZWVsZHNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTg1NzEsImV4cCI6MjA3MjU3NDU3MX0.CRjFvK8kNrLD7m1n2qJsXwK0TnYuzYxxHl_YxIK1M6c
-VITE_PROJECT_ID=prj_5KwO5Oc5osKcgQnarIpZB7sBeDEz
-VITE_SUPABASE_ACCESS_TOKENS=sbp_521aac1c7d990a0f61c42dafb54698ff2bd3aac1
+VITE_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+VITE_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+VITE_PROJECT_ID=your_project_id_here
+VITE_SUPABASE_ACCESS_TOKENS=your_supabase_access_token_here
 ```
 
 ### 2. Paystack Configuration
@@ -28,28 +28,28 @@ PAYSTACK_SECRET_KEY=sk_live_your_live_secret_key_here
 
 ### 3. Database Configuration
 ```
-DATABASE_URL=postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
-VITE_POSTGRES_TRANSACTION_POOLER=postgresql://postgres.ulduqjddmhnwvdeeldsb:[Ka!gi#so123J]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
-VITE_POSTGRES_SESSON_POOLER=postgresql://postgres.zjvfyarwezepxzepyxte:[Ka!gi#so123J]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres
-VITE_POSTGRES_DIRECT_CONNECTION=postgresql://postgres:[Ka!gi#so]@db.ulduqjddmhnwvdeeldsb.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:6543/postgres
+VITE_POSTGRES_TRANSACTION_POOLER=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:6543/postgres
+VITE_POSTGRES_SESSON_POOLER=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:5432/postgres
+VITE_POSTGRES_DIRECT_CONNECTION=postgresql://postgres:your_password@db.your-project-id.supabase.co:5432/postgres
 VITE_POSTGRES_DATABASE=postgres
 VITE_POSTGRES_USER=postgres
-VITE_POSTGRES_PASSWORD=Ka!gi#so123J
-VITE_POSTGRES_HOST=db.ulduqjddmhnwvdeeldsb.supabase.co
+VITE_POSTGRES_PASSWORD=your_database_password_here
+VITE_POSTGRES_HOST=db.your-project-id.supabase.co
 ```
 
 ### 4. Supabase Extended Configuration
 ```
-VITE_SUPABASE_USERNAME=Wilson08031983
-VITE_ORGANIZATION_SLUG=EGM4FSC9DdTXa3NQsUFGSxYP
-VITE_SUPABASE_JWT_SECRET=gn+RXwSsVHKjcukg3NsCcC7xh10vd+61lFlFntOhyOe5RcJUdHkM/pAsLQlBcZJLNogx3KGqERt/tmrlnTZg1g==
-VITE_SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=489cd173cc448b9532723a5c5b2dc8396fa24778089e1be85aca06ef44019808
-VITE_SUPABASE_STORAGE_S3_ACCESS_KEY_ID=9359cd45d37c918e0e4838d5af4f0e4e
-VITE_SUPABASE_STORAGE_S3_ENDPOINT=https://ulduqjddmhnwvdeeldsb.storage.supabase.co/storage/v1/s3
-VITE_SUPABASE_STORAGE_S3_REGION=sa-east-1
-VITE_SUPABASE_PROJECT_ID=ulduqjddmhnwvdeeldsb
+VITE_SUPABASE_USERNAME=your_supabase_username
+VITE_ORGANIZATION_SLUG=your_organization_slug_here
+VITE_SUPABASE_JWT_SECRET=your_jwt_secret_here
+VITE_SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=your_s3_secret_access_key_here
+VITE_SUPABASE_STORAGE_S3_ACCESS_KEY_ID=your_s3_access_key_id_here
+VITE_SUPABASE_STORAGE_S3_ENDPOINT=https://your-project-id.storage.supabase.co/storage/v1/s3
+VITE_SUPABASE_STORAGE_S3_REGION=your-region
+VITE_SUPABASE_PROJECT_ID=your-project-id
 VITE_ORGANIZATION_NAME=MOKMzansiBooks
-VITE_SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkY2h2eXljY2l6dXNpZ3Z6cnR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTUzNjI0NiwiZXhwIjoyMDY1MTEyMjQ2fQ.9zZWtUjh1G9m3VgIrr3tAwLA6jrUmwOIivzOMNbDK0U
+VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 ```
 
 ### 5. Application URLs
