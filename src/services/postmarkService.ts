@@ -2,20 +2,43 @@ import { Client, Message, TemplatedMessage } from 'postmark';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import emailConfig from '@/emails/config/emailConfig';
-import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
+
+// Browser-safe UUID generator
+const genId = (): string => {
+  try {
+    // Prefer Web Crypto API if available in browser
+    // @ts-ignore - crypto may not exist in some environments
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      // @ts-ignore
+      return globalThis.crypto.randomUUID();
+    }
+  } catch {}
+  try {
+    return uuidv4();
+  } catch {
+    // Fallback: not cryptographically secure; only used for local/dev dry runs
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  }
+};
+
+// Safely detect server environment to avoid process reference errors in the browser
+const isServerEnv = typeof process !== 'undefined' && typeof process.env !== 'undefined';
 
 // PostMark client configuration - lazy initialization
 let postmarkClient: Client | null = null;
 
 function getPostmarkClient(): Client {
   if (!postmarkClient) {
-    postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
+    postmarkClient = new Client((isServerEnv ? process.env.POSTMARK_SERVER_TOKEN : '') || '');
   }
   return postmarkClient;
 }
 
 // In local/dev, or when no token is configured, avoid sending real emails
-const POSTMARK_DRY_RUN = (process.env.NODE_ENV !== 'production' && !process.env.POSTMARK_SERVER_TOKEN) || process.env.EMAIL_DRY_RUN === 'true';
+const POSTMARK_DRY_RUN = isServerEnv
+  ? ((process.env.NODE_ENV !== 'production' && !process.env.POSTMARK_SERVER_TOKEN) || process.env.EMAIL_DRY_RUN === 'true')
+  : true;
 
 // Blob storage URLs for email assets
 const BLOB_ASSETS = {
@@ -64,8 +87,8 @@ class PostMarkService {
   constructor() {
     // Avoid constructing the Postmark client when in DRY RUN to prevent token verification errors
     this.client = POSTMARK_DRY_RUN ? null : getPostmarkClient();
-    this.defaultFrom = process.env.POSTMARK_FROM_EMAIL || process.env.POSTMARK_SENDER_EMAIL || `${emailConfig.company.name} <noreply@mokmzansibooks.com>`;
-    this.defaultReplyTo = process.env.POSTMARK_REPLY_TO || process.env.POSTMARK_FROM_EMAIL || process.env.POSTMARK_SENDER_EMAIL || emailConfig.company.email;
+    this.defaultFrom = (isServerEnv && (process.env.POSTMARK_FROM_EMAIL || process.env.POSTMARK_SENDER_EMAIL)) || `${emailConfig.company.name} <noreply@mokmzansibooks.com>`;
+    this.defaultReplyTo = (isServerEnv && (process.env.POSTMARK_REPLY_TO || process.env.POSTMARK_FROM_EMAIL || process.env.POSTMARK_SENDER_EMAIL)) || emailConfig.company.email;
   }
 
   // Minimal retry helper with exponential backoff + jitter
@@ -124,7 +147,7 @@ class PostMarkService {
         const to = Array.isArray(options.to) ? options.to.join(',') : options.to;
         console.warn('[postmarkService] DRY RUN: sendEmail suppressed (no token / dev). To:', to, 'Subject:', options.subject);
         return {
-          messageId: randomUUID(),
+          messageId: genId(),
           to,
           submittedAt: new Date().toISOString(),
           errorCode: 0,
@@ -190,7 +213,7 @@ class PostMarkService {
         const to = Array.isArray(options.to) ? options.to.join(',') : options.to;
         console.warn('[postmarkService] DRY RUN: sendEmailWithTemplate suppressed (no token / dev). To:', to, 'Alias:', options.templateAlias);
         return {
-          messageId: randomUUID(),
+          messageId: genId(),
           to,
           submittedAt: new Date().toISOString(),
           errorCode: 0,
@@ -257,7 +280,7 @@ class PostMarkService {
       };
     } catch (error) {
       console.error('PostMark template send error:', error);
-      throw new Error(`Failed to send template email: ${error}`);
+      throw new Error(`Failed to send templated email: ${error}`);
     }
   }
 

@@ -11,7 +11,7 @@ const emailItemSchema = z.object({
 });
 
 const sendEmailSchema = z.object({
-  type: z.enum(['welcome', 'invoice', 'quotation', 'password-reset', 'team-invitation', 'low-stock-alert', 'custom']),
+  type: z.enum(['welcome', 'invoice', 'quotation', 'password-reset', 'team-invitation', 'low-stock-alert', 'custom', 'employee-welcome']),
   to: z.union([z.string().email(), z.array(z.string().email())]),
   subject: z.string().optional(),
   data: z.object({
@@ -45,6 +45,16 @@ const sendEmailSchema = z.object({
       minimumStock: z.number(),
       sku: z.string().optional()
     })).optional(),
+
+    // Employee welcome email data
+    employeeName: z.string().optional(),
+    employeeEmail: z.string().email().optional(),
+    position: z.string().optional(),
+    department: z.string().optional(),
+    passwordCreationLink: z.string().url().optional(),
+    startDate: z.string().optional(),
+    managerName: z.string().optional(),
+    supportEmail: z.string().email().optional(),
     
     // Custom email data
     htmlBody: z.string().optional(),
@@ -76,9 +86,9 @@ export async function POST(request: NextRequest) {
     const { type, to, subject, data = {}, options = {} } = validatedData;
     
     // Check if PostMark is configured
-    if (!process.env.POSTMARK_API_TOKEN) {
+    if (!process.env.POSTMARK_SERVER_TOKEN) {
       return NextResponse.json(
-        { error: 'PostMark API token not configured' },
+        { error: 'PostMark server token not configured' },
         { status: 500 }
       );
     }
@@ -98,6 +108,29 @@ export async function POST(request: NextRequest) {
           Array.isArray(to) ? to[0] : to,
           data.userName,
           data.loginLink
+        );
+        break;
+
+      case 'employee-welcome':
+        if (!data.employeeName || !data.employeeEmail || !data.passwordCreationLink || !data.startDate || !data.companyName) {
+          return NextResponse.json(
+            { error: 'Employee welcome email requires employeeName, employeeEmail, companyName, passwordCreationLink, startDate' },
+            { status: 400 }
+          );
+        }
+        result = await postmarkService.sendEmployeeWelcomeEmail(
+          Array.isArray(to) ? to[0] : to,
+          {
+            employeeName: data.employeeName,
+            employeeEmail: data.employeeEmail,
+            position: data.position || 'Employee',
+            department: data.department || 'General',
+            companyName: data.companyName,
+            passwordCreationLink: data.passwordCreationLink,
+            startDate: data.startDate,
+            managerName: data.managerName,
+            supportEmail: data.supportEmail,
+          }
         );
         break;
         
@@ -287,9 +320,9 @@ export async function GET(request: NextRequest) {
     const toDate = searchParams.get('toDate') || undefined;
     const action = searchParams.get('action');
     
-    if (!process.env.POSTMARK_API_TOKEN) {
+    if (!process.env.POSTMARK_SERVER_TOKEN) {
       return NextResponse.json(
-        { error: 'PostMark API token not configured' },
+        { error: 'PostMark server token not configured' },
         { status: 500 }
       );
     }

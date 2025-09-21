@@ -17,7 +17,6 @@ import {
 import { toast } from 'sonner';
 import { addEmployee, EmployeeFormData, Employee } from '@/services/employeeService';
 import AuthVerificationModal from '@/components/company/AuthVerificationModal';
-import { postmarkService } from '@/services/postmarkService';
 
 interface AddEmployeeModalProps {
   isOpen: boolean;
@@ -137,17 +136,31 @@ const AddEmployeeModal = ({ isOpen, onClose, onEmployeeAdded }: AddEmployeeModal
           const passwordCreationToken = `emp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const passwordCreationLink = `${window.location.origin}/create-password?token=${passwordCreationToken}`;
           
-          await postmarkService.sendEmployeeWelcomeEmail(newEmployee.email, {
-            employeeName: `${newEmployee.firstName} ${newEmployee.surname}`,
-            employeeEmail: newEmployee.email,
-            position: newEmployee.position || 'Employee',
-            department: newEmployee.department || 'General',
-            companyName: 'MOK Mzansi Books',
-            passwordCreationLink,
-            startDate: newEmployee.startDate || new Date().toISOString().split('T')[0],
-            managerName: 'Wilson Moabelo',
-            supportEmail: 'hr@mokmzansibooks.com'
+          // Call server API to send employee welcome email (avoids using server-only libs in the browser)
+          const response = await fetch('/api/emails/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'employee-welcome',
+              to: newEmployee.email,
+              data: {
+                employeeName: `${newEmployee.firstName} ${newEmployee.surname}`,
+                employeeEmail: newEmployee.email,
+                position: newEmployee.position || 'Employee',
+                department: newEmployee.department || 'General',
+                companyName: 'MOK Mzansi Books',
+                passwordCreationLink,
+                startDate: newEmployee.startDate || new Date().toISOString().split('T')[0],
+                managerName: 'Wilson Moabelo',
+                supportEmail: 'hr@mokmzansibooks.com'
+              }
+            })
           });
+
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to send employee welcome email');
+          }
           
           toast.success('Employee added successfully and welcome email sent!');
         } catch (emailError) {
