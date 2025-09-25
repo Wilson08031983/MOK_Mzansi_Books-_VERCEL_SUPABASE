@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Cleanup Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .target-emails {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .log {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .log p {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        .success {
+            color: #2ecc71;
+        }
+        .warning {
+            color: #f39c12;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .info {
+            color: #3498db;
+        }
+        .storage-type {
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Account Cleanup Tool</h1>
+        
+        <div class="target-emails">
+            <p><strong>Target Emails:</strong></p>
+            <ul>
+                <li>mokgethwamoabelo@gmail.com</li>
+                <li>mokgethwamoabelo@icloud.com</li>
+            </ul>
+        </div>
+        
+        <div>
+            <button id="scanBtn">Scan Storage</button>
+            <button id="cleanupBtn" disabled>Perform Cleanup</button>
+            <button id="verifyBtn" disabled>Verify Cleanup</button>
+        </div>
+        
+        <div class="log" id="logOutput"></div>
+    </div>
+
+    <script>
+        // Target emails
+        const TARGET_EMAILS = [
+            'mokgethwamoabelo@gmail.com',
+            'mokgethwamoabelo@icloud.com'
+        ];
+        
+        // DOM elements
+        const scanBtn = document.getElementById('scanBtn');
+        const cleanupBtn = document.getElementById('cleanupBtn');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const logOutput = document.getElementById('logOutput');
+        
+        // Storage locations to check
+        const storageTypes = [
+            'localStorage',
+            'sessionStorage',
+            'cookies',
+            'indexedDB'
+        ];
+        
+        // Log functions
+        function log(message, type = '') {
+            const p = document.createElement('p');
+            p.innerHTML = message;
+            if (type) p.classList.add(type);
+            logOutput.appendChild(p);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+        
+        function logSuccess(message) { log(message, 'success'); }
+        function logWarning(message) { log(message, 'warning'); }
+        function logError(message) { log(message, 'error'); }
+        function logInfo(message) { log(message, 'info'); }
+        
+        // Create backup of all storage
+        async function createBackup() {
+            log('📦 Creating backup of browser storage...');
+            
+            const backup = {
+                localStorage: {},
+                sessionStorage: {},
+                cookies: document.cookie,
+                indexedDB: {}
+            };
+            
+            // Backup localStorage
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                backup.localStorage[key] = localStorage.getItem(key);
+            }
+            
+            // Backup sessionStorage
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                backup.sessionStorage[key] = sessionStorage.getItem(key);
+            }
+            
+            // Backup IndexedDB (basic approach)
+            try {
+                const dbNames = await indexedDB.databases();
+                for (const db of dbNames) {
+                    logInfo(`Found IndexedDB database: ${db.name}`);
+                    backup.indexedDB[db.name] = db.name;
+                }
+            } catch (error) {
+                logWarning(`IndexedDB backup limited: ${error.message}`);
+            }
+            
+            // Save backup to download
+            const backupStr = JSON.stringify(backup, null, 2);
+            const blob = new Blob([backupStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `browser-storage-backup-${new Date().toISOString()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            logSuccess('✅ Backup created and downloaded');
+            return backup;
+        }
+        
+        // Scan all storage for target emails
+        async function scanStorage() {
+            log('🔍 Scanning browser storage for target emails...');
+            const findings = {
+                localStorage: [],
+                sessionStorage: [],
+                cookies: [],
+                indexedDB: []
+            };
+            
+            // Check localStorage
+            log('<div class="storage-type">📁 Checking localStorage...</div>');
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                
+                for (const email of TARGET_EMAILS) {
+                    if (key.includes(email) || value.includes(email)) {
+                        findings.localStorage.push({ key, value });
+                        logWarning(`Found in localStorage - Key: ${key}`);
+                    }
+                }
+            }
+            
+            // Check sessionStorage
+            log('<div class="storage-type">📁 Checking sessionStorage...</div>');
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                const value = sessionStorage.getItem(key);
+                
+                for (const email of TARGET_EMAILS) {
+                    if (key.includes(email) || value.includes(email)) {
+                        findings.sessionStorage.push({ key, value });
+                        logWarning(`Found in sessionStorage - Key: ${key}`);
+                    }
+                }
+            }
+            
+            // Check cookies
+            log('<div class="storage-type">📁 Checking cookies...</div>');
+            const cookies = document.cookie.split(';');
+            for (const cookie of cookies) {
+                for (const email of TARGET_EMAILS) {
+                    if (cookie.includes(email)) {
+                        findings.cookies.push(cookie.trim());
+                        logWarning(`Found in cookies: ${cookie.trim()}`);
+                    }
+                }
+            }
+            
+            // Check IndexedDB
+            log('<div class="storage-type">📁 Checking IndexedDB...</div>');
+            try {
+                const dbNames = await indexedDB.databases();
+                for (const db of dbNames) {
+                    logInfo(`Examining IndexedDB database: ${db.name}`);
+                    
+                    // Check next-auth related databases
+                    if (db.name.includes('next-auth')) {
+                        findings.indexedDB.push(db.name);
+                        logWarning(`Found potentially relevant IndexedDB: ${db.name}`);
+                    }
+                }
+            } catch (error) {
+                logError(`Error scanning IndexedDB: ${error.message}`);
+            }
+            
+            // Summary
+            let totalFindings = 0;
+            for (const type in findings) {
+                totalFindings += findings[type].length;
+            }
+            
+            if (totalFindings > 0) {
+                logWarning(`⚠️ Found ${totalFindings} items potentially related to target emails`);
+                cleanupBtn.disabled = false;
+            } else {
+                logSuccess('✅ No traces of target emails found in browser storage');
+            }
+            
+            return findings;
+        }
+        
+        // Clean up all storage
+        async function cleanupStorage(findings) {
+            await createBackup();
+            log('🧹 Starting cleanup process...');
+            
+            // Clean localStorage
+            if (findings.localStorage.length > 0) {
+                log('<div class="storage-type">🗑️ Cleaning localStorage...</div>');
+                for (const item of findings.localStorage) {
+                    localStorage.removeItem(item.key);
+                    logSuccess(`Removed from localStorage: ${item.key}`);
+                }
+            }
+            
+            // Clean sessionStorage
+            if (findings.sessionStorage.length > 0) {
+                log('<div class="storage-type">🗑️ Cleaning sessionStorage...</div>');
+                for (const item of findings.sessionStorage) {
+                    sessionStorage.removeItem(item.key);
+                    logSuccess(`Removed from sessionStorage: ${item.key}`);
+                }
+            }
+            
+            // Clean cookies
+            if (findings.cookies.length > 0) {
+                log('<div class="storage-type">🗑️ Cleaning cookies...</div>');
+                for (const cookie of findings.cookies) {
+                    const cookieName = cookie.split('=')[0].trim();
+                    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+                    logSuccess(`Removed cookie: ${cookieName}`);
+                }
+            }
+            
+            // Clean IndexedDB
+            if (findings.indexedDB.length > 0) {
+                log('<div class="storage-type">🗑️ Cleaning IndexedDB...</div>');
+                for (const dbName of findings.indexedDB) {
+                    try {
+                        // For next-auth databases, we'll delete and recreate them
+                        if (dbName.includes('next-auth')) {
+                            const deleteRequest = indexedDB.deleteDatabase(dbName);
+                            deleteRequest.onsuccess = () => {
+                                logSuccess(`Deleted IndexedDB database: ${dbName}`);
+                            };
+                            deleteRequest.onerror = () => {
+                                logError(`Failed to delete IndexedDB database: ${dbName}`);
+                            };
+                        }
+                    } catch (error) {
+                        logError(`Error cleaning IndexedDB: ${error.message}`);
+                    }
+                }
+            }
+            
+            // Force cleanup of next-auth session
+            try {
+                if (window.localStorage.getItem('next-auth.session-token')) {
+                    window.localStorage.removeItem('next-auth.session-token');
+                    logSuccess('Removed next-auth session token from localStorage');
+                }
+                
+                if (window.localStorage.getItem('next-auth.callback-url')) {
+                    window.localStorage.removeItem('next-auth.callback-url');
+                    logSuccess('Removed next-auth callback URL from localStorage');
+                }
+                
+                if (window.localStorage.getItem('next-auth.csrf-token')) {
+                    window.localStorage.removeItem('next-auth.csrf-token');
+                    logSuccess('Removed next-auth CSRF token from localStorage');
+                }
+                
+                // Clear any session cookies
+                document.cookie = 'next-auth.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                document.cookie = 'next-auth.csrf-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                document.cookie = 'next-auth.callback-url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                logSuccess('Cleared next-auth cookies');
+            } catch (error) {
+                logError(`Error during forced next-auth cleanup: ${error.message}`);
+            }
+            
+            logSuccess('✅ Cleanup process completed');
+            verifyBtn.disabled = false;
+        }
+        
+        // Verify cleanup
+        async function verifyCleanup() {
+            log('🔍 Verifying cleanup...');
+            const findings = await scanStorage();
+            
+            let totalFindings = 0;
+            for (const type in findings) {
+                totalFindings += findings[type].length;
+            }
+            
+            if (totalFindings > 0) {
+                logError('❌ Verification failed - some items still remain');
+                cleanupBtn.disabled = false;
+            } else {
+                logSuccess('✅ Verification successful - all traces removed');
+                logSuccess('🎉 You can now register with these email addresses');
+            }
+        }
+        
+        // Event listeners
+        scanBtn.addEventListener('click', async () => {
+            scanBtn.disabled = true;
+            try {
+                await scanStorage();
+            } catch (error) {
+                logError(`Error during scan: ${error.message}`);
+            }
+            scanBtn.disabled = false;
+        });
+        
+        cleanupBtn.addEventListener('click', async () => {
+            cleanupBtn.disabled = true;
+            try {
+                const findings = await scanStorage();
+                await cleanupStorage(findings);
+            } catch (error) {
+                logError(`Error during cleanup: ${error.message}`);
+                cleanupBtn.disabled = false;
+            }
+        });
+        
+        verifyBtn.addEventListener('click', async () => {
+            verifyBtn.disabled = true;
+            try {
+                await verifyCleanup();
+            } catch (error) {
+                logError(`Error during verification: ${error.message}`);
+            }
+            verifyBtn.disabled = false;
+        });
+        
+        // Initialize
+        log('🚀 Account Cleanup Tool initialized');
+        log('ℹ️ This tool will help you completely remove all traces of the target email accounts from browser storage');
+        log('ℹ️ Click "Scan Storage" to begin');
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { UserPermissions } from './permissionService';
-import { safeLocalStorage, safeGet, safeArray, safeString } from '@/utils/safeAccess';
+import { safeLocalStorage, safeString } from '@/utils/safeAccess';
 import { UserCredentials } from './resetLocalAuth';
 
 export interface InvitedUser {
@@ -81,8 +81,7 @@ export const createInvitation = (email: string, role: string, invitedBy: string,
  */
 export const getInvitedUsers = (): Record<string, InvitedUser> => {
   try {
-    const stored = safeLocalStorage.getItem('invitedUsers', null);
-    return safeGet(stored, {}) as Record<string, InvitedUser>;
+    return safeLocalStorage.getItem<Record<string, InvitedUser>>('invitedUsers', {});
   } catch (error) {
     console.error('Error getting invited users:', error);
     return {};
@@ -144,7 +143,7 @@ export const completeInvitation = (token: string, userData: {
   safeLocalStorage.setItem('invitedUsers', invitedUsers);
   
   // Add the complete user to localStorage userCredentials
-  const userCredentials = safeGet(safeLocalStorage.getItem('userCredentials', null), {}) as Record<string, UserCredentials>;
+  const userCredentials = safeLocalStorage.getItem<Record<string, UserCredentials>>('userCredentials', {});
   const newUserId = uuidv4();
   
   // Validate company scope

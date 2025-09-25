@@ -1,119 +1,78 @@
 /**
- * Verify Regular User Removal Script
- * Run this in the browser console to verify Regular User has been completely removed
+ * Verify Admin Only Script (Updated)
+ * Run this in the browser console to verify only admin@mokmzansibooks.com exists
  */
 
-console.log('🔍 Verifying Regular User removal from all systems...');
+console.log('🔍 Verifying that only admin@mokmzansibooks.com exists...');
 
 // Check 1: User Credentials
 console.log('\n1️⃣ Checking User Credentials...');
 const credentials = localStorage.getItem('userCredentials');
 if (credentials) {
   const parsedCredentials = JSON.parse(credentials);
-  const regularUserFound = Object.values(parsedCredentials).some(user => 
-    user.fullName === 'Regular User' || user.email === 'user@mokmzansibooks.com'
-  );
-  
-  if (regularUserFound) {
-    console.error('❌ Regular User found in credentials');
+  const userCount = Object.keys(parsedCredentials).length;
+  const users = Object.values(parsedCredentials);
+
+  console.log(`📊 Total users found: ${userCount}`);
+  users.forEach((user, index) => {
+    console.log(`  ${index + 1}. ${user.fullName} (${user.email}) - ${user.role}`);
+  });
+
+  // Check if only admin user exists
+  const adminUser = users.find(user => user.email === 'admin@mokmzansibooks.com');
+  const nonAdminUsers = users.filter(user => user.email !== 'admin@mokmzansibooks.com');
+
+  if (userCount === 1 && adminUser) {
+    console.log('✅ SUCCESS: Only admin user exists');
+  } else if (userCount === 0) {
+    console.error('❌ ERROR: No users found');
   } else {
-    console.log('✅ No Regular User in credentials');
+    console.error('❌ ERROR: Multiple users found:');
+    nonAdminUsers.forEach(user => {
+      console.log(`   - ${user.fullName} (${user.email})`);
+    });
   }
-  
-  console.log('Available users:', Object.values(parsedCredentials).map(u => u.fullName));
 } else {
-  console.log('ℹ️ No credentials found - will be initialized with Admin only');
+  console.error('❌ ERROR: No user credentials found');
 }
 
-// Check 2: Employee Data
-console.log('\n2️⃣ Checking Employee Data...');
-const employees = localStorage.getItem('employees');
-if (employees) {
-  const parsedEmployees = JSON.parse(employees);
-  const regularEmployeeFound = parsedEmployees.some(emp => 
-    emp.firstName === 'Regular' && emp.surname === 'User'
-  );
-  
-  if (regularEmployeeFound) {
-    console.error('❌ Regular User found in employees');
-  } else {
-    console.log('✅ No Regular User in employees');
-  }
-  
-  console.log('Available employees:', parsedEmployees.map(e => `${e.firstName} ${e.surname}`));
-} else {
-  console.log('ℹ️ No employees found - will be initialized with Admin only');
-}
-
-// Check 3: Payroll Data
-console.log('\n3️⃣ Checking Payroll Data...');
-const payroll = localStorage.getItem('payrollCalculations');
-if (payroll) {
-  const parsedPayroll = JSON.parse(payroll);
-  const regularPayrollFound = parsedPayroll.some(p => 
-    p.employeeName === 'Regular User' || p.employeeId === '0f043fc8-b140-48ce-ba79-56d47e21725c'
-  );
-  
-  if (regularPayrollFound) {
-    console.error('❌ Regular User found in payroll');
-  } else {
-    console.log('✅ No Regular User in payroll');
-  }
-  
-  console.log('Payroll employees:', parsedPayroll.map(p => p.employeeName));
-} else {
-  console.log('ℹ️ No payroll found - will be calculated for Admin only');
-}
-
-// Check 4: Attendance Data
-console.log('\n4️⃣ Checking Attendance Data...');
-const attendance = localStorage.getItem('attendanceSummaries');
-if (attendance) {
-  const parsedAttendance = JSON.parse(attendance);
-  const regularAttendanceFound = parsedAttendance.some(a => 
-    a.employeeId === '0f043fc8-b140-48ce-ba79-56d47e21725c'
-  );
-  
-  if (regularAttendanceFound) {
-    console.error('❌ Regular User found in attendance');
-  } else {
-    console.log('✅ No Regular User in attendance');
+// Check 2: Current User Session
+console.log('\n2️⃣ Checking Current User Session...');
+const currentUser = localStorage.getItem('mokUser');
+if (currentUser) {
+  try {
+    const user = JSON.parse(currentUser);
+    console.log(`📋 Current session user: ${user.email}`);
+    if (user.email === 'admin@mokmzansibooks.com') {
+      console.log('✅ Current session is admin user');
+    } else {
+      console.log('⚠️ Current session is not admin user');
+    }
+  } catch (error) {
+    console.error('❌ Error parsing current user session:', error);
   }
 } else {
-  console.log('ℹ️ No attendance found');
-}
-
-// Check 5: EMP201 Cache
-console.log('\n5️⃣ Checking EMP201 Cache...');
-const emp201Cache = localStorage.getItem('emp201Cache');
-if (emp201Cache) {
-  const parsedCache = JSON.parse(emp201Cache);
-  const regularEMP201Found = Object.keys(parsedCache).some(key => 
-    key.includes('0f043fc8-b140-48ce-ba79-56d47e21725c')
-  );
-  
-  if (regularEMP201Found) {
-    console.error('❌ Regular User found in EMP201 cache');
-  } else {
-    console.log('✅ No Regular User in EMP201 cache');
-  }
-} else {
-  console.log('ℹ️ No EMP201 cache found');
+  console.log('ℹ️ No current user session');
 }
 
 // Final Summary
 console.log('\n🎯 VERIFICATION SUMMARY:');
-console.log('Regular User should be completely removed from:');
-console.log('✅ Authentication system');
-console.log('✅ Employee management');
-console.log('✅ Payroll calculations');
-console.log('✅ HR components');
-console.log('✅ EMP201/PAYE integration');
+if (credentials) {
+  const parsedCredentials = JSON.parse(credentials);
+  const userCount = Object.keys(parsedCredentials).length;
+  const adminUser = Object.values(parsedCredentials).find(user => user.email === 'admin@mokmzansibooks.com');
 
-console.log('\n📋 NEXT STEPS:');
-console.log('1. Navigate to HR Management > Employees');
-console.log('2. Verify only Admin User appears');
-console.log('3. Check Accounting > EMP201/PAYE dropdown');
-console.log('4. Confirm only Admin User is available');
-
-console.log('\n🔄 If Regular User still appears, run clear-regular-user-cache.js first');
+  if (userCount === 1 && adminUser) {
+    console.log('✅ SUCCESS: System contains only admin@mokmzansibooks.com');
+    console.log('\n📋 ADMIN LOGIN DETAILS:');
+    console.log('   Email: admin@mokmzansibooks.com');
+    console.log('   Password: admin123');
+    console.log('   Role: Manager');
+  } else {
+    console.log('❌ FAILURE: System does not contain only admin user');
+    console.log('   Run remove-all-users-except-admin.js to fix this');
+  }
+} else {
+  console.log('❌ FAILURE: No user credentials found');
+  console.log('   Run remove-all-users-except-admin.js to initialize the system');
+}

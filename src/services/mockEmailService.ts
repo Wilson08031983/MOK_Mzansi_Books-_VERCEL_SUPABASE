@@ -14,6 +14,11 @@ interface EmailOptions {
   lastName?: string;
 }
 
+interface VerificationEmailOptions extends EmailOptions {
+  companyName: string;
+  verifyLink: string;
+}
+
 interface PasswordResetEmailOptions {
   to: string;
   subject: string;
@@ -72,21 +77,21 @@ const mockEmailService = {
     return true;
   },
   
-  // Send a confirmation email
-  async sendConfirmationEmail(options: EmailOptions): Promise<boolean> {
+  // Send a verification email
+  async sendVerificationEmail(options: VerificationEmailOptions): Promise<boolean> {
     await simulateNetworkDelay();
     
     const email: SentEmail = {
       to: options.to,
-      subject: options.subject,
-      content: options.html || `Welcome ${options.firstName || 'User'}! Your account has been created.`,
+      subject: options.subject || 'Verify your MOK Mzansi Books account',
+      content: `Welcome ${options.firstName || 'User'} to ${options.companyName}! Please verify your email: ${options.verifyLink}`,
       timestamp: new Date(),
       status: 'sent',
       type: 'confirmation'
     };
     
     sentEmails.push(email);
-    console.log('Mock confirmation email sent:', email);
+    console.log('Mock verification email sent:', email);
     return true;
   },
   

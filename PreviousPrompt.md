@@ -1,593 +1,473 @@
+- Prompt 1
 
-We Once Done a Correction on Isolation of Account (Please See Previous Prompts PreviousPrompt.md For More Details), But is See that All the Accounts are Still Saving Under One Account, Previously All this Account were Saving Under admin@mokmzansibooks and Created another Account ruben@gmail.com and i still Get all the previous Accounts That Are in
+Diagnose & Fix: New users NOT receiving Verification Emails (Postmark)
 
-1. company Page div > Team Management Tab button div , Team Members div ,
-
-2. hr-management Page div > Employees Tab button div , Employee Management div
-
-This shows that Isolation is Not Correctly Done If All this Companies 'New Users Are Still Visible on a New Acccount i Created ruben@gmail.com and the Same Accounts Were visible on admin@mokmzansibooks.com and Again this is Separate Accounts But Saved In two different Accounts, Please Remove them and Do a Complete Clean Up
-
-Here’s a single copy-and-paste prompt you can use directly in your AI development environment:
+**Context / Goal**
+New users are not receiving verification emails. The app uses **Postmark** as the email provider. Postmark appears configured but verification emails are not arriving. Your task: fully audit the verification-email flow (app → Postmark → recipient inbox), find and fix root cause(s), then verify & document the fix. All work must be done locally (Postmark test server) and produce evidence.
 
 ---
 
-**Prompt:**
+## High-level objective (single instruction)
 
-We need to correct the account isolation logic across the entire project. Currently, data from one company/user account is leaking into another, which means isolation between tenants is not functioning as intended.
-
-**Observed Problems:**
-
-1. On the **Company Page → Team Management Tab**, team members from other accounts are still visible when creating or switching to a new user/company.
-
-2. On the **HR Management Page → Employees Tab**, employees from other accounts are still showing under newly created accounts (e.g., creating a new account [ruben@gmail.com](mailto:ruben@gmail.com) shows all employees and team members that also appear under [admin@mokmzansibooks.com](mailto:admin@mokmzansibooks.com)).
-
-**Required Fixes:**
-
-* Completely remove any shared or global storage of accounts, users, team members, or employees across tenants.
-
-* Ensure each **company account** and its **users** (team members, employees, clients, projects, invoices, quotations, etc.) are strictly isolated and cannot be seen by another account.
-
-* Implement proper **tenant isolation** using `companyId` or `userId` as a scoping key for all records across all modules (Team Management, Employees, Quotations, Invoices, Projects, etc.).
-
-* Perform a **full cleanup** of the backend database:
-
-* Delete all existing user/company data, including [admin@mokmzansibooks.com](mailto:admin@mokmzansibooks.com), [ruben@gmail.com](mailto:ruben@gmail.com), and any seeded/mock/default data.
-
-* Reset every page/module (Company, HR Management, Invoices, Quotations, Projects, etc.) to a clean state with no preloaded accounts, employees, or team members.
-
-* After cleanup, enforce isolation so that:
-
-* When a **new company signs up**, only that company’s users and employees are visible within their own scope.
-
-* Switching accounts (e.g., from [admin@mokmzansibooks.com](mailto:admin@mokmzansibooks.com) to [ruben@gmail.com](mailto:ruben@gmail.com)) shows only that account’s data, with no overlap.
-
-**Goal:**
-
-Achieve true multi-company separation (tenant isolation), so each company and its users manage only their own data in a secure, isolated environment.
-
-At the end of this task, please confirm isolation by creating at least two separate accounts and verifying that data (team members, employees, invoices, projects, etc.) remains isolated per account with no crossover.
-
-Prompt 1:
-
-Multi-Company Data Isolation and Clean Signup Flow
-
-Prompt for Multi-Company SaaS Data Isolation
-
-Our application is a multi-tenant SaaS (serving many different companies, each with separate users). Each new signup must create an entirely new company tenant with its own clean dataset. Currently, new users are inheriting data from the default admin account (admin@mokmzansibooks.com), which should not happen. In a proper multi-tenant design, every user is associated with a unique company (tenant) ID, and all data queries must be filtered by that ID so a user sees only their company’s data
-softwareengineering.stackexchange.com
-. Likewise, there should be no pre-selected default data for a new company. For example, one best-practice tutorial explains that a multi-tenant app should have “no default data source available when the application starts” – instead, the correct (empty) database is chosen when a user logs in with tenant info
-blog.v2stech.com
-. Also, many frameworks auto-seed initial data (like a default admin user) when creating a tenant
-abp.io
-; we specifically want to disable all such seeding. In summary, each new company must start with blank pages (no clients, quotes, invoices, etc.) and all user/company records must be isolated by a companyId
-softwareengineering.stackexchange.com
-abp.io
-.
-
-Key Requirements
-
-New Tenant Isolation: Treat each signup as a new company/tenant. Do not link new users to the existing admin@mokmzansibooks account or data. Each company should have its own unique tenant ID (companyId) and only its data should be visible
-softwareengineering.stackexchange.com
-.
-
-Signup Field Mapping: On the signup page, take the user-entered fields and populate the new company’s details. For example: Name → Company Details (Name), Surname → Company Details (Surname), Company Name → Company Details (Company Name), Email → Company Details (Email), Position → Company Details (Position). In short, the signup form fields should create the company profile fields.
-
-Empty Default Pages: For a new company, all module pages (Clients, Quotations, Invoices, Projects, Inventory, HR Management – both Employees tab and other HR tabs, Accounting Income tab, and Settings) must appear empty. There should be no pre-populated records. In other words, remove or disable any hard-coded or seeded example data so that the new user must manually add all entries. This ensures each tenant starts from a blank slate (as recommended for multi-tenant setups
-blog.v2stech.com
-abp.io
-).
-
-Data Filtering by Company ID: Ensure the backend uses the existing tenant logic: every user and record has a companyId (or tenantId) that scopes the data. All database queries should include this filter so users see only data for their own company
-softwareengineering.stackexchange.com
-. This means, for example, when fetching clients, quotations, invoices, etc., filter by the current user’s companyId.
-
-Remove Seed/Mock Data: Explicitly remove any default or mock records that may have been created by the system. For instance, disable or delete any initial “example” clients, inventory items, or admin users. As one multitenancy guide notes, avoid auto-seeding an admin on tenant creation
-abp.io
-. Our requirement is that new companies have no leftover data from any other tenant.
-
-Settings Isolation: Each company’s Settings page and configurations must be independent. On creation, a new company’s settings should also start empty or default to generic (not copying from admin). New users should configure their own settings rather than inheriting any existing ones.
-
-Backend (Database) Logic: Assume user accounts and data live in a backend database (not localStorage). The AI prompt should instruct the solution to operate on the database (e.g. using ORM or SQL queries) with the tenant separation in mind. Make it clear that the system is already multi-tenant capable (using a companyId on user profiles), and we want to correct the logic so new sign-ups get a fresh, isolated database context
-softwareengineering.stackexchange.com
-.
-
-Clean Startup: Instruct the AI to remove any code that assumes a single global admin or reuses global data for new users. For example, exclude any “DataSourceAutoConfiguration” or default context as suggested in some guides
-blog.v2stech.com
-, so that each user’s company is treated separately.
-
-Example AI Prompt
-
-Use the following instructions as a single prompt in your AI development environment. It asks the AI to implement all the above requirements for multi-tenant data isolation:
-
-You are a backend developer for a multi-tenant SaaS application. Each company has its own users and data. Implement the following changes:
-
-New Company per Signup: Treat every signup as creating a new company tenant. Do not associate new users with the existing admin or its data.
-
-Field Mapping: On the signup form, save the submitted Name, Surname, Company Name, Email, and Position into the new company’s Company Details record (map each field to the corresponding field in the Company Details tab).
-
-Empty Module Pages: Ensure that after signup, pages like Clients, Quotations, Invoices, Projects, Inventory, HR (Employees and other tabs), Accounting (Income), and Settings show no existing data. Remove any default records so the user sees empty lists and must add their own data.
-
-Tenant Filter: Use the tenant/companyId in every data query. All user profiles and company records should include a companyId that is the same as the new company. When fetching data (clients, quotes, etc.), filter by this companyId so only the company’s own data is accessed.
-
-Remove Seed Data: Delete or disable any code that seeds initial data for a new tenant. Do not auto-create an admin or sample entries for the new company. The new company’s database tables should be blank (as per multi-tenant best practices
-abp.io
-).
-
-Settings Isolation: Ensure each company has its own Settings configuration. On company creation, the Settings page should not inherit values from the admin or any other tenant.
-
-Database Persistence: All accounts and company data are stored in the backend database (not in localStorage). Use the existing tenant-based logic and database schema to implement these changes.
-
-Clarifications: Accounts are managed in the database and each user already has a companyId (tenantId) for scoping. Remove any code that ties data to the global admin user. Every piece of data should be scoped by the new user’s company.
-
-Make sure the AI’s output respects multi-tenancy: each new company starts fresh and isolated, and no old user’s data appears in a new account. The above instructions summarize all needed changes.
-
-Sources: Multi-tenant best practices suggest using a company/tenant ID to filter data
-softwareengineering.stackexchange.com
- and avoiding any default seed data on new tenant creation
-blog.v2stech.com
-abp.io
-. These requirements are applied here to ensure each new user/company has an empty, separate workspace.
-
-
-**audit** whether the multi-company / multi-tenant isolation requirements were implemented correctly. It is intentionally comprehensive and structured so the auditor can run manual and automated checks, inspect backend data, and produce the deliverables you need.
+Find and fix whatever prevents verification emails from being sent or delivered to new users. Confirm the app creates a verification token, calls Postmark, Postmark accepts the message, and the recipient receives the email (or Postmark provides a clear reason for rejection). Provide structured logs, screenshots and a remediation summary.
 
 ---
 
-**AUDIT PROMPT — Multi-Company SaaS Data Isolation**
+## Step-by-step checklist (run in order and record outputs)
 
-LOCATION: local development environment (backend + frontend) — signup flow, tenant creation, company details, session/auth logic, DB/ORM layer, all pages: Clients, Quotations, Invoices, Projects, Inventory, HR Management, Accounting > Income, Settings, Notifications, and background workers.
+1. **Reproduce the failure**
 
-GOAL (single instruction):
-Perform a complete, non-destructive audit verifying that every **new signup** creates a **fresh, isolated company tenant** with no data carried over from any existing tenants (especially [admin@mokmzansibooks.com](mailto:admin@mokmzansibooks.com)). Confirm that signup fields map to company details, no seeded/mock data is visible to new tenants, all queries are scoped by companyId/tenantId, and settings / notification / session logic are tenant-isolated. Produce a detailed audit report, evidence (logs, DB snapshots, screenshots), remediation steps for any failures, and an acceptance checklist.
+   * Create a new test user through the app (use a controlled test inbox you own).
+   * Record: exact signup inputs, timestamp, and app response.
+   * Expectation: the app should create a verification token and enqueue/send a verification email.
 
-GENERAL RULES FOR THE AUDITOR
-• Work local only. Do not modify production.
-• Inspect existing code before changing anything. Do not duplicate files.
-• Use test accounts; redact PII in exported artifacts.
-• Log all verification steps and outputs to console / audit log.
-• If you change anything for testing, revert and document changes.
+2. **Confirm the app attempted to send**
 
-AUDIT SCOPE (what to verify)
+   * Inspect server logs around signup and mailer call.
+   * Look for structured logs showing the email send call and Postmark API response (HTTP 200/201 + message-id or an error).
+   * If no send log found, add immediate logging around mailer call and retry signup.
+   * Save the log snippet proving the send attempt and Postmark response (or the lack thereof).
 
-A. Signup → Company Creation & Field Mapping (Critical)
+3. **Verify verification token & DB state**
 
-1. Create a brand-new test user using the signup form (use a unique email not seen before). Record the exact input values:
+   * Confirm a verification token record exists for that user (token/hash, expiry, userId, createdAt).
+   * Verify token storage policy (hashed or not) and expiry time.
+   * Document the DB row(s) (redact PII).
 
-   * Name, Surname, Company Name, Email, Position, Password.
-2. Verify the verification-email step (if implemented): after clicking verification link, that user is activated and redirected to login.
-3. After login, open Company Page → Company Details and confirm the following fields are populated from the signup values exactly: Name, Surname, Company Name, Email, Position.
-4. Confirm the company record in the database is created and contains a unique `companyId` (tenantId) tied to the new user (i.e., user.companyId === company.id).
-5. Verify that this new company has a fresh company record (no inherited fields from admin user) and that any default settings are generic, not copied from admin.
+4. **Capture the exact email payload**
 
-B. Tenant Isolation — Per-page Data (Critical)
-For the new test user (fresh tenant), visit each of the following pages and verify **no existing company data is visible** (should be empty lists or appropriate “no data” UI):
-• Clients Page
-• Quotations Page
-• Invoices Page
-• Projects Page
-• Inventory Page
-• HR Management (Employees and other HR tabs)
-• Accounting → Income tab
-• Settings Page (company configuration pages)
+   * Log the payload sent to Postmark (To, From, TemplateId or HTML, variables used).
+   * Important: verify the verification link generated inside the email uses the correct `APP_HOST` (not `localhost` unless tester runs locally). If `localhost` is used, note that link reachability is separate from deliverability.
+   * Save a redacted copy of the exact payload as evidence.
 
-Actions to perform and evidence to collect:
-• Take screenshots of each page (showing empty state).
-• Confirm backend responses for each fetch request return zero records for that companyId. Log the API response.
-• Capture the database query results for each table filtered by the new companyId (export or screenshot). Redact PII.
+5. **Check Postmark API response**
 
-C. Data Scoping & Query Filter Verification (Critical)
+   * From app logs, get the full Postmark API response (status, message-id, error details).
+   * If Postmark did not return success, document the error body.
+   * If API returned success but Postmark dashboard shows no message, proceed to the Postmark dashboard checks.
 
-1. Inspect server/API code that fetches tenant data (controllers/services/ORM queries). Identify how the companyId is obtained (session token, JWT claim, request header, cookie). Document the code paths and file names where scoping occurs.
-2. For representative endpoints (clients list, invoices list, employees list), confirm that database queries include a filter based on companyId. Record the code file/line references and sample query structure (in plain English).
-3. Test negative case: attempt to fetch a record from another tenant by manipulating parameters; confirm the API denies access or returns 404/empty.
-4. Ensure session/auth tokens include companyId and that the frontend attaches the token properly on each request.
+6. **Postmark Server / Dashboard checks**
 
-D. Seeded / Mock Data Removal (High)
+   * Log into Postmark test account and check:
 
-1. Search startup scripts, database seeders, or tenant-creation routines for any hardcoded seed data that auto-creates example clients, admin data, or sample invoices. Provide a list of files found.
-2. If seed data exists, confirm it is disabled for new tenants and that seeding does not run automatically for each new signup. Document whether sample data remains present for preexisting tenants and how to remove it safely.
-3. Verify that the admin account ([admin@mokmzansibooks.com](mailto:admin@mokmzansibooks.com)) data is not used as a template for new tenants.
+     * **Messages Inbox / Activity** for the specific message-id/time.
+     * **Message events** for accepted/dropped/bounced/rejected/suppressed.
+     * **Suppression lists** (bounces, complaints, unsubscribes). If recipient is suppressed, Postmark will block sends.
+   * Export or screenshot relevant Postmark entries and suppression records.
 
-E. Settings Isolation (High)
+7. **Domain & sender identity / DNS checks**
 
-1. Create a second test tenant (different signup email). Change a setting (e.g., company name, timezone, currency) in tenant A, then verify tenant B does not reflect that change.
-2. Document settings stored per company in the DB and the table/field names. Confirm the Settings page reads/writes company-scoped settings only.
+   * Verify the sending sender identity in Postmark:
 
-F. Notification & Bell Isolation (High)
+     * Sending domain/email is verified in Postmark.
+     * SPF record includes Postmark sending IPs/hosts.
+     * DKIM is configured for the domain and shows as verified.
+     * DMARC (if present) not set to a strict policy that blocks delivery.
+   * If domain not verified, Postmark may accept but deliverability is poor. Document status and needed DNS records.
 
-1. Log in as new tenant and verify Notification Bell is empty (except system messages intended for all tenants). Confirm notifications created for tenant A do not appear for tenant B.
-2. Verify scheduled emails (trial reminders, payment notices) include the correct company context and links.
+8. **Local queue & worker**
 
-G. Authentication & Session Hygiene (High)
+   * If the app enqueues emails, confirm background worker/queue is running and processing jobs.
+   * Check job queue for pending/failed jobs and worker logs for failures.
+   * Restart worker if down and re-run signup test. Document queue snapshots.
 
-1. Confirm logout invalidates session tokens. Open a new browser or incognito and verify old sessions do not leak data.
-2. Test switching users in same browser: login as tenant A, logout, login as tenant B — confirm no prior company data is visible.
+9. **Template mapping & variables**
 
-H. Database & Persistence Checks (Critical)
+   * Ensure the app uses the correct Postmark **template ID** for verification emails and passes all required template variables.
+   * Render the template with test variables to confirm the final HTML/subject are valid. Log the rendered output.
 
-1. For the new test tenant, query the canonical tables (users, companies, clients, invoices, projects, inventory, employees, settings) with a filter on that companyId and confirm row counts are zero (except for company and the initial user record).
-2. Export small, redacted CSV snapshots of these tables for evidence.
+10. **Webhooks / bounce handling**
 
-I. Edge Cases & Race Conditions (Medium)
+* Confirm Postmark webhooks for bounces/delivery events are configured (in dev use ngrok or make a webhook test endpoint).
+* If webhooks are used, ensure the app endpoint is reachable and processes bounce events into an internal suppression/flag list.
+* Document webhook settings and sample webhook payloads received (if any).
 
-1. Simultaneous signup attempts: simulate two signups at the same time; verify unique companyIds created and no cross-contamination.
-2. Multi-tab behavior: login as tenant A in one tab, open tenant B in another — ensure auth tokens, cookies, and local caches don’t mix.
+11. **Deliverability checks**
 
-J. Files & Code Paths to Inspect (Required list returned by auditor)
-Ask the auditor to list the exact files they inspected (frontend API calls, server routes, auth middleware, tenant resolver, seed scripts, DB migrations, and any background workers that create company data).
+* Check recipient inbox (including spam/promotions folders). If not found, check Postmark event: delivered / deferred / bounced and the reason code.
+* For Gmail/Hotmail, also check Promotions/Other tabs and spam.
+* Document screenshots and Postmark status for the message.
 
-DELIVERABLES (what to return)
+12. **Manual/isolated send**
 
-1. **audit\_report.md** — narrative report with findings, categorized by severity (Critical / High / Medium / Low), including exact reproduction steps for any issue.
-2. **acceptance\_checklist.md** — checklist with each verification step and PASS / FAIL + short notes.
-3. **evidence.zip** (redacted) — screenshots of each page for each test tenant, API response logs, DB query snapshots (CSV), and structured console logs.
-4. **files\_inspected.txt** — absolute file paths and brief notes on what was checked in each file.
-5. **remediation\_plan.md** — for every failed item provide clear code pointers (file names & suggested fix approach in plain English), priority, and estimated risk.
-6. **final\_verification\_steps.md** — exact steps to re-run to confirm fixes (smoke tests and acceptance tests).
+* From Postmark UI or using Postmark test API, manually send a verification-style email to the test recipient (bypass app).
+* If manual send succeeds and inbox receives the message, the problem is in the app (configuration, payload, template, or queue).
+* If manual send fails, the problem is deliverability or Postmark account settings (suppression, domain verification, account hold).
+* Document manual send evidence and inbox screenshot.
 
-ACCEPTANCE CRITERIA (must be TRUE to pass)
-• New signup creates a company record and a unique companyId tied to that user.
-• Company Details populated from signup fields after verification.
-• All module pages for a new company show empty states (no clients, quotes, invoices, projects, inventory, HR entries, or accounting income rows).
-• All API queries and DB operations filter by companyId — no cross-tenant data returned.
-• No seeded/mock data is visible to new tenants. Any seeding is explicitly controlled and disabled at tenant creation time.
-• Settings are per-company and changes in one company do not affect others.
-• Notifications are scoped per company.
-• Session tokens and auth include company scoping; sign out clears session data.
-• Audit produces the six deliverables above.
+13. **Rate limits / account status**
 
-TEST CASES (run these, include expected results & evidence)
+* Check Postmark account for any limits, holds, or policy violations preventing deliveries.
+* If account is suspended or limited, document and resolve with Postmark support.
 
-1. **Signup & mapping** — create user A: expect company details match signup; evidence: screenshot + DB row.
-2. **Empty pages** — login user A and view Clients/Invoices/Projects/Inventory/HR/Accounting/Settings: expect empty state; evidence: screenshots.
-3. **Cross-tenant fetch** — attempt to access tenant B’s client ID while logged in as tenant A: expect 404/empty; evidence: API response log.
-4. **Settings isolation** — modify setting in tenant A and verify tenant B unaffected; evidence: screenshots + DB diff.
-5. **Seed validation** — check seed scripts are disabled or guarded; evidence: file list and seed config.
-6. **Race condition** — concurrent signups produce unique companyIds; evidence: DB snapshots.
-7. **Notification isolation** — create notification for tenant A; check tenant B’s bell empty; evidence: screenshots + DB notification rows.
-8. **Logout hygiene** — login, logout, login another user — previous user’s data not present; evidence: sequence logs.
+14. **Common root-cause checks to perform explicitly**
 
-LOGGING & OUTPUT FORMAT
-• All logs should be structured JSON and include fields: event, userEmail (masked), companyId, endpoint, query, resultCount, timestamp. Example fields requested in logs: `{"event":"api.fetch.clients","user":"m*****@example.com","companyId":"c_123","resultCount":0,"timestamp":...}`.
-• Provide a short summary table in the audit\_report.md with PASS/FAIL per acceptance criterion.
+* Wrong Postmark API key or wrong environment variable (e.g., using production key in dev or empty value).
+* Wrong template ID mapping or missing template variables.
+* Email being queued but worker not running.
+* Recipient on suppression list (bounce/complain/unsubscribe).
+* Domain/sender not verified — SPF/DKIM missing.
+* Postmark account throttled or suspended.
+* App logs showing success but Postmark showing reject (inspect API response).
+* Link is `localhost` — recipients receive email but cannot open link externally (UI vs delivery separate).
 
-TIMING & NOTES
-• If any critical failures are found (cross-tenant exposure, seeded admin data visible to new tenants), stop further tests and escalate immediately with reproduction steps and exact DB record IDs involved.
-• If fixes are made, re-run the acceptance checklist and provide a delta report showing which checks changed from FAIL → PASS.
+15. **Fix & re-test**
 
-Prompt 2:
-
-Here is a single, comprehensive prompt written for direct copy-paste into an AI development environment. It is structured in a clear step-by-step sequence, contains explicit rules to avoid duplication or misconfiguration, and includes all required functionality from **A through F**.
+* Apply the appropriate fix depending on root cause (env var update, restart worker, correct template ID, remove suppression, verify domain/SPF/DKIM, webhook handling).
+* Re-run the signup test and produce full evidence: server log, Postmark activity entry, and inbox screenshot. All three must be present.
 
 ---
 
-### 📌 Full Development Prompt (Copy-Paste Ready)
+## Recommended fixes for common outcomes (do these when you find the matching symptom)
 
-This is a **very long, connected prompt** and it is important not to miss any steps. Each instruction builds on the previous, so the execution must be done carefully to ensure full functionality.
+* **Symptom: No mailer call in app logs**
 
----
+  * Action: ensure signup flow calls mailer; add logging; fix early-exit/bad try/catch swallowing errors. Re-run.
 
-#### **A. Important References and Requirements**
+* **Symptom: App shows success but Postmark dashboard shows nothing**
 
-1. For every action, always **refer back to the task for advanced understanding** before executing. Do not assume — check first.
-2. These functions and prompts have been implemented before in parts. Therefore:
+  * Action: check Postmark API key env var (POSTMARK\_API\_KEY or similar). Confirm app uses correct key and endpoint. Re-run.
 
-   * Update only when required.
-   * Investigate files before making changes.
-   * Avoid file duplication.
-   * Avoid function duplication.
-   * Avoid backend duplication.
-3. Backend must remain **local only** until development is complete. Later, it will be copied to Supabase.
-4. All new changes must **match the theme of the website** (Apple Sequoia inspired).
-5. **Avoid hard-coded changes**. All updates must remain dynamic and reusable.
-6. After all tasks are implemented, conduct **full testing** to confirm end-to-end functionality.
+* **Symptom: Postmark accepted but message bounced**
 
----
+  * Action: check bounce reason, fix recipient address or domain policy problems. Remove suppression only after verifying root cause.
 
-#### **B. User Reset for Development**
+* **Symptom: Message suppressed (on suppression list)**
 
-* Remove all previously created users from the `signup` page.
-* Keep only the testing account:
+  * Action: inspect suppression reason; if safe, remove suppression and re-send only after fixing root cause (e.g., corrected email, validated domain).
 
-  * **Email:** [admin@mokmzansibooks.com](mailto:admin@mokmzansibooks.com)
-  * **Password:** admin123
-* This testing account will be removed in production, but it must remain available during development.
+* **Symptom: Template render errors**
 
----
+  * Action: ensure all required variables passed; correct template ID; render template locally to verify.
 
-#### **C. Multi-User and Company Setup**
+* **Symptom: Worker queue backlog**
 
-1. Each new signup represents a **completely independent company, organization, or individual**. No data between users should overlap.
+  * Action: start/repair worker, process jobs, ensure jobs mark success/fail correctly; add retry/backoff.
 
-2. The **email address** used during signup must act as the unique identifier linking the user to their company.
+* **Symptom: Link uses `localhost`**
 
-3. Add the following fields to the `signup` page → Create Account form:
+  * Action: for dev testing either run app locally, or set `APP_HOST` to a reachable dev URL or use ngrok and update verification link generation to use `APP_HOST`. Document decision.
 
-   * **Company Name**
-   * **Position** (dropdown with options: CEO, Managing Director, Director, Founder, General Manager, Operations Manager, Finance Manager / CFO, Bookkeeper)
+* **Symptom: DKIM/SPF missing**
 
-4. After creating an account, the user must receive a **verification email** with a link that returns them to the login page.
+  * Action: add DNS records per Postmark instructions and wait for propagation. Use Postmark to verify. Re-run manual send.
 
-5. Prevent duplicate signups:
+* **Symptom: Postmark account holds/limits**
 
-   * An email address already used must redirect to login.
-   * A company name already used must redirect to login.
-
-6. Create a **verification email template** styled like the existing welcome and invoice templates. It must include the MOKMzansiBooks logo, signature, design, and this information:
-
-   ```
-   Wilson Mokgethwa Moabelo  
-   Founder & CEO  
-   MOK Mzansi Books  
-   support@mokmzansibooks.com  
-   +27 64 550 4029  
-   81 Monokane Street  
-   Atteridgeville x17  
-   Pretoria, Gauteng 0006
-   ```
-
-7. After verification, link the signup fields (email, company name, position, etc.) directly to the **Company Page → Company Details Tab**.
+  * Action: contact Postmark support; document ticket and follow up.
 
 ---
 
-#### **D. Role and Employee Management**
+## Acceptance criteria (must be TRUE)
 
-1. The first verified user is the **Company Owner (New User)**. This person’s data becomes the official company profile.
+1. After fixes, creating a new user triggers a single verification email that is:
 
-   * Their information can only be edited in **Company Page → Company Details Tab**.
-   * It cannot be deleted elsewhere in the system.
-2. The New User can expand their team by:
-
-   * **Inviting team members** → Company Page → Team Management Tab → Invite Team Member.
-   * **Adding employees directly** → HR Management Page → Employees Tab → Add Employee.
-3. Role hierarchy:
-
-   * **Admin Users (unrestricted access):** CEO, Managing Director, Director, Founder, General Manager, Operations Manager, Finance Manager/CFO, Bookkeeper.
-   * **Regular Users (restricted):** All other roles added by Admins.
-4. Admin Users must be able to **log in with their invitation email and password**. Any Admin under the same company can make changes, and these changes must sync across all other Admins for teamwork.
+   * Accepted by Postmark (message-id recorded in Postmark).
+   * Delivered to the recipient’s inbox (or Spam/Promotions) within 60 seconds.
+   * Evidence: (a) server log showing the send and Postmark response, (b) Postmark dashboard activity showing message accepted/delivered, (c) screenshot of recipient inbox showing message.
+2. Verification token present in DB and the link in the received email activates the account (or you document how to test activation locally).
+3. No unhandled exceptions or silent errors during the send; failures are logged and retried where appropriate.
+4. If recipient was previously suppressed, remediation documented and suppression cleared only after root cause fixed.
 
 ---
 
-#### **E. Dashboard Enhancements**
+## Required deliverables (produce ALL)
 
-1. Display dynamic greetings:
-
-   * **First login:** “Welcome, (Name)”
-   * **Returning login:** “Welcome Back, (Name)”
-   * The (Name) must always be the name of the Admin User currently logged in.
-2. On the **Top Bar avatar**, use the **first letter of the Admin’s first name + first letter of the Admin’s surname** (not company details).
-3. Show a **welcome notification popup** in the Notification Bell for every New User after first login.
-
----
-
-#### **F. Payment and Billing**
-
-1. **Settings → Billing Tab**:
-
-   * **Overview Tab**
-
-     * Show subscription status.
-     * Make “Cancel Subscription” fully functional.
-     * Payment Method section must allow updates.
-     * Payment History must display transaction records.
-   * **Plans Tab**
-
-     * Must function exactly like the Payment Page (identical design & functionality).
-   * **Billing Tab**
-
-     * Remove this tab completely.
-2. **Trial and Subscription System**:
-
-   * On first login, start a **30-day free trial countdown**. Show trial days remaining in the Top Bar.
-   * At 5 days left, send an email reminder to the company owner (New User).
-   * Include a **Payment Link** in the email for subscription.
-   * Create a professional email template for both “5 Days Left” and “5-Day Grace Period” reminders using the same style system as other templates. Include the full company signature block.
-3. **Trial Limitations (Free 30 Days):**
-
-   * Up to 5 invoices/month
-   * Up to 5 quotations/month
-   * Up to 5 clients
-   * Up to 5 projects
-   * Up to 5 inventory items
-   * Up to 5 suppliers
-   * Up to 5 storage locations
-   * Basic support only
-4. **Payment Flow:**
-
-   * Successful payment → redirect first to `ThankYou.tsx` → then to Dashboard.
-   * Remove trial countdown and unlock all features.
-5. **Billing Cycles:**
-
-   * Monthly subscription = 31 days = R60
-   * Annual subscription = 365 days = R684 (5% discount)
-   * Automatically bill every cycle.
-6. **Grace Period Handling:**
-
-   * If payment fails after trial or subscription renewal → grant 5-day grace period.
-   * Retry debit daily for 5 days.
-   * Send daily reminder emails.
-   * If payment succeeds → stop retries, restore full access.
-   * If payment fails after grace → lock out all pages except Dashboard.
-   * Show banner at top: “Please Pay to Access Full Function.”
-   * Notification Bell must show “Update Card Details” linking to Billing → Overview → Payment Method → Update.
-7. **Payment Integration:**
-
-   * Use **Paystack** as processor.
+1. `postmark_debug_report.md` — narrative of findings, root cause(s), steps taken, final status.
+2. `server_logs/` — redacted server logs showing send call(s) and Postmark API response(s).
+3. `postmark_activity_screenshots.zip` — Postmark dashboard screenshots showing the message(s) and any suppression or bounce entries.
+4. `inbox_screenshots.zip` — screenshot(s) of test recipient inbox (show From, Subject, timestamp). If message landed in Spam/Promotions, include that screenshot and explanation.
+5. `db_token_snapshot.json` — redacted row(s) showing verification token(s).
+6. `fix_summary.md` — files/config changed (env var names, template IDs, worker commands) and exact edits made.
+7. `final_verification.md` — clear step-by-step instructions to reproduce the successful signup → verification email flow and how to test again.
 
 ---
 
-#### **G. Final Verification**
+## Logging format (use these structured JSON log messages)
 
-At the end of development, confirm completion with a **checklist of ticks (✓)** for tasks A through F. Each must show as tested and working.
+When you add or capture logs, use these shapes for traceability:
 
----
+* Mail send attempt:
 
-✅ This prompt is structured for complete execution, avoids duplication, matches the theme, and enforces end-to-end subscription and user management logic.
+```json
+{
+  "event":"email.send_attempt",
+  "type":"verification",
+  "toMasked":"j***@example.com",
+  "companyId":"c_123",
+  "templateId":"postmark-template-id",
+  "payloadSummary":{"hasToken":true,"linkHost":"http://localhost:8080"},
+  "timestamp":"2025-09-XXTYY:ZZ:00Z"
+}
+```
 
-Great, I’ll conduct a detailed audit prompt focusing on your multi-tenant SaaS project. I’ll include instructions to address all isolation issues, correct user/company scoping, and ensure complete removal of shared or default data—including `admin@mokmzansibooks.com`. I’ll also provide insights into how QuickBooks handles company isolation so your setup can align accordingly. I’ll let you know once it’s ready.
+* Postmark response:
 
-Perform a full, non-destructive **audit + cleanup + verification** of the multi-tenant SaaS app using the requirements from the previous prompts (Multi-Company Data Isolation, Signup mapping, Subscription/Billing rules, and related UX rules).
-**This is a single copy-paste prompt for your AI development environment / dev team. Do not produce code here — only run the audit, make safe local fixes where specified, and produce the requested deliverables.**
+```json
+{
+  "event":"postmark.response",
+  "messageId":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "status":"Success"|"Error",
+  "httpStatus":200,
+  "responseBody":"...raw response...",
+  "timestamp":"2025-09-XXTYY:ZZ:01Z"
+}
+```
 
----
+* Postmark webhook (bounce/suppression):
 
-## CONTEXT & GOAL
-
-You are auditing a multi-tenant SaaS (local backend only for now) that must treat **every signup as a new, isolated company (tenant)**. Current problems: new users inherit data from previous accounts (especially `admin@mokmzansibooks.com`), notifications and pages show cross-tenant data, seed/mock data is leaking into new tenants, and subscription/billing state is inconsistent. Your job: verify all isolation rules are implemented correctly, wipe legacy test data (including admin account) as requested, fix any isolation violations, and produce a complete audit report + remediation plan + evidence.
-
-**Work locally only.** Do not push to production or live services. Reference previous prompts (signup mapping, tenant rules, subscription rules, email/Mailjet notes) while auditing.
-
----
-
-## HIGH-LEVEL TASKS (in order)
-
-1. **Inventory & inspection**
-
-   * List files and modules to inspect (auth middleware, tenant resolver, signup flow, company creation, seeders, DB migrations, API endpoints for clients/quotations/invoices/projects/inventory/hr/accounting/notifications/settings, background workers, billing worker).
-   * Document where `companyId`/tenant scoping is performed and how it is attached to sessions/JWTs.
-
-2. **Database cleanup (local)**
-
-   * **Wipe all existing test user & company records** (including `admin@mokmzansibooks.com`) from local DB as requested. Keep a redacted backup (export) **before** deleting — store in `evidence.zip` with PII redacted.
-   * Ensure the DB is left in a clean state: no seeded clients/quotes/invoices/projects/inventory/employees/settings belonging to other companies remain.
-   * Note: only perform this wipe on the local dev DB. Document the exact SQL/ORM commands used in `files_inspected.txt` and `remediation_plan.md`.
-
-3. **Signup & company creation verification**
-
-   * Confirm each signup creates a new `company` record and links `user.companyId === company.id`.
-   * Verify the signup fields map exactly to Company Details: `Name`, `Surname`, `Company Name`, `Email`, `Position`.
-   * Ensure verification email flow (if present) triggers and only after verification are company details activated/used.
-
-4. **Tenant isolation fixes**
-
-   * Ensure **every** API endpoint, service, and frontend fetch that reads tenant data (clients/quotations/invoices/projects/inventory/hr/accounting/notifications/settings) filters by `companyId` from authenticated session/JWT.
-   * Fix any endpoint or UI that returns cross-tenant results. For each fix, record the file path and exact change required in plain English in `remediation_plan.md`.
-
-5. **Notifications & Activity log**
-
-   * Ensure Notification Bell and company Activity Log return records only for current `companyId`.
-   * Confirm scheduled notifications (trial reminders, billing notices) generate with correct company context and are sent only to that company’s users.
-
-6. **Per-page empty state checks**
-
-   * For a newly created test tenant (fresh signup), verify these pages show empty states:
-
-     * Clients, Quotations, Invoices, Projects, Inventory, HR Management (Employees & other HR tabs), Accounting → Income & Tax tabs, Settings → General
-   * Capture screenshots showing empty states and API response logs showing zero records.
-
-7. **Settings & Users tab**
-
-   * Confirm Settings → General reads/writes the current company’s details (not admin’s).
-   * Confirm Settings → Users (Administrative Users) lists only users for that company.
-   * Ensure company owner/admin created at signup is editable only via Company Details and cannot be overwritten by other tenants.
-
-8. **Session/auth hygiene**
-
-   * Ensure session tokens (JWT/session cookie) include `companyId` and that logout invalidates tokens.
-   * Test login/logout/switch users in same browser and confirm no cross-tenant cache leakage.
-
-9. **Seeders & mocks**
-
-   * Locate any seed or mock data scripts that auto-create sample data on startup; disable or guard them so they do NOT run per-new-signup. Document file locations and recommend how to safely re-enable for local demo (if needed) without seeding real tenants.
-
-10. **Subscription / billing checks (summary)**
-
-    * Confirm trial → paid conversion updates subscription state and unlocks features immediately.
-    * Confirm trial expiry → 5-day grace → retries → lock behavior (as described previously). (If you find billing flaws, note them in remediation with exact steps to fix; do not change billing logic unless trivial and local.)
-    * Confirm user feature limits are enforced for trial and removed for paid users.
-
-11. **QuickBooks reference**
-
-    * Use QuickBooks behavior as a model: companies are separate "files" — users are not shared across companies unless invited. Validate our system mirrors that isolation model.
+```json
+{
+  "event":"postmark.webhook.bounce",
+  "messageId":"...",
+  "toMasked":"j***@example.com",
+  "bounceType":"HardBounce"|"SoftBounce"|"SpamComplaint",
+  "timestamp":"..."
+}
+```
 
 ---
 
-## ACCEPTANCE CRITERIA (must pass)
+## Extra developer notes
 
-Each criterion must be tested and reported PASS / FAIL with evidence:
+* **Do not expose Postmark secret keys** in screenshots or logs. Mask them.
+* If verification link must be accessible externally for QA, use ngrok or set `APP_HOST` env var to a reachable dev domain before generating the email link.
+* If you implement temporary extra logging to debug, remove or reduce verbose logs after fix and keep only structured events.
+* If using multiple environments, ensure Postmark keys and template IDs are environment-specific and not mixed.
 
-1. New signup creates new `company` and unique `companyId` linked to the new user. (DB row evidence)
-2. Company Details fields populated from signup fields after verification. (screenshot + DB row)
-3. Clients/Quotations/Invoices/Projects/Inventory/HR/Accounting/Settings show empty state for new tenant. (screenshots + API responses)
-4. All API queries filter by `companyId`. (code file list + sample queries)
-5. Notifications and Activity Log scoped by `companyId`. (screenshot + DB query evidence)
-6. No seeded/mock data visible to new tenants. (list of seeders and status)
-7. Settings are per-company; changing settings in tenant A does not affect tenant B. (screenshot diff + DB diff)
-8. Logout clears session and tokens; switching users shows no prior tenant data. (session logs)
-9. Wipe of admin/test accounts completed and documented with backups. (evidence.zip contains redacted backup)
-10. “Back to Dashboard” button responsiveness improved or documented if delay root cause is heavy render/load. (timing check / remediation notes)
 
----
+Prompt 2 
 
-## TEST SUITE (run and capture evidence)
+Verification Email Flow (Start → Finish)
 
-For each test below, capture: API request/response logs (JSON), DB query results (CSV redacted), screenshots (PNG), and structured console logs (JSON). Put all into `evidence.zip`.
-
-1. **Signup & mapping**
-
-   * Create `tenant_A` with unique email; verify company record created and Company Details shows signup values.
-2. **Empty pages**
-
-   * Log in `tenant_A` → check Clients/Invoices/Projects/Inventory/HR/Accounting/Settings are empty.
-3. **Cross-tenant access**
-
-   * Create `tenant_B` and create a sample client. While logged in as `tenant_A`, attempt to fetch `tenant_B` client by ID — expect 403/404 or empty.
-4. **Notifications isolation**
-
-   * Create notification for `tenant_B`; verify `tenant_A` bell is empty.
-5. **Settings isolation**
-
-   * Change timezone/currency in `tenant_A`; verify `tenant_B` not affected.
-6. **Session hygiene**
-
-   * Login tenant\_A → logout → login tenant\_B in same browser; confirm no tenant\_A data visible.
-7. **Seed check**
-
-   * Start app fresh; confirm no auto seeding into new tenant on signup.
-8. **Concurrency**
-
-   * Simultaneous signups (2 processes); verify two unique companyIds and no shared data.
-9. **Back to Dashboard delay**
-
-   * Measure click-to-dashboard render time before and after any fix. Document root cause and remediation.
+**Objective:** Implement, test and document a secure, tenant-aware verification email flow so that when a *new user* signs up (creating a new company), they receive a single-use verification email. When they click the verification link the server validates the token, marks the user as verified, invalidates the token, and redirects the user to the Login page to sign in for the first time. All actions are logged with structured JSON and scoped to the company (tenant). Do everything local-only.
 
 ---
 
-## DELIVERABLES (return these files)
+## Environment & Global Rules (READ FIRST)
 
-Place outputs in a top-level folder and return as a package:
-
-1. `audit_report.md` — full narrative of findings, categorized (Critical/High/Medium/Low) with reproduction steps.
-2. `acceptance_checklist.md` — criteria table with PASS/FAIL and evidence references.
-3. `evidence.zip` — screenshots, API logs (JSON), DB snapshots (CSV redacted), console logs (JSON).
-4. `files_inspected.txt` — absolute paths and short notes of each file inspected (auth, middleware, API routes, seeders, DB models).
-5. `remediation_plan.md` — for each failed item include exact file(s) to change, plain-English change instructions, risk, and priority.
-6. `final_verification_steps.md` — step-by-step smoke tests to re-run after fixes.
-
----
-
-## LOGGING FORMAT (all logs must follow this)
-
-Use structured JSON (mask emails):
-`{"event":"<name>","user":"m*****@domain.com","companyId":"c_XXXXX","endpoint":"/api/clients","query":"{companyId:...}","resultCount":0,"timestamp":"ISO8601","notes":"..."}`
+* Work local only. Use Postmark test server keys in development (do not use live keys).
+* Use `APP_HOST` environment variable for all generated links (e.g., `http://localhost:8081` or an ngrok URL for external testing).
+* Each signup must create a **new company** (tenant) and set `user.companyId`.
+* Tokens must be cryptographically secure, URL-safe, ≥32 bytes, stored **hashed** (SHA256), single-use, configurable expiry (default 24 hours).
+* Do **not** auto-login users after verification — redirect to `/auth/login`.
+* Log every major event with structured JSON (see Logging section).
+* Avoid user enumeration in public UI messages.
+* Rate-limit resend attempts (e.g., 1 per 2 minutes) and signup attempts per IP/email.
 
 ---
 
-## RULES & SAFETY
+## Data model (ensure these exist or map to your schema)
 
-* **Do NOT** modify production or live keys. Work local-only.
-* **Back up** the DB before any deletions and include a redacted backup in evidence.
-* Avoid sweeping code deletions — prefer guarded fixes and clear remediation notes.
-* Keep theme/UI unchanged unless fix requires minimal UX change; document any UI changes.
-
----
-
-## Escalation
-
-If you discover **any critical cross-tenant exposure** (private data from another tenant visible), stop other tests immediately and report: reproduction steps, exact DB record IDs, exact API endpoints returning the leaked records, and suggested immediate mitigation (e.g., take the instance offline / disable the endpoint).
+* **users**: `id`, `companyId`, `email`, `firstName`, `surname`, `position`, `passwordHash`, `verified` (bool, default false), `verifiedAt`, `createdAt`.
+* **companies**: `id`, `name`, `ownerUserId`, `contactEmail`, `createdAt`.
+* **verification\_tokens**: `id`, `userId`, `tokenHash`, `expiresAt`, `purpose` (`email_verification`), `usedAt`, `createdAt`.
+* **email\_logs**: `id`, `event`, `userId`, `companyId`, `templateId`, `postmarkMessageId`, `status`, `meta`, `timestamp`.
+* **audit\_logs**: for all critical events.
 
 ---
 
-Paste this entire prompt into your AI dev environment or hand it to the developer/tester. Run the audit, make safe local cleanups (DB wipe + seed disabling), fix tenant filtering issues where trivial, and produce the six deliverables with full evidence and remediation steps.
+## Endpoints to implement/verify
 
+* `POST /api/signup` — create company + user + send verification email.
+* `POST /api/verify-email` — accept `token` and `uid` (or `token` only if token embeds uid); validate and mark verified.
+* `POST /api/resend-verification` — resend logic with rate-limit.
+* Optional: `GET /auth/verify-email?token=...&uid=...` that performs server-side verification and redirects to login (or frontend route that posts to `/api/verify-email`).
+
+---
+
+## Full flow (step-by-step)
+
+### A. Client: Signup form
+
+1. Page: `Signup / Create Account`.
+2. Fields: `First name`, `Surname`, `Company Name`, `Email`, `Position` (dropdown), `Password`, `Confirm password`.
+3. Client-side validations: email format, password strength, password match.
+4. On submit: POST payload to `/api/signup`.
+5. UX: show spinner + success message: **"Signup successful — check your email for a verification link (check spam). If you don't receive it, use 'Resend verification'."** (mask email on UI: `m***@domain.com`).
+
+### B. Server: Signup handler (`POST /api/signup`)
+
+1. Validate payload server-side; canonicalize email (lowercase, trim).
+2. Check email uniqueness:
+
+   * If exists and `verified=true` → return 409 / user-visible "Email already used. Please login."
+   * If exists and `verified=false` → allow option to resend (return 200 with info or prompt to resend).
+3. Create a **company** record (empty defaults) with fields mapped:
+
+   * `companies.name = Company Name`
+   * `companies.contactEmail = Email`
+   * `companies.ownerUserId = userId` (after user creation)
+   * Persist owner contact fields to company details (firstName, surname, position as owner meta).
+4. Create **user** record with `companyId`, `verified=false`, hashed password (bcrypt/argon2), `createdAt`.
+5. Generate verification token (see Token Generation) and store token hash.
+6. Enqueue/email verification message (see Send Email).
+7. Respond HTTP 201 with message `"Signup successful — check your email to verify your account."`
+8. Log `{"event":"signup.complete","userMasked":"m***@...","userId":"u_xxx","companyId":"c_xxx","timestamp":...}` to audit logs and `email.send_attempt` to email\_logs.
+
+### C. Token generation & storage (server)
+
+1. Generate secure random token (≥32 bytes URL-safe). Example: use crypto.randomBytes(32).toString('base64url').
+2. Compute `tokenHash = SHA256(rawToken)` and store only the hash in DB.
+3. Insert `verification_tokens`:
+
+   * `userId`, `tokenHash`, `purpose='email_verification'`, `expiresAt = now + VERIFICATION_TOKEN_EXPIRY (default 24h)`, `createdAt`.
+4. Log `{"event":"token.created","userId":"u_xxx","companyId":"c_xxx","expiresAt":"YYYY-MM-DDT...Z"}`.
+
+### D. Build verification URL
+
+* Pattern: `${APP_HOST}/auth/verify-email?token=<rawToken>&uid=<userIdEncoded>`
+
+  * Suggestion: encode `userId` (base64 or signed short id) to avoid exposing raw DB ids. Alternatively use token that encodes user info (but still validate server-side).
+* Example: `https://dev.mokmzansibooks.local/auth/verify-email?token=abc123...&uid=Zm9v...`
+
+### E. Compose & send Postmark verification email
+
+1. Use Postmark test server template `postmark-verification` (or create one).
+2. Template variables: `firstName`, `companyName`, `verifyUrl`, `supportEmail`, `supportPhone`, `signatureBlock`.
+3. Subject: `Verify your MOK Mzansi Books account`
+4. From: `MOK Mzansi Books <noreply@mokmzansibooks.com>`
+5. Include `companyId` and `userId` as metadata in the send call for audit.
+6. Enqueue via job queue or send directly in request handler (prefer queue to avoid user-facing delay).
+7. Log send attempt:
+   `{"event":"email.send_attempt","type":"verification","toMasked":"m***@...","userId":"u_xxx","companyId":"c_xxx","templateId":"postmark-verification","timestamp":...}`
+8. Capture Postmark response and log:
+   `{"event":"postmark.response","messageId":"...", "status":"Success|Error","httpStatus":200,"timestamp":...}`.
+9. If Postmark rejects/suppresses the address, log and surface a friendly message to UI.
+
+### F. User clicks link (frontend route)
+
+1. Link opens frontend route `/auth/verify-email?token=...&uid=...`.
+2. Frontend shows a "Verifying..." screen and posts `token` + `uid` to `POST /api/verify-email` (preferred over GET).
+3. Option: support server-side redirect (GET) that validates server-side and returns a redirect to `/auth/login` with flash.
+
+### G. Server: Verify endpoint (`POST /api/verify-email`)
+
+1. Receive `token` and `uid`.
+2. Validate `uid` -> fetch `user` and associated `verification_tokens` filtered by `purpose='email_verification'`.
+3. Compute `SHA256(token)` and perform constant-time comparison with stored `tokenHash`.
+4. Validate:
+
+   * token exists and matches,
+   * `expiresAt > now`,
+   * `usedAt == null`.
+5. If invalid/expired/used:
+
+   * Return 400 with generic message: `"Verification link is invalid or expired. Request a new verification email."` (do not reveal whether user exists).
+   * Log `{"event":"token.invalid","reason":"expired|not_found|used","userMasked":"m***@...","timestamp":...}`.
+6. If valid:
+
+   * Update `users.verified = true`, `users.verifiedAt = now`.
+   * Update `verification_tokens.usedAt = now`.
+   * Optionally delete/invalidate other outstanding tokens for this user.
+   * Log `{"event":"token.consumed","userId":"u_xxx","companyId":"c_xxx","timestamp":...}`.
+   * Return success (HTTP 200) and instruct frontend to redirect to `/auth/login?verified=1` or return redirect (HTTP 303) to login with flash message.
+
+### H. Frontend after verification
+
+* On success, redirect to `/auth/login` and display a success message: `"Your email is verified. Please log in."` with a prominent "Login" CTA.
+* Do NOT auto-login the user.
+
+### I. Resend verification
+
+1. Endpoint: `POST /api/resend-verification` (accepts `email` or auth context).
+2. Rate-limit (e.g., allow once per 2 minutes per email).
+3. If user exists and `verified=false`, invalidate previous tokens (mark used or delete) and create new token; send email as in E.
+4. Log `{"event":"email.resend_attempt","userId":"u_xxx","companyId":"c_xxx","timestamp":...}`.
+
+---
+
+## Security & best practices (MUST)
+
+* **Hash tokens** (SHA256) in DB; never store raw token.
+* Use **constant-time** string comparison for token checks.
+* Tokens single-use: mark `usedAt` and reject reuse.
+* Token expiry default 24 hours (configurable).
+* Rate-limit signups and resend endpoints.
+* Mask emails in log/UI (e.g., `m***@gmail.com`).
+* Avoid exposing whether an email is registered to prevent enumeration; on resend return a generic message where appropriate.
+* Use HTTPS for production `APP_HOST`; for local testing, ngrok can be used.
+
+---
+
+## Logging & observability (structured JSON)
+
+Log these events (examples):
+
+* `signup.attempt` / `signup.complete`
+* `token.created`
+* `email.send_attempt`
+* `postmark.response`
+* `token.consumed`
+* `token.invalid`
+* `verification.resend`
+  Each log entry should include `event`, `userMasked`, `userId`, `companyId`, `endpoint`, `resultCount` (where relevant), `timestamp`, and `meta` JSON.
+
+Example:
+
+```json
+{"event":"email.send_attempt","userMasked":"m***@gmail.com","userId":"u_abc123","companyId":"c_def456","templateId":"postmark-verification","timestamp":"2025-09-XXT12:00:00Z"}
+```
+
+---
+
+## Acceptance tests (run locally and attach artifacts)
+
+For QA run each test and attach logs/screenshots.
+
+1. **Signup + Email sent**
+
+   * Action: POST `/api/signup` with test email (Postmark test inbox).
+   * Expect: HTTP 201; DB: `users.verified=false`; `verification_tokens` row exists; Postmark accepted send.
+   * Evidence: server log, DB row snapshot (masked), Postmark activity screenshot.
+
+2. **Email delivery**
+
+   * Action: check Postmark test inbox.
+   * Expect: verification email received within 60s with valid `verifyUrl`.
+   * Evidence: email screenshot.
+
+3. **Click link → Verify**
+
+   * Action: click link (or POST token to `/api/verify-email`).
+   * Expect: server validates, sets `users.verified=true`, token marked used; redirect to `/auth/login` with success flash.
+   * Evidence: server logs, DB snapshot (verified true), login page screenshot.
+
+4. **Invalid/Expired token**
+
+   * Action: reuse token or use expired token.
+   * Expect: server returns invalid/expired; UI shows resend option. Evidence: logs + UI screenshot.
+
+5. **Resend verification**
+
+   * Action: POST `/api/resend-verification`.
+   * Expect: new token created, old invalidated, new email sent; rate-limit enforced.
+   * Evidence: logs + Postmark screenshot.
+
+6. **Multi-tenant isolation**
+
+   * Action: repeat signup with second email (creates second company).
+   * Expect: each tenant receives own verification email branded for their company; verifying one user does not affect the other.
+   * Evidence: logs and screenshots.
+
+---
+
+## Deliverables (attach after work)
+
+* `verification_flow.md` — narrative of implemented flow (short).
+* `acceptance_checklist.md` — pass/fail for each test with notes.
+* `evidence.zip` — server logs (JSON), DB snapshots (redacted), Postmark activity screenshots, inbox screenshots, login page screenshot after verify.
+* `files_touched.txt` — list of server routes, mailer files, templates updated.
+* `runbook.md` — how to run tests locally (set `APP_HOST`, Postmark test keys, run worker/queue, ngrok if needed).
+
+---
+
+## Troubleshooting quick checklist (if emails not delivered)
+
+1. Confirm Postmark API key is set in env and used by the app (test vs live).
+2. Confirm `templateId` exists and template variables are correct.
+3. Ensure worker/queue is running (if using background jobs).
+4. Check Postmark suppression/bounce lists and remove test addresses in Postmark dashboard or via API.
+5. Use Postmark activity logs to see accepted vs bounced messages.
+6. If external access to verification link is required, set `APP_HOST` to an ngrok URL.
 

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verification Email Flow Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input, select { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .result { margin-top: 10px; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Verification Email Flow Test Interface</h1>
+
+    <div class="test-section info">
+        <h3>📋 Test Instructions</h3>
+        <ol>
+            <li>Fill out the signup form below</li>
+            <li>Click "Test Signup" to create a new account</li>
+            <li>Check the result for success/failure</li>
+            <li>If successful, check Postmark test inbox for verification email</li>
+            <li>Click the verification link in the email</li>
+            <li>Test the verification endpoint with the token</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>📝 Test Signup</h3>
+        <form id="signupForm">
+            <label>First Name: <input type="text" id="firstName" value="Test" required></label>
+            <label>Surname: <input type="text" id="surname" value="User" required></label>
+            <label>Company Name: <input type="text" id="companyName" value="Test Company Pty Ltd" required></label>
+            <label>Email: <input type="email" id="email" value="test@example.com" required></label>
+            <label>Position:
+                <select id="position" required>
+                    <option value="CEO">CEO</option>
+                    <option value="Director">Director</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Staff">Staff</option>
+                </select>
+            </label>
+            <label>Password: <input type="password" id="password" value="TestPass123!" required></label>
+            <label>Confirm Password: <input type="password" id="confirmPassword" value="TestPass123!" required></label>
+            <button type="submit">Test Signup</button>
+        </form>
+        <div id="signupResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>🔗 Test Email Verification</h3>
+        <form id="verifyForm">
+            <label>Token: <input type="text" id="verifyToken" placeholder="Paste token from email" required></label>
+            <label>User ID: <input type="text" id="verifyUserId" placeholder="Paste user ID from email" required></label>
+            <button type="submit">Test Verification</button>
+        </form>
+        <div id="verifyResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📧 Test Resend Verification</h3>
+        <form id="resendForm">
+            <label>Email: <input type="email" id="resendEmail" value="test@example.com" required></label>
+            <button type="submit">Resend Verification</button>
+        </form>
+        <div id="resendResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>🔍 Debug Information</h3>
+        <p><strong>Application URL:</strong> <span id="appUrl">Loading...</span></p>
+        <p><strong>API Base:</strong> <span id="apiBase">Loading...</span></p>
+        <p><strong>Environment:</strong> <span id="environment">Loading...</span></p>
+        <button onclick="checkStorage()">Check localStorage</button>
+        <div id="storageInfo" style="display: none; margin-top: 10px; font-family: monospace; font-size: 12px;"></div>
+    </div>
+
+    <script>
+        // Update debug info
+        document.getElementById('appUrl').textContent = window.location.origin;
+        document.getElementById('apiBase').textContent = window.location.origin + '/api';
+        document.getElementById('environment').textContent = 'Development (Browser Test)';
+
+        // Test signup
+        document.getElementById('signupForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('signupResult');
+            resultDiv.style.display = 'none';
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                resultDiv.className = response.ok ? 'result success' : 'result warning';
+                resultDiv.innerHTML = `
+                    <strong>${response.ok ? '✅ Success' : '⚠️ Error'} (${response.status})</strong><br>
+                    ${result.message || 'No message'}<br>
+                    ${result.userId ? `User ID: ${result.userId}<br>` : ''}
+                    ${result.companyId ? `Company ID: ${result.companyId}<br>` : ''}
+                    ${result.error ? `Error: ${result.error}` : ''}
+                `;
+                resultDiv.style.display = 'block';
+
+                if (response.ok) {
+                    console.log('Signup successful:', result);
+                } else {
+                    console.error('Signup failed:', result);
+                }
+            } catch (error) {
+                resultDiv.className = 'result warning';
+                resultDiv.innerHTML = `<strong>❌ Network Error</strong><br>${error.message}`;
+                resultDiv.style.display = 'block';
+                console.error('Network error:', error);
+            }
+        };
+
+        // Test email verification
+        document.getElementById('verifyForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('verifyResult');
+            resultDiv.style.display = 'none';
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/verify-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                resultDiv.className = response.ok ? 'result success' : 'result warning';
+                resultDiv.innerHTML = `
+                    <strong>${response.ok ? '✅ Success' : '⚠️ Error'} (${response.status})</strong><br>
+                    ${result.message || 'No message'}<br>
+                    ${result.error ? `Error: ${result.error}` : ''}
+                `;
+                resultDiv.style.display = 'block';
+
+                if (response.ok) {
+                    console.log('Verification successful:', result);
+                } else {
+                    console.error('Verification failed:', result);
+                }
+            } catch (error) {
+                resultDiv.className = 'result warning';
+                resultDiv.innerHTML = `<strong>❌ Network Error</strong><br>${error.message}`;
+                resultDiv.style.display = 'block';
+                console.error('Network error:', error);
+            }
+        };
+
+        // Test resend verification
+        document.getElementById('resendForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('resendResult');
+            resultDiv.style.display = 'none';
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/resend-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                resultDiv.className = 'result info';
+                resultDiv.innerHTML = `
+                    <strong>📧 Resend Request</strong><br>
+                    ${result.message || 'No message'}<br>
+                    ${result.error ? `Error: ${result.error}` : ''}
+                `;
+                resultDiv.style.display = 'block';
+
+                console.log('Resend result:', result);
+            } catch (error) {
+                resultDiv.className = 'result warning';
+                resultDiv.innerHTML = `<strong>❌ Network Error</strong><br>${error.message}`;
+                resultDiv.style.display = 'block';
+                console.error('Network error:', error);
+            }
+        };
+
+        // Check localStorage
+        window.checkStorage = () => {
+            const storageInfo = document.getElementById('storageInfo');
+            const data = {
+                users: localStorage.getItem('users') ? JSON.parse(localStorage.getItem('users')).length : 0,
+                companies: localStorage.getItem('companies') ? JSON.parse(localStorage.getItem('companies')).length : 0,
+                tokens: localStorage.getItem('verification_tokens') ? JSON.parse(localStorage.getItem('verification_tokens')).length : 0,
+                logs: localStorage.getItem('audit_logs') ? JSON.parse(localStorage.getItem('audit_logs')).length : 0
+            };
+
+            storageInfo.innerHTML = `
+                Users: ${data.users}<br>
+                Companies: ${data.companies}<br>
+                Tokens: ${data.tokens}<br>
+                Audit Logs: ${data.logs}<br>
+                Total Size: ~${Math.round(JSON.stringify(localStorage).length / 1024)}KB
+            `;
+            storageInfo.style.display = 'block';
+        };
+    </script>
+</body>
+</html>

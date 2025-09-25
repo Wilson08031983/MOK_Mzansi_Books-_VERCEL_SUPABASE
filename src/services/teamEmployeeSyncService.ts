@@ -1,6 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
 import { getAllTeamMembers } from './localAuthService';
-import { Employee, getAllEmployees, addEmployee, setAllEmployees } from './employeeService';
+import { Employee, EmployeeFormData, getAllEmployees, addEmployee, setAllEmployees } from './employeeService';
 
 // Type for team member from getAllTeamMembers
 type TeamMember = {
@@ -16,7 +15,7 @@ type TeamMember = {
  */
 
 // Convert team member to employee format
-const convertTeamMemberToEmployee = (teamMember: TeamMember): Omit<Employee, 'id' | 'employeeNumber' | 'status'> => {
+const convertTeamMemberToEmployee = (teamMember: TeamMember): EmployeeFormData => {
   // Extract names from fullName or use email as fallback
   const fullName = teamMember.fullName || teamMember.email.split('@')[0];
   const nameParts = fullName.split(' ');
@@ -64,8 +63,6 @@ const convertTeamMemberToEmployee = (teamMember: TeamMember): Omit<Employee, 'id
     dayShift: true,
     nightShift: false,
     flexibleShift: false,
-    
-    avatar: undefined
   };
 };
 

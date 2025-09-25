@@ -56,7 +56,9 @@ const AuthReset = () => {
           <span className="font-semibold">{t('auth.authReset.adminPassword')}</span>
           <span>admin123</span>
         </div>
-
+        <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-800">
+          <strong>Note:</strong> Only the admin user is available. All other users have been removed.
+        </div>
       </div>
     );
   };

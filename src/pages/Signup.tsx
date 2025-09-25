@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Eye, EyeOff, ArrowLeft, UserPlus, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuthHook';
-import { sendConfirmationEmail } from '@/services/emailService';
 import { useLocalization } from '@/hooks/useLocalization';
 import { userLinkingService } from '@/services/userLinkingService';
 import { addNotification } from '@/services/notificationService';
@@ -116,134 +115,41 @@ const Signup = () => {
         alert('Please select your Position');
         return;
       }
-      if (emailExists(formData.email)) {
-        alert('An account with this email already exists. Please sign in or use a different email.');
-        return;
-      }
-      if (companyNameExists(formData.companyName)) {
-        alert('This company name is already registered on this device. Please sign in or use a different company name.');
-        return;
-      }
     }
 
     setLoading(true);
     
     try {
-      // Save all form data in user metadata for profile completion
-      const userData = {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        email: formData.email, // Store email in metadata as well for easy access
-        invitation_token: invitationData?.invitation_token || null,
-        // Link company fields for normal signup
-        ...(isInvitationSignup ? {} : { company_name: formData.companyName, role: formData.position })
-      } as Record<string, any>;
-      
-      // Pass complete user data to signUp
-      // Set one-time email verification bypass for localhost to allow immediate login
-      try {
-        const isLocalhost = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname || '');
-        if (isLocalhost) {
-          const key = String(formData.email || '').toLowerCase();
-          const raw = localStorage.getItem('mokBypassEmailVerificationOnce');
-          const map = raw ? JSON.parse(raw) : {};
-          map[key] = true; // consumed on first login attempt
-          localStorage.setItem('mokBypassEmailVerificationOnce', JSON.stringify(map));
-        }
-      } catch {}
+      // Prepare signup data
+      const signupData = {
+        firstName: formData.firstName.trim(),
+        surname: formData.lastName.trim(),
+        companyName: formData.companyName.trim(),
+        email: formData.email.toLowerCase().trim(),
+        position: formData.position,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
+      };
 
-      await signUp(formData.email, formData.password, userData);
-      
-      // Log the data being saved to ensure it's working
-      console.log('User profile data saved:', userData);
-      
-      if (isInvitationSignup) {
-        // Handle invitation acceptance workflow
-        try {
-          const invitationAcceptanceData = {
-            email: formData.email,
-            fullName: `${formData.firstName} ${formData.lastName}`,
-            position: invitationData.role || 'Staff Member'
-          };
-          
-          const linkingSuccess = await userLinkingService.handleInvitationAcceptance(invitationAcceptanceData);
-          
-          if (linkingSuccess) {
-            console.log('User successfully linked across all tables during invitation acceptance');
-          } else {
-            console.warn('User linking encountered issues during invitation acceptance');
-          }
-        } catch (linkingError) {
-          console.error('Error during invitation acceptance linking:', linkingError);
-        }
-        
-        alert(t('auth.signup.accountCreatedSuccess'));
-        navigate('/dashboard');
-      } else {
-        // Persist company details for the new account owner
-        try {
-          const detailsToSave = {
-            companyName: formData.companyName,
-            email: formData.email,
-            phone: '',
-            website: '',
-            ownerName: formData.firstName,
-            ownerSurname: formData.lastName,
-            ownerPosition: formData.position,
-            addressLine1: '',
-            addressLine2: '',
-            addressLine3: '',
-            addressLine4: ''
-          };
-          companyEmployeeSyncService.saveCompanyDetails(detailsToSave as any);
-          // Broadcast update for listeners
-          window.dispatchEvent(new Event('companyDetailsUpdated'));
-          // Update primary user in team members with owner info
-          updatePrimaryUserInTeamMembers({
-            ownerName: formData.firstName,
-            ownerSurname: formData.lastName,
-            ownerPosition: formData.position,
-            email: formData.email,
-            phone: ''
-          });
-          // Auto-sync to HR employees
-          autoSyncCompanyEmployee();
-        } catch (persistErr) {
-          console.warn('Could not persist company details during signup:', persistErr);
-        }
+      // Call the new signup API
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(signupData)
+      });
 
-        // Add a welcome notification for new trial users
-        addNotification({
-          title: t('auth.signup.welcomeNotificationTitle'),
-          message: t('auth.signup.welcomeTrialNotificationMessage'),
-          type: 'system'
-        });
+      const result = await response.json();
 
-        // Send confirmation email using Postmark
-        const tokenResult = createEmailVerificationToken(formData.email);
-        let verifyLink: string | undefined = undefined;
-        if (tokenResult.success && tokenResult.token) {
-          const baseUrl = window.location.origin;
-          verifyLink = `${baseUrl}/verify-email?token=${tokenResult.token}&email=${encodeURIComponent(formData.email)}`;
-          // Helpful for local testing when email sending may be disabled
-          console.log('Email verification link:', verifyLink);
-        }
-        const emailSent = await sendConfirmationEmail({
-          to: formData.email,
-          subject: 'Confirm Your MOK Mzansi Books Account',
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          verifyLink
-        });
-        
-        if (emailSent) {
-          alert(t('auth.signup.accountCreatedSuccess'));
-        } else {
-          alert(t('auth.signup.accountCreatedPartial'));
-        }
-        // Redirect to login so user can sign in with the new account
-        navigate('/login');
+      if (!response.ok) {
+        throw new Error(result.message || 'Signup failed');
       }
+
+      // Success - show message and redirect to login
+      alert(result.message || t('auth.signup.accountCreatedSuccess'));
+      navigate('/login');
+
     } catch (error: any) {
       console.error(t('auth.signup.signupError'), error);
       alert(error.message || t('auth.signup.signupError'));

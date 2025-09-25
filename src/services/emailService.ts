@@ -17,12 +17,16 @@ interface QuotationEmailOptions {
   pdfFileName: string;
 }
 
-interface EmailOptions {
+interface VerificationEmailOptions {
   to: string;
   subject?: string;
   firstName?: string;
   lastName?: string;
-  verifyLink?: string;
+  verifyUrl: string;
+  companyName: string;
+  userId: string;
+  companyId: string;
+  metadata?: Record<string, string>;
 }
 
 interface PasswordResetEmailOptions {
@@ -115,23 +119,48 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export const sendConfirmationEmail = async (options: EmailOptions): Promise<boolean> => {
+export const sendVerificationEmail = async (options: VerificationEmailOptions): Promise<boolean> => {
   try {
-    const { to, subject, firstName = 'there', lastName = '', verifyLink } = options;
+    const {
+      to,
+      subject,
+      firstName = 'there',
+      lastName = '',
+      verifyUrl,
+      companyName,
+      userId,
+      companyId,
+      metadata = {},
+    } = options;
     if (!to) throw new Error('Missing recipient email');
+    if (!verifyUrl) throw new Error('Missing verification link');
+    if (!companyName) throw new Error('Missing company name');
 
-    await postJson('confirmation', { to, subject, firstName, lastName, verifyLink });
+    // Call the server-side API endpoint
+    const response = await postJson('verification', {
+      to,
+      firstName,
+      lastName,
+      companyName,
+      verifyUrl,
+      userId,
+      companyId,
+      subject: subject || 'Verify your MOK Mzansi Books account',
+      metadata,
+    });
+
+    console.log('Verification email sent successfully to:', to, 'Message ID:', (response as any).id);
     return true;
   } catch (error: any) {
-    console.error('Error sending confirmation email:', error);
-    // Dev fallback: use mock email service if API route isn't available locally
+    console.error('Error sending verification email:', error);
+    // Dev fallback: use mock email service if API isn't available
     if (__DEV__) {
-      console.warn('Dev fallback: using mock email service for confirmation email');
+      console.warn('Dev fallback: using mock email service for verification email');
       try {
         await mockEmailService.sendConfirmationEmail(options as any);
         return true;
       } catch (e) {
-        console.error('Mock confirmation email failed:', e);
+        console.error('Mock verification email failed:', e);
       }
     }
     return false;
@@ -304,6 +333,7 @@ export const sendTrialReminderEmail = async (to: string, name: string): Promise<
 
 export default {
   sendConfirmationEmail,
+  sendVerificationEmail,
   sendPasswordResetEmail,
   sendInvitationEmail,
   sendQuotationEmail,

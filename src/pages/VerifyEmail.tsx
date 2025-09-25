@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { verifyEmailByToken } from '@/services/localAuthService';
+import { logAuditEvent } from '@/services/loggingService';
 
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
@@ -13,26 +13,60 @@ const VerifyEmail = () => {
 
   useEffect(() => {
     const token = searchParams.get('token') || '';
-    if (!token) {
+    const userId = searchParams.get('uid') || '';
+    
+    if (!token || !userId) {
       setStatus('error');
       setMessage('Invalid verification link.');
+      logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
+        reason: 'missing_parameters',
+        token: token ? 'provided' : 'missing',
+        userId: userId ? 'provided' : 'missing'
+      });
       return;
     }
 
-    try {
-      const result = verifyEmailByToken(token);
-      if (result.success) {
-        setStatus('success');
-        setEmail(result.email);
-        setMessage('Your email has been successfully verified. You can now log in.');
-      } else {
+    const verifyEmail = async () => {
+      try {
+        const response = await fetch('/api/verify-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token,
+            userId
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          setStatus('success');
+          setMessage('Your email has been successfully verified. You can now log in.');
+          logAuditEvent('email_verified', userId, undefined, window.location.href, undefined, navigator.userAgent, 1, {
+            verificationMethod: 'email_link',
+            success: true
+          });
+        } else {
+          setStatus('error');
+          setMessage(result.message || 'Verification failed.');
+          logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
+            reason: 'verification_failed',
+            error: result.message
+          });
+        }
+      } catch (error: any) {
         setStatus('error');
-        setMessage(result.error || 'Verification failed.');
+        setMessage('An unexpected error occurred during verification.');
+        logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
+          reason: 'network_error',
+          error: error.message
+        });
       }
-    } catch (e) {
-      setStatus('error');
-      setMessage('An unexpected error occurred during verification.');
-    }
+    };
+
+    verifyEmail();
   }, [searchParams]);
 
   const goToLogin = () => navigate('/login');

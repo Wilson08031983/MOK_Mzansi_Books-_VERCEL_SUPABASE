@@ -32,6 +32,7 @@ import { GenericCustomEmail } from '../emails/templates/GenericCustomEmail';
 import { LoginNotificationEmail } from '../emails/templates/LoginNotificationEmail';
 import { PasswordResetEmail } from '../emails/templates/PasswordResetEmail';
 import { EmployeeWelcomeEmail } from '../emails/templates/EmployeeWelcomeEmail';
+import { VerificationEmail } from '../emails/templates/VerificationEmail';
 
 // Load environment variables
 require('dotenv').config({ path: '.env.local' });
@@ -456,6 +457,23 @@ class PostmarkTemplateDeployer {
         }
       },
       {
+        name: 'Email Verification',
+        alias: 'postmark-verification',
+        subject: 'Verify your {{company_name}} account',
+        component: React.createElement(VerificationEmail, {
+          firstName: '{{first_name}}',
+          companyName: '{{company_name}}',
+          verifyUrl: '{{verify_url}}',
+          signature: '{{signature}}'
+        }),
+        sampleData: {
+          first_name: 'John',
+          company_name: 'MOK Mzansi Books',
+          verify_url: 'http://localhost:8081/auth/verify-email?token=example&uid=abc123',
+          signature: 'The MOK Team'
+        }
+      },
+      {
         name: 'Employee Welcome',
         alias: 'employee-welcome-email',
         subject: 'Welcome to {{company_name}} - Set Up Your Account',
@@ -658,7 +676,8 @@ async function main() {
     const testEmail = process.env.TEST_EMAIL;
     if (testEmail) {
       console.log(`\n🧪 Testing with email: ${testEmail}`);
-      await deployer.testTemplate('welcome-email', testEmail);
+      const testAlias = process.env.TEST_TEMPLATE_ALIAS || 'welcome-email';
+      await deployer.testTemplate(testAlias, testEmail);
     }
     
   } catch (error: any) {

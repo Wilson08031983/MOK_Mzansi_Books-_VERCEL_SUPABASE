@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import postmark from 'postmark';
+import { Client } from 'postmark';
 import emailConfig from '@/emails/config/emailConfig';
 
 // Initialize Postmark client with server token
-const postmarkClient = new postmark.ServerClient(process.env.POSTMARK_SERVER_TOKEN || '');
+const postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
 
 // Get configuration from environment variables with fallbacks
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');

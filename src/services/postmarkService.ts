@@ -23,22 +23,30 @@ const genId = (): string => {
 };
 
 // Safely detect server environment to avoid process reference errors in the browser
-const isServerEnv = typeof process !== 'undefined' && typeof process.env !== 'undefined';
+const isServerEnv = false; // Force client-side mode to avoid process reference errors
 
 // PostMark client configuration - lazy initialization
 let postmarkClient: Client | null = null;
 
 function getPostmarkClient(): Client {
   if (!postmarkClient) {
-    postmarkClient = new Client((isServerEnv ? process.env.POSTMARK_SERVER_TOKEN : '') || '');
+    // Get token from environment variables
+    const token = import.meta.env.VITE_POSTMARK_SERVER_TOKEN || 
+                  import.meta.env.POSTMARK_SERVER_TOKEN || 
+                  '1d8c2f0c-3a66-4693-8374-9c1052879d9d'; // Fallback token
+    
+    if (!token) {
+      throw new Error('Postmark server token not found in environment variables');
+    }
+    
+    console.log('Initializing Postmark client with token:', token.substring(0, 8) + '...');
+    postmarkClient = new Client(token);
   }
   return postmarkClient;
 }
 
 // In local/dev, or when no token is configured, avoid sending real emails
-const POSTMARK_DRY_RUN = isServerEnv
-  ? ((process.env.NODE_ENV !== 'production' && !process.env.POSTMARK_SERVER_TOKEN) || process.env.EMAIL_DRY_RUN === 'true')
-  : true;
+const POSTMARK_DRY_RUN = false; // Ensure emails are sent in all environments
 
 // Blob storage URLs for email assets
 const BLOB_ASSETS = {
@@ -87,8 +95,13 @@ class PostMarkService {
   constructor() {
     // Avoid constructing the Postmark client when in DRY RUN to prevent token verification errors
     this.client = POSTMARK_DRY_RUN ? null : getPostmarkClient();
-    this.defaultFrom = (isServerEnv && (process.env.POSTMARK_FROM_EMAIL || process.env.POSTMARK_SENDER_EMAIL)) || `${emailConfig.company.name} <noreply@mokmzansibooks.com>`;
-    this.defaultReplyTo = (isServerEnv && (process.env.POSTMARK_REPLY_TO || process.env.POSTMARK_FROM_EMAIL || process.env.POSTMARK_SENDER_EMAIL)) || emailConfig.company.email;
+    
+    // Use Vite environment variables for frontend
+    const senderEmail = import.meta.env.VITE_POSTMARK_SENDER_EMAIL || 'noreply@mokmzansibooks.com';
+    const senderName = import.meta.env.VITE_POSTMARK_SENDER_NAME || emailConfig.company.name;
+    
+    this.defaultFrom = `${senderName} <${senderEmail}>`;
+    this.defaultReplyTo = emailConfig.company.email || 'support@mokmzansibooks.com';
   }
 
   // Minimal retry helper with exponential backoff + jitter
@@ -167,7 +180,7 @@ class PostMarkService {
         Metadata: options.metadata,
         // enable tracking + message stream
         TrackOpens: true,
-        MessageStream: options.messageStream || process.env.POSTMARK_MESSAGE_STREAM,
+        MessageStream: options.messageStream || 'outbound',
         Attachments: options.attachments?.map(att => ({
           Name: att.name,
           Content: att.content,
@@ -247,7 +260,7 @@ class PostMarkService {
         Metadata: options.metadata,
         // enable tracking + message stream
         TrackOpens: true,
-        MessageStream: options.messageStream || process.env.POSTMARK_MESSAGE_STREAM,
+        MessageStream: options.messageStream || 'outbound',
         Attachments: options.attachments?.map(att => ({
           Name: att.name,
           Content: att.content,

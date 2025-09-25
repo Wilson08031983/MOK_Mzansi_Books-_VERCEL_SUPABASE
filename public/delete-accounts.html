@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delete Unverified Accounts</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #e11d48;
+      border-bottom: 2px solid #e11d48;
+      padding-bottom: 10px;
+    }
+    .container {
+      background-color: #f8fafc;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .target-emails {
+      background-color: #f1f5f9;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .email {
+      font-weight: bold;
+      color: #0f172a;
+    }
+    button {
+      background-color: #e11d48;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #be123c;
+    }
+    button:disabled {
+      background-color: #cbd5e1;
+      cursor: not-allowed;
+    }
+    .backup-btn {
+      background-color: #0ea5e9;
+    }
+    .backup-btn:hover {
+      background-color: #0284c7;
+    }
+    .verify-btn {
+      background-color: #22c55e;
+    }
+    .verify-btn:hover {
+      background-color: #16a34a;
+    }
+    pre {
+      background-color: #1e293b;
+      color: #f8fafc;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      margin-top: 20px;
+    }
+    .success {
+      color: #22c55e;
+    }
+    .error {
+      color: #ef4444;
+    }
+    .warning {
+      color: #f59e0b;
+    }
+    .log-container {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .step {
+      margin-bottom: 30px;
+    }
+    .step-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Delete Unverified Accounts</h1>
+    
+    <div class="target-emails">
+      <p>Target emails to delete:</p>
+      <ol>
+        <li class="email">mokgethwamoabelo@gmail.com</li>
+        <li class="email">mokgethwamoabelo@icloud.com</li>
+      </ol>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 1: Create Backup</div>
+      <button id="backupBtn" class="backup-btn">Create Backup</button>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 2: Discover User Data</div>
+      <button id="discoverBtn" disabled>Discover User Data</button>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 3: Delete User Data</div>
+      <button id="deleteBtn" disabled>Delete User Data</button>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 4: Verify Deletion</div>
+      <button id="verifyBtn" class="verify-btn" disabled>Verify Deletion</button>
+    </div>
+    
+    <div class="log-container">
+      <pre id="logOutput">Waiting to start account deletion process...</pre>
+    </div>
+  </div>
+
+  <script>
+    // Target emails to delete
+    const TARGET_EMAILS = [
+      'mokgethwamoabelo@gmail.com',
+      'mokgethwamoabelo@icloud.com'
+    ].map(email => email.toLowerCase());
+
+    // Storage keys to check for user data
+    const STORAGE_KEYS = [
+      'userCredentials',
+      'companyDetails',
+      'mokMzansiBooks_company',
+      'invitedUsers',
+      'teamMembers',
+      'employees',
+      'clients',
+      'invoices',
+      'quotations',
+      'projects',
+      'inventory',
+      'notifications',
+      'auditLogs',
+      'sessions',
+      'verificationTokens',
+      'passwordResets',
+      'emailLogs',
+      'subscriptions',
+      'paymentHistory'
+    ];
+
+    // DOM elements
+    const logOutput = document.getElementById('logOutput');
+    const backupBtn = document.getElementById('backupBtn');
+    const discoverBtn = document.getElementById('discoverBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const verifyBtn = document.getElementById('verifyBtn');
+
+    // Global variables to store process data
+    let backupTimestamp = null;
+    let discoveryData = null;
+    let deletionLog = null;
+    let verificationResults = null;
+
+    // Logging function
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      let prefix = '';
+      
+      switch (type) {
+        case 'success':
+          prefix = '✅ ';
+          break;
+        case 'error':
+          prefix = '❌ ';
+          break;
+        case 'warning':
+          prefix = '⚠️ ';
+          break;
+        case 'info':
+          prefix = '📝 ';
+          break;
+        case 'header':
+          prefix = '🚀 ';
+          break;
+      }
+      
+      logOutput.innerHTML += `<span class="${type}">[${timestamp}] ${prefix}${message}</span>\n`;
+      logOutput.scrollTop = logOutput.scrollHeight;
+    }
+
+    // Create backup of all relevant data
+    function createBackup() {
+      log('Creating backup of local storage data...', 'header');
+      
+      const backup = {};
+      STORAGE_KEYS.forEach(key => {
+        try {
+          const data = localStorage.getItem(key);
+          if (data) {
+            backup[key] = data;
+            log(`Backed up ${key} (${data.length} bytes)`, 'info');
+          }
+        } catch (error) {
+          log(`Error backing up ${key}: ${error.message}`, 'error');
+        }
+      });
+      
+      // Save backup to localStorage with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      localStorage.setItem(`backup_pre_delete_${timestamp}`, JSON.stringify(backup));
+      
+      log(`Backup created with key: backup_pre_delete_${timestamp}`, 'success');
+      return timestamp;
+    }
+
+    // Find user records and associated data
+    function discoverUserData() {
+      log('Discovering user data for target emails...', 'header');
+      
+      const discovery = {};
+      
+      // Check userCredentials
+      try {
+        const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+        
+        TARGET_EMAILS.forEach(email => {
+          discovery[email] = { userId: null, companyId: null, verified: null, dependentData: {} };
+          
+          // Find user by email
+          Object.entries(credentials).forEach(([userId, userData]) => {
+            if (userData.email && userData.email.toLowerCase() === email) {
+              discovery[email].userId = userId;
+              discovery[email].verified = userData.emailVerified || false;
+              discovery[email].companyId = userData.companyId;
+              
+              log(`Found user record for ${email}: userId=${userId}, verified=${userData.emailVerified || false}, companyId=${userData.companyId || 'none'}`, 'info');
+            }
+          });
+          
+          if (!discovery[email].userId) {
+            log(`No user record found for ${email}`, 'warning');
+          }
+        });
+        
+        // Check other storage for related data
+        STORAGE_KEYS.forEach(key => {
+          if (key === 'userCredentials') return; // Already processed
+          
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || '{}');
+            
+            TARGET_EMAILS.forEach(email => {
+              const userId = discovery[email].userId;
+              const companyId = discovery[email].companyId;
+              
+              if (!userId && !companyId) return;
+              
+              // Count references to this user or company
+              let count = 0;
+              let ids = [];
+              
+              // Different handling based on data structure
+              if (Array.isArray(data)) {
+                // Handle array data
+                data.forEach((item, index) => {
+                  if (
+                    (userId && item.userId === userId) ||
+                    (companyId && item.companyId === companyId) ||
+                    (item.email && item.email.toLowerCase() === email)
+                  ) {
+                    count++;
+                    ids.push(index);
+                  }
+                });
+              } else {
+                // Handle object data
+                Object.entries(data).forEach(([id, item]) => {
+                  if (
+                    (userId && item.userId === userId) ||
+                    (companyId && item.companyId === companyId) ||
+                    (item.email && item.email.toLowerCase() === email)
+                  ) {
+                    count++;
+                    ids.push(id);
+                  }
+                });
+              }
+              
+              if (count > 0) {
+                discovery[email].dependentData[key] = { count, ids };
+                log(`Found ${count} references in ${key} for ${email}`, 'info');
+              }
+            });
+          } catch (error) {
+            log(`Error checking ${key}: ${error.message}`, 'error');
+          }
+        });
+      } catch (error) {
+        log(`Error discovering user data: ${error.message}`, 'error');
+      }
+      
+      return discovery;
+    }
+
+    // Delete user and all associated data
+    function deleteUserData(discovery) {
+      log('Deleting user data...', 'header');
+      
+      const deletionLog = {};
+      
+      TARGET_EMAILS.forEach(email => {
+        log(`\nProcessing deletion for ${email}...`, 'header');
+        deletionLog[email] = { deletedData: {} };
+        
+        const userData = discovery[email];
+        if (!userData.userId) {
+          log(`No user record found for ${email}`, 'warning');
+          deletionLog[email].status = 'no_user_found';
+          return;
+        }
+        
+        // 1. Delete sessions, tokens, invitations first
+        const tokensToDelete = ['sessions', 'verificationTokens', 'passwordResets', 'invitedUsers'];
+        tokensToDelete.forEach(key => {
+          if (userData.dependentData[key]) {
+            try {
+              const data = JSON.parse(localStorage.getItem(key) || '{}');
+              const deletedIds = [];
+              
+              if (Array.isArray(data)) {
+                // Filter out items related to this user
+                const newData = data.filter((item, index) => {
+                  const shouldDelete = 
+                    (userData.userId && item.userId === userData.userId) ||
+                    (item.email && item.email.toLowerCase() === email);
+                  
+                  if (shouldDelete) deletedIds.push(index);
+                  return !shouldDelete;
+                });
+                
+                localStorage.setItem(key, JSON.stringify(newData));
+              } else {
+                // Remove entries related to this user
+                userData.dependentData[key].ids.forEach(id => {
+                  delete data[id];
+                  deletedIds.push(id);
+                });
+                
+                localStorage.setItem(key, JSON.stringify(data));
+              }
+              
+              deletionLog[email].deletedData[key] = deletedIds;
+              log(`Deleted ${deletedIds.length} items from ${key}`, 'success');
+            } catch (error) {
+              log(`Error deleting from ${key}: ${error.message}`, 'error');
+            }
+          }
+        });
+        
+        // 2. Delete notifications, logs, etc.
+        const logsToDelete = ['notifications', 'auditLogs', 'emailLogs'];
+        logsToDelete.forEach(key => {
+          if (userData.dependentData[key]) {
+            try {
+              const data = JSON.parse(localStorage.getItem(key) || '{}');
+              const deletedIds = [];
+              
+              if (Array.isArray(data)) {
+                // Filter out items related to this user
+                const newData = data.filter((item, index) => {
+                  const shouldDelete = 
+                    (userData.userId && item.userId === userData.userId) ||
+                    (userData.companyId && item.companyId === userData.companyId);
+                  
+                  if (shouldDelete) deletedIds.push(index);
+                  return !shouldDelete;
+                });
+                
+                localStorage.setItem(key, JSON.stringify(newData));
+              } else {
+                // Remove entries related to this user
+                userData.dependentData[key].ids.forEach(id => {
+                  delete data[id];
+                  deletedIds.push(id);
+                });
+                
+                localStorage.setItem(key, JSON.stringify(data));
+              }
+              
+              deletionLog[email].deletedData[key] = deletedIds;
+              log(`Deleted ${deletedIds.length} items from ${key}`, 'success');
+            } catch (error) {
+              log(`Error deleting from ${key}: ${error.message}`, 'error');
+            }
+          }
+        });
+        
+        // 3. Delete company data if it belongs solely to this user
+        if (userData.companyId) {
+          // Check if company has other users
+          let hasOtherUsers = false;
+          try {
+            const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+            
+            Object.values(credentials).forEach(user => {
+              if (user.companyId === userData.companyId && 
+                  user.email && 
+                  !TARGET_EMAILS.includes(user.email.toLowerCase())) {
+                hasOtherUsers = true;
+              }
+            });
+            
+            if (hasOtherUsers) {
+              log(`Company ${userData.companyId} has other users - not deleting company data`, 'warning');
+            } else {
+              log(`Company ${userData.companyId} belongs only to this user - deleting company data`, 'info');
+              
+              // Delete company-related data
+              const companyData = ['companyDetails', 'mokMzansiBooks_company', 'clients', 'invoices', 'quotations', 'projects', 'inventory', 'employees'];
+              companyData.forEach(key => {
+                if (userData.dependentData[key]) {
+                  try {
+                    const data = JSON.parse(localStorage.getItem(key) || '{}');
+                    const deletedIds = [];
+                    
+                    if (Array.isArray(data)) {
+                      // Filter out items related to this company
+                      const newData = data.filter((item, index) => {
+                        const shouldDelete = item.companyId === userData.companyId;
+                        if (shouldDelete) deletedIds.push(index);
+                        return !shouldDelete;
+                      });
+                      
+                      localStorage.setItem(key, JSON.stringify(newData));
+                    } else if (key === 'companyDetails' || key === 'mokMzansiBooks_company') {
+                      // Special handling for company details
+                      if (data.id === userData.companyId || 
+                          (data.email && data.email.toLowerCase() === email)) {
+                        localStorage.removeItem(key);
+                        deletedIds.push('company_record');
+                      }
+                    } else {
+                      // Remove entries related to this company
+                      userData.dependentData[key].ids.forEach(id => {
+                        delete data[id];
+                        deletedIds.push(id);
+                      });
+                      
+                      localStorage.setItem(key, JSON.stringify(data));
+                    }
+                    
+                    deletionLog[email].deletedData[key] = deletedIds;
+                    log(`Deleted ${deletedIds.length} items from ${key}`, 'success');
+                  } catch (error) {
+                    log(`Error deleting from ${key}: ${error.message}`, 'error');
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            log(`Error checking company users: ${error.message}`, 'error');
+          }
+        }
+        
+        // 4. Finally delete the user record
+        try {
+          const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+          
+          if (credentials[userData.userId]) {
+            delete credentials[userData.userId];
+            localStorage.setItem('userCredentials', JSON.stringify(credentials));
+            
+            deletionLog[email].deletedData.userCredentials = [userData.userId];
+            log(`Deleted user record for ${email}`, 'success');
+          }
+          
+          deletionLog[email].status = 'deleted';
+        } catch (error) {
+          log(`Error deleting user record: ${error.message}`, 'error');
+          deletionLog[email].status = 'error';
+          deletionLog[email].error = error.message;
+        }
+      });
+      
+      return deletionLog;
+    }
+
+    // Verify deletion was successful
+    function verifyDeletion() {
+      log('\nVerifying deletion...', 'header');
+      
+      const verification = {};
+      
+      TARGET_EMAILS.forEach(email => {
+        verification[email] = { userExists: false, references: {} };
+        
+        // Check if user still exists
+        try {
+          const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+          
+          Object.values(credentials).forEach(user => {
+            if (user.email && user.email.toLowerCase() === email) {
+              verification[email].userExists = true;
+            }
+          });
+          
+          if (verification[email].userExists) {
+            log(`User record for ${email} still exists!`, 'error');
+          } else {
+            log(`User record for ${email} successfully deleted`, 'success');
+          }
+        } catch (error) {
+          log(`Error verifying user deletion: ${error.message}`, 'error');
+        }
+        
+        // Check for any remaining references
+        STORAGE_KEYS.forEach(key => {
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || '{}');
+            let references = 0;
+            
+            if (Array.isArray(data)) {
+              data.forEach(item => {
+                if (item.email && item.email.toLowerCase() === email) {
+                  references++;
+                }
+              });
+            } else {
+              Object.values(data).forEach(item => {
+                if (item.email && item.email.toLowerCase() === email) {
+                  references++;
+                }
+              });
+            }
+            
+            if (references > 0) {
+              verification[email].references[key] = references;
+              log(`Found ${references} references to ${email} in ${key}`, 'error');
+            }
+          } catch (error) {
+            // Ignore empty or invalid storage
+          }
+        });
+        
+        // Final verdict
+        if (!verification[email].userExists && Object.keys(verification[email].references).length === 0) {
+          verification[email].status = 'success';
+          log(`${email} successfully deleted from all storage`, 'success');
+        } else {
+          verification[email].status = 'incomplete';
+          log(`Deletion of ${email} is incomplete`, 'error');
+        }
+      });
+      
+      return verification;
+    }
+
+    // Event listeners
+    backupBtn.addEventListener('click', () => {
+      backupTimestamp = createBackup();
+      discoverBtn.disabled = false;
+    });
+
+    discoverBtn.addEventListener('click', () => {
+      discoveryData = discoverUserData();
+      deleteBtn.disabled = false;
+    });
+
+    deleteBtn.addEventListener('click', () => {
+      deletionLog = deleteUserData(discoveryData);
+      verifyBtn.disabled = false;
+    });
+
+    verifyBtn.addEventListener('click', () => {
+      verificationResults = verifyDeletion();
+      
+      // Create final report
+      const report = {
+        timestamp: new Date().toISOString(),
+        backupKey: `backup_pre_delete_${backupTimestamp}`,
+        targetEmails: TARGET_EMAILS,
+        discovery: discoveryData,
+        deletionLog,
+        verification: verificationResults
+      };
+      
+      // Save report to localStorage
+      localStorage.setItem('deletion_report', JSON.stringify(report));
+      
+      log('\nDeletion Report saved to localStorage with key: deletion_report', 'info');
+      
+      // Display final message
+      log('\nAccount deletion process completed!', 'header');
+      TARGET_EMAILS.forEach(email => {
+        const status = verificationResults[email].status;
+        if (status === 'success') {
+          log(`${email} was successfully deleted and can now be re-registered.`, 'success');
+        } else {
+          log(`Deletion of ${email} was incomplete. Please check the deletion report.`, 'error');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -252,45 +252,16 @@ export const authenticateUser = async (
     if (!email || !password) {
       return { user: null, error: 'Email and password are required' };
     }
-    
-    const credentials = safeGet<StoredCredentials>('userCredentials', {});
-    
-    // Find user with matching email (case insensitive)
-    const userEntry = Object.entries(credentials).find(
-      ([_, cred]) => cred.email.toLowerCase() === email.toLowerCase()
-    );
-    
-    if (!userEntry) {
-      return { user: null, error: 'Invalid email or password' };
+
+    // Delegate to the stricter credential checker that enforces email verification
+    const result = getUserCredentialsByEmail(email, password);
+    if (!result.success || !result.user) {
+      return { user: null, error: result.error || 'Authentication failed' };
     }
-    
-    const [userId, userCred] = userEntry;
-    
-    // Verify password
-    if (userCred.password !== password) {
-      return { user: null, error: 'Invalid email or password' };
-    }
-    
-    // Create user object
-    const user: AuthUser = {
-      id: userId,
-      email: userCred.email,
-      fullName: userCred.fullName,
-      role: userCred.role,
-      permissions: userCred.permissions,
-      user_metadata: {
-        role: userCred.role,
-        first_name: userCred.fullName?.split(' ')[0] || '',
-        last_name: userCred.fullName?.split(' ').slice(1).join(' ') || '',
-        company_name: 'MOK Mzansi Books',
-        phone: ''
-      }
-    };
-    
-    // Store current user in localStorage
-    safeSet('currentUser', user);
-    
-    return { user, error: null };
+
+    // Persist current user on successful auth
+    safeSet('currentUser', result.user);
+    return { user: result.user, error: null };
   } catch (error) {
     console.error('Error authenticating user:', error);
     return { user: null, error: 'Authentication failed' };
@@ -565,39 +536,8 @@ export const getUserCredentialsByEmail = (email: string, password: string): { su
       return { success: false, error: 'Invalid email or password' };
     }
 
-    // Enforce email verification with bypass in dev/preview/local
-    let localBypass = false;
-    try {
-      localBypass = typeof window !== 'undefined' && (
-        localStorage.getItem('mokBypassEmailVerification') === 'true' ||
-        localStorage.getItem('mokDisableEmailVerification') === 'true'
-      );
-    } catch {}
-
-    // NEW: one-time bypass flag scoped by email; consume after use
-    let oneTimeBypass = false;
-    try {
-      if (typeof window !== 'undefined') {
-        const raw = localStorage.getItem('mokBypassEmailVerificationOnce');
-        if (raw) {
-          const map: Record<string, any> = JSON.parse(raw || '{}');
-          const key = String(email || '').toLowerCase();
-          if (map && key && (map[key] === true || map[key] === 'true' || (typeof map[key] === 'number' && map[key] > Date.now()))) {
-            oneTimeBypass = true;
-            // Consume the one-time flag for this email
-            try {
-              delete map[key];
-              localStorage.setItem('mokBypassEmailVerificationOnce', JSON.stringify(map));
-            } catch {}
-          }
-        }
-      }
-    } catch {}
-
-    const isPreviewDomain = typeof window !== 'undefined' && /localhost|127\.0\.0\.1|\.vercel\.app$|\.netlify\.app$/i.test((window.location && window.location.hostname) || '');
-    const bypassVerification = __DEV__ || isPreviewDomain || localBypass || oneTimeBypass;
-
-    if (userCreds.emailVerified !== true && !bypassVerification) {
+    // Strictly enforce email verification everywhere (no bypasses)
+    if (userCreds.emailVerified !== true) {
       return { success: false, error: 'Please verify your email address before signing in.' };
     }
 

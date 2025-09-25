@@ -10,9 +10,9 @@ export default defineConfig({
     }
   },
   server: {
-    port: 8081,
+    port: 8080,
     host: '::',
-    strictPort: false,
+    strictPort: true,
     proxy: process.env.VITE_API_PROXY_TARGET
       ? {
           '/api': {
@@ -21,8 +21,22 @@ export default defineConfig({
           },
         }
       : undefined,
+    // Enable better debugging connection
+    hmr: {
+      port: 8080,
+    },
+    // Enable source maps for debugging
+    sourcemap: true,
   },
   optimizeDeps: {
     include: ['react', 'react-dom']
+  },
+  // Enable better debugging
+  build: {
+    sourcemap: true,
+  },
+  // Enable CSS source maps
+  css: {
+    devSourcemap: true,
   }
 });
