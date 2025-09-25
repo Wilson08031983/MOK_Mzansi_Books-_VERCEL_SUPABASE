@@ -157,10 +157,37 @@ export const sendVerificationEmail = async (options: VerificationEmailOptions): 
     if (__DEV__) {
       console.warn('Dev fallback: using mock email service for verification email');
       try {
-        await mockEmailService.sendConfirmationEmail(options as any);
+        await mockEmailService.sendVerificationEmail({
+          to: options.to,
+          subject: options.subject,
+          firstName: options.firstName,
+          lastName: options.lastName,
+          companyName: options.companyName,
+          verifyLink: options.verifyUrl,
+        } as any);
         return true;
       } catch (e) {
         console.error('Mock verification email failed:', e);
+      }
+    }
+    return false;
+  }
+};
+
+export const sendConfirmationEmail = async (options: { to: string; subject?: string; html?: string; firstName?: string; lastName?: string }): Promise<boolean> => {
+  try {
+    // Attempt to send via API if available (optional backend route)
+    await postJson('confirmation', options);
+    return true;
+  } catch (error: any) {
+    console.error('Error sending confirmation email:', error);
+    // Dev fallback: use mock email service
+    if (__DEV__) {
+      try {
+        await mockEmailService.sendConfirmationEmail(options as any);
+        return true;
+      } catch (e) {
+        console.error('Mock confirmation email failed:', e);
       }
     }
     return false;

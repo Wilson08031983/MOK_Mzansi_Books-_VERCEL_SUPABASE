@@ -150,61 +150,27 @@ export const generateInvoicePdf = async (
 };
 
 /**
- * Generate a quotation PDF
+ * Generate a generic PDF (alias for generateInvoicePdf)
+ * @param data The data for PDF generation
+ * @param companyDetails The company details
+ * @returns Promise resolving to a Blob containing the PDF
+ */
+export const generatePDF = generateInvoicePdf;
+
+/**
+ * Generate an invoice PDF (alias for generateInvoicePdf with uppercase PDF)
+ * @param invoiceData The invoice data
+ * @param companyDetails The company details
+ * @returns Promise resolving to a Blob containing the PDF
+ */
+export const generateInvoicePDF = generateInvoicePdf;
+
+/**
+ * Generate a quotation PDF (alias for generateQuotationPdf with uppercase PDF)
  * @param quotationData The quotation data
  * @param companyDetails The company details
  * @returns Promise resolving to a Blob containing the PDF
  */
-export const generateQuotationPdf = async (
-  quotationData: QuotationData,
-  companyDetails: CompanyDetails
-): Promise<Blob> => {
-  try {
-    // In a real implementation, this would use jsPDF and html2canvas
-    // For now, we'll simulate PDF generation with a delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    console.log('Generated quotation PDF for:', quotationData.quotationNumber);
-    
-    // Create a simple text representation of the PDF content
-    const pdfContent = `
-      QUOTATION #${quotationData.quotationNumber}
-      
-      From:
-      ${companyDetails.name}
-      ${companyDetails.email}
-      ${companyDetails.phone}
-      ${companyDetails.addressLine1 || ''}
-      ${companyDetails.addressLine2 || ''}
-      
-      To:
-      ${quotationData.clientInfo.name}
-      ${quotationData.clientInfo.email || ''}
-      ${quotationData.clientInfo.phone || ''}
-      ${quotationData.clientInfo.billingStreet || ''}
-      ${quotationData.clientInfo.billingCity || ''}, ${quotationData.clientInfo.billingState || ''}
-      
-      Date: ${quotationData.date}
-      Expiry Date: ${quotationData.expiryDate}
-      
-      Items:
-      ${quotationData.items.map(item => 
-        `${item.description} - ${item.quantity} x R${item.rate.toFixed(2)} = R${item.amount.toFixed(2)}`
-      ).join('\n')}
-      
-      Subtotal: R${quotationData.subtotal.toFixed(2)}
-      VAT (${quotationData.vatRate}%): R${quotationData.vatTotal.toFixed(2)}
-      Total: R${quotationData.grandTotal.toFixed(2)}
-      
-      Notes: ${quotationData.notes || 'N/A'}
-      Terms: ${quotationData.terms || 'N/A'}
-    `;
-    
-    // Create a blob representing a PDF (in reality this would be actual PDF data)
-    const blob = new Blob([pdfContent], { type: 'application/pdf' });
-    return blob;
-  } catch (error) {
-    console.error('Error generating quotation PDF:', error);
-    throw new Error('Failed to generate quotation PDF');
-  }
-};
+import { generateQuotationPdf as generateQuotationPdfExternal } from '@/utils/quotationPdfGenerator';
+export const generateQuotationPDF = generateQuotationPdfExternal;
+export const generateQuotationPdf = generateQuotationPdfExternal;
