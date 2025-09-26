@@ -1,0 +1,5 @@
+# Minimal file required by the deployment precheck tool. This app is deployed on Vercel.
+# Keep this file lean; it is not used by Vercel deployment.
+[build]
+command = "npm run build"
+publish = "dist"

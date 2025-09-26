@@ -86,10 +86,12 @@ export const testAllServices = async (): Promise<{
     // Step 4: Test mock email service
     console.log('Step 4: Testing mock email service...');
     try {
-      const emailSuccess = await mockEmailService.sendConfirmationEmail({
+      const emailSuccess = await mockEmailService.sendInvitationEmail({
         to: 'test@example.com',
-        subject: 'Service Test',
-        html: '<p>This is a test email</p>'
+        inviterName: 'Service Test',
+        email: 'test@example.com',
+        role: 'test-user',
+        invitationLink: 'https://test.example.com/invite'
       });
       
       const sentEmails = mockEmailService.getSentEmails();
@@ -116,7 +118,7 @@ export const testAllServices = async (): Promise<{
     try {
       // Verify function availability
       const pdfSuccess = typeof pdfGenerationService.generateInvoicePdf === 'function' &&
-                         typeof pdfGenerationService.generateQuotationPdf === 'function';
+                         typeof pdfGenerationService.generateQuotationPDF === 'function';
       
       results.pdf = {
         success: pdfSuccess,

@@ -13,6 +13,11 @@ const postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
 const signupAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 
+// In-memory storage for development (replace with database in production)
+let users: any[] = [];
+let companies: any[] = [];
+let verificationTokens: any[] = [];
+
 /**
  * Validates signup request data
  */
@@ -55,7 +60,6 @@ function validateSignupRequest(data: any): { valid: boolean; errors: string[] } 
  */
 function checkEmailExists(email: string): { exists: boolean; verified: boolean; userId?: string } {
   try {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
     const existingUser = users.find((user: any) => user.email.toLowerCase() === email.toLowerCase());
 
     if (existingUser) {
@@ -78,8 +82,6 @@ function createCompany(companyData: {
   ownerUserId: string;
 }): { success: boolean; companyId?: string; error?: string } {
   try {
-    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
-
     // Check if company name already exists
     const existingCompany = companies.find((c: any) => c.name.toLowerCase() === companyData.name.toLowerCase());
     if (existingCompany) {
@@ -97,8 +99,6 @@ function createCompany(companyData: {
     };
 
     companies.push(company);
-    localStorage.setItem('companies', JSON.stringify(companies));
-
     return { success: true, companyId };
   } catch (error) {
     console.error('Error creating company:', error);
@@ -118,8 +118,6 @@ function createUser(userData: {
   passwordHash: string;
 }): { success: boolean; userId?: string; error?: string } {
   try {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const user = {
       id: userId,
@@ -135,8 +133,6 @@ function createUser(userData: {
     };
 
     users.push(user);
-    localStorage.setItem('users', JSON.stringify(users));
-
     return { success: true, userId };
   } catch (error) {
     console.error('Error creating user:', error);
@@ -149,9 +145,7 @@ function createUser(userData: {
  */
 function storeVerificationToken(token: any): void {
   try {
-    const tokens = JSON.parse(localStorage.getItem('verification_tokens') || '[]');
-    tokens.push(token);
-    localStorage.setItem('verification_tokens', JSON.stringify(tokens));
+    verificationTokens.push(token);
   } catch (error) {
     console.error('Error storing verification token:', error);
   }
@@ -306,11 +300,9 @@ export default async function handler(
     }
 
     // Update company with owner user ID
-    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
     const companyIndex = companies.findIndex((c: any) => c.id === companyResult.companyId);
     if (companyIndex !== -1) {
       companies[companyIndex].ownerUserId = userResult.userId!;
-      localStorage.setItem('companies', JSON.stringify(companies));
     }
 
     // Create verification token

@@ -1,11 +1,14 @@
-/**
- * South African Labor Service
- * 
- * This service provides functionality for managing South African labor regulations,
- * including working hours, leave entitlements, and other HR-related calculations.
- */
-
-// Types for labor regulations
+// Constants for labor regulations
+export const LABOR_CONSTANTS = {
+  MAX_WEEKLY_HOURS: 45,
+  MAX_DAILY_HOURS_5DAY: 9,
+  MAX_DAILY_HOURS_6DAY: 8,
+  OVERTIME_RATE: 1.5,
+  SUNDAY_OVERTIME_RATE: 2.0,
+  NIGHT_SHIFT_ALLOWANCE: 1.1,
+  STANDARD_WORK_HOURS: ['08:00-17:00', '09:00-17:00'],
+  NIGHT_SHIFT_HOURS: '18:00-06:00'
+} as const;
 export interface WorkingHoursRegulation {
   maxWeeklyHours: number;
   maxDailyHours5Day: number;
@@ -185,29 +188,11 @@ export const calculateNightShiftAllowance = (
 };
 
 /**
- * Check if an employee is eligible for leave
- * @param employeeStartDate Date the employee started working
- * @param leaveType Type of leave
- * @returns Boolean indicating eligibility
+ * Calculate overtime rate based on regulations
+ * @param isSunday Whether the overtime is on a Sunday or public holiday
+ * @returns Overtime rate multiplier
  */
-export const isEligibleForLeave = (
-  employeeStartDate: Date,
-  leaveType: string
-): boolean => {
-  const today = new Date();
-  const employmentDuration = today.getTime() - employeeStartDate.getTime();
-  const employmentDays = Math.floor(employmentDuration / (1000 * 60 * 60 * 24));
-  
-  switch (leaveType) {
-    case 'Annual Leave':
-      return employmentDays >= 30; // Eligible after 1 month
-    case 'Sick Leave':
-      return true; // Always eligible, but pro-rated
-    case 'Family Responsibility Leave':
-      return employmentDays >= 120; // Eligible after 4 months
-    case 'Maternity Leave':
-      return true; // Always eligible
-    default:
-      return true;
-  }
+export const calculateOvertimeRate = (isSunday: boolean = false): number => {
+  const regulations = getDayShiftRegulations();
+  return isSunday ? regulations.sundayOvertimeRate : regulations.overtimeRate;
 };

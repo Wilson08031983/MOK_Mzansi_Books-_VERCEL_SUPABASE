@@ -17,6 +17,7 @@ const welcomeHandler = require('./api/emails/welcome').default;
 const invoiceHandler = require('./api/emails/invoice').default;
 const accountLockoutHandler = require('./api/emails/account-lockout').default;
 const confirmationHandler = require('./api/emails/confirmation').default;
+const verificationHandler = require('./src/pages/api/emails/verification').default;
 
 const signupHandler = require('./src/pages/api/signup').default;
 const verifyEmailHandler = require('./src/pages/api/verify-email').default;
@@ -49,6 +50,7 @@ app.post('/api/emails/welcome', wrapNextHandler(welcomeHandler as any));
 app.post('/api/emails/invoice', wrapNextHandler(invoiceHandler as any));
 app.post('/api/emails/account-lockout', wrapNextHandler(accountLockoutHandler as any));
 app.post('/api/emails/confirmation', wrapNextHandler(confirmationHandler as any));
+app.post('/api/emails/verification', wrapNextHandler(verificationHandler as any));
 
 // Authentication handlers
 app.post('/api/signup', wrapNextHandler(signupHandler as any));

@@ -21,10 +21,31 @@
     "noImplicitAny": false,
     "noFallthroughCasesInSwitch": false,
 
+    /* Type definitions */
+    "typeRoots": ["./node_modules/@types"],
+    "types": ["vite/client"],
+
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "server",
+    "api",
+    "**/*.server.ts",
+    "**/*.server.js",
+    "**/server/**",
+    "**/api/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "scripts/**/*",
+    "dev-api.ts"
+  ]
 }

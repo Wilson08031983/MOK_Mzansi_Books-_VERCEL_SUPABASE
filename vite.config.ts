@@ -13,14 +13,12 @@ export default defineConfig({
     port: 8080,
     host: '::',
     strictPort: true,
-    proxy: process.env.VITE_API_PROXY_TARGET
-      ? {
-          '/api': {
-            target: process.env.VITE_API_PROXY_TARGET,
-            changeOrigin: true,
-          },
-        }
-      : undefined,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
     // Enable better debugging connection
     hmr: {
       port: 8080,

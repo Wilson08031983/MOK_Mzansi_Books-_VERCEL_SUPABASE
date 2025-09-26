@@ -1,309 +1,222 @@
-Full Verification Email Flow (Signup → Verify → Redirect to Login)
+Diagnose & fix missing verification emails (full flow + bypass removal)
 
-**Goal:** Implement, document, and test the entire verification flow so that when a *new user* signs up (each signup creates a new company tenant), they immediately receive a verification email and, after clicking the link, are redirected to the Login page to sign in for the first time. The workflow must be secure, tenant-aware, single-use, and fully logged.
-
----
-
-## High-level summary (one sentence)
-
-When a new user signs up, create a new company tenant and an unverified user record, generate a single-use hashed verification token, send a branded Postmark verification email containing a tokenized URL, and when the user clicks the link validate the token, mark the user verified, delete the token, then redirect the user to the Login page with a success message.
+**Goal (one sentence):** Find why new signups show “Account created — check your email” but never receive the verification email; remove any intentional bypass that auto-verifies accounts; re-enable the secure verification flow (token generation → Postmark send → token validation); permanently delete two bad unverified accounts; produce logs, evidence, and acceptance report. Work local-only and do not commit secrets.
 
 ---
 
-## Requirements & constraints
+## High-level checklist (do these steps, in order)
 
-* Work **local only**; use Postmark test server and local DB.
-* Company = tenant: every signup creates a new `company` and `user.companyId` must be set.
-* Do **not** auto-login the user after verification; redirect to Login page to sign in for the first time.
-* Use environment variable `APP_HOST` (e.g., `https://dev.mokmzansibooks.local` or `http://localhost:8081`) for links — don’t hardcode `localhost`. For external QA use `ngrok` and set `APP_HOST` accordingly.
-* Tokens must be single-use, short-lived (configurable, default 24h), and stored hashed.
-* Use Postmark templates with company branding (Apple Sequoia theme).
-* Log structured JSON events for all major steps (send attempt, postmark response, token created, token consumed).
-* Provide acceptance tests and evidence artifacts.
+1. Search codebase for any “bypass” or “skip verification” flags and disable them (do not delete — comment and document).
+2. Verify verification-token generation + storage (token created, hashed, expiresAt, stored).
+3. Verify mail send call is executed and logged (email.send\_attempt) and Postmark API response recorded.
+4. Check Postmark for suppression/bounce/rejection of the email addresses.
+5. Check message queue / background worker responsible for sending emails.
+6. Check resend flow and rate limits.
+7. Permanently delete specified unverified accounts from DB ([mokgethwamoabelo@gmail.com](mailto:mokgethwamoabelo@gmail.com) and [mokgethwamoabelo@icloud.com](mailto:mokgethwamoabelo@icloud.com)).
+8. Run end-to-end test signup → receive email → click verification → redirected to login.
+9. Produce deliverables (logs, screenshots, postmortem).
 
----
+**Important rules before editing**
 
-## Data model (fields to check/create)
-
-(Names are suggestions — map to your schema)
-
-**Users table**
-
-* id
-* companyId
-* email
-* name, surname, position
-* passwordHash
-* verified (boolean default false)
-* verifiedAt (timestamp nullable)
-* createdAt, updatedAt
-
-**Companies table**
-
-* id
-* name
-* ownerUserId
-* email (company owner/contact)
-* createdAt, updatedAt
-
-**VerificationTokens table**
-
-* id
-* userId
-* tokenHash (store hashed token)
-* expiresAt (timestamp)
-* createdAt
-* purpose (e.g., `email_verification`)
-* usedAt (nullable timestamp)
-* createdBy (system)
-
-**Audit / Email logs**
-
-* id
-* event (email.send\_attempt, postmark.response, token.created, token.consumed)
-* userId / companyId
-* templateId
-* postmarkMessageId (if present)
-* status
-* timestamp
-* meta (JSON)
+* Work local only (local DB). Do not change production data.
+* Inspect code before changing anything. Avoid duplicating files or handlers.
+* Do not commit environment secrets to Git — use env files locally and keep secrets out of commits.
+* Log everything in structured JSON to console/email\_logs for the audit.
 
 ---
 
-## Detailed step-by-step flow
+## Step A — Find & disable the bypass (very likely root cause)
 
-### 1) Signup form (frontend)
+Search the repo (frontend + backend) for the following keywords (case-insensitive):
 
-* Page: `Signup / Create Account`.
-* Fields required (map these to Company Details on creation): `First name`, `Surname`, `Company Name`, `Email`, `Position` (dropdown), `Password`, `Confirm password`.
-* Client validation (email format, password strength).
-* On submit: POST to `/api/signup` with all fields and `APP_HOST` will be used for generating verification URL server-side.
-* UX: show "Creating your company..." spinner, then "Check your email: a verification link has been sent to <masked email>" on success. Do **not** assume verification complete — show instructions.
+* `bypass`, `skipVerification`, `autoVerify`, `forceVerified`, `VERIFY_BYPASS`, `SKIP_EMAIL_VERIFICATION`, `AUTO_VERIFY`, `mockEmail`, `DEV_SKIP_VERIFY`, `testOnlyVerify`
+  For each match:
 
-### 2) Backend: Signup handler (`/api/signup`)
+1. Identify where the flag is set (env var, test helper, seed script).
+2. If flag is `true` or code path auto-sets `user.verified = true`, temporarily disable it and document the exact file & lines changed.
+3. If the bypass was added as a temporary patch, revert to the original verification code path: ensure user remains `verified = false` after signup and the mailer is invoked.
+4. Add/or update a TODO comment explaining why bypass existed and how to re-enable only for safe local testing.
 
-* Validate payload server-side.
-* Check `email` uniqueness across users (if exists and verified: return "Email already used. Please login"; if exists and unverified, allow or return option to resend verification).
-* Create new **company** record with `companyName` and initial default settings (empty lists). Set `company.ownerUserId` to the user to be created.
-* Create **user** record with `companyId`, `verified=false`, store hashed password (bcrypt/argon2).
-* Create one **verification token** (see next step).
-* Enqueue/send verification email.
-* Return HTTP 201 + UI message: `"Signup successful — check your email to verify your account."`
-
-> IMPORTANT: map signup fields to company fields (Name → Company Details Name; Surname → Company Details Surname; Email → Company Details Email; Position → Company Details Position) and persist them on the `companies` table as owner details.
-
-### 3) Token generation & storage (server)
-
-* Generate a cryptographically secure random token (e.g., 32+ byte base64 or urlsafe).
-* Hash token using a secure hash (SHA256) before storing: `tokenHash = sha256(token)`.
-* Create `VerificationTokens` row:
-
-  * userId = new user id
-  * tokenHash
-  * expiresAt = now + `VERIFICATION_TOKEN_EXPIRY` (default 24 hours)
-  * purpose = `email_verification`
-* Log event: `{"event":"token.created","userId":..., "companyId":..., "timestamp":...}`.
-* **Important:** Do not store plain token in DB — only the hash.
-
-### 4) Build verification URL (server)
-
-* URL pattern: `${APP_HOST}/auth/verify-email?token=<token>&uid=<userIdEncoded>`
-
-  * `APP_HOST` from env.
-  * Optionally encode userId (e.g., base64 or a signed short id) to keep link tidy.
-* Example (dev): `https://dev.mokmzansibooks.local/auth/verify-email?token=abc123...&uid=u_abc`
-
-### 5) Compose & send Postmark email
-
-* Use Postmark test server / template.
-* Template variables:
-
-  * `firstName`, `companyName`, `verifyUrl`, `supportEmail`, `supportPhone`, `signature` (Wilson Mokgethwa Moabelo block).
-* Subject: `Verify your MOK Mzansi Books account — Action required`
-* From: `MOK Mzansi Books <noreply@mokmzansibooks.com>`
-* Send call must include `companyId` or `userId` as metadata and `templateId` used.
-* Log structured JSON send attempt:
-
-  ```json
-  {"event":"email.send_attempt","type":"verification","toMasked":"m***@gmail.com","userId":"u_xxx","companyId":"c_xxx","templateId":"postmark-verification","timestamp":"..."}
-  ```
-* If using a job queue, push job. Ensure worker processes queue.
-
-### 6) Postmark response & logging
-
-* Capture Postmark response (messageId, status).
-* Log: `{"event":"postmark.response","messageId":"...","status":"Success","httpStatus":200,"timestamp":"..."}`.
-* If Postmark response indicates rejection/suppression, capture and surface to admin log and show suggestion to user: "We couldn't send the verification email. Please contact support or try another email."
-
-### 7) Frontend success UI
-
-* After server returns success, show a clear page:
-
-  * "Check your inbox — we sent a verification email to **m**\*@gmail.com\*\*. If you don't receive it in 5 minutes, check spam or click 'Resend verification email'."
-  * Show `Resend verification email` button (disabled for N seconds to rate-limit).
-  * Optionally show link to change email.
-
-### 8) Clicking verification link (user flow)
-
-* User clicks link in email (opens `/auth/verify-email?token=...&uid=...`).
-* Frontend route displays "Verifying..." and POSTs token+uid to backend endpoint `/api/verify-email` (or GET allowed with server-side verification — but prefer POST for safety).
-* Backend steps:
-
-  1. Validate `uid` exists and map to `userId`.
-  2. Look up verification token by `userId` and `purpose=email_verification`.
-  3. Hash received token and compare with stored `tokenHash` (constant-time compare).
-  4. If no match or `expiresAt < now` or `usedAt` present → return error (expired/invalid) and show UI: "Verification link expired/invalid. \[Resend verification email]" and a link to resend.
-  5. If valid:
-
-     * Update user: `verified = true`, `verifiedAt = now`.
-     * Update token: `usedAt = now`.
-     * Remove token row or keep with usedAt for audit.
-     * Log: `{"event":"token.consumed","userId":..., "companyId":..., "timestamp":...}`.
-     * Remove any "unverified account" soft-locks if present.
-* IMPORTANT: token must be single-use. Subsequent uses must be rejected.
-
-### 9) Redirect to Login page
-
-* After successful verification, redirect user (HTTP 303 or frontend navigation) to `/auth/login` with a success flash message:
-
-  * `"Your email is verified. You can now log in with your email and password."`
-* Optionally show a “Login now” CTA button.
-* Do not auto-login for security.
-
-### 10) Resend verification flow
-
-* Provide endpoint `/api/resend-verification`:
-
-  * Rate-limit (e.g., once per 2 minutes per email).
-  * Validate user exists and `verified=false`.
-  * Invalidate old tokens (delete or mark used) and create a new token following steps 3–6.
-  * Log `email.resend_attempt`.
-* Show UI: "Verification email resent. Please check your inbox."
+Log a structured note:
+`{"event":"bypass.disabled","file":"<filepath>","oldValue":"true","newValue":"false","timestamp":...}`
 
 ---
 
-## Security & best practices (must implement)
+## Step B — Verify server-side signup/verification code paths
 
-* Hash stored tokens (SHA256 or better). Only the one-time raw token is sent via email.
-* Tokens length: 32+ bytes URL-safe random string.
-* Token expiry default: 24 hours (configurable). For security-critical cases consider shorter.
-* Single-use enforced: after use, mark token `usedAt` and reject further uses.
-* Rate-limit resend and signup to avoid abuse and spam.
-* Use constant-time comparison to avoid timing attacks.
-* Do not reveal whether a given email exists in error messages (avoid user enumeration); for internal dev you may log it but UI should remain generic.
-* Mask email in UX and logs (e.g., `m***@gmail.com`) when showing to support screenshots.
-* Record audit logs for each critical event: signup, token created, email send attempt, postmark response, token consumed, resend.
+Open and inspect these endpoints / modules (or their equivalents in your codebase):
 
----
+* `POST /api/signup` (or `api/auth/signup`, `api/users/create`)
+* `POST /api/verify-email` or `api/auth/verify`
+* `POST /api/resend-verification`
+* mailer service / `services/mailer` / `services/email` / `src/services/postmark*`
+* queue/worker that flushes email jobs (e.g., `jobs/emailWorker`, `worker.js`, `bull`, `agenda`)
 
-## Multi-tenant considerations (company isolation)
+Confirm:
 
-* Every signup creates a **distinct company** record and sets `user.companyId` to that company.
-* The verification email must be scoped to the company context (branding variables passed to template).
-* Ensure no data pre-population for new company — pages must be empty until user adds data.
+1. Signup creates `company` and `user` with `verified=false`.
+2. Signup creates a verification token record: token (random), tokenHash (SHA256 stored), expiresAt, purpose.
+3. Signup enqueues or immediately calls mailer with `to`, `templateId`, `verifyUrl` and logs `email.send_attempt`.
+4. `verify-email` endpoint validates tokenHash (constant-time compare), `expiresAt`, `usedAt` and sets `user.verified = true`, `verifiedAt` and marks token `usedAt`.
+5. Resend handler invalidates old tokens and creates+sends a new one, with rate limit.
 
----
+If any of these steps are missing or short-circuited because of bypass, re-enable the full flow and log what you changed.
 
-## Postmark template & copy suggestions
-
-**Template ID**: `postmark-verification` (or your existing id).
-**Subject**: `Verify your MOK Mzansi Books account`
-**Template fields**:
-
-* `{{firstName}}`
-* `{{companyName}}`
-* `{{verifyUrl}}`
-* `{{supportEmail}}`
-* `{{supportPhone}}`
-* `{{signatureBlock}}` (Wilson block)
-
-**Sample email body (short):**
-
-> Hi {{firstName}},
-> Thanks for signing up for **{{companyName}}** on MOK Mzansi Books. Please verify your email by clicking the button below:
-> **Verify my email** (link = {{verifyUrl}})
-> If you did not sign up, ignore this email. The link expires in 24 hours.
-> — Wilson Mokgethwa Moabelo, Founder & CEO
+Log example:
+`{"event":"signup.flow.checked","signupEndpoint":"/api/signup","tokenCreated":true,"mailerCalled":true,"timestamp":...}`
 
 ---
 
-## Error handling UI flows
+## Step C — Check verification token generation & persistence
 
-* On expired/invalid token page: show clear message with `Resend verification email` action. Log the attempt.
-* On send errors: show `"We couldn't send verification email. Please try again or contact support."` and log Postmark error.
-* On suppressed/bounced addresses: surface "Email bounce detected" to admin logs and suggest trying different email.
+Run a local signup (use a test email you can check). Immediately inspect DB:
 
----
+* Confirm a `verification_tokens` table/collection/document exists for that user.
+* Fields to check: `tokenHash`, `expiresAt`, `purpose='email_verification'`, `usedAt=null`.
+* Ensure only the **hash** is in DB — raw token should not be stored.
 
-## Logging / Observability (required)
+If token is not created:
 
-Log structured events to console/files for audit and evidence. Example events:
-
-* `email.send_attempt` (with templateId, masked email, companyId)
-* `postmark.response` (messageId, httpStatus)
-* `token.created` (userId, companyId, expiresAt)
-* `token.consumed` (userId, companyId, usedAt)
-* `verification.resend` (userId, companyId, attempt)
-
-Store logs for debugging and attach to deliverables.
+* Look for early returns in signup code or errors swallowed by try/catch.
+* Re-enable token generation and add console logs at token create point:
+  `console.log(JSON.stringify({event:"token.created","userId":..., "companyId":..., "expiresAt":...}))`
 
 ---
 
-## Acceptance tests & checklist (run locally, provide artifacts)
+## Step D — Confirm mailer is invoked and Postmark interaction
 
-For QA run these and attach logs/screenshots:
+1. At token creation, the server should call mailer: `mailer.sendVerification({to, firstName, company, verifyUrl, templateId})`.
+2. Ensure mailer logs both send attempt and Postmark response:
 
-1. **Signup + Email sent**
+   * `email.send_attempt` (before call)
+   * `postmark.response` (after call: success|rejected|error|bounce)
+3. If a job queue is used: confirm job is enqueued and worker is running. If job remains queued but worker not processing, start worker and confirm job runs.
+4. If mailer is stubbed for local dev (mockEmailService), either:
 
-   * Action: submit signup form with test email (use Postmark test inbox).
-   * Expect: server returns success, DB has `user` with `verified=false`, `verification_token` created, Postmark activity shows message accepted.
-   * Evidence: server log (send attempt), DB snapshot (user + token), Postmark activity screenshot.
+   * Unstub it to use Postmark test server OR
+   * Ensure the mock writes an `email.send_attempt` log and a simulated `postmark.response` so the flow behaves like a real send.
 
-2. **Receive the email**
-
-   * Action: check test inbox / Postmark test inbox.
-   * Expect: verification email received within 60s, contains `verifyUrl`.
-   * Evidence: email screenshot.
-
-3. **Click verification link**
-
-   * Action: click link (or copy/paste to browser).
-   * Expect: backend validates token, sets `user.verified=true`, token marked used, redirect to `/auth/login` with success message.
-   * Evidence: server logs (token consumed), DB snapshot (verified true), screenshot of login page with success message.
-
-4. **Invalid token handling**
-
-   * Action: use expired token or replay used token.
-   * Expect: show "expired or invalid", allow resend.
-   * Evidence: logs and UI screenshot.
-
-5. **Resend verification**
-
-   * Action: trigger resend.
-   * Expect: new token created, old token invalidated, new Postmark email sent, rate limit enforced.
-   * Evidence: logs, Postmark screenshot.
-
-6. **Multi-tenant verification**
-
-   * Action: sign up two different users (two companies).
-   * Expect: each receives an email scoped to their company branding; verifying one does not affect the other.
-   * Evidence: logs and screenshots.
+Log expected actions:
+`{"event":"email.send_attempt","toMasked":"m***@...","userId":"u_xxx","companyId":"c_xxx","template":"verification","timestamp":...}`
+then
+`{"event":"postmark.response","messageId":"pm_xxx","status":"Success","httpStatus":200,"timestamp":...}`
 
 ---
 
-## Deliverables (attach after work)
+## Step E — Inspect Postmark (developer checklist)
 
-* `verification_flow.md` — narrative of implemented flow.
-* `acceptance_checklist.md` — pass/fail for each test above.
-* `evidence.zip` — server logs (email.send\_attempt, postmark.response, token.created, token.consumed), DB snapshots (before and after verification), Postmark activity screenshots, inbox screenshots showing the verification email, final login page screenshot.
-* `files_touched.txt` — list of files/routes/endpoints updated (server routes, mailer, templates).
-* `runbook.md` — how to re-run tests locally (set APP\_HOST, start worker, use Postmark test server, ngrok if needed).
+Locally, verify env variables reference Postmark test settings (do **not** paste secrets into code). In Postmark dashboard:
+
+1. Check Postmark Activity for the test email addresses — was the message accepted, bounced, or suppressed?
+2. If suppressed/bounced, investigate suppression reason and remove the address or fix content causing bounce.
+3. If Postmark shows message accepted but you don’t see it in your inbox:
+
+   * Check spam/junk.
+   * Confirm `From` address is the same as sender configured in Postmark (must match verified sender).
+4. If Postmark rejects because of invalid template ID: confirm the `POSTMARK_TEMPLATE_VERIFICATION_ID` in env matches the template in Postmark.
+5. If anything in Postmark settings is misconfigured (sender, domain verification, message stream), correct in dashboard and re-test.
+
+Log example from Postmark:
+`{"event":"postmark.inspect","messageStatus":"Accepted|Bounced|Suppressed","detail":"...","timestamp":...}`
 
 ---
 
-## Final notes & tips
+## Step F — Worker / Job queue health
 
-* Use Postmark **test server** keys in dev env. Do not use live keys until full verification.
-* If QA needs to click links from external testers, use `ngrok` and set `APP_HOST` to the ngrok URL while testing.
-* Keep the verification page UX friendly and accessible (mobile-friendly button).
-* Mask secrets in logs/screenshots.
+If your mailer uses a job queue:
+
+* Check the queue engine (Redis/Bull/Agenda) is running locally.
+* Confirm jobs are dequeued and processed.
+* If jobs persist, start the worker and re-run the signup test.
+* Add logging at job start and completion.
+
+Log example:
+`{"event":"email.job.process","jobId":"j_xxx","status":"started|completed|failed","timestamp":...}`
+
+---
+
+## Step G — Resend verification & rate-limit checks
+
+Test the resend endpoint:
+
+1. Trigger `/api/resend-verification` for the test user.
+2. Confirm new token created, old tokens invalidated, and mailer invoked.
+3. Confirm rate-limit (e.g., second attempt within 2 minutes is throttled).
+
+Log example:
+`{"event":"verification.resend","userMasked":"m***@...","result":"sent|rate_limited","timestamp":...}`
+
+---
+
+## Step H — Delete problematic unverified accounts (requested)
+
+Permanently remove these unverified accounts and associated tokens from local DB:
+
+* `mokgethwamoabelo@gmail.com`
+* `mokgethwamoabelo@icloud.com`
+
+Procedure:
+
+1. Confirm accounts exist and are `verified=false`.
+2. Delete user record(s), company record(s) created alongside them, and any `verification_tokens` entries.
+3. Log deletion with masked emails and DB ids:
+   `{"event":"account.deleted","userMasked":"m***@...","userId":"u_xxx","companyId":"c_xxx","reason":"cleanup-unverified","timestamp":...}`
+
+**Warning:** Only delete these accounts in local DB for this dev cycle. Do not delete in production unless you are certain.
+
+---
+
+## Step I — End-to-end test (must pass)
+
+After bypass removal and mailer fixes, run this E2E locally:
+
+1. Clear local DB test data or create a fresh DB snapshot.
+2. On signup page: Fill signup form with a test email you control (or Postmark test inbox).
+3. Submit and confirm:
+
+   * Response shows “Account created — check your email”.
+   * `verification_tokens` row exists (DB).
+   * `email.send_attempt` log exists (console + email\_logs).
+   * Postmark shows accepted message (or mock service wrote success).
+4. Receive email and confirm `verifyUrl` contains token UID; click the link.
+5. Server validates token, sets `users.verified = true`, sets token `usedAt` and returns success.
+6. Frontend redirects to `/auth/login` and shows success message.
+7. Confirm `email_logs` show send and `token.consumed` is logged.
+
+Capture these artifacts:
+
+* Console logs (structured JSON) for token creation, email send attempt, Postmark response, token consumed.
+* DB snapshots (redacted) showing user record before/after verification and token row with `usedAt`.
+* Email screenshot showing verify link.
+
+---
+
+## Acceptance criteria (all must be true to close ticket)
+
+* Bypass/auto-verify flag is disabled and documented.
+* On signup, a verification token is created and stored hashed.
+* Mailer is invoked; an `email.send_attempt` log is present and Postmark (or mock) responded OK.
+* Test verification email is received (or Postmark accepted send) and clicking link marks the account verified.
+* The two specified unverified accounts are removed from local DB.
+* All steps have structured logs and artifacts attached to deliverables.
+
+---
+
+## Deliverables (attach when done)
+
+1. `fix_report.md` — one-page summary of root cause, changes made (file paths + brief diff description), and how bypass was disabled.
+2. `evidence.zip` — console/log screenshot(s), Postmark activity screenshot, DB snapshots (redacted), email screenshot (verification email), and final login screenshot.
+3. `files_touched.txt` — file paths changed with short description of change.
+4. `audit_logs.json` — structured JSON logs for events listed above.
+5. `run_instructions.md` — how to re-run tests locally (env var list, start worker, test email address).
+
+---
+
+## Quick debug checklist (if still not receiving)
+
+* Are you using a mock mailer that doesn’t actually call Postmark? If so, switch to Postmark test sender for this full test.
+* Is the Postmark template ID in env correct? (typo will silently cause rejections)
+* Is the sender address verified in Postmark and matches `From`? (unverified sender can block mails)
+* Is the worker processing the email jobs? (if queue is used)
+* Are the test emails on Postmark suppression list? (remove if needed)
+* Is the verification link correctly built (APP\_HOST env)? If using ngrok for external click, set `APP_HOST` to ngrok URL.

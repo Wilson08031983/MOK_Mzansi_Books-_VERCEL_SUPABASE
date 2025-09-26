@@ -184,7 +184,14 @@ export const sendConfirmationEmail = async (options: { to: string; subject?: str
     // Dev fallback: use mock email service
     if (__DEV__) {
       try {
-        await mockEmailService.sendConfirmationEmail(options as any);
+        await mockEmailService.sendInvitationEmail({
+          to: options.to,
+          subject: options.subject,
+          email: options.to,
+          role: 'User',
+          invitationLink: '#',
+          inviterName: options.firstName
+        });
         return true;
       } catch (e) {
         console.error('Mock confirmation email failed:', e);
@@ -343,12 +350,14 @@ export const sendTrialReminderEmail = async (to: string, name: string): Promise<
     // Dev fallback: use mock service to simulate delivery
     if (__DEV__) {
       try {
-        await mockEmailService.sendConfirmationEmail({
+        await mockEmailService.sendInvitationEmail({
           to,
           subject: 'Your trial is ending soon',
-          firstName: name,
-          html: `<p>Hi ${name},</p><p>Your trial will expire in 5 days. Visit Settings → Billing to upgrade and keep access.</p>`,
-        } as any);
+          email: to,
+          role: 'User',
+          invitationLink: '#',
+          inviterName: name,
+        });
         return true;
       } catch (e) {
         console.error('Mock trial reminder failed:', e);
