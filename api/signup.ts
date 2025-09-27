@@ -184,6 +184,16 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<SignupResponse>
 ) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   // Only allow POST requests
   if (req.method !== 'POST') {
     logAuditEvent('signup.attempt', undefined, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
@@ -318,7 +328,7 @@ export default async function handler(
       await sendVerificationEmail({
         to: normalizedEmail,
         firstName: requestData.firstName,
-        surname: requestData.surname,
+        lastName: requestData.surname,
         companyName: requestData.companyName,
         verifyUrl,
         userId: userResult.userId!,
