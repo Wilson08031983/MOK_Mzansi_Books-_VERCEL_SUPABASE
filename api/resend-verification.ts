@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ResendVerificationRequest, ResendVerificationResponse } from '@/types/auth';
-import { createVerificationToken } from '@/services/tokenService';
-import { logAuditEvent, logEmailEvent } from '@/services/loggingService';
-import { sendVerificationEmail } from '@/services/emailService';
+import { ResendVerificationRequest, ResendVerificationResponse } from '../src/types/auth';
+import { createVerificationToken } from '../src/services/tokenService';
+import { logAuditEvent, logEmailEvent } from '../src/services/loggingService';
+import { sendVerificationEmail } from '../src/services/emailService';
 
 // Rate limiting storage (in production, use Redis or similar)
 const resendAttempts = new Map<string, { count: number; lastAttempt: number }>();

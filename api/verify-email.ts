@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { VerificationRequest, VerificationResponse } from '@/types/auth';
-import { validateToken, markTokenAsUsed } from '@/services/tokenService';
-import { logAuditEvent } from '@/services/loggingService';
+import { VerificationRequest, VerificationResponse } from '../src/types/auth';
+import { validateToken, markTokenAsUsed } from '../src/services/tokenService';
+import { logAuditEvent } from '../src/services/loggingService';
 
 /**
  * Gets verification token by ID

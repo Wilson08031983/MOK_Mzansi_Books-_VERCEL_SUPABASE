@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import bcrypt from 'bcryptjs';
 import { Client } from 'postmark';
-import { SignupRequest, SignupResponse } from '@/types/auth';
-import { createVerificationToken } from '@/services/tokenService';
-import { logAuditEvent, logEmailEvent } from '@/services/loggingService';
-import { sendVerificationEmail } from '@/services/emailService';
+import { SignupRequest, SignupResponse } from '../src/types/auth';
+import { createVerificationToken } from '../src/services/tokenService';
+import { logAuditEvent, logEmailEvent } from '../src/services/loggingService';
+import { sendVerificationEmail } from '../src/services/emailService';
 
 // Initialize Postmark client
 const postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
