@@ -6,6 +6,9 @@
   "functions": {
     "api/**/*.ts": {
       "runtime": "nodejs18.x"
+    },
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
     }
   },
   "rewrites": [
