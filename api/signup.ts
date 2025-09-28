@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import bcrypt from 'bcryptjs';
 import { Client } from 'postmark';
 import { SignupRequest, SignupResponse } from '../src/types/auth';
@@ -181,8 +181,8 @@ function checkRateLimit(identifier: string): { allowed: boolean; waitTime?: numb
 }
 
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<SignupResponse>
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');

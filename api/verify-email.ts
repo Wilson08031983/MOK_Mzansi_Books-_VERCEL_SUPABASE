@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { VerificationRequest, VerificationResponse } from '../src/types/auth';
 import { validateToken, markTokenAsUsed } from '../src/services/tokenService';
 import { logAuditEvent } from '../src/services/loggingService';
@@ -94,8 +94,8 @@ function invalidateOtherTokens(userId: string, currentTokenId: string): void {
 }
 
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<VerificationResponse>
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // Only allow POST requests
   if (req.method !== 'POST') {
