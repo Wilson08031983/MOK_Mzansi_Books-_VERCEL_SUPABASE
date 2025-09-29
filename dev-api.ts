@@ -19,8 +19,8 @@ const accountLockoutHandler = require('./api/emails/account-lockout').default;
 const confirmationHandler = require('./api/emails/confirmation').default;
 const verificationHandler = require('./src/pages/api/emails/verification').default;
 
-const signupHandler = require('./src/pages/api/signup').default;
-const verifyEmailHandler = require('./src/pages/api/verify-email').default;
+const signupHandler = require('./api/signup').default;
+const verifyEmailHandler = require('./api/verify-email').default;
 const resendVerificationHandler = require('./src/pages/api/resend-verification').default;
 
 const app: any = express();

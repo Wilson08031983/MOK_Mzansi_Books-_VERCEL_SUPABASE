@@ -15,7 +15,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },
@@ -23,8 +23,6 @@ export default defineConfig({
     hmr: {
       port: 8080,
     },
-    // Enable source maps for debugging
-    sourcemap: true,
   },
   optimizeDeps: {
     include: ['react', 'react-dom']
