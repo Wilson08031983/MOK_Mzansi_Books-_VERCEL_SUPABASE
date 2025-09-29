@@ -5,10 +5,10 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "functions": {
     "api/**/*.ts": {
-      "runtime": "nodejs18.x"
+      "runtime": "@vercel/node"
     },
     "api/**/*.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "@vercel/node"
     }
   },
   "rewrites": [
