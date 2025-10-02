@@ -73,3 +73,31 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- Email verification support
+-- Add profile flags for email verification
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP WITH TIME ZONE;
+
+-- Verification tokens table (stores only hashes, never raw tokens)
+CREATE TABLE IF NOT EXISTS public.verification_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT 'email_verification',
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  used_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE public.verification_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Only allow the user to select their own tokens
+CREATE POLICY IF NOT EXISTS "Users can view their own verification tokens"
+  ON public.verification_tokens FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Allow service role to insert/update tokens (handled via server-side environment)
+-- NOTE: Keep insert/update restricted to server-side API. Do not enable for anon.

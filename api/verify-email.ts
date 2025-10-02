@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { VerificationRequest, VerificationResponse } from '../src/types/auth';
-import { validateToken, markTokenAsUsed } from '../src/services/tokenService';
+import { validateToken, hashToken } from '../src/services/tokenService';
 import { logAuditEvent } from '../src/services/loggingService';
+import { findTokenByHash, markTokenUsed, invalidateOtherTokensForUser, markUserEmailVerified } from '../src/repositories/verificationRepo';
 
 /**
  * Gets verification token by ID
@@ -122,12 +123,19 @@ export default async function handler(
       });
     }
 
-    // Get verification token
-    const token = getVerificationToken(requestData.token);
+    // Supabase-backed: compute hash from raw token and look up
+    const computedHash = hashToken(requestData.token);
+    const { token, error: tokenLookupError } = await findTokenByHash(requestData.userId, computedHash);
+    if (tokenLookupError) {
+      logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
+        reason: 'token_lookup_failed',
+        error: tokenLookupError
+      });
+      return res.status(500).json({ success: false, message: 'Verification failed. Please try again.' });
+    }
     if (!token) {
       logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
-        reason: 'token_not_found',
-        tokenId: requestData.token
+        reason: 'token_not_found'
       });
       return res.status(400).json({
         success: false,
@@ -135,25 +143,14 @@ export default async function handler(
       });
     }
 
-    // Get user
-    const user = getUserById(requestData.userId);
-    if (!user) {
-      logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
-        reason: 'user_not_found',
-        tokenId: requestData.token
-      });
-      return res.status(400).json({
-        success: false,
-        message: 'Verification link is invalid or expired. Request a new verification email.'
-      });
-    }
+    // Supabase-backed: profiles table is updated directly; skip local user lookup
 
     // Validate token
     const validation = validateToken(
       requestData.token,
-      token.tokenHash,
-      token.expiresAt,
-      token.usedAt
+      token.token_hash,
+      token.expires_at,
+      token.used_at
     );
 
     if (!validation.valid) {
@@ -168,46 +165,29 @@ export default async function handler(
       });
     }
 
-    // Check if user is already verified
-    if (user.verified) {
-      logAuditEvent('verify_email.attempt', requestData.userId, user.companyId, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
-        reason: 'already_verified',
-        tokenId: requestData.token
-      });
-      return res.status(400).json({
-        success: false,
-        message: 'Your email is already verified. Please sign in.'
-      });
-    }
-
-    // Mark user as verified
-    const updateResult = updateUserVerification(requestData.userId, true);
+    // Mark user as verified in Supabase profiles
+    const updateResult = await markUserEmailVerified(requestData.userId);
     if (!updateResult.success) {
-      logAuditEvent('verify_email.attempt', requestData.userId, user.companyId, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
+      logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
         reason: 'user_update_failed',
-        tokenId: requestData.token,
         error: updateResult.error
       });
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to verify email. Please try again.'
-      });
+      return res.status(500).json({ success: false, message: 'Failed to verify email. Please try again.' });
     }
 
     // Mark token as used
-    const tokenUpdateResult = updateTokenAsUsed(requestData.token);
+    const tokenUpdateResult = await markTokenUsed(token.id);
     if (!tokenUpdateResult.success) {
       console.warn('Failed to mark token as used:', tokenUpdateResult.error);
     }
 
     // Invalidate other tokens for this user
-    invalidateOtherTokens(requestData.userId, requestData.token);
+    await invalidateOtherTokensForUser(requestData.userId, token.id);
 
     // Log successful verification
-    logAuditEvent('email_verified', requestData.userId, user.companyId, req.url, req.socket.remoteAddress, req.headers['user-agent'], 1, {
-      tokenId: requestData.token,
-      verificationMethod: 'email_link',
-      userEmail: user.email
+    logAuditEvent('email_verified', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 1, {
+      tokenId: token.id,
+      verificationMethod: 'email_link'
     });
 
     // Success response

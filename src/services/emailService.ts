@@ -91,10 +91,11 @@ interface AccountLockoutOptions {
   subject?: string;
 }
 
-const API_BASE = '/api/emails';
+const API_BASE = typeof window !== 'undefined' ? '/api/emails' : 'http://localhost:3000/api/emails';
 
 async function postJson<T = any>(path: string, body: any): Promise<T> {
-  const res = await fetch(`${API_BASE}/${path}`, {
+  const url = path.startsWith('http') ? path : `${API_BASE}/${path}`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -153,23 +154,23 @@ export const sendVerificationEmail = async (options: VerificationEmailOptions): 
     return true;
   } catch (error: any) {
     console.error('Error sending verification email:', error);
-    // Dev fallback: use mock email service if API isn't available
-    if (__DEV__) {
-      console.warn('Dev fallback: using mock email service for verification email');
-      try {
-        await mockEmailService.sendVerificationEmail({
-          to: options.to,
-          subject: options.subject,
-          firstName: options.firstName,
-          lastName: options.lastName,
-          companyName: options.companyName,
-          verifyLink: options.verifyUrl,
-        } as any);
-        return true;
-      } catch (e) {
-        console.error('Mock verification email failed:', e);
-      }
-    }
+    // DISABLED: Dev fallback to mock service - we want to see actual Postmark errors
+    // if (__DEV__) {
+    //   console.warn('Dev fallback: using mock email service for verification email');
+    //   try {
+    //     await mockEmailService.sendVerificationEmail({
+    //       to: options.to,
+    //       subject: options.subject,
+    //       firstName: options.firstName,
+    //       lastName: options.lastName,
+    //       companyName: options.companyName,
+    //       verifyLink: options.verifyUrl,
+    //     } as any);
+    //     return true;
+    //   } catch (e) {
+    //     console.error('Mock verification email failed:', e);
+    //   }
+    // }
     return false;
   }
 };

@@ -3,17 +3,19 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { logAuditEvent } from '@/services/loggingService';
+import { verifyEmailByToken } from '@/services/localAuthService';
 
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
-  const [message, setMessage] = useState<string>('Verifying your email, please wait...');
+  const [message, setMessage] = useState<string>('Verifying your email. This may take a moment...');
   const [email, setEmail] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const token = searchParams.get('token') || '';
     const userId = searchParams.get('uid') || '';
+    const emailParam = searchParams.get('email') || '';
     
     if (!token || !userId) {
       setStatus('error');
@@ -28,6 +30,7 @@ const VerifyEmail = () => {
 
     const verifyEmail = async () => {
       try {
+        // Prefer server verification when available
         const response = await fetch('/api/verify-email', {
           method: 'POST',
           headers: {
@@ -43,26 +46,51 @@ const VerifyEmail = () => {
 
         if (response.ok && result.success) {
           setStatus('success');
-          setMessage('Your email has been successfully verified. You can now log in.');
+          setMessage('Your email is verified. You can now log in.');
+          if (emailParam) setEmail(emailParam);
           logAuditEvent('email_verified', userId, undefined, window.location.href, undefined, navigator.userAgent, 1, {
             verificationMethod: 'email_link',
             success: true
           });
         } else {
-          setStatus('error');
-          setMessage(result.message || 'Verification failed.');
-          logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
-            reason: 'verification_failed',
-            error: result.message
-          });
+          // Fallback to client-side verification (dev/local flows)
+          const localResult = verifyEmailByToken(token);
+          if (localResult.success) {
+            setStatus('success');
+            setMessage('Your email is verified. You can now log in.');
+            setEmail(localResult.email || emailParam || undefined);
+            logAuditEvent('email_verified', userId, undefined, window.location.href, undefined, navigator.userAgent, 1, {
+              verificationMethod: 'client_fallback',
+              success: true
+            });
+          } else {
+            setStatus('error');
+            setMessage(result.message || localResult.error || 'Verification failed. Request a new link and try again.');
+            logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
+              reason: 'verification_failed',
+              error: result.message || localResult.error
+            });
+          }
         }
       } catch (error: any) {
-        setStatus('error');
-        setMessage('An unexpected error occurred during verification.');
-        logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
-          reason: 'network_error',
-          error: error.message
-        });
+        // Network/API error — try client-side fallback
+        const localResult = verifyEmailByToken(token);
+        if (localResult.success) {
+          setStatus('success');
+          setMessage('Your email is verified. You can now log in.');
+          setEmail(localResult.email || emailParam || undefined);
+          logAuditEvent('email_verified', userId, undefined, window.location.href, undefined, navigator.userAgent, 1, {
+            verificationMethod: 'client_fallback',
+            success: true
+          });
+        } else {
+          setStatus('error');
+          setMessage(localResult.error || 'We couldn’t verify your email. Request a new link and try again.');
+          logAuditEvent('verify_email.attempt', userId, undefined, window.location.href, undefined, navigator.userAgent, 0, {
+            reason: 'network_error',
+            error: error.message
+          });
+        }
       }
     };
 

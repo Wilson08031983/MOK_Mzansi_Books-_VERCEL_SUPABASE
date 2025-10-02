@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ResendVerificationRequest, ResendVerificationResponse } from '../src/types/auth';
-import { createVerificationToken } from '../src/services/tokenService';
+import { createVerificationTokenWithRaw } from '../src/services/tokenService';
 import { logAuditEvent, logEmailEvent } from '../src/services/loggingService';
 import { sendVerificationEmail } from '../src/services/emailService';
+import { insertVerificationToken, invalidateOtherTokensForUser } from '../src/repositories/verificationRepo';
 
 // Rate limiting storage (in production, use Redis or similar)
 const resendAttempts = new Map<string, { count: number; lastAttempt: number }>();
@@ -34,37 +35,7 @@ function getCompanyById(companyId: string): any {
   }
 }
 
-/**
- * Stores a verification token
- */
-function storeVerificationToken(token: any): void {
-  try {
-    const tokens = JSON.parse(localStorage.getItem('verification_tokens') || '[]');
-    tokens.push(token);
-    localStorage.setItem('verification_tokens', JSON.stringify(tokens));
-  } catch (error) {
-    console.error('Error storing verification token:', error);
-  }
-}
-
-/**
- * Invalidates existing tokens for a user
- */
-function invalidateExistingTokens(userId: string): void {
-  try {
-    const tokens = JSON.parse(localStorage.getItem('verification_tokens') || '[]');
-    const updatedTokens = tokens.map((token: any) => {
-      if (token.userId === userId && !token.usedAt) {
-        return { ...token, usedAt: new Date().toISOString() };
-      }
-      return token;
-    });
-
-    localStorage.setItem('verification_tokens', JSON.stringify(updatedTokens));
-  } catch (error) {
-    console.error('Error invalidating existing tokens:', error);
-  }
-}
+// Supabase-backed: tokens are stored in DB; localStorage fallback removed
 
 /**
  * Checks rate limiting for resend attempts
@@ -178,16 +149,24 @@ export default async function handler(
       });
     }
 
-    // Invalidate existing tokens
-    invalidateExistingTokens(user.id);
+    // Invalidate existing tokens in Supabase
+    await invalidateOtherTokensForUser(user.id);
 
-    // Create new verification token
-    const verificationToken = createVerificationToken(user.id, 'email_verification');
-    storeVerificationToken(verificationToken);
+    // Create new verification token (raw for email, hash for DB)
+    const { rawToken, tokenHash, expiresAt } = createVerificationTokenWithRaw(user.id, 'email_verification');
+    const insertResult = await insertVerificationToken({ userId: user.id, tokenHash, purpose: 'email_verification', expiresAt });
+    if (insertResult.error) {
+      logAuditEvent('resend_verification.attempt', user.id, user.companyId, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
+        reason: 'token_insert_failed',
+        error: insertResult.error
+      });
+      return res.status(500).json({ success: false, message: 'Unable to create verification token. Please try again.' });
+    }
 
     // Build verification URL
     const appHost = process.env.APP_HOST || 'http://localhost:8082';
-    const verifyUrl = `${appHost}/auth/verify-email?token=${verificationToken.id}&uid=${user.id}`;
+    // Use the correct public route for verification page
+    const verifyUrl = `${appHost}/verify-email?token=${encodeURIComponent(rawToken)}&uid=${user.id}`;
 
     // Send verification email
     try {
