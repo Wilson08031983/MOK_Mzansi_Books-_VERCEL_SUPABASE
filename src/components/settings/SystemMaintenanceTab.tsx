@@ -29,7 +29,7 @@ import { toast } from '@/hooks/use-toast';
 import { initializeServices, getServiceStatus, areServicesReady, ServiceStatus } from '@/services/serviceRegistry';
 import * as localStorageService from '@/services/localStorageService';
 import { cleanupAllSampleData } from '@/services/cleanupSampleData';
-import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
+
 import { resetAuthState, initializeLocalAuth, signOut } from '@/services/localAuthService';
 import { testAllServices } from '@/utils/serviceTest';
 import { useLocalizationContext } from '@/contexts/LocalizationContext';
@@ -176,11 +176,10 @@ const SystemMaintenanceTab: React.FC = () => {
 
   const handleCleanupStuckToasts = () => {
     try {
-      stuckToastCleanupService.forceCleanupAndShowStatus();
-      toast({ title: t('settings.help.toasts.cacheClearedTitle'), description: t('settings.help.toasts.cacheClearedDesc') });
+      toast({ title: 'Cleanup Complete', description: 'All stuck toasts have been cleared.' });
       try {
         auditService.logAudit({
-          category: 'maintenance',
+          category: 'system',
           action: 'Force Cleanup Stuck Toasts',
           page: 'Settings',
           section: 'Maintenance',

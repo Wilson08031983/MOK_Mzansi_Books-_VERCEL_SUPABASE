@@ -5,10 +5,26 @@
  *
  * This script tests the verification email flow implementation
  * by simulating the complete signup -> verification process
+ * and testing the Supabase verification_tokens table
  */
 
 const fs = require('fs');
 const path = require('path');
+
+// Load Supabase client
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config({ path: '.env.local' });
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 // Test data
 const testUser = {
@@ -22,6 +38,91 @@ const testUser = {
 };
 
 console.log('🔧 Starting Verification Email Flow Tests...\n');
+
+// Test 0: Supabase verification_tokens table
+console.log('📝 Test 0: Supabase verification_tokens Table');
+async function testSupabaseTable() {
+  try {
+    console.log('🧪 Testing verification_tokens table...');
+    
+    // Step 1: Test table access
+    console.log('1️⃣ Testing table access...');
+    const { data: tableTest, error: tableError } = await supabase
+      .from('verification_tokens')
+      .select('*')
+      .limit(1);
+    
+    if (tableError) {
+      console.log('❌ Table access failed:', tableError.message);
+      return false;
+    }
+    console.log('✅ Table access successful');
+
+    // Step 2: Test token insertion with test UUID
+    console.log('2️⃣ Testing token insertion...');
+    const testToken = {
+      user_id: '00000000-0000-0000-0000-000000000000', // Test UUID
+      token: `test_token_${Date.now()}`,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    };
+
+    const { data: insertData, error: insertError } = await supabase
+      .from('verification_tokens')
+      .insert(testToken)
+      .select();
+
+    if (insertError) {
+      console.log('❌ Token insertion failed:', insertError.message);
+      if (insertError.code === '23503') {
+        console.log('ℹ️  Expected: Foreign key constraint (user_id must exist in auth.users)');
+        console.log('✅ Foreign key constraint is working correctly');
+      }
+    } else {
+      console.log('✅ Token insertion successful:', insertData);
+    }
+
+    // Step 3: Test cleanup function
+    console.log('3️⃣ Testing cleanup function...');
+    const { data: cleanupData, error: cleanupError } = await supabase
+      .rpc('cleanup_expired_verification_tokens');
+
+    if (cleanupError) {
+      console.log('❌ Cleanup function failed:', cleanupError.message);
+    } else {
+      console.log('✅ Cleanup function successful. Deleted tokens:', cleanupData);
+    }
+
+    // Step 4: Test RLS policies
+    console.log('4️⃣ Testing RLS policies...');
+    const supabaseAnon = createClient(
+      process.env.SUPABASE_URL,
+      process.env.VITE_SUPABASE_ANON_KEY
+    );
+
+    const { data: anonData, error: anonError } = await supabaseAnon
+      .from('verification_tokens')
+      .select('*')
+      .limit(1);
+
+    if (anonError) {
+      console.log('✅ RLS is working - anon access properly restricted:', anonError.message);
+    } else {
+      console.log('⚠️  Anon access allowed (check RLS policies):', anonData);
+    }
+
+    console.log('✅ Supabase verification_tokens table test completed!\n');
+    return true;
+
+  } catch (error) {
+    console.error('❌ Supabase table test failed:', error);
+    return false;
+  }
+}
+
+// Run Supabase test first
+testSupabaseTable().then(() => {
+  console.log('📝 Continuing with other verification flow tests...\n');
+});
 
 // Test 1: Token Service
 console.log('📝 Test 1: Token Service');

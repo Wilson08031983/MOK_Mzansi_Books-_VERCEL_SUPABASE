@@ -338,11 +338,28 @@ class LocalizationService {
     const timezone = targetTimezone || this.settings.timezone;
     
     try {
-      // Get the time in the target timezone
-      const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-      const targetTime = new Date(utc);
+      // Create a new date object with the same moment in time but displayed in the target timezone
+      // This uses Intl.DateTimeFormat to get the components in the target timezone
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
       
-      return targetTime;
+      const parts = formatter.formatToParts(date);
+      const year = parseInt(parts.find(p => p.type === 'year')?.value || '0');
+      const month = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1; // Month is 0-indexed
+      const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+      const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+      const second = parseInt(parts.find(p => p.type === 'second')?.value || '0');
+      
+      return new Date(year, month, day, hour, minute, second);
     } catch (error) {
       console.error('Error converting timezone:', error);
       return date;

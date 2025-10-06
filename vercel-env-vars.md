@@ -1,8 +1,10 @@
 # Vercel Environment Variables Configuration
 
-This document provides the complete list of environment variables that need to be configured in Vercel to match the local `.env.local` file.
+This document explains which environment variables should be configured in Vercel and how to safely separate public client variables from server-only secrets.
 
 ## Required Environment Variables for Vercel
+
+Important: Only non-sensitive values should use `NEXT_PUBLIC_` or `VITE_` prefixes (these are embedded into the client bundle). All secrets must be defined without these prefixes and accessed only on the server.
 
 ### 1. Supabase Core Configuration
 ```
@@ -11,45 +13,43 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 VITE_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 VITE_PROJECT_ID=your_project_id_here
-VITE_SUPABASE_ACCESS_TOKENS=your_supabase_access_token_here
+# Client-safe
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+VITE_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+
+# Server-only
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 ```
 
 ### 2. Paystack Configuration
 ```
 VITE_PAYSTACK_LIVE_PUBLIC_KEY=pk_live_your_live_public_key_here
-VITE_PAYSTACK_LIVE_SECRET_KEY=sk_live_your_live_secret_key_here
 VITE_PAYSTACK_TEST_PUBLIC_KEY=pk_test_your_test_public_key_here
-VITE_PAYSTACK_TEST_SECRET_KEY=sk_test_your_test_secret_key_here
 VITE_PAYSTACK_PUBLIC_KEY_TEST=pk_test_your_test_public_key_here
 VITE_PAYSTACK_PUBLIC_KEY=pk_live_your_live_public_key_here
-PAYSTACK_SECRET_KEY_TEST=sk_test_your_test_secret_key_here
-PAYSTACK_SECRET_KEY=sk_live_your_live_secret_key_here
+PAYSTACK_SECRET_KEY=sk_live_your_live_secret_key_here   # Server-only
+PAYSTACK_SECRET_KEY_TEST=sk_test_your_test_secret_key_here   # Server-only (dev only)
 ```
 
 ### 3. Database Configuration
 ```
 DATABASE_URL=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:6543/postgres
-VITE_POSTGRES_TRANSACTION_POOLER=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:6543/postgres
-VITE_POSTGRES_SESSON_POOLER=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:5432/postgres
-VITE_POSTGRES_DIRECT_CONNECTION=postgresql://postgres:your_password@db.your-project-id.supabase.co:5432/postgres
-VITE_POSTGRES_DATABASE=postgres
-VITE_POSTGRES_USER=postgres
-VITE_POSTGRES_PASSWORD=your_database_password_here
-VITE_POSTGRES_HOST=db.your-project-id.supabase.co
+DATABASE_URL=postgresql://postgres.your-project-id:your_password@aws-0-region.pooler.supabase.com:6543/postgres   # Server-only
 ```
 
 ### 4. Supabase Extended Configuration
 ```
 VITE_SUPABASE_USERNAME=your_supabase_username
 VITE_ORGANIZATION_SLUG=your_organization_slug_here
-VITE_SUPABASE_JWT_SECRET=your_jwt_secret_here
-VITE_SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=your_s3_secret_access_key_here
-VITE_SUPABASE_STORAGE_S3_ACCESS_KEY_ID=your_s3_access_key_id_here
+SUPABASE_JWT_SECRET=your_jwt_secret_here                 # Server-only
+SUPABASE_STORAGE_S3_SECRET_ACCESS_KEY=your_s3_secret_access_key_here   # Server-only
+SUPABASE_STORAGE_S3_ACCESS_KEY_ID=your_s3_access_key_id_here           # Server-only
 VITE_SUPABASE_STORAGE_S3_ENDPOINT=https://your-project-id.storage.supabase.co/storage/v1/s3
 VITE_SUPABASE_STORAGE_S3_REGION=your-region
 VITE_SUPABASE_PROJECT_ID=your-project-id
 VITE_ORGANIZATION_NAME=MOKMzansiBooks
-VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here     # Server-only
 ```
 
 ### 5. Application URLs
@@ -69,14 +69,14 @@ POSTMARK_ACCOUNT_TOKEN=1e46da79-7267-48a2-a17f-35d5053c099c
 POSTMARK_SENDER_EMAIL=noreply@mokmzansibooks.com
 POSTMARK_SENDER_NAME=MOK Mzansi Books
 POSTMARK_MESSAGE_STREAM=outbound
-POSTMARK_WEBHOOK_SECRET=your-postmark-webhook-secret-here
+POSTMARK_WEBHOOK_SECRET=your-postmark-webhook-secret-here  # Server-only
 POSTMARK_SANDBOX_MODE=false
 POSTMARK_SMTP_HOST=smtp.postmarkapp.com
 POSTMARK_SMTP_PORT=587
 POSTMARK_SMTP_USERNAME=1d8c2f0c-3a66-4693-8374-9c1052879d9d
 POSTMARK_SMTP_PASSWORD=1d8c2f0c-3a66-4693-8374-9c1052879d9d
-VITE_POSTMARK_SENDER_EMAIL=noreply@mokmzansibooks.com
-VITE_POSTMARK_SENDER_NAME=MOK Mzansi Books
+VITE_POSTMARK_SENDER_EMAIL=noreply@mokmzansibooks.com   # Client-safe (not a secret)
+VITE_POSTMARK_SENDER_NAME=MOK Mzansi Books             # Client-safe (not a secret)
 ```
 
 ## Instructions for Setting Up in Vercel
@@ -94,10 +94,11 @@ VITE_POSTMARK_SENDER_NAME=MOK Mzansi Books
 ## Critical Notes
 
 - **NEXT_PUBLIC_APP_URL**: Must be set to `https://www.mokmzansibooks.com` for proper email functionality
-- **Database URLs**: Contain special characters that may need URL encoding
-- **Paystack Keys**: Ensure live keys are used for production environment
-- **Postmark Configuration**: Required for email functionality
-- **Domain Configuration**: All callback URLs and webhook endpoints use the primary domain
+- Do not define secrets with `NEXT_PUBLIC_` or `VITE_` prefixes. These are exposed to the browser.
+- Database URLs may need URL encoding for special characters.
+- Use live Paystack public and secret keys in production; keep secret keys server-side only.
+- Postmark server token and webhook secret are server-only; sender name/email are client-safe.
+- All callback URLs and webhook endpoints should use the primary domain.
 
 ## Post-Configuration Steps
 

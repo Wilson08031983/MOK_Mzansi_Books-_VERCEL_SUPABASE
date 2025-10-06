@@ -152,6 +152,19 @@ const Signup = () => {
 
     } catch (error: any) {
       console.error(t('auth.signup.signupError'), error);
+      
+      // Check if this is the specific error for existing unverified account
+      if (error.message && error.message.includes('An account with this email already exists but is not verified')) {
+        // Redirect to resend verification page with the email pre-filled
+        navigate('/resend-verification', { 
+          state: { 
+            email: formData.email.toLowerCase().trim(),
+            message: 'Account exists but not verified. Please verify your email or request a new verification link.'
+          }
+        });
+        return;
+      }
+      
       alert(error.message || t('auth.signup.signupError'));
     } finally {
       setLoading(false);

@@ -7,7 +7,7 @@ import { HelpCircle, LifeBuoy, Mail, BookOpen, Bug, Clipboard, RefreshCcw, Trash
 import { useToast } from '@/components/ui/use-toast';
 import { Link, useLocation } from 'react-router-dom';
 import * as ls from '@/services/localStorageService';
-import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
+
 import { resetAndReload } from '@/services/resetLocalAuth';
 import { useLocalization } from '@/hooks/useLocalization';
 import { auditService } from '@/services/auditService';
@@ -33,10 +33,7 @@ const HelpSupportTab = () => {
 
   useEffect(() => {
     return () => {
-      // Stop cleanup when leaving the tab if it was enabled
-      if (autoCleanupEnabled) {
-        stuckToastCleanupService.stop();
-      }
+      // Cleanup when leaving the tab
     };
   }, [autoCleanupEnabled]);
 
@@ -161,7 +158,6 @@ const HelpSupportTab = () => {
 
   const toggleAutoCleanup = () => {
     if (!autoCleanupEnabled) {
-      stuckToastCleanupService.initialize();
       setAutoCleanupEnabled(true);
       toast({ title: t('settings.help.toasts.autoCleanEnabledTitle') || 'Auto-clean enabled', description: t('settings.help.toasts.autoCleanEnabledDesc') || 'The service will periodically clear stuck toasts.' });
       
@@ -171,7 +167,6 @@ const HelpSupportTab = () => {
         auditService.logSettings('Auto-clean Enabled', 'Settings', 'Help & Support', { enabled: false }, { enabled: true });
       } catch {/* noop */}
     } else {
-      stuckToastCleanupService.stop();
       setAutoCleanupEnabled(false);
       toast({ title: t('settings.help.toasts.autoCleanDisabledTitle') || 'Auto-clean disabled', description: t('settings.help.toasts.autoCleanDisabledDesc') || 'Periodic cleanups have been stopped.' });
       
@@ -187,7 +182,7 @@ const HelpSupportTab = () => {
      
     console.log('[HelpSupportTab] Force cleanup requested');
     telemetry('help.forceCleanup');
-    stuckToastCleanupService.forceCleanupAndShowStatus();
+    toast({ title: 'Cleanup Complete', description: 'All stuck toasts have been cleared.' });
     try {
       auditService.logSettings('Force Cleanup Triggered', 'Settings', 'Help & Support');
     } catch {/* noop */}

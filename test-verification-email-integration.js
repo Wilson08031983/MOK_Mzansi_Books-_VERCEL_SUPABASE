@@ -43,7 +43,7 @@ function generateTestToken() {
 // Create verification URL
 function createVerificationUrl(token, userId, email) {
   const baseUrl = appUrl;
-  return `${baseUrl}/verify-email?token=${token}&uid=${userId}&email=${encodeURIComponent(email)}`;
+  return `${baseUrl}/auth/verify-email?token=${token}&uid=${userId}&email=${encodeURIComponent(email)}`;
 }
 
 // Test 1: Direct Postmark API call

@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-10-02T14:19:48.744Z",
+  "totalTested": 4,
+  "rateLimitsCleared": 4,
+  "results": [
+    {
+      "email": "mokgethwamoabelo@icloud.com",
+      "status": 201,
+      "success": true,
+      "rateLimitCleared": true,
+      "message": "Account created successfully. Please check your email to verify your account."
+    },
+    {
+      "email": "mokgethwamoabelo@gmail.com",
+      "status": 201,
+      "success": true,
+      "rateLimitCleared": true,
+      "message": "Account created successfully. Please check your email to verify your account."
+    },
+    {
+      "email": "mokgethwamoabelo@yahoo.com",
+      "status": 201,
+      "success": true,
+      "rateLimitCleared": true,
+      "message": "Account created successfully. Please check your email to verify your account."
+    },
+    {
+      "email": "wilsonmoabelo1@yahoo.com",
+      "status": 201,
+      "success": true,
+      "rateLimitCleared": true,
+      "message": "Account created successfully. Please check your email to verify your account."
+    }
+  ]
+}

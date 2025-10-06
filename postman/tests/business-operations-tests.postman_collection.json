@@ -1,0 +1,651 @@
+{
+  "info": {
+    "name": "MOK Mzansi Books - Business Operations Tests",
+    "description": "Automated test collection for business operations including invoices, quotations, clients, and contacts",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Invoice Management",
+      "description": "Test invoice creation and management functionality",
+      "item": [
+        {
+          "name": "Create Invoice - Valid Data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 or 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains invoice data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('invoiceNumber');",
+                  "    pm.expect(responseJson).to.have.property('clientId');",
+                  "});",
+                  "",
+                  "pm.test('Invoice number matches request', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    pm.expect(responseJson.invoiceNumber).to.equal(requestBody.invoiceNumber);",
+                  "});",
+                  "",
+                  "pm.test('Total amount is calculated correctly', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    ",
+                  "    // Calculate expected total from items",
+                  "    let expectedTotal = 0;",
+                  "    requestBody.items.forEach(item => {",
+                  "        expectedTotal += item.quantity * item.unitPrice;",
+                  "    });",
+                  "    ",
+                  "    pm.expect(responseJson.total).to.equal(expectedTotal);",
+                  "});",
+                  "",
+                  "// Store invoice ID for subsequent tests",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.environment.set('created_invoice_id', responseJson.id);",
+                  "}",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique invoice number",
+                  "const timestamp = Date.now();",
+                  "const invoiceNumber = `INV-${timestamp}`;",
+                  "pm.environment.set('unique_invoice_number', invoiceNumber);",
+                  "",
+                  "// Set dates",
+                  "const today = new Date();",
+                  "const dueDate = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days from now",
+                  "",
+                  "pm.environment.set('invoice_issue_date', today.toISOString().split('T')[0]);",
+                  "pm.environment.set('invoice_due_date', dueDate.toISOString().split('T')[0]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{test_client_id}}\",\n  \"invoiceNumber\": \"{{unique_invoice_number}}\",\n  \"issueDate\": \"{{invoice_issue_date}}\",\n  \"dueDate\": \"{{invoice_due_date}}\",\n  \"items\": [\n    {\n      \"description\": \"Web Development Services\",\n      \"quantity\": 40,\n      \"unitPrice\": 75.00\n    },\n    {\n      \"description\": \"Domain Registration\",\n      \"quantity\": 1,\n      \"unitPrice\": 15.00\n    }\n  ],\n  \"notes\": \"Payment due within 30 days\",\n  \"terms\": \"Net 30\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/invoices/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "create"]
+            }
+          }
+        },
+        {
+          "name": "Create Invoice - Missing Required Fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Response contains validation error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('required') || msg.includes('missing') || msg.includes('clientid');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"INV-INCOMPLETE\",\n  \"items\": [\n    {\n      \"description\": \"Test Service\",\n      \"quantity\": 1,\n      \"unitPrice\": 100.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/invoices/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "create"]
+            }
+          }
+        },
+        {
+          "name": "Create Invoice - Invalid Data Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Response contains validation error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('invalid') || msg.includes('type') || msg.includes('number');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"invalid-client-id\",\n  \"invoiceNumber\": \"INV-INVALID\",\n  \"issueDate\": \"invalid-date\",\n  \"dueDate\": \"2024-01-01\",\n  \"items\": [\n    {\n      \"description\": \"Test Service\",\n      \"quantity\": \"not-a-number\",\n      \"unitPrice\": \"also-not-a-number\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/invoices/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "create"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quotation Management",
+      "description": "Test quotation creation and management functionality",
+      "item": [
+        {
+          "name": "Create Quotation - Valid Data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 or 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains quotation data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('quotationNumber');",
+                  "    pm.expect(responseJson).to.have.property('clientId');",
+                  "});",
+                  "",
+                  "pm.test('Quotation number matches request', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    pm.expect(responseJson.quotationNumber).to.equal(requestBody.quotationNumber);",
+                  "});",
+                  "",
+                  "pm.test('Total amount is calculated correctly', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    ",
+                  "    // Calculate expected total from items",
+                  "    let expectedTotal = 0;",
+                  "    requestBody.items.forEach(item => {",
+                  "        expectedTotal += item.quantity * item.unitPrice;",
+                  "    });",
+                  "    ",
+                  "    pm.expect(responseJson.total).to.equal(expectedTotal);",
+                  "});",
+                  "",
+                  "// Store quotation ID for subsequent tests",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.environment.set('created_quotation_id', responseJson.id);",
+                  "}",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique quotation number",
+                  "const timestamp = Date.now();",
+                  "const quotationNumber = `QUO-${timestamp}`;",
+                  "pm.environment.set('unique_quotation_number', quotationNumber);",
+                  "",
+                  "// Set dates",
+                  "const today = new Date();",
+                  "const validUntil = new Date(today.getTime() + (14 * 24 * 60 * 60 * 1000)); // 14 days from now",
+                  "",
+                  "pm.environment.set('quotation_issue_date', today.toISOString().split('T')[0]);",
+                  "pm.environment.set('quotation_valid_until', validUntil.toISOString().split('T')[0]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{test_client_id}}\",\n  \"quotationNumber\": \"{{unique_quotation_number}}\",\n  \"issueDate\": \"{{quotation_issue_date}}\",\n  \"validUntil\": \"{{quotation_valid_until}}\",\n  \"items\": [\n    {\n      \"description\": \"Website Design & Development\",\n      \"quantity\": 1,\n      \"unitPrice\": 2500.00\n    },\n    {\n      \"description\": \"SEO Optimization\",\n      \"quantity\": 1,\n      \"unitPrice\": 500.00\n    },\n    {\n      \"description\": \"Monthly Maintenance\",\n      \"quantity\": 12,\n      \"unitPrice\": 150.00\n    }\n  ],\n  \"notes\": \"This quotation is valid for 14 days\",\n  \"terms\": \"50% deposit required, balance on completion\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/quotations/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "quotations", "create"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client Management",
+      "description": "Test client creation and management functionality",
+      "item": [
+        {
+          "name": "Create Client - Valid Data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 or 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains client data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('id');",
+                  "    pm.expect(responseJson).to.have.property('name');",
+                  "    pm.expect(responseJson).to.have.property('email');",
+                  "});",
+                  "",
+                  "pm.test('Client name matches request', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    pm.expect(responseJson.name).to.equal(requestBody.name);",
+                  "});",
+                  "",
+                  "pm.test('Client email matches request', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    pm.expect(responseJson.email).to.equal(requestBody.email);",
+                  "});",
+                  "",
+                  "// Store client ID for subsequent tests",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.environment.set('test_client_id', responseJson.id);",
+                  "}",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique client data",
+                  "const timestamp = Date.now();",
+                  "const clientName = `Test Client ${timestamp}`;",
+                  "const clientEmail = `client-${timestamp}@testcompany.com`;",
+                  "",
+                  "pm.environment.set('unique_client_name', clientName);",
+                  "pm.environment.set('unique_client_email', clientEmail);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{unique_client_name}}\",\n  \"email\": \"{{unique_client_email}}\",\n  \"phone\": \"+27 11 123 4567\",\n  \"address\": {\n    \"street\": \"123 Business Street\",\n    \"city\": \"Johannesburg\",\n    \"province\": \"Gauteng\",\n    \"postalCode\": \"2000\",\n    \"country\": \"South Africa\"\n  },\n  \"company\": \"Test Company (Pty) Ltd\",\n  \"vatNumber\": \"4123456789\",\n  \"notes\": \"Test client created via API\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "create"]
+            }
+          }
+        },
+        {
+          "name": "Create Client - Missing Required Fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Response contains validation error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('required') || msg.includes('missing') || msg.includes('name');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"incomplete@test.com\",\n  \"phone\": \"+27 11 123 4567\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "create"]
+            }
+          }
+        },
+        {
+          "name": "Create Client - Invalid Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Response contains email validation error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('email') && (msg.includes('invalid') || msg.includes('format'));",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Invalid Email Client\",\n  \"email\": \"not-a-valid-email\",\n  \"phone\": \"+27 11 123 4567\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "create"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authorization Tests",
+      "description": "Test authentication and authorization requirements",
+      "item": [
+        {
+          "name": "Create Invoice - No Auth Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.expect(pm.response.code).to.equal(401);",
+                  "});",
+                  "",
+                  "pm.test('Response contains authentication error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('unauthorized') || msg.includes('authentication') || msg.includes('token');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"test-client-id\",\n  \"invoiceNumber\": \"INV-NOAUTH\",\n  \"issueDate\": \"2024-01-01\",\n  \"dueDate\": \"2024-01-31\",\n  \"items\": [\n    {\n      \"description\": \"Test Service\",\n      \"quantity\": 1,\n      \"unitPrice\": 100.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/invoices/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "create"]
+            }
+          }
+        },
+        {
+          "name": "Create Client - Invalid Auth Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains authentication error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('unauthorized') || msg.includes('invalid') || msg.includes('token');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "invalid-token-12345",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Unauthorized Client\",\n  \"email\": \"unauthorized@test.com\",\n  \"phone\": \"+27 11 123 4567\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "create"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script for business operations",
+          "console.log('Running business operations test:', pm.info.requestName);",
+          "pm.globals.set('test_start_time', Date.now());",
+          "",
+          "// Ensure we have required test data",
+          "if (!pm.environment.get('test_client_id') && pm.info.requestName.includes('Invoice')) {",
+          "    console.warn('Warning: test_client_id not set. Some invoice tests may fail.');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script for business operations",
+          "const testDuration = Date.now() - pm.globals.get('test_start_time');",
+          "console.log('Test completed in:', testDuration + 'ms');",
+          "",
+          "// Check for proper JSON response",
+          "pm.test('Response is valid JSON', function () {",
+          "    pm.expect(() => pm.response.json()).to.not.throw();",
+          "});",
+          "",
+          "// Check Content-Type header",
+          "pm.test('Content-Type is application/json', function () {",
+          "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "});",
+          "",
+          "// Log important response data for debugging",
+          "if (pm.response.code >= 400) {",
+          "    console.log('Error Response:', pm.response.text());",
+          "} else if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    const responseJson = pm.response.json();",
+          "    if (responseJson.id) {",
+          "        console.log('Created resource ID:', responseJson.id);",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ]
+}

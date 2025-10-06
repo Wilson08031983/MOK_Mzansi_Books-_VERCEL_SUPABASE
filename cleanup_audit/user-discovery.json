@@ -1,0 +1,29 @@
+{
+  "timestamp": "2025-10-02T19:57:54.394Z",
+  "target_emails": [
+    "mokgethamoabelo@yahoo.com",
+    "cindyramatladi@gmail.com",
+    "wilsonmoabelo1@yahoo.com"
+  ],
+  "findings": {
+    "auth.users": [],
+    "profiles": {
+      "error": "Could not find the table 'public.profiles' in the schema cache"
+    },
+    "companies": {
+      "error": "Could not find the table 'public.companies' in the schema cache"
+    },
+    "invitations": {
+      "error": "Could not find the table 'public.invitations' in the schema cache"
+    },
+    "User": {
+      "error": "Could not find the table 'public.User' in the schema cache"
+    },
+    "EmailStatus": {
+      "error": "Could not find the table 'public.EmailStatus' in the schema cache"
+    },
+    "EmailEvent": {
+      "error": "Could not find the table 'public.EmailEvent' in the schema cache"
+    }
+  }
+}

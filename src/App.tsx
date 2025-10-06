@@ -59,6 +59,7 @@ import ServiceTestPanel from "./components/ServiceTestPanel";
 // TwoFactorVerify removed
 import SessionTimeoutWatcher from "@/components/auth/SessionTimeoutWatcher";
 import VerifyEmail from "./pages/VerifyEmail";
+import ResendVerification from "./pages/ResendVerification";
 import EmailTemplatePreview from "@/components/EmailTemplatePreview";
 
 // Initialize global error handlers
@@ -170,6 +171,9 @@ const App = () => {
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/resend-verification" element={<ResendVerification />} />
+                    {/* Legacy path support for previously sent emails */}
+                    <Route path="/auth/verify-email" element={<VerifyEmail />} />
                     <Route path="/auth-reset" element={<AuthReset />} />
                     <Route path="/auth-debug" element={<AuthDebug />} />
                     <Route path="/service-test" element={<ServiceTestPanel />} />

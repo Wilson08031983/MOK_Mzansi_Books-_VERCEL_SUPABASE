@@ -1,0 +1,40 @@
+{
+  "timestamp": "2025-10-02T12:32:19.239Z",
+  "target_emails": [
+    "mokgethamoabelo@yahoo.com",
+    "cindyramatladi@gmail.com",
+    "wilsonmoabelo1@yahoo.com"
+  ],
+  "message_stream_id": "outbound",
+  "suppression_findings": {
+    "suppressions": {
+      "total_found": 1,
+      "target_suppressions": [
+        {
+          "EmailAddress": "mokgethamoabelo@yahoo.com",
+          "SuppressionReason": "HardBounce",
+          "Origin": "Recipient",
+          "CreatedAt": "2025-10-02T07:41:36-04:00"
+        }
+      ],
+      "target_count": 1
+    }
+  },
+  "cleanup_actions": [
+    {
+      "email": "mokgethamoabelo@yahoo.com",
+      "suppression_reason": "HardBounce",
+      "action": "delete_attempted",
+      "success": true,
+      "response": {
+        "Suppressions": [
+          {
+            "EmailAddress": "mokgethamoabelo@yahoo.com",
+            "Status": "Deleted"
+          }
+        ]
+      },
+      "timestamp": "2025-10-02T12:32:21.844Z"
+    }
+  ]
+}

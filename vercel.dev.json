@@ -3,6 +3,6 @@
   "framework": null,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "http://localhost:8081/$1" }
+    { "source": "/(.*)", "destination": "http://localhost:8080/$1" }
   ]
 }

@@ -1,98 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { VerificationRequest, VerificationResponse } from '../src/types/auth';
-import { validateToken, hashToken } from '../src/services/tokenService';
-import { logAuditEvent } from '../src/services/loggingService';
-import { findTokenByHash, markTokenUsed, invalidateOtherTokensForUser, markUserEmailVerified } from '../src/repositories/verificationRepo';
+import { VerificationRequest, VerificationResponse } from '../src/types/auth.ts';
+import { validateToken, hashToken } from '../src/services/tokenService.ts';
+import { logAuditEvent } from '../src/services/loggingService.ts';
+import { findTokenByHash, markTokenUsed, invalidateOtherTokensForUser, markUserEmailVerified } from '../src/repositories/verificationRepo.ts';
 
-/**
- * Gets verification token by ID
- */
-function getVerificationToken(tokenId: string): any {
-  try {
-    const tokens = JSON.parse(localStorage.getItem('verification_tokens') || '[]');
-    return tokens.find((token: any) => token.id === tokenId);
-  } catch (error) {
-    console.error('Error getting verification token:', error);
-    return null;
-  }
-}
-
-/**
- * Gets user by ID
- */
-function getUserById(userId: string): any {
-  try {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    return users.find((user: any) => user.id === userId);
-  } catch (error) {
-    console.error('Error getting user:', error);
-    return null;
-  }
-}
-
-/**
- * Updates user verification status
- */
-function updateUserVerification(userId: string, verified: boolean): { success: boolean; error?: string } {
-  try {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const userIndex = users.findIndex((user: any) => user.id === userId);
-
-    if (userIndex === -1) {
-      return { success: false, error: 'User not found' };
-    }
-
-    users[userIndex].verified = verified;
-    users[userIndex].verifiedAt = verified ? new Date().toISOString() : undefined;
-    users[userIndex].updatedAt = new Date().toISOString();
-
-    localStorage.setItem('users', JSON.stringify(users));
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating user verification:', error);
-    return { success: false, error: 'Failed to update user verification status' };
-  }
-}
-
-/**
- * Updates verification token as used
- */
-function updateTokenAsUsed(tokenId: string): { success: boolean; error?: string } {
-  try {
-    const tokens = JSON.parse(localStorage.getItem('verification_tokens') || '[]');
-    const tokenIndex = tokens.findIndex((token: any) => token.id === tokenId);
-
-    if (tokenIndex === -1) {
-      return { success: false, error: 'Token not found' };
-    }
-
-    tokens[tokenIndex].usedAt = new Date().toISOString();
-    localStorage.setItem('verification_tokens', JSON.stringify(tokens));
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating token as used:', error);
-    return { success: false, error: 'Failed to update token status' };
-  }
-}
-
-/**
- * Invalidates all other verification tokens for a user
- */
-function invalidateOtherTokens(userId: string, currentTokenId: string): void {
-  try {
-    const tokens = JSON.parse(localStorage.getItem('verification_tokens') || '[]');
-    const updatedTokens = tokens.map((token: any) => {
-      if (token.userId === userId && token.id !== currentTokenId && !token.usedAt) {
-        return { ...token, usedAt: new Date().toISOString() };
-      }
-      return token;
-    });
-
-    localStorage.setItem('verification_tokens', JSON.stringify(updatedTokens));
-  } catch (error) {
-    console.error('Error invalidating other tokens:', error);
-  }
-}
+// All localStorage-based functions have been removed as they are not compatible with server-side execution
+// The API now uses Supabase-backed functions from verificationRepo instead
 
 export default async function handler(
   req: VercelRequest,
@@ -124,9 +37,17 @@ export default async function handler(
     }
 
     // Supabase-backed: compute hash from raw token and look up
+    console.log('Verification attempt - Raw token:', requestData.token);
+    console.log('Verification attempt - User ID:', requestData.userId);
+    
     const computedHash = hashToken(requestData.token);
+    console.log('Computed hash from raw token:', computedHash);
+    
     const { token, error: tokenLookupError } = await findTokenByHash(requestData.userId, computedHash);
+    console.log('Token lookup result:', { token, error: tokenLookupError });
+    
     if (tokenLookupError) {
+      console.log('Token lookup failed:', tokenLookupError);
       logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
         reason: 'token_lookup_failed',
         error: tokenLookupError
@@ -134,6 +55,7 @@ export default async function handler(
       return res.status(500).json({ success: false, message: 'Verification failed. Please try again.' });
     }
     if (!token) {
+      console.log('No token found for computed hash:', computedHash);
       logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
         reason: 'token_not_found'
       });
@@ -146,28 +68,38 @@ export default async function handler(
     // Supabase-backed: profiles table is updated directly; skip local user lookup
 
     // Validate token
+    console.log('About to validate token with:');
+    console.log('- rawToken:', requestData.token);
+    console.log('- stored token_hash:', token.token_hash);
+    console.log('- expires_at:', token.expires_at);
+    console.log('- used_at:', token.used_at);
+    
     const validation = validateToken(
       requestData.token,
       token.token_hash,
       token.expires_at,
       token.used_at
     );
+    console.log('Token validation result:', validation);
 
     if (!validation.valid) {
-      logAuditEvent('verify_email.attempt', requestData.userId, user.companyId, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
-        reason: validation.reason,
-        tokenId: requestData.token,
-        tokenPurpose: token.purpose
+      console.log('Token validation failed with reason:', validation.reason);
+      logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
+        reason: 'invalid_token',
+        validationReason: validation.reason
       });
-      return res.status(400).json({
-        success: false,
-        message: 'Verification link is invalid or expired. Request a new verification email.'
-      });
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification token.' });
     }
+    
+    console.log('Token validation passed, proceeding to mark user email as verified');
 
     // Mark user as verified in Supabase profiles
+    console.log('Marking user email as verified...');
     const updateResult = await markUserEmailVerified(requestData.userId);
+    console.log('User email verification result:', updateResult);
+    
     if (!updateResult.success) {
+      console.log('Failed to mark user email as verified:', updateResult.error);
       logAuditEvent('verify_email.attempt', requestData.userId, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
         reason: 'user_update_failed',
         error: updateResult.error

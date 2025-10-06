@@ -3,8 +3,8 @@ const { Client } = require('postmark');
 require('dotenv').config({ path: '.env.local' });
 
 // Get environment variables
-const serverToken = process.env.VITE_POSTMARK_SERVER_TOKEN || process.env.POSTMARK_SERVER_TOKEN;
-const senderEmail = process.env.VITE_POSTMARK_SENDER_EMAIL || process.env.POSTMARK_SENDER_EMAIL;
+const serverToken = process.env.POSTMARK_SERVER_TOKEN;
+const senderEmail = process.env.POSTMARK_FROM_EMAIL;
 
 console.log('Testing Postmark configuration...');
 console.log('Server Token:', serverToken ? `${serverToken.substring(0, 8)}...` : 'NOT FOUND');
@@ -16,7 +16,7 @@ if (!serverToken) {
 }
 
 if (!senderEmail) {
-  console.error('❌ POSTMARK_SENDER_EMAIL not found in environment variables');
+  console.error('❌ POSTMARK_FROM_EMAIL not found in environment variables');
   process.exit(1);
 }
 

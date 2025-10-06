@@ -27,7 +27,7 @@ export function logAuditEvent(
 ): void {
   try {
     const auditLog: AuditLog = {
-      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       event,
       userId,
       companyId,
@@ -35,25 +35,24 @@ export function logAuditEvent(
       ipAddress,
       userAgent,
       resultCount,
-      meta: {
-        ...meta,
-        timestamp: new Date().toISOString(),
-        source: 'verification_flow'
-      },
+      meta: sanitizeMetaForLogging(meta),
       timestamp: new Date().toISOString()
     };
 
-    // Get existing audit logs
-    const existingLogs = getStoredAuditLogs();
+    // Only store to localStorage if we're in a browser environment
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      // Get existing audit logs
+      const existingLogs = getStoredAuditLogs();
 
-    // Add new log to beginning of array
-    existingLogs.unshift(auditLog);
+      // Add new log to beginning of array
+      existingLogs.unshift(auditLog);
 
-    // Keep only last 1000 logs to prevent storage bloat
-    const trimmedLogs = existingLogs.slice(0, 1000);
+      // Keep only last 1000 logs to prevent storage bloat
+      const trimmedLogs = existingLogs.slice(0, 1000);
 
-    // Store back to localStorage
-    localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(trimmedLogs));
+      // Store back to localStorage
+      localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(trimmedLogs));
+    }
 
     // Also log to console in development
     if (process.env.NODE_ENV === 'development') {
@@ -90,7 +89,7 @@ export function logEmailEvent(
 ): void {
   try {
     const emailLog: EmailLog = {
-      id: `email_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       event,
       userId,
       companyId,
@@ -104,17 +103,20 @@ export function logEmailEvent(
       timestamp: new Date().toISOString()
     };
 
-    // Get existing email logs
-    const existingLogs = getStoredEmailLogs();
+    // Only store to localStorage if we're in a browser environment
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      // Get existing email logs
+      const existingLogs = getStoredEmailLogs();
 
-    // Add new log to beginning of array
-    existingLogs.unshift(emailLog);
+      // Add new log to beginning of array
+      existingLogs.unshift(emailLog);
 
-    // Keep only last 1000 logs to prevent storage bloat
-    const trimmedLogs = existingLogs.slice(0, 1000);
+      // Keep only last 1000 logs to prevent storage bloat
+      const trimmedLogs = existingLogs.slice(0, 1000);
 
-    // Store back to localStorage
-    localStorage.setItem(EMAIL_LOG_KEY, JSON.stringify(trimmedLogs));
+      // Store back to localStorage
+      localStorage.setItem(EMAIL_LOG_KEY, JSON.stringify(trimmedLogs));
+    }
 
     // Also log to console in development
     if (process.env.NODE_ENV === 'development') {
@@ -137,6 +139,9 @@ export function logEmailEvent(
  */
 export function getStoredAuditLogs(): AuditLog[] {
   try {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return [];
+    }
     const logs = localStorage.getItem(AUDIT_LOG_KEY);
     return logs ? JSON.parse(logs) : [];
   } catch (error) {
@@ -151,6 +156,9 @@ export function getStoredAuditLogs(): AuditLog[] {
  */
 export function getStoredEmailLogs(): EmailLog[] {
   try {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return [];
+    }
     const logs = localStorage.getItem(EMAIL_LOG_KEY);
     return logs ? JSON.parse(logs) : [];
   } catch (error) {
@@ -204,7 +212,9 @@ export function getRecentAuditLogs(limit: number = 50): AuditLog[] {
  */
 export function clearAuditLogs(): void {
   try {
-    localStorage.removeItem(AUDIT_LOG_KEY);
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(AUDIT_LOG_KEY);
+    }
     logAuditEvent('audit_logs_cleared', undefined, undefined, 'system', undefined, undefined, undefined, {
       reason: 'manual_clear'
     });
@@ -218,7 +228,9 @@ export function clearAuditLogs(): void {
  */
 export function clearEmailLogs(): void {
   try {
-    localStorage.removeItem(EMAIL_LOG_KEY);
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(EMAIL_LOG_KEY);
+    }
     logAuditEvent('email_logs_cleared', undefined, undefined, 'system', undefined, undefined, undefined, {
       reason: 'manual_clear'
     });

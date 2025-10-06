@@ -1,222 +1,206 @@
-Diagnose & fix missing verification emails (full flow + bypass removal)
+permanently remove three specific unverified test users from your local development database, remove any related data (companies, tokens, jobs, notifications, email logs), and remove or unblock their addresses in Postmark where possible. It also instructs how to handle any API keys that may be tied to these records and how to produce evidence and an audit trail. Read it all before executing.
 
-**Goal (one sentence):** Find why new signups show “Account created — check your email” but never receive the verification email; remove any intentional bypass that auto-verifies accounts; re-enable the secure verification flow (token generation → Postmark send → token validation); permanently delete two bad unverified accounts; produce logs, evidence, and acceptance report. Work local-only and do not commit secrets.
 
----
+Full Cleanup: permanently remove test users + Postmark cleanup + API-key housekeeping
 
-## High-level checklist (do these steps, in order)
+**Goal (one sentence):** Permanently remove the following user accounts and all associated tenant data from the local development system, remove/unblock those email addresses from Postmark (suppression lists) if present, revoke any API keys that are tied to those users/sampled tenants, and produce a complete audit with logs and deliverables so the addresses can be safely re-used for sign-up/testing.
 
-1. Search codebase for any “bypass” or “skip verification” flags and disable them (do not delete — comment and document).
-2. Verify verification-token generation + storage (token created, hashed, expiresAt, stored).
-3. Verify mail send call is executed and logged (email.send\_attempt) and Postmark API response recorded.
-4. Check Postmark for suppression/bounce/rejection of the email addresses.
-5. Check message queue / background worker responsible for sending emails.
-6. Check resend flow and rate limits.
-7. Permanently delete specified unverified accounts from DB ([mokgethwamoabelo@gmail.com](mailto:mokgethwamoabelo@gmail.com) and [mokgethwamoabelo@icloud.com](mailto:mokgethwamoabelo@icloud.com)).
-8. Run end-to-end test signup → receive email → click verification → redirected to login.
-9. Produce deliverables (logs, screenshots, postmortem).
+**Accounts to remove (exact):**
 
-**Important rules before editing**
+* `mokgethamoabelo@yahoo.com`
+* `cindyramatladi@gmail.com`
+* `wilsonmoabelo1@yahoo.com`
 
-* Work local only (local DB). Do not change production data.
-* Inspect code before changing anything. Avoid duplicating files or handlers.
-* Do not commit environment secrets to Git — use env files locally and keep secrets out of commits.
-* Log everything in structured JSON to console/email\_logs for the audit.
+**Environment & rules**
+
+* Work **local-only** (local DB / dev Postmark/test server). Do **not** touch production.
+* Before deleting anything, create a full DB backup (dump) and export Postmark activity/suppression lists that include the addresses (store backups securely).
+* Do not remove or affect the dedicated developer test admin account used for development unless explicitly requested.
+* All destructive actions must be logged with structured JSON entries and saved in `cleanup_audit/` (or similar) in the local dev environment. Do **not** commit secrets to Git.
+* If any API keys are found to be tied to the removed users or their resources, **revoke and rotate** them. Document the rotation and update local secrets as needed.
+* If Postmark objects cannot be removed (activity cannot be deleted), remove addresses from suppression lists and document what was removed and why.
 
 ---
 
-## Step A — Find & disable the bypass (very likely root cause)
+## Step 1 — Pre-cleanup safety & evidence (MUST do)
 
-Search the repo (frontend + backend) for the following keywords (case-insensitive):
+1. Take a full local DB export (dump) and save to `backups/db-before-cleanup-YYYYMMDD.sql` or similar.
+2. Export Postmark activity for the three email addresses and the server: save JSON/CSV to `backups/postmark-activity-before-cleanup-YYYYMMDD.json`.
+3. Take screenshots of the accounts/pages where these users currently appear (company/team lists, hr-management employees, notification logs). Save to `backups/screenshots-before/`.
+4. Create a local `cleanup_audit/README.md` that will hold all logs and deliverables.
 
-* `bypass`, `skipVerification`, `autoVerify`, `forceVerified`, `VERIFY_BYPASS`, `SKIP_EMAIL_VERIFICATION`, `AUTO_VERIFY`, `mockEmail`, `DEV_SKIP_VERIFY`, `testOnlyVerify`
-  For each match:
+Log actions (structured JSON) into `cleanup_audit/logs.json`:
 
-1. Identify where the flag is set (env var, test helper, seed script).
-2. If flag is `true` or code path auto-sets `user.verified = true`, temporarily disable it and document the exact file & lines changed.
-3. If the bypass was added as a temporary patch, revert to the original verification code path: ensure user remains `verified = false` after signup and the mailer is invoked.
-4. Add/or update a TODO comment explaining why bypass existed and how to re-enable only for safe local testing.
-
-Log a structured note:
-`{"event":"bypass.disabled","file":"<filepath>","oldValue":"true","newValue":"false","timestamp":...}`
+```
+{"event":"pre_cleanup_backup","db_dump":"backups/db-before-cleanup-YYYYMMDD.sql","postmark_export":"backups/postmark-activity-before-cleanup-YYYYMMDD.json","timestamp":"..."}
+```
 
 ---
 
-## Step B — Verify server-side signup/verification code paths
+## Step 2 — Identify all records to delete (discover)
 
-Open and inspect these endpoints / modules (or their equivalents in your codebase):
+For each email address:
 
-* `POST /api/signup` (or `api/auth/signup`, `api/users/create`)
-* `POST /api/verify-email` or `api/auth/verify`
-* `POST /api/resend-verification`
-* mailer service / `services/mailer` / `services/email` / `src/services/postmark*`
-* queue/worker that flushes email jobs (e.g., `jobs/emailWorker`, `worker.js`, `bull`, `agenda`)
+1. Query the database for any records linked to the user or the company created by that user:
 
-Confirm:
+   * `users` table (or collection)
+   * `companies` table (company record created on signup)
+   * `verification_tokens` / `email_tokens`
+   * `invoices`, `quotations`, `clients`, `projects`, `inventory`, `employees`, `notifications`, `email_logs` (filter by `companyId` or `userId`)
+   * `subscriptions`, `billing records`, `payment_history`
+   * any background job records where `userId` or `companyId` is referenced (email jobs, queued tasks)
+2. Produce a list of found records with their DB ids and counts saved to `cleanup_audit/records-to-delete-<masked-email>.json` (mask email in filename if desired).
 
-1. Signup creates `company` and `user` with `verified=false`.
-2. Signup creates a verification token record: token (random), tokenHash (SHA256 stored), expiresAt, purpose.
-3. Signup enqueues or immediately calls mailer with `to`, `templateId`, `verifyUrl` and logs `email.send_attempt`.
-4. `verify-email` endpoint validates tokenHash (constant-time compare), `expiresAt`, `usedAt` and sets `user.verified = true`, `verifiedAt` and marks token `usedAt`.
-5. Resend handler invalidates old tokens and creates+sends a new one, with rate limit.
+Log each discovery:
 
-If any of these steps are missing or short-circuited because of bypass, re-enable the full flow and log what you changed.
-
-Log example:
-`{"event":"signup.flow.checked","signupEndpoint":"/api/signup","tokenCreated":true,"mailerCalled":true,"timestamp":...}`
+```
+{"event":"discovery","emailMasked":"m***@yahoo.com","userId":"u_xxx","companyId":"c_xxx","tablesFound":{"users":1,"companies":1,"tokens":1,"invoices":0,...},"timestamp":"..."}
+```
 
 ---
 
-## Step C — Check verification token generation & persistence
+## Step 3 — Delete local DB records (safe, auditable deletion)
 
-Run a local signup (use a test email you can check). Immediately inspect DB:
+For each email address and its discovered records:
 
-* Confirm a `verification_tokens` table/collection/document exists for that user.
-* Fields to check: `tokenHash`, `expiresAt`, `purpose='email_verification'`, `usedAt=null`.
-* Ensure only the **hash** is in DB — raw token should not be stored.
+1. Delete in the following safe order (transaction if possible):
 
-If token is not created:
+   * Delete `verification_tokens` for that user.
+   * Delete `email_logs` and queued email jobs for that user/company.
+   * Delete `notifications` referencing that user/company.
+   * Delete child records that depend on company (invoices, clients, projects, employees, inventory, etc.).
+   * Delete the `company` record (if it was created by that user and is not shared).
+   * Delete the `user` record itself last.
+2. After deletion, immediately query those tables to confirm zero rows remain for that `userId` / `companyId`. Save results to `cleanup_audit/post_delete_checks-<masked-email>.json`.
+3. If any records cannot be deleted because of foreign key constraints or other errors, stop and record the error in `cleanup_audit/errors.json` and escalate rather than force an inconsistent state.
 
-* Look for early returns in signup code or errors swallowed by try/catch.
-* Re-enable token generation and add console logs at token create point:
-  `console.log(JSON.stringify({event:"token.created","userId":..., "companyId":..., "expiresAt":...}))`
+Add a deletion log entry per user:
 
----
+```
+{"event":"deleted_user_data","emailMasked":"m***@yahoo.com","userId":"u_xxx","companyId":"c_xxx","deletedTables":["tokens","email_logs","notifications","invoices","companies","users"],"timestamp":"..."}
+```
 
-## Step D — Confirm mailer is invoked and Postmark interaction
-
-1. At token creation, the server should call mailer: `mailer.sendVerification({to, firstName, company, verifyUrl, templateId})`.
-2. Ensure mailer logs both send attempt and Postmark response:
-
-   * `email.send_attempt` (before call)
-   * `postmark.response` (after call: success|rejected|error|bounce)
-3. If a job queue is used: confirm job is enqueued and worker is running. If job remains queued but worker not processing, start worker and confirm job runs.
-4. If mailer is stubbed for local dev (mockEmailService), either:
-
-   * Unstub it to use Postmark test server OR
-   * Ensure the mock writes an `email.send_attempt` log and a simulated `postmark.response` so the flow behaves like a real send.
-
-Log expected actions:
-`{"event":"email.send_attempt","toMasked":"m***@...","userId":"u_xxx","companyId":"c_xxx","template":"verification","timestamp":...}`
-then
-`{"event":"postmark.response","messageId":"pm_xxx","status":"Success","httpStatus":200,"timestamp":...}`
+**Important:** If any of these users are linked to shared company resources that must remain (e.g., they were added incorrectly to an admin company that should stay), **do not delete the shared company** — instead remove the user record and detach references. Log your decision.
 
 ---
 
-## Step E — Inspect Postmark (developer checklist)
+## Step 4 — Postmark cleanup (remove or unblock addresses where possible)
 
-Locally, verify env variables reference Postmark test settings (do **not** paste secrets into code). In Postmark dashboard:
+1. Using Postmark test server/dashboard/API, search for the three email addresses:
 
-1. Check Postmark Activity for the test email addresses — was the message accepted, bounced, or suppressed?
-2. If suppressed/bounced, investigate suppression reason and remove the address or fix content causing bounce.
-3. If Postmark shows message accepted but you don’t see it in your inbox:
+   * Export any activity rows (already done in pre-cleanup).
+   * Check if the addresses are on Postmark suppression lists (bounces, complaints, unsubscribes).
+2. If addresses are present on suppression lists and you want them reusable:
 
-   * Check spam/junk.
-   * Confirm `From` address is the same as sender configured in Postmark (must match verified sender).
-4. If Postmark rejects because of invalid template ID: confirm the `POSTMARK_TEMPLATE_VERIFICATION_ID` in env matches the template in Postmark.
-5. If anything in Postmark settings is misconfigured (sender, domain verification, message stream), correct in dashboard and re-test.
+   * Remove them from the suppression lists (Postmark provides suppression management). Document the action.
+   * If they are bounces or permanent failures due to invalid addresses, DO NOT attempt to force-send — note the finding and advise using a different address OR correct the cause.
+3. If the Postmark server has message copies tied to these addresses, note that Activity cannot be fully erased via Postmark (activity is an audit trail). Document what Postmark allows you to change vs what is immutable.
+4. Record Postmark responses and save to `cleanup_audit/postmark-changes.json`.
 
-Log example from Postmark:
-`{"event":"postmark.inspect","messageStatus":"Accepted|Bounced|Suppressed","detail":"...","timestamp":...}`
+Log Postmark actions:
 
----
-
-## Step F — Worker / Job queue health
-
-If your mailer uses a job queue:
-
-* Check the queue engine (Redis/Bull/Agenda) is running locally.
-* Confirm jobs are dequeued and processed.
-* If jobs persist, start the worker and re-run the signup test.
-* Add logging at job start and completion.
-
-Log example:
-`{"event":"email.job.process","jobId":"j_xxx","status":"started|completed|failed","timestamp":...}`
+```
+{"event":"postmark_cleanup","emailMasked":"m***@gmail.com","action":"removed_from_suppression|no_action_needed|bounce_recorded","postmark_detail":"...","timestamp":"..."}
+```
 
 ---
 
-## Step G — Resend verification & rate-limit checks
+## Step 5 — API keys & secrets housekeeping
 
-Test the resend endpoint:
+1. Search your local envs and secrets manager for any API keys that are specifically tied to the deleted test tenants or user-owned resources (rare, but check `email` servers, webhook tokens, per-tenant API keys).
+2. If you find any API keys created under those user accounts:
 
-1. Trigger `/api/resend-verification` for the test user.
-2. Confirm new token created, old tokens invalidated, and mailer invoked.
-3. Confirm rate-limit (e.g., second attempt within 2 minutes is throttled).
+   * Revoke the key immediately and log the revoke event.
+   * Rotate the key(s) if they are used in dev workflows. Update local dev `.env`/secret store accordingly.
+   * If keys were accidentally committed, remove them from Git history (BFG/git filter-branch) **locally**, rotate keys in providers, and document the rotation.
+3. For Postmark: if any server tokens or senders were created exclusively for those accounts, decide whether to keep them (if used elsewhere) or delete them. Document the change.
+4. Save `cleanup_audit/api_key_rotation.json` listing keys revoked and new keys created (mask actual values).
 
-Log example:
-`{"event":"verification.resend","userMasked":"m***@...","result":"sent|rate_limited","timestamp":...}`
+Log API key actions:
 
----
-
-## Step H — Delete problematic unverified accounts (requested)
-
-Permanently remove these unverified accounts and associated tokens from local DB:
-
-* `mokgethwamoabelo@gmail.com`
-* `mokgethwamoabelo@icloud.com`
-
-Procedure:
-
-1. Confirm accounts exist and are `verified=false`.
-2. Delete user record(s), company record(s) created alongside them, and any `verification_tokens` entries.
-3. Log deletion with masked emails and DB ids:
-   `{"event":"account.deleted","userMasked":"m***@...","userId":"u_xxx","companyId":"c_xxx","reason":"cleanup-unverified","timestamp":...}`
-
-**Warning:** Only delete these accounts in local DB for this dev cycle. Do not delete in production unless you are certain.
+```
+{"event":"api_key_revoked","provider":"postmark|paystack|github", "keyId":"pm_***","reason":"account_cleanup","timestamp":"..."}
+```
 
 ---
 
-## Step I — End-to-end test (must pass)
+## Step 6 — Webhooks & background jobs
 
-After bypass removal and mailer fixes, run this E2E locally:
+1. Remove or reassign any webhook endpoints, scheduled jobs, or background workers that were pinned to the deleted user/company.
+2. If there were scheduled retry jobs (payment retries, email retries) for those users, cancel them and log job cancellations to `cleanup_audit/job_cancellations.json`.
 
-1. Clear local DB test data or create a fresh DB snapshot.
-2. On signup page: Fill signup form with a test email you control (or Postmark test inbox).
-3. Submit and confirm:
+Log job cancellations:
 
-   * Response shows “Account created — check your email”.
-   * `verification_tokens` row exists (DB).
-   * `email.send_attempt` log exists (console + email\_logs).
-   * Postmark shows accepted message (or mock service wrote success).
-4. Receive email and confirm `verifyUrl` contains token UID; click the link.
-5. Server validates token, sets `users.verified = true`, sets token `usedAt` and returns success.
-6. Frontend redirects to `/auth/login` and shows success message.
-7. Confirm `email_logs` show send and `token.consumed` is logged.
-
-Capture these artifacts:
-
-* Console logs (structured JSON) for token creation, email send attempt, Postmark response, token consumed.
-* DB snapshots (redacted) showing user record before/after verification and token row with `usedAt`.
-* Email screenshot showing verify link.
+```
+{"event":"job_cancelled","jobId":"j_xxx","reason":"cleanup_deleted_user","timestamp":"..."}
+```
 
 ---
 
-## Acceptance criteria (all must be true to close ticket)
+## Step 7 — Post-clean checks & validation (MUST do)
 
-* Bypass/auto-verify flag is disabled and documented.
-* On signup, a verification token is created and stored hashed.
-* Mailer is invoked; an `email.send_attempt` log is present and Postmark (or mock) responded OK.
-* Test verification email is received (or Postmark accepted send) and clicking link marks the account verified.
-* The two specified unverified accounts are removed from local DB.
-* All steps have structured logs and artifacts attached to deliverables.
+1. Confirm `users` table has no rows for the three emails (query & save result).
+2. Confirm `companies` table has no rows for the deleted companyIds (or if shared, that the user references were removed).
+3. Confirm `verification_tokens` removed.
+4. Confirm `email_logs` & `notifications` removed for those users.
+5. Confirm Postmark suppression list entries removed (if action taken).
+6. Confirm any local stored API keys that were revoked are no longer present in `.env` or local secret store.
 
----
+Record all checks to `cleanup_audit/post_cleanup_checks.json` with pass/fail flags.
 
-## Deliverables (attach when done)
+Example log:
 
-1. `fix_report.md` — one-page summary of root cause, changes made (file paths + brief diff description), and how bypass was disabled.
-2. `evidence.zip` — console/log screenshot(s), Postmark activity screenshot, DB snapshots (redacted), email screenshot (verification email), and final login screenshot.
-3. `files_touched.txt` — file paths changed with short description of change.
-4. `audit_logs.json` — structured JSON logs for events listed above.
-5. `run_instructions.md` — how to re-run tests locally (env var list, start worker, test email address).
+```
+{"event":"post_cleanup_check","emailMasked":"m***@yahoo.com","usersRemaining":0,"companiesRemaining":0,"tokensRemaining":0,"emailLogsRemaining":0,"postmarkSuppressionPresent":false,"timestamp":"..."}
+```
 
 ---
 
-## Quick debug checklist (if still not receiving)
+## Step 8 — Deliverables & evidence (what to return)
 
-* Are you using a mock mailer that doesn’t actually call Postmark? If so, switch to Postmark test sender for this full test.
-* Is the Postmark template ID in env correct? (typo will silently cause rejections)
-* Is the sender address verified in Postmark and matches `From`? (unverified sender can block mails)
-* Is the worker processing the email jobs? (if queue is used)
-* Are the test emails on Postmark suppression list? (remove if needed)
-* Is the verification link correctly built (APP\_HOST env)? If using ngrok for external click, set `APP_HOST` to ngrok URL.
+Put all artifacts under `cleanup_audit/` and provide the following deliverables:
+
+1. `cleanup_audit/final_report.md` — explanation of root cause (why these addresses existed), steps performed, and summary of results.
+2. `cleanup_audit/logs.json` — structured log of events (pre_backup, discovery, deletes, postmark changes, API key revocations, errors).
+3. `cleanup_audit/backups/` — DB dump and Postmark activity export (pre-cleanup).
+4. `cleanup_audit/screenshots-before/` and `cleanup_audit/screenshots-after/` — showing UI before & after (team lists, hr-management, notifications).
+5. `cleanup_audit/records-to-delete-*.json` — record lists that were removed for each address.
+6. `cleanup_audit/post_cleanup_checks.json` — pass/fail checks for each record type.
+7. `cleanup_audit/api_key_rotation.json` — list of API keys revoked/rotated (masked).
+8. `cleanup_audit/files_touched.txt` — any code/config files changed (note: prefer no code change; this should be data cleanup).
+
+Final log entry example:
+
+```
+{"event":"cleanup_complete","emails":["m***@yahoo.com","c***@gmail.com","w***@yahoo.com"],"auditPath":"cleanup_audit/","timestamp":"..."}
+```
+
+---
+
+## Safety & rollback
+
+* If any delete step fails or produces unexpected results, immediately revert using DB backup and log the rollback attempt.
+* Keep a copy of the DB backup offline for at least 7 days after cleanup, then archive or delete per your retention policy.
+* If a deletion inadvertently removed shared data, restore from backup and escalate.
+
+---
+
+## Notes about Postmark limitations
+
+* Postmark **Activity** (sent messages) is an audit log and typically cannot be permanently deleted by the user. You can export and archive it, and you can remove email addresses from **suppression** lists so they are again deliverable. Document what Postmark allows and what it does not.
+* If an email is permanently bounced at Postmark due to a real bounce, re-using the email address may still fail until the underlying cause (mailbox) is resolved. If Postmark shows a "permanent bounce", recommend using a different testing address or resolving the mailbox with the recipient provider.
+
+---
+
+## Quick acceptance criteria (all must be true)
+
+* The three email addresses have no user or company records remaining in the local DB.
+* `verification_tokens`, `email_logs`, and queued email jobs for those addresses are removed.
+* Postmark suppression entries for those addresses are removed (if applicable) or documented why not possible.
+* Any API keys tied specifically to those accounts were revoked and rotated (documented).
+* All steps and evidence are saved under `cleanup_audit/` and logs show the deletion events.
+* A rollback plan and DB backup exist.
+
+---
+
+Execute exactly as stated, produce the deliverables, and share `cleanup_audit/final_report.md` plus the `cleanup_audit/logs.json` once done.

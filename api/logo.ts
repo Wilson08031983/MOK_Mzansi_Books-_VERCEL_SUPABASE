@@ -8,7 +8,7 @@ export default function handler(req: any, res: any) {
 
   try {
     // Read the logo file from the public directory
-    const logoPath = path.join(process.cwd(), 'public', 'email-assets', 'mokmzansi-logo.PNG');
+    const logoPath = path.join(process.cwd(), 'public', 'mokmzansi-logo.PNG');
     const logoBuffer = fs.readFileSync(logoPath);
     
     // Set appropriate headers

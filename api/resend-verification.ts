@@ -4,18 +4,47 @@ import { createVerificationTokenWithRaw } from '../src/services/tokenService';
 import { logAuditEvent, logEmailEvent } from '../src/services/loggingService';
 import { sendVerificationEmail } from '../src/services/emailService';
 import { insertVerificationToken, invalidateOtherTokensForUser } from '../src/repositories/verificationRepo';
+import { supabaseServer } from '../src/integrations/supabase/serverClient';
 
 // Rate limiting storage (in production, use Redis or similar)
 const resendAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
- * Gets user by email
+ * Gets user by email from Supabase auth
  */
-function getUserByEmail(email: string): any {
+async function getUserByEmail(email: string): Promise<any> {
   try {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    return users.find((user: any) => user.email.toLowerCase() === email.toLowerCase());
+    // First try to get from auth.users
+    const { data: authData, error: authError } = await supabaseServer.auth.admin.listUsers();
+    
+    if (!authError && authData?.users) {
+      const authUser = authData.users.find(user => 
+        user.email?.toLowerCase() === email.toLowerCase()
+      );
+      
+      if (authUser) {
+        // Try to get additional profile data
+        const { data: profileData } = await supabaseServer
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
+        
+        // Combine auth user with profile data
+        return {
+          id: authUser.id,
+          email: authUser.email,
+          firstName: profileData?.first_name || authUser.user_metadata?.first_name || '',
+          surname: profileData?.last_name || authUser.user_metadata?.last_name || '',
+          companyId: profileData?.company_id || authUser.user_metadata?.company_id,
+          verified: authUser.email_confirmed_at ? true : false,
+          ...profileData
+        };
+      }
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error getting user by email:', error);
     return null;
@@ -23,14 +52,24 @@ function getUserByEmail(email: string): any {
 }
 
 /**
- * Gets company by ID
+ * Gets company by ID from Supabase
  */
-function getCompanyById(companyId: string): any {
+async function getCompanyById(companyId: string): Promise<any> {
   try {
-    const companies = JSON.parse(localStorage.getItem('companies') || '[]');
-    return companies.find((company: any) => company.id === companyId);
+    const { data, error } = await supabaseServer
+      .from('companies')
+      .select('*')
+      .eq('id', companyId)
+      .single();
+    
+    if (error) {
+      console.error('Error getting company by ID:', error);
+      return null;
+    }
+    
+    return data;
   } catch (error) {
-    console.error('Error getting company:', error);
+    console.error('Error getting company by ID:', error);
     return null;
   }
 }
@@ -111,7 +150,7 @@ export default async function handler(
     }
 
     // Get user by email
-    const user = getUserByEmail(normalizedEmail);
+    const user = await getUserByEmail(normalizedEmail);
     if (!user) {
       logAuditEvent('resend_verification.attempt', undefined, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
         reason: 'user_not_found',
@@ -136,18 +175,17 @@ export default async function handler(
       });
     }
 
-    // Get company information
-    const company = getCompanyById(user.companyId);
-    if (!company) {
-      logAuditEvent('resend_verification.attempt', user.id, user.companyId, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
-        reason: 'company_not_found',
-        email: normalizedEmail
-      });
-      return res.status(500).json({
-        success: false,
-        message: 'Company information not found. Please contact support.'
-      });
+    // Get company information - skip if not available for now
+    let company: { id: string; name: string } | null = null;
+    if (user.companyId) {
+      company = await getCompanyById(user.companyId);
     }
+    
+    // Use default company info if not found
+    const companyInfo = company || {
+      id: 'default-company',
+      name: 'MOK Mzansi Books'
+    };
 
     // Invalidate existing tokens in Supabase
     await invalidateOtherTokensForUser(user.id);
@@ -164,9 +202,9 @@ export default async function handler(
     }
 
     // Build verification URL
-    const appHost = process.env.APP_HOST || 'http://localhost:8082';
-    // Use the correct public route for verification page
-    const verifyUrl = `${appHost}/verify-email?token=${encodeURIComponent(rawToken)}&uid=${user.id}`;
+    const appHost = process.env.APP_HOST || 'http://localhost:3000';
+    // Use the correct public route for verification page (client route)
+    const verifyUrl = `${appHost}/auth/verify-email?token=${encodeURIComponent(rawToken)}&uid=${user.id}`;
 
     // Send verification email
     try {
@@ -174,35 +212,35 @@ export default async function handler(
         to: normalizedEmail,
         firstName: user.firstName,
         lastName: user.surname,
-        companyName: company.name,
-        verifyLink: verifyUrl,
+        companyName: companyInfo.name,
+        verifyUrl: verifyUrl,
         userId: user.id,
-        companyId: company.id
+        companyId: companyInfo.id
       });
 
-      logEmailEvent('send_attempt', user.id, company.id, 'verification_resend', undefined, 'success', {
+      logEmailEvent('send_attempt', user.id, companyInfo.id, 'verification_resend', undefined, 'success', {
         email: normalizedEmail,
         verifyUrl: verifyUrl.substring(0, 50) + '...',
         previousAttempts: resendAttempts.get(normalizedEmail)?.count || 1
       });
 
-      logAuditEvent('verification_resent', user.id, company.id, req.url, req.socket.remoteAddress, req.headers['user-agent'], 1, {
+      logAuditEvent('verification_resent', user.id, companyInfo.id, req.url, req.socket.remoteAddress, req.headers['user-agent'], 1, {
         email: normalizedEmail,
-        companyName: company.name,
+        companyName: companyInfo.name,
         attemptCount: resendAttempts.get(normalizedEmail)?.count || 1
       });
 
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
 
-      logEmailEvent('send_attempt', user.id, company.id, 'verification_resend', undefined, 'error', {
+      logEmailEvent('send_attempt', user.id, companyInfo.id, 'verification_resend', undefined, 'error', {
         email: normalizedEmail,
         error: emailError instanceof Error ? emailError.message : 'Unknown error'
       });
 
-      logAuditEvent('verification_resent', user.id, company.id, req.url, req.socket.remoteAddress, req.headers['user-agent'], 1, {
+      logAuditEvent('verification_resent', user.id, companyInfo.id, req.url, req.socket.remoteAddress, req.headers['user-agent'], 1, {
         email: normalizedEmail,
-        companyName: company.name,
+        companyName: companyInfo.name,
         emailError: 'Verification email failed to send'
       });
 
@@ -214,7 +252,7 @@ export default async function handler(
 
     // Success response (generic to avoid email enumeration)
     return res.status(200).json({
-      success: false,
+      success: true,
       message: 'If an account with this email exists, a new verification email has been sent.'
     });
 

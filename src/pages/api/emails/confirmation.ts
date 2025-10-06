@@ -1,14 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Client } from 'postmark';
-import emailConfig from '@/emails/config/emailConfig';
+import emailConfig from '../../../emails/config/emailConfig';
 
-// Initialize Postmark client with server token
-const postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
+// Postmark client will be initialized in the handler after validating the server token
 
 // Get configuration from environment variables with fallbacks
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || emailConfig.company.website).replace(/\/$/, '');
 const logoUrl = `${new URL(emailConfig.company.website).origin}${emailConfig.company.logo.startsWith('/') ? emailConfig.company.logo : `/${emailConfig.company.logo}`}`;
-const fromEmail = process.env.POSTMARK_SENDER_EMAIL || `no-reply@${process.env.POSTMARK_SENDER_DOMAIN || 'mokmzansibooks.com'}`;
+const fromEmail = process.env.POSTMARK_FROM_EMAIL || `no-reply@${process.env.POSTMARK_SENDER_DOMAIN || 'mokmzansibooks.com'}`;
 const senderName = process.env.POSTMARK_SENDER_NAME || 'MOK Mzansi Books';
 
 export default async function handler(
@@ -18,6 +17,13 @@ export default async function handler(
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
+
+  // Ensure Postmark server token is configured
+  const serverToken = process.env.POSTMARK_SERVER_TOKEN;
+  if (!serverToken || serverToken.trim().length === 0) {
+    return res.status(500).json({ message: 'Postmark server token not configured' });
+  }
+  const postmarkClient = new Client(serverToken);
 
   const { to, subject, firstName = 'there', lastName = '', verifyLink } = req.body || {};
 

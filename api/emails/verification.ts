@@ -1,9 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Client as PostmarkClient } from 'postmark';
 
-// Initialize Postmark client
-const postmarkClient = new PostmarkClient(process.env.POSTMARK_SERVER_TOKEN!);
-
 // Configuration
 const fromEmail = process.env.POSTMARK_SENDER_EMAIL || 'noreply@mokmzansibooks.com';
 const senderName = process.env.POSTMARK_SENDER_NAME || 'MOK Mzansi Books';
@@ -17,6 +14,13 @@ export default async function handler(
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
+
+  // Ensure Postmark server token is configured before initializing the client
+  const serverToken = process.env.POSTMARK_SERVER_TOKEN;
+  if (!serverToken || serverToken.trim().length === 0) {
+    return res.status(500).json({ message: 'Postmark server token not configured' });
+  }
+  const postmarkClient = new PostmarkClient(serverToken);
 
   const { 
     to, 

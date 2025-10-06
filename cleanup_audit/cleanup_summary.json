@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-10-02T14:16:11.151Z",
+  "targetEmails": [
+    "mokgethwamoabelo@icloud.com",
+    "mokgethwamoabelo@gmail.com",
+    "mokgethwamoabelo@yahoo.com",
+    "wilsonmoabelo1@yahoo.com"
+  ],
+  "results": {
+    "rateLimits": {
+      "success": true,
+      "method": "server_restart_required"
+    },
+    "postmarkSuppressions": {
+      "success": true,
+      "suppressions": []
+    },
+    "databaseRecords": {
+      "success": true,
+      "results": {
+        "users": [],
+        "companies": [],
+        "tokens": []
+      }
+    }
+  },
+  "recommendations": [
+    "Restart the API server (pnpm dev:api) to clear in-memory rate limits",
+    "Restart the main dev server (pnpm dev) to ensure clean state",
+    "Test signup with one of the cleaned email addresses",
+    "Monitor Postmark activity for successful email delivery"
+  ]
+}

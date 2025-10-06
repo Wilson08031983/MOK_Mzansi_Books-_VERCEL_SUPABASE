@@ -8,6 +8,13 @@ async function getPaystack() {
   const mod: any = await import('paystack');
   const Paystack = mod?.default ?? mod;
   const secretKey = getSecretKey();
+  if (!secretKey) {
+    const env = process.env.NODE_ENV !== 'production' ? 'development' : 'production';
+    throw new Error(
+      `Missing Paystack secret key for ${env}. ` +
+      `Set PAYSTACK_SECRET_KEY${env === 'development' ? '_TEST' : ''} in server environment.`
+    );
+  }
   return new Paystack(secretKey);
 }
 
@@ -30,10 +37,7 @@ export const paystackService = {
         email,
         amount,
         currency: 'ZAR',
-        callback_url:
-          process.env.NODE_ENV !== 'production'
-            ? (process.env.PAYSTACK_CALLBACK_URL || process.env.PAYSTACK_CALLBACK_URL)
-            : process.env.PAYSTACK_CALLBACK_URL,
+        callback_url: process.env.PAYSTACK_CALLBACK_URL,
         metadata,
       });
       return response.data;

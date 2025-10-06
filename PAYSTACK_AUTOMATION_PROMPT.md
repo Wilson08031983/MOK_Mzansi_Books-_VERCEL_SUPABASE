@@ -17,9 +17,14 @@ Implement a fully automated Paystack subscription system for MOK Mzansi Books th
 
 ```bash
 # Update .env.local with test keys
-VITE_PAYSTACK_TEST_SECRET_KEY="sk_test_[YOUR_TEST_SECRET_KEY]"
-VITE_PAYSTACK_TEST_PUBLIC_KEY="pk_test_[YOUR_TEST_PUBLIC_KEY]"
+# Server-only secret key (do NOT prefix with VITE/NEXT_PUBLIC)
+PAYSTACK_SECRET_KEY_TEST="sk_test_[YOUR_TEST_SECRET_KEY]"
+
+# Client-safe public key (used in frontend, ok to prefix)
+VITE_PAYSTACK_PUBLIC_KEY_TEST="pk_test_[YOUR_TEST_PUBLIC_KEY]"
 ```
+
+Note: Never use `VITE_` or `NEXT_PUBLIC_` prefixes for secrets. Public prefixes embed values into the client bundle.
 
 ## SUBSCRIPTION LIFECYCLE & BUSINESS RULES
 

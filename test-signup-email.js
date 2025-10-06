@@ -25,7 +25,7 @@ async function testSignupEmailFlow() {
   console.log('Test Data:', testSignupData);
   
   // Get environment variables
-  const serverToken = process.env.VITE_POSTMARK_SERVER_TOKEN || process.env.POSTMARK_SERVER_TOKEN;
+const serverToken = process.env.POSTMARK_SERVER_TOKEN;
   const senderEmail = process.env.VITE_POSTMARK_SENDER_EMAIL || process.env.POSTMARK_SENDER_EMAIL;
   
   console.log('Server Token:', serverToken ? `${serverToken.substring(0, 8)}...` : 'NOT FOUND');
@@ -43,7 +43,7 @@ async function testSignupEmailFlow() {
     
     // Step 2: Create verification link
     const baseUrl = 'http://localhost:8081';
-    const verifyLink = `${baseUrl}/verify-email?token=${tokenResult.token}&email=${encodeURIComponent(testSignupData.email)}`;
+  const verifyLink = `${baseUrl}/auth/verify-email?token=${tokenResult.token}&email=${encodeURIComponent(testSignupData.email)}`;
     console.log('✅ Verification link created:', verifyLink);
     
     // Step 3: Send confirmation email using direct Postmark client (same as working test)

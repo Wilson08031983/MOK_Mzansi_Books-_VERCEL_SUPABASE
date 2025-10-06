@@ -78,6 +78,35 @@ PAYSTACK_WEBHOOK_URL=https://www.mokmzansibooks.com/api/paystack-webhook
 PAYSTACK_CALLBACK_URL=https://www.mokmzansibooks.com/thank-you
 ```
 
+#### Email Configuration Alignment (Postmark)
+- Use a single sender address across all environments: `POSTMARK_SENDER_EMAIL=noreply@mokmzansibooks.com`
+- Ensure the sender address is verified in Postmark and DKIM is configured on `mokmzansibooks.com`
+- Set `POSTMARK_MESSAGE_STREAM=outbound` for production sending
+- Mirror server-side and client-side names if used:
+  - `POSTMARK_SENDER_EMAIL` and `VITE_POSTMARK_SENDER_EMAIL`
+  - `POSTMARK_SENDER_NAME` and `VITE_POSTMARK_SENDER_NAME`
+- Avoid mixing `admin@` and `noreply@`; pick one (recommended: `noreply@`)
+
+#### GitHub → Vercel Secrets Mapping
+Add these secrets in GitHub (if using Actions) and mirror them in Vercel Environment Variables:
+```bash
+# Postmark
+POSTMARK_SERVER_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+POSTMARK_SENDER_EMAIL=noreply@mokmzansibooks.com
+POSTMARK_SENDER_NAME=MOK Mzansi Books
+POSTMARK_MESSAGE_STREAM=outbound
+
+# App URLs
+NEXT_PUBLIC_APP_URL=https://www.mokmzansibooks.com
+APP_HOST=https://www.mokmzansibooks.com
+```
+
+Verification steps after updates:
+- Trigger a redeploy on Vercel to apply new env vars
+- Run `node test-email.js` locally to confirm sending works
+- Send a test via the API: `POST /api/emails/send` with `type=welcome`
+
+
 #### Environment-Specific Configuration
 - **Production**: Use live API keys and production URLs
 - **Preview**: Use test API keys and staging URLs

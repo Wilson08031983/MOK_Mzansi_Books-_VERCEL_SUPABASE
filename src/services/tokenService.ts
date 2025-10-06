@@ -1,4 +1,5 @@
-import crypto from 'crypto';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const crypto = require('node:crypto');
 import { VerificationToken } from '@/types/auth';
 
 // Configuration
@@ -64,13 +65,28 @@ export function createVerificationToken(userId: string, purpose: 'email_verifica
   const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
   return {
-    id: `vt_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`,
+    id: crypto.randomUUID(),
     userId,
     tokenHash,
     purpose,
     expiresAt: expiresAt.toISOString(),
     createdAt: new Date().toISOString()
   };
+}
+
+/**
+ * Creates a verification token and returns the raw token for emailing.
+ * Use this for Supabase-backed storage where only the hash is stored.
+ */
+export function createVerificationTokenWithRaw(
+  userId: string,
+  purpose: 'email_verification' | 'password_reset' = 'email_verification'
+): { rawToken: string; tokenHash: string; expiresAt: string; userId: string; purpose: typeof purpose } {
+  const rawToken = generateSecureToken();
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+
+  return { rawToken, tokenHash, expiresAt, userId, purpose };
 }
 
 /**

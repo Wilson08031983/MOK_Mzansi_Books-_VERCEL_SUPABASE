@@ -17,17 +17,31 @@ const ForgotPassword = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Add immediate alert to test if form submission is working
+    alert('Form submitted! Check console for details.');
+    
     setError(null);
     setLoading(true);
+    
+    console.log('=== FORGOT PASSWORD FORM SUBMITTED ===');
+    console.log('Email entered:', email);
+    console.log('Form event:', e);
+    console.log('Loading state:', loading);
     
     try {
       // Check if a user exists for this email in our local mock store
       const mockUsers: Array<{ email: string; firstName?: string }> = JSON.parse(localStorage.getItem('mockUsers') || '[]');
+      console.log('Mock users in localStorage:', mockUsers);
+      
       const user = mockUsers.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      console.log('Found user for email:', user);
 
       // Always show the same outcome to avoid user enumeration
       // Only generate/store token and send email if the user exists locally
       if (user) {
+        console.log('User exists, proceeding with password reset');
+        
         // Read existing reset requests
         const resetRequests = JSON.parse(localStorage.getItem('passwordResetRequests') || '{}');
         const existing = resetRequests[email];
@@ -37,6 +51,8 @@ const ForgotPassword = () => {
         const tokenToUse = existing && existing.expires > now
           ? existing.token
           : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+        console.log('Using reset token:', tokenToUse);
 
         // Store/refresh the reset request (1 hour expiry) with metadata
         resetRequests[email] = {
@@ -48,6 +64,13 @@ const ForgotPassword = () => {
         localStorage.setItem('passwordResetRequests', JSON.stringify(resetRequests));
 
         // Attempt to send password reset email (mock/real based on env)
+        console.log('Calling sendPasswordResetEmail with:', {
+          to: email,
+          subject: t('auth.forgotPassword.resetTitle'),
+          resetToken: tokenToUse,
+          firstName: user.firstName,
+        });
+        
         const result = await sendPasswordResetEmail({
           to: email,
           subject: t('auth.forgotPassword.resetTitle'),
@@ -55,10 +78,14 @@ const ForgotPassword = () => {
           firstName: user.firstName,
         });
 
+        console.log('sendPasswordResetEmail result:', result);
+
         if (!result) {
           // Log but continue to avoid leaking information
           console.error('Failed to send password reset email');
         }
+      } else {
+        console.log('User not found in mock users, not sending email');
       }
 
       // Show success regardless of whether the user exists

@@ -1,0 +1,86 @@
+{
+  "timestamp": "2025-10-05T18:52:54.243Z",
+  "results": [
+    {
+      "email": "mokgethwamoabelo@gmail.com",
+      "found": true,
+      "userId": "2bc5de7d-3a04-4608-8c03-f60f30f2c4a9",
+      "actions": [
+        {
+          "step": "find_user",
+          "status": "found",
+          "userId": "2bc5de7d-3a04-4608-8c03-f60f30f2c4a9"
+        },
+        {
+          "step": "delete_verification_tokens",
+          "status": "ok"
+        },
+        {
+          "step": "delete_user_verifications",
+          "status": "warn",
+          "error": "Could not find the table 'public.user_verifications' in the schema cache"
+        },
+        {
+          "step": "delete_profiles",
+          "status": "warn",
+          "error": "Could not find the table 'public.profiles' in the schema cache"
+        },
+        {
+          "step": "delete_invitations",
+          "status": "warn",
+          "error": "Could not find the table 'public.invitations' in the schema cache"
+        },
+        {
+          "step": "delete_auth_user",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "email": "mokgethwamoabelo@icloud.com",
+      "found": false,
+      "userId": null,
+      "actions": [
+        {
+          "step": "find_user",
+          "status": "not_found"
+        }
+      ]
+    },
+    {
+      "email": "mokgethwamoabelo@yahoo.com",
+      "found": true,
+      "userId": "5d147341-bf36-45c2-ae1e-1d2e2bb71517",
+      "actions": [
+        {
+          "step": "find_user",
+          "status": "found",
+          "userId": "5d147341-bf36-45c2-ae1e-1d2e2bb71517"
+        },
+        {
+          "step": "delete_verification_tokens",
+          "status": "ok"
+        },
+        {
+          "step": "delete_user_verifications",
+          "status": "warn",
+          "error": "Could not find the table 'public.user_verifications' in the schema cache"
+        },
+        {
+          "step": "delete_profiles",
+          "status": "warn",
+          "error": "Could not find the table 'public.profiles' in the schema cache"
+        },
+        {
+          "step": "delete_invitations",
+          "status": "warn",
+          "error": "Could not find the table 'public.invitations' in the schema cache"
+        },
+        {
+          "step": "delete_auth_user",
+          "status": "ok"
+        }
+      ]
+    }
+  ]
+}

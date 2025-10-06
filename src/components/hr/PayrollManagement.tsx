@@ -37,7 +37,6 @@ import { saPayrollCalculatorService } from '@/services/saPayrollCalculatorServic
 import PayrollExpenseIntegration from '@/components/payroll/PayrollExpenseIntegration';
 import PayrollTestRunner from '@/components/testing/PayrollTestRunner';
 
-import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 // Removed PAYE sync from Accounting feature
 import { useLocalization } from '@/hooks/useLocalization';
 import { localizationService } from '@/services/localizationService';
@@ -541,9 +540,6 @@ const PayrollManagement: React.FC = () => {
     loadSalaryData();
     loadSalaryAdvances();
     
-    // Initialize cleanup service to remove stuck PAYE sync toasts
-    stuckToastCleanupService.initialize();
-    
     // Listen for localStorage changes from Accounting EMP201 sync
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'payrollCalculations' || e.key === 'accounting_hr_sync_audit') {
@@ -603,7 +599,6 @@ const PayrollManagement: React.FC = () => {
     
     // Cleanup on unmount
     return () => {
-      stuckToastCleanupService.stop();
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(intervalId);
     };

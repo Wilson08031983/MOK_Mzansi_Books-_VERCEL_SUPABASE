@@ -1,138 +1,206 @@
-A. Important References and Requirements:
-1. For every Prompt Firstly use  for More Advanced Vision of whats needed to be Done and Full Understanding Before Executing The task.
-2. This prompts and Functions have been done Before:
-- Please Update if the function is Available if it Required and only when it is Required.
-- Investigate the File Before Execution
-- Please Avoid File Duplication 
-- Please Avoid Function Duplication 
-- Backends Should Not be Duplicated 
-3. BackEnd Should Be Done Locally Until We Done with Development, Backend Should be Prepared and it will Later be Copied to Supabase.
-4. All New Changes should Match the theme of the Website
-5. Avoid Hard Coded Changes, Insure Full Functionality on all the Tasks 
+Permanently remove three specific unverified test users from your local development database, remove any related data (companies, tokens, jobs, notifications, email logs), and remove or unblock their addresses in Postmark where possible. It also instructs how to handle any API keys that may be tied to these records and how to produce evidence and an audit trail. Read it all before executing.
 
-B. Remove All the Past Users That where Created Thru the 'signup' Page , The Only User that Must Be Left for Testing Purposes is admin@mokmzansibooks.com Password: admin123, Because the Configuration was Done Incorrectly and they Might Cause Issues, We Will Remove admin@mokmzansibooks.com Password: admin123 when we Do Production, Im Going to Use it For Testing Porposes For Now
+---
 
-C.1. This Website Will be Used By Multiple individuals, Companies, Organisations That are Not Connected Every 'New User' is the Representative of a Different Company, Not in anyway Connected to the Previous Users, individuals, Companies, Organisations that Created Accounts ,  This User should be Regarded as a 'New user' and a New User Must always be in a New Company (Default Website). The 'Email Address'  Used By the Users On the signup Page ​ are  Very Important Because they are there to show which User is Logged in and which Information must be shown thats strictly for that User or Users, The 'Email Address'  Used By the Users On the signup Page Should Be Connected be a Connection or Link to a Company.
+# PROMPT — Full Cleanup: permanently remove test users + Postmark cleanup + API-key housekeeping
 
-C.2. Please Create a 'Company Name' Field and a 'Position' Drop down Menu With the Following Positions:
-- CEO (Chief Executive Officer)
-- Managing Director (MD)
-- Director
-- Founder
-- General Manager (GM)
-- Operations Manager
-- Finance Manager / CFO
-- Bookkeeper
-On the signup Page  > Create Account Form 
+**Goal (one sentence):** Permanently remove the following user accounts and all associated tenant data from the local development system, remove/unblock those email addresses from Postmark (suppression lists) if present, revoke any API keys that are tied to those users/sampled tenants, and produce a complete audit with logs and deliverables so the addresses can be safely re-used for sign-up/testing.
 
-C.3. when the 'New User' is Done with Creating an Account on the signup Page  > Create Account , This User Should Receive a 'Verification Email' with a Link that Must Return the User to the Login Page.
+**Accounts to remove (exact):**
 
-C.4. Avoid a Case Where an Email Address  is Used Multiple time to Signup or a Company Names is Used Multiple Time, Users that Are Already signup Must Be Redirected to the Login Page , 
+* `mokgethamoabelo@yahoo.com`
+* `cindyramatladi@gmail.com`
+* `wilsonmoabelo1@yahoo.com`
 
-C.5 Create a 'Verification Email' Template and it Must Be Similar to the Welcome Email Template, Invoice Email Template it Terms of Design and Fonts and More, The  'Verification Email' Templete Must Also Have MOKMzansibook Logo and My Signature Similar to the the Mentioned Email Templates and this Template Must Also Include this Information:
-Wilson Mokgethwa Moabelo
-Founder & CEO
-MOK Mzansi Books
-support@mokmzansibooks.com
-+27 64 550 4029
-81 Monokane Street
-Atteridgeville x17
-Pretoria, Gauteng 0006
+**Environment & rules**
 
-C.5. Link Infomation on the Field on the signup Page  > Create Account Form  to company Page  > Company Details Tab , E.g Email Address on the signup Page to Email on the company Page  > Company Details Tab  but this should happen when the User is Verified by Clicking the Link on the Verification Email Sent.
+* Work **local-only** (local DB / dev Postmark/test server). Do **not** touch production.
+* Before deleting anything, create a full DB backup (dump) and export Postmark activity/suppression lists that include the addresses (store backups securely).
+* Do not remove or affect the dedicated developer test admin account used for development unless explicitly requested.
+* All destructive actions must be logged with structured JSON entries and saved in `cleanup_audit/` (or similar) in the local dev environment. Do **not** commit secrets to Git.
+* If any API keys are found to be tied to the removed users or their resources, **revoke and rotate** them. Document the rotation and update local secrets as needed.
+* If Postmark objects cannot be removed (activity cannot be deleted), remove addresses from suppression lists and document what was removed and why.
 
-D. The 'New User' is a Very Important Figure and Holds State of Presidency in the Website, He's/Her's Information Must Be the Information that must be Regarded as Company Information as shown on 'C.5.' (Linking of Signup fields), This User Information Cannot Be Deleted, Edited or Remove anywhere on this Website but on the company Page  > Company Details Tab . All New Employees in this Company Must be Under the 'New User' and the New User Needs to Invite new Employees or Add New Employees:
+---
 
-D.1. Invite new Employees:
-The 'New User' will Invite New Employees on company Page  > Team Management Tab , on the 'Invite Team Member' 
+## Step 1 — Pre-cleanup safety & evidence (MUST do)
 
-D.2. The New 'New User' will Also Add Employee on the 'hr-management' Page  > Add Employee , Add New Employee Form 
+1. Take a full local DB export (dump) and save to `backups/db-before-cleanup-YYYYMMDD.sql` or similar.
+2. Export Postmark activity for the three email addresses and the server: save JSON/CSV to `backups/postmark-activity-before-cleanup-YYYYMMDD.json`.
+3. Take screenshots of the accounts/pages where these users currently appear (company/team lists, hr-management employees, notification logs). Save to `backups/screenshots-before/`.
+4. Create a local `cleanup_audit/README.md` that will hold all logs and deliverables.
 
-D.3. All Employees That are in a Company Must Be Under the 'New User' and In a case where this Users are in the Following 'POSITIONS':
- - CEO (Chief Executive Officer)
-- Managing Director (MD)
-- Director
-- Founder
-- General Manager (GM)
-- Operations Manager
-- Finance Manager / CFO
-- Bookkeeper
-This Users are Possessed to have the Similar Strength as the 'New User' and they Are Regarded as 'Admin Users' (Company High Ranks) they Have No Limitations, Note that For Some Functionality it will Require a Email and Password to Be Accessed, Edited, Deleted, Change and More by Admin Users, Thats:
- - CEO (Chief Executive Officer)
-- Managing Director (MD)
-- Director
-- Founder
-- General Manager (GM)
-- Operations Manager
-- Finance Manager / CFO
-- Bookkeeper,
-The 'Regular users' or 'General Stuff' are Invited by Admin Users on the company Page > Team Management Tab , Invite Team Member  or By Adding them on the hr-management Page  > Employees Tab , This Users Have Limitations to Navigate or Access Some Functions (View/Edit).
+Log actions (structured JSON) into `cleanup_audit/logs.json`:
 
-D.4. Very Important: Admin Users Must be Able to Login to the website Using the Email and the Password that they Received with the Email Invitation, Any Admin User Under 'New User' Can Access, Edit, Delete and More and the other Admin User in a Different Place Can see the Changes as Long as they are Under the Same 'New user'  (TEAM WORK) 
+```
+{"event":"pre_cleanup_backup","db_dump":"backups/db-before-cleanup-YYYYMMDD.sql","postmark_export":"backups/postmark-activity-before-cleanup-YYYYMMDD.json","timestamp":"..."}
+```
 
-E. On the Dashboard Page , Please Make the 'Welcome: (Name)' For the First time Logged in User and 'Welcome Back: (Name)' When that User is a Repeating Logger to the Website Fully Function .
+---
 
-E.1. Please Use the Name on the Name of the 'Admin User' (Remember Admin User is Not a Name of a Person but Users with the Following Positions :
-- CEO (Chief Executive Officer)
-- Managing Director (MD)
-- Director
-- Founder
-- General Manager (GM)
-- Operations Manager
-- Finance Manager / CFO
-- Bookkeeper,) 
-For E.g if Simon Smith Login and his Position is Operations Manager, So that Means it Will say Welcome back, Simon and Welcome, Simon
+## Step 2 — Identify all records to delete (discover)
 
-E.2. On the Dashboard Page , On the  thats on the Topbar For Showing First Letters of the Name and Surname, It was Using the First Letter of the Name  and the First Letter of the Surname  From the company Page  > Company Details Tab , Please Change it To use the First Letters of the Name and First Letter of the Surname of that Admin User
+For each email address:
 
-Please Check if this Prompt Makes Sense:
+1. Query the database for any records linked to the user or the company created by that user:
 
-Payment and Billing:
+   * `users` table (or collection)
+   * `companies` table (company record created on signup)
+   * `verification_tokens` / `email_tokens`
+   * `invoices`, `quotations`, `clients`, `projects`, `inventory`, `employees`, `notifications`, `email_logs` (filter by `companyId` or `userId`)
+   * `subscriptions`, `billing records`, `payment_history`
+   * any background job records where `userId` or `companyId` is referenced (email jobs, queued tasks)
+2. Produce a list of found records with their DB ids and counts saved to `cleanup_audit/records-to-delete-<masked-email>.json` (mask email in filename if desired).
 
-F. Make The settings page (settings?tab=billing)  > Billing Tab  ,  Make the Overview Tab , Plans Tab  , Billing Tab  Fully Function: 
-- Overview Tab : Make the Subscription Status  inluding the 'Cancel subscription' ButtonFully Function, Make the 'Payment Method'  Fully Functioning including the Update , Make the 'Payment History'  Fully Function.
-- Plans Tab : the Plan Tab Must Look and Function like the payment Page , Because this Plan tab and payment Page are the Same.
-- Billing Tab : Remove the Billing Tab 
+Log each discovery:
 
-E.1. The 'New User' Must Recieve a Welcome Notification Popup on the Notification Bell  thats On the Dashboard Top Bar  
+```
+{"event":"discovery","emailMasked":"m***@yahoo.com","userId":"u_xxx","companyId":"c_xxx","tablesFound":{"users":1,"companies":1,"tokens":1,"invoices":0,...},"timestamp":"..."}
+```
 
-E.2. Immidiatelly when the 'New User' Gets on the Dashboard Page  for the First, The Count Down to the 30 Day Trial Should Begin, Starting From day 30 counting Down (Which Means the following Day it will Be 29, 28...) and it Must Show on the Top Bar of the Dashboard Page Trial and Days Left on that Trial
+---
 
-E.3. When it Gets to '5 Days Left' of the Trial it Must Send a Email Notification to the User On the company Page  > Company Details Tab, Because He is the First Person that Used his/Her Details For this Website and He/She is the Owner Of the Company, The Email is to Remind the User to Pay for Full Subscription and the Email must Have a Payment Link that will Direct the User to Pay
+## Step 3 — Delete local DB records (safe, auditable deletion)
 
-E.3.1 Please Create the '5 Days Left' of the Trial' Email Template and '5 days Grace' Period, this Template should Be Similar to Welcome Email Template, Birthday Email Template in Terms of Having a Logo, Signature, Design and the Following Infomation:
-Wilson Mokgethwa Moabelo
-Founder & CEO
-MOK Mzansi Books
-support@mokmzansibooks.com
-+27 64 550 4029
-81 Monokane Street
-Atteridgeville x17
-Pretoria, Gauteng 0006
+For each email address and its discovered records:
 
-E.4. When the user ( On Trial Pays for Subscription and the Payment is Successful, the User Must First Be Directed to ThankYou Page (ThankYou.tsx) and then to a Dashboard Page and Remember to remove Trial Days Count Down 'E.2' and Unlock All Features.
+1. Delete in the following safe order (transaction if possible):
 
-E.5. on the 30 Days Trial Users Must Limited to Some Features:
-- Free for 30 days
-- Up to 5 invoices per month
-- Up to 5 quotations per month
-- Up to 5 clients
-- Up to 5 projects
-- Up to 5 inventory items
-- Up to 5 suppliers
-- Up to 5 storage locations
-- Basic support
+   * Delete `verification_tokens` for that user.
+   * Delete `email_logs` and queued email jobs for that user/company.
+   * Delete `notifications` referencing that user/company.
+   * Delete child records that depend on company (invoices, clients, projects, employees, inventory, etc.).
+   * Delete the `company` record (if it was created by that user and is not shared).
+   * Delete the `user` record itself last.
+2. After deletion, immediately query those tables to confirm zero rows remain for that `userId` / `companyId`. Save results to `cleanup_audit/post_delete_checks-<masked-email>.json`.
+3. If any records cannot be deleted because of foreign key constraints or other errors, stop and record the error in `cleanup_audit/errors.json` and escalate rather than force an inconsistent state.
 
+Add a deletion log entry per user:
 
-E.6. The Billing Cycle of Subscriptions Must Run for 31 Days, The User Must be Automatically Biiled Every 31 Days  on the Monthy Subscription and 365 Days  for Annual Subscription from the Day the User Made Payment, 
+```
+{"event":"deleted_user_data","emailMasked":"m***@yahoo.com","userId":"u_xxx","companyId":"c_xxx","deletedTables":["tokens","email_logs","notifications","invoices","companies","users"],"timestamp":"..."}
+```
 
-E.7. In a Case where the User Payment is Unsuccesful at the End Of the  Trial or the User was Previously Subscribing then User Must Be Given 5 Days Grace Period
+**Important:** If any of these users are linked to shared company resources that must remain (e.g., they were added incorrectly to an admin company that should stay), **do not delete the shared company** — instead remove the user record and detach references. Log your decision.
 
-E.8. On the 5 Days Grace, Continue with the Debit once a day and Send a Email That Reminds the User to Subscribe From Day 1 to Day 5 of the Grace Period, This Payment Reminders Must Stop Only if the User Re- Subscribes (Pays Again), 
+---
 
-E.9.  In a case the user Payments Bounced and 5 Days Grace has Pased Stop the Payment Reminder Emails and Re-trying to Debit, then that User Must Get a Padlocks on all the Pages On the Navigation Bar so that the User Can Only Have Access to the Dashboard Page  Only and a Banner on the Top Bar  on the Dashboard page  that says 'Please Pay to Access for Full Function' and Must Have a Notification on the Notification Bell that Say Update Card Details With a Link that Takes the User to settings Page (settings?tab=billing) > Billing Tab > Overview Tab, Payment Method , Update 
+## Step 4 — Postmark cleanup (remove or unblock addresses where possible)
 
-Note:
-2 Types Of Subscription:
-31 Days = R60
-365 Days = R684.00 Has a Discount of 5%
+1. Using Postmark test server/dashboard/API, search for the three email addresses:
+
+   * Export any activity rows (already done in pre-cleanup).
+   * Check if the addresses are on Postmark suppression lists (bounces, complaints, unsubscribes).
+2. If addresses are present on suppression lists and you want them reusable:
+
+   * Remove them from the suppression lists (Postmark provides suppression management). Document the action.
+   * If they are bounces or permanent failures due to invalid addresses, DO NOT attempt to force-send — note the finding and advise using a different address OR correct the cause.
+3. If the Postmark server has message copies tied to these addresses, note that Activity cannot be fully erased via Postmark (activity is an audit trail). Document what Postmark allows you to change vs what is immutable.
+4. Record Postmark responses and save to `cleanup_audit/postmark-changes.json`.
+
+Log Postmark actions:
+
+```
+{"event":"postmark_cleanup","emailMasked":"m***@gmail.com","action":"removed_from_suppression|no_action_needed|bounce_recorded","postmark_detail":"...","timestamp":"..."}
+```
+
+---
+
+## Step 5 — API keys & secrets housekeeping
+
+1. Search your local envs and secrets manager for any API keys that are specifically tied to the deleted test tenants or user-owned resources (rare, but check `email` servers, webhook tokens, per-tenant API keys).
+2. If you find any API keys created under those user accounts:
+
+   * Revoke the key immediately and log the revoke event.
+   * Rotate the key(s) if they are used in dev workflows. Update local dev `.env`/secret store accordingly.
+   * If keys were accidentally committed, remove them from Git history (BFG/git filter-branch) **locally**, rotate keys in providers, and document the rotation.
+3. For Postmark: if any server tokens or senders were created exclusively for those accounts, decide whether to keep them (if used elsewhere) or delete them. Document the change.
+4. Save `cleanup_audit/api_key_rotation.json` listing keys revoked and new keys created (mask actual values).
+
+Log API key actions:
+
+```
+{"event":"api_key_revoked","provider":"postmark|paystack|github", "keyId":"pm_***","reason":"account_cleanup","timestamp":"..."}
+```
+
+---
+
+## Step 6 — Webhooks & background jobs
+
+1. Remove or reassign any webhook endpoints, scheduled jobs, or background workers that were pinned to the deleted user/company.
+2. If there were scheduled retry jobs (payment retries, email retries) for those users, cancel them and log job cancellations to `cleanup_audit/job_cancellations.json`.
+
+Log job cancellations:
+
+```
+{"event":"job_cancelled","jobId":"j_xxx","reason":"cleanup_deleted_user","timestamp":"..."}
+```
+
+---
+
+## Step 7 — Post-clean checks & validation (MUST do)
+
+1. Confirm `users` table has no rows for the three emails (query & save result).
+2. Confirm `companies` table has no rows for the deleted companyIds (or if shared, that the user references were removed).
+3. Confirm `verification_tokens` removed.
+4. Confirm `email_logs` & `notifications` removed for those users.
+5. Confirm Postmark suppression list entries removed (if action taken).
+6. Confirm any local stored API keys that were revoked are no longer present in `.env` or local secret store.
+
+Record all checks to `cleanup_audit/post_cleanup_checks.json` with pass/fail flags.
+
+Example log:
+
+```
+{"event":"post_cleanup_check","emailMasked":"m***@yahoo.com","usersRemaining":0,"companiesRemaining":0,"tokensRemaining":0,"emailLogsRemaining":0,"postmarkSuppressionPresent":false,"timestamp":"..."}
+```
+
+---
+
+## Step 8 — Deliverables & evidence (what to return)
+
+Put all artifacts under `cleanup_audit/` and provide the following deliverables:
+
+1. `cleanup_audit/final_report.md` — explanation of root cause (why these addresses existed), steps performed, and summary of results.
+2. `cleanup_audit/logs.json` — structured log of events (pre_backup, discovery, deletes, postmark changes, API key revocations, errors).
+3. `cleanup_audit/backups/` — DB dump and Postmark activity export (pre-cleanup).
+4. `cleanup_audit/screenshots-before/` and `cleanup_audit/screenshots-after/` — showing UI before & after (team lists, hr-management, notifications).
+5. `cleanup_audit/records-to-delete-*.json` — record lists that were removed for each address.
+6. `cleanup_audit/post_cleanup_checks.json` — pass/fail checks for each record type.
+7. `cleanup_audit/api_key_rotation.json` — list of API keys revoked/rotated (masked).
+8. `cleanup_audit/files_touched.txt` — any code/config files changed (note: prefer no code change; this should be data cleanup).
+
+Final log entry example:
+
+```
+{"event":"cleanup_complete","emails":["m***@yahoo.com","c***@gmail.com","w***@yahoo.com"],"auditPath":"cleanup_audit/","timestamp":"..."}
+```
+
+---
+
+## Safety & rollback
+
+* If any delete step fails or produces unexpected results, immediately revert using DB backup and log the rollback attempt.
+* Keep a copy of the DB backup offline for at least 7 days after cleanup, then archive or delete per your retention policy.
+* If a deletion inadvertently removed shared data, restore from backup and escalate.
+
+---
+
+## Notes about Postmark limitations
+
+* Postmark **Activity** (sent messages) is an audit log and typically cannot be permanently deleted by the user. You can export and archive it, and you can remove email addresses from **suppression** lists so they are again deliverable. Document what Postmark allows and what it does not.
+* If an email is permanently bounced at Postmark due to a real bounce, re-using the email address may still fail until the underlying cause (mailbox) is resolved. If Postmark shows a "permanent bounce", recommend using a different testing address or resolving the mailbox with the recipient provider.
+
+---
+
+## Quick acceptance criteria (all must be true)
+
+* The three email addresses have no user or company records remaining in the local DB.
+* `verification_tokens`, `email_logs`, and queued email jobs for those addresses are removed.
+* Postmark suppression entries for those addresses are removed (if applicable) or documented why not possible.
+* Any API keys tied specifically to those accounts were revoked and rotated (documented).
+* All steps and evidence are saved under `cleanup_audit/` and logs show the deletion events.
+* A rollback plan and DB backup exist.
+
+---
+Execute exactly as stated, produce the deliverables, and share `cleanup_audit/final_report.md` plus the `cleanup_audit/logs.json` once done.

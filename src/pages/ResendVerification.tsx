@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,10 +8,21 @@ import { AlertCircle, Mail } from 'lucide-react';
 import { logAuditEvent } from '@/services/loggingService';
 
 const ResendVerification = () => {
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Check if email was passed from signup page
+  useEffect(() => {
+    if (location.state?.email) {
+      setEmail(location.state.email);
+    }
+    if (location.state?.message) {
+      setMessage(location.state.message);
+    }
+  }, [location.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

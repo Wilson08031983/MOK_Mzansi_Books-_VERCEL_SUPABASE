@@ -1,0 +1,17 @@
+{
+  // PostgresTools configuration for Supabase
+  "db": {
+    "host": "ulduqjddmhnwvdeeldsb.supabase.co",
+    "port": 5432,
+    "database": "postgres",
+    "username": "postgres",
+    "password": "gn+RXwSsVHKjcukg3NsCcC7xh10vd+61lFlFntOhyOe5RcJUdHkM/pAsLQlBcZJLNogx3KGqERt/tmrlnTZg1g==",
+    "ssl": true
+  },
+  "rules": {
+    "pg(syntax)": "error",
+    "pg(type-check)": "error",
+    "pg(lint)": "warn"
+  },
+  "schemas": ["public", "auth"]
+}

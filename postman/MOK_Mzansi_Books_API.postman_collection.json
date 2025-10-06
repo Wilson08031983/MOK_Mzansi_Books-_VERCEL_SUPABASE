@@ -1,0 +1,818 @@
+{
+  "info": {
+    "name": "MOK Mzansi Books API",
+    "description": "Complete API collection for MOK Mzansi Books platform including authentication, user management, billing, emails, and webhooks",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "User authentication and registration endpoints",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"companyName\": \"Test Company\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "signup"]
+            },
+            "description": "Register a new user account with email verification"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verification_token}}\",\n  \"userId\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/verify-email",
+              "host": ["{{base_url}}"],
+              "path": ["api", "verify-email"]
+            },
+            "description": "Verify user email address using verification token"
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resend-verification",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resend-verification"]
+            },
+            "description": "Resend email verification token"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Billing & Payments",
+      "description": "Billing, subscription, and payment management endpoints",
+      "item": [
+        {
+          "name": "Get Billing Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/billing/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "billing", "me"]
+            },
+            "description": "Get current user's billing information and subscription status"
+          },
+          "response": []
+        },
+        {
+          "name": "Start Trial",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{plan_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/billing/start-trial",
+              "host": ["{{base_url}}"],
+              "path": ["api", "billing", "start-trial"]
+            },
+            "description": "Start a trial subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/billing/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["api", "billing", "cancel"]
+            },
+            "description": "Cancel current subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/billing/resume",
+              "host": ["{{base_url}}"],
+              "path": ["api", "billing", "resume"]
+            },
+            "description": "Resume a cancelled subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "Charge Default Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": {{charge_amount}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/billing/charge-default",
+              "host": ["{{base_url}}"],
+              "path": ["api", "billing", "charge-default"]
+            },
+            "description": "Charge the default payment method"
+          },
+          "response": []
+        },
+        {
+          "name": "Paystack Verify Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reference\": \"{{payment_reference}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/paystack-verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paystack-verify"]
+            },
+            "description": "Verify Paystack payment transaction"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Email Services",
+      "description": "Email sending and template management endpoints",
+      "item": [
+        {
+          "name": "Send Welcome Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"firstName\": \"{{first_name}}\",\n  \"companyName\": \"{{company_name}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/welcome",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "welcome"]
+            },
+            "description": "Send welcome email to new users"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Verification Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"token\": \"{{verification_token}}\",\n  \"firstName\": \"{{first_name}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/verification",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "verification"]
+            },
+            "description": "Send email verification token"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Password Reset Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"resetToken\": \"{{reset_token}}\",\n  \"firstName\": \"{{first_name}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/password-reset",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "password-reset"]
+            },
+            "description": "Send password reset email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Invoice Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceId\": \"{{invoice_id}}\",\n  \"to\": \"{{recipient_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/invoice",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "invoice"]
+            },
+            "description": "Send invoice via email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Confirmation Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"subject\": \"{{email_subject}}\",\n  \"message\": \"{{email_message}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/confirmation",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "confirmation"]
+            },
+            "description": "Send confirmation email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Account Lockout Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"firstName\": \"{{first_name}}\",\n  \"lockoutReason\": \"{{lockout_reason}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/account-lockout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "account-lockout"]
+            },
+            "description": "Send account lockout notification email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Account Deletion Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"firstName\": \"{{first_name}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/account-deletion",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "account-deletion"]
+            },
+            "description": "Send account deletion confirmation email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Trial Reminder Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/send-trial-reminder",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "send-trial-reminder"]
+            },
+            "description": "Send trial reminder email to user"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Grace Period Reminder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/grace-period-reminder",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "grace-period-reminder"]
+            },
+            "description": "Send grace period reminder email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Login Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"firstName\": \"{{first_name}}\",\n  \"loginTime\": \"{{login_time}}\",\n  \"ipAddress\": \"{{ip_address}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/login-notification",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "login-notification"]
+            },
+            "description": "Send login notification email"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Invitation Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"{{recipient_email}}\",\n  \"inviterName\": \"{{inviter_name}}\",\n  \"companyName\": \"{{company_name}}\",\n  \"inviteToken\": \"{{invite_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/invitation",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "invitation"]
+            },
+            "description": "Send invitation email to new team member"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Quotation Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quotationId\": \"{{quotation_id}}\",\n  \"to\": \"{{recipient_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/emails/quotation",
+              "host": ["{{base_url}}"],
+              "path": ["api", "emails", "quotation"]
+            },
+            "description": "Send quotation via email"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Business Operations",
+      "description": "Client, invoice, and quotation management endpoints",
+      "item": [
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{client_name}}\",\n  \"email\": \"{{client_email}}\",\n  \"phone\": \"{{client_phone}}\",\n  \"address\": \"{{client_address}}\",\n  \"companyName\": \"{{client_company}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "create"]
+            },
+            "description": "Create a new client record"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"invoiceNumber\": \"{{invoice_number}}\",\n  \"issueDate\": \"{{issue_date}}\",\n  \"dueDate\": \"{{due_date}}\",\n  \"items\": [\n    {\n      \"description\": \"{{item_description}}\",\n      \"quantity\": {{item_quantity}},\n      \"unitPrice\": {{unit_price}}\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/invoices/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "create"]
+            },
+            "description": "Create a new invoice"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Quotation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"quotationNumber\": \"{{quotation_number}}\",\n  \"issueDate\": \"{{issue_date}}\",\n  \"validUntil\": \"{{valid_until}}\",\n  \"items\": [\n    {\n      \"description\": \"{{item_description}}\",\n      \"quantity\": {{item_quantity}},\n      \"unitPrice\": {{unit_price}}\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/quotations/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "quotations", "create"]
+            },
+            "description": "Create a new quotation"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Monitoring & Analytics",
+      "description": "System monitoring and analytics endpoints",
+      "item": [
+        {
+          "name": "Get Email Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/monitoring/email-stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "monitoring", "email-stats"]
+            },
+            "description": "Get email delivery statistics and metrics"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "description": "Webhook endpoints for external service integrations",
+      "item": [
+        {
+          "name": "Postmark Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Postmark-Signature",
+                "value": "{{postmark_signature}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"RecordType\": \"Delivery\",\n  \"MessageID\": \"{{message_id}}\",\n  \"DeliveredAt\": \"{{delivered_at}}\",\n  \"Details\": \"{{delivery_details}}\",\n  \"Tag\": \"{{message_tag}}\",\n  \"Recipient\": \"{{recipient_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/postmark-webhook",
+              "host": ["{{base_url}}"],
+              "path": ["api", "postmark-webhook"]
+            },
+            "description": "Handle Postmark email delivery webhooks"
+          },
+          "response": []
+        },
+        {
+          "name": "Paystack Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Paystack-Signature",
+                "value": "{{paystack_signature}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"charge.success\",\n  \"data\": {\n    \"id\": {{transaction_id}},\n    \"reference\": \"{{payment_reference}}\",\n    \"amount\": {{amount}},\n    \"currency\": \"ZAR\",\n    \"status\": \"success\",\n    \"customer\": {\n      \"email\": \"{{customer_email}}\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/paystack-webhook",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paystack-webhook"]
+            },
+            "description": "Handle Paystack payment webhooks"
+          },
+          "response": []
+        },
+        {
+          "name": "Mailjet Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"sent\",\n  \"time\": {{timestamp}},\n  \"MessageID\": {{message_id}},\n  \"email\": \"{{recipient_email}}\",\n  \"mj_campaign_id\": \"{{campaign_id}}\",\n  \"mj_contact_id\": \"{{contact_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/mailjet-webhook",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mailjet-webhook"]
+            },
+            "description": "Handle Mailjet email webhooks"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Utility",
+      "description": "Utility endpoints for logos and assets",
+      "item": [
+        {
+          "name": "Get Logo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/logo",
+              "host": ["{{base_url}}"],
+              "path": ["api", "logo"]
+            },
+            "description": "Get company logo"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Logo (Alternative)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/get-logo",
+              "host": ["{{base_url}}"],
+              "path": ["api", "get-logo"]
+            },
+            "description": "Alternative endpoint to get company logo"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set timestamp for requests",
+          "pm.globals.set('timestamp', Date.now());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script for all requests",
+          "pm.test('Response time is less than 5000ms', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});",
+          "",
+          "pm.test('Response has valid JSON structure', function () {",
+          "    try {",
+          "        pm.response.json();",
+          "        pm.test.skip();",
+          "    } catch (e) {",
+          "        // Skip JSON validation for non-JSON responses",
+          "    }",
+          "});",
+          "",
+          "// Log response for debugging",
+          "console.log('Response Status:', pm.response.status);",
+          "console.log('Response Time:', pm.response.responseTime + 'ms');"
+        ]
+      }
+    }
+  ]
+}

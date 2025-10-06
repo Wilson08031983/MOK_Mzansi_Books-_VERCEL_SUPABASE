@@ -1,0 +1,582 @@
+{
+  "info": {
+    "name": "MOK Mzansi Books - Authentication Tests",
+    "description": "Automated test collection for authentication endpoints including signup, verification, and error handling",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "{{base_url}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "User Registration Flow",
+      "description": "Complete user registration and verification flow",
+      "item": [
+        {
+          "name": "Sign Up - Valid Data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201 or 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "pm.test('Response has success message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('success');",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Response contains user data', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('user');",
+                  "    pm.expect(responseJson.user).to.have.property('id');",
+                  "    pm.expect(responseJson.user).to.have.property('email');",
+                  "});",
+                  "",
+                  "pm.test('User email matches request', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const requestBody = JSON.parse(pm.request.body.raw);",
+                  "    pm.expect(responseJson.user.email).to.equal(requestBody.email);",
+                  "});",
+                  "",
+                  "// Store user ID for subsequent tests",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.environment.set('user_id', responseJson.user.id);",
+                  "    pm.environment.set('test_user_email', responseJson.user.email);",
+                  "}",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique email for testing",
+                  "const timestamp = Date.now();",
+                  "const testEmail = `test-${timestamp}@mokmzansibooks.com`;",
+                  "pm.environment.set('unique_test_email', testEmail);",
+                  "",
+                  "// Generate strong password",
+                  "const password = 'TestPassword123!';",
+                  "pm.environment.set('unique_test_password', password);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{unique_test_email}}\",\n  \"password\": \"{{unique_test_password}}\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"companyName\": \"Test Company Ltd\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "signup"]
+            }
+          }
+        },
+        {
+          "name": "Sign Up - Invalid Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Response contains error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    pm.expect(responseJson.error).to.include('email');",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"invalid-email\",\n  \"password\": \"TestPassword123!\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"companyName\": \"Test Company\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "signup"]
+            }
+          }
+        },
+        {
+          "name": "Sign Up - Weak Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.expect(pm.response.code).to.equal(400);",
+                  "});",
+                  "",
+                  "pm.test('Response contains password error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    pm.expect(responseJson.error.toLowerCase()).to.include('password');",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique email for this test",
+                  "const timestamp = Date.now();",
+                  "const testEmail = `weak-password-test-${timestamp}@mokmzansibooks.com`;",
+                  "pm.environment.set('weak_password_test_email', testEmail);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{weak_password_test_email}}\",\n  \"password\": \"123\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"companyName\": \"Test Company\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "signup"]
+            }
+          }
+        },
+        {
+          "name": "Sign Up - Duplicate Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409 or 400', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 409]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains duplicate email error', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('email') && (msg.includes('exists') || msg.includes('already') || msg.includes('duplicate'));",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{unique_test_email}}\",\n  \"password\": \"TestPassword123!\",\n  \"firstName\": \"Duplicate\",\n  \"lastName\": \"User\",\n  \"companyName\": \"Duplicate Company\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "signup"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Email Verification Flow",
+      "description": "Email verification and resend functionality tests",
+      "item": [
+        {
+          "name": "Verify Email - Valid Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test('Response indicates successful verification', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('success');",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Response contains verification message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    pm.expect(responseJson.message.toLowerCase()).to.include('verified');",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate a mock verification token for testing",
+                  "// In real scenarios, this would come from the signup response or email",
+                  "const mockToken = 'mock-verification-token-' + Date.now();",
+                  "pm.environment.set('mock_verification_token', mockToken);",
+                  "",
+                  "// Note: This test may fail in real scenarios without a valid token",
+                  "// It's designed to test the endpoint structure and response format"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{mock_verification_token}}\",\n  \"userId\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/verify-email",
+              "host": ["{{base_url}}"],
+              "path": ["api", "verify-email"]
+            }
+          }
+        },
+        {
+          "name": "Verify Email - Invalid Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 or 404', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('token') || msg.includes('invalid') || msg.includes('expired');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"invalid-token-12345\",\n  \"userId\": \"{{user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/verify-email",
+              "host": ["{{base_url}}"],
+              "path": ["api", "verify-email"]
+            }
+          }
+        },
+        {
+          "name": "Resend Verification - Valid Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "",
+                  "pm.test('Response indicates email sent', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('success');",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Response contains appropriate message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('message');",
+                  "    const message = responseJson.message.toLowerCase();",
+                  "    pm.expect(message).to.satisfy(function(msg) {",
+                  "        return msg.includes('sent') || msg.includes('resent') || msg.includes('verification');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(10000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{unique_test_email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resend-verification",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resend-verification"]
+            }
+          }
+        },
+        {
+          "name": "Resend Verification - Invalid Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 or 404', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+                  "});",
+                  "",
+                  "pm.test('Response contains error message', function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson).to.have.property('error');",
+                  "    const errorMessage = responseJson.error.toLowerCase();",
+                  "    pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "        return msg.includes('email') || msg.includes('not found') || msg.includes('invalid');",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nonexistent@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/resend-verification",
+              "host": ["{{base_url}}"],
+              "path": ["api", "resend-verification"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rate Limiting Tests",
+      "description": "Test rate limiting functionality",
+      "item": [
+        {
+          "name": "Multiple Signup Attempts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// This test should be run multiple times to trigger rate limiting",
+                  "pm.test('Response is handled appropriately', function () {",
+                  "    // Accept both success and rate limit responses",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 429]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 429) {",
+                  "    pm.test('Rate limit response contains appropriate message', function () {",
+                  "        const responseJson = pm.response.json();",
+                  "        pm.expect(responseJson).to.have.property('error');",
+                  "        const errorMessage = responseJson.error.toLowerCase();",
+                  "        pm.expect(errorMessage).to.satisfy(function(msg) {",
+                  "            return msg.includes('rate') || msg.includes('limit') || msg.includes('too many');",
+                  "        });",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.test('Response time is acceptable', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate unique email for each attempt",
+                  "const timestamp = Date.now();",
+                  "const randomNum = Math.floor(Math.random() * 1000);",
+                  "const testEmail = `rate-limit-test-${timestamp}-${randomNum}@mokmzansibooks.com`;",
+                  "pm.environment.set('rate_limit_test_email', testEmail);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{rate_limit_test_email}}\",\n  \"password\": \"TestPassword123!\",\n  \"firstName\": \"Rate\",\n  \"lastName\": \"Limit\",\n  \"companyName\": \"Rate Limit Test Co\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "signup"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script",
+          "console.log('Running authentication test:', pm.info.requestName);",
+          "pm.globals.set('test_start_time', Date.now());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script",
+          "const testDuration = Date.now() - pm.globals.get('test_start_time');",
+          "console.log('Test completed in:', testDuration + 'ms');",
+          "",
+          "// Common security headers check",
+          "pm.test('Security headers are present', function () {",
+          "    // Check for common security headers",
+          "    const headers = pm.response.headers;",
+          "    ",
+          "    // These tests are optional as not all endpoints may have all headers",
+          "    if (headers.has('X-Content-Type-Options')) {",
+          "        pm.expect(headers.get('X-Content-Type-Options')).to.equal('nosniff');",
+          "    }",
+          "    ",
+          "    if (headers.has('X-Frame-Options')) {",
+          "        pm.expect(headers.get('X-Frame-Options')).to.be.oneOf(['DENY', 'SAMEORIGIN']);",
+          "    }",
+          "});",
+          "",
+          "// Log important response data for debugging",
+          "if (pm.response.code >= 400) {",
+          "    console.log('Error Response:', pm.response.text());",
+          "}"
+        ]
+      }
+    }
+  ]
+}

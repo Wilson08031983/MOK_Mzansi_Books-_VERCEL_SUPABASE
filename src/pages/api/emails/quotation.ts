@@ -21,6 +21,10 @@ export default async function handler(
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  if (!process.env.POSTMARK_SERVER_TOKEN) {
+    return res.status(500).json({ message: 'Postmark server token not configured' });
+  }
+
   const { to, subject, quotationNumber, clientName, pdfBase64, pdfFileName } = req.body || {};
 
   if (!to || !quotationNumber || !clientName || !pdfBase64 || !pdfFileName) {

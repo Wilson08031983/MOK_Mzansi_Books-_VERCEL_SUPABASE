@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-10-05T18:54:29.130Z",
+  "emails": [
+    "mokgethwamoabelo@gmail.com",
+    "mokgethwamoabelo@icloud.com",
+    "mokgethwamoabelo@yahoo.com"
+  ],
+  "actions": [
+    {
+      "step": "list_suppressions",
+      "found": 0,
+      "targets_in_list": []
+    },
+    {
+      "step": "delete_skip",
+      "reason": "none_in_suppression"
+    }
+  ]
+}

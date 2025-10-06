@@ -34,20 +34,21 @@
     <div class="test-section">
         <h3>📝 Test Signup</h3>
         <form id="signupForm">
-            <label>First Name: <input type="text" id="firstName" value="Test" required></label>
-            <label>Surname: <input type="text" id="surname" value="User" required></label>
-            <label>Company Name: <input type="text" id="companyName" value="Test Company Pty Ltd" required></label>
-            <label>Email: <input type="email" id="email" value="test@example.com" required></label>
+            <label>First Name: <input type="text" id="firstName" name="firstName" value="Test" required></label>
+            <label>Surname: <input type="text" id="surname" name="surname" value="User" required></label>
+            <label>Company Name: <input type="text" id="companyName" name="companyName" value="Test Company Pty Ltd" required></label>
+            <label>Email: <input type="email" id="email" name="email" value="mokgethwamoabelo@gmail.com" required></label>
             <label>Position:
-                <select id="position" required>
-                    <option value="CEO">CEO</option>
+                <select id="position" name="position" required>
+                    <option value="">Select Position</option>
+                    <option value="CEO" selected>CEO</option>
                     <option value="Director">Director</option>
                     <option value="Manager">Manager</option>
                     <option value="Staff">Staff</option>
                 </select>
             </label>
-            <label>Password: <input type="password" id="password" value="TestPass123!" required></label>
-            <label>Confirm Password: <input type="password" id="confirmPassword" value="TestPass123!" required></label>
+            <label>Password: <input type="password" id="password" name="password" value="TestPass123!" required></label>
+            <label>Confirm Password: <input type="password" id="confirmPassword" name="confirmPassword" value="TestPass123!" required></label>
             <button type="submit">Test Signup</button>
         </form>
         <div id="signupResult" class="result" style="display: none;"></div>
@@ -56,8 +57,8 @@
     <div class="test-section">
         <h3>🔗 Test Email Verification</h3>
         <form id="verifyForm">
-            <label>Token: <input type="text" id="verifyToken" placeholder="Paste token from email" required></label>
-            <label>User ID: <input type="text" id="verifyUserId" placeholder="Paste user ID from email" required></label>
+            <label>Token: <input type="text" id="verifyToken" name="token" placeholder="Paste token from email" required></label>
+            <label>User ID: <input type="text" id="verifyUserId" name="userId" placeholder="Paste user ID from email" required></label>
             <button type="submit">Test Verification</button>
         </form>
         <div id="verifyResult" class="result" style="display: none;"></div>
@@ -66,7 +67,7 @@
     <div class="test-section">
         <h3>📧 Test Resend Verification</h3>
         <form id="resendForm">
-            <label>Email: <input type="email" id="resendEmail" value="test@example.com" required></label>
+            <label>Email: <input type="email" id="resendEmail" name="email" value="mokgethwamoabelo@gmail.com" required></label>
             <button type="submit">Resend Verification</button>
         </form>
         <div id="resendResult" class="result" style="display: none;"></div>
@@ -135,7 +136,13 @@
             resultDiv.style.display = 'none';
 
             const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
+            let data = Object.fromEntries(formData);
+
+            // Extract token from URL if full URL is provided
+            if (data.token && data.token.includes('?token=')) {
+                const url = new URL(data.token);
+                data.token = url.searchParams.get('token') || data.token;
+            }
 
             try {
                 const response = await fetch('/api/verify-email', {

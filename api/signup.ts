@@ -1,10 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import bcrypt from 'bcryptjs';
 import { Client } from 'postmark';
+import { createClient } from '@supabase/supabase-js';
 import { SignupRequest, SignupResponse } from '../src/types/auth';
-import { createVerificationToken } from '../src/services/tokenService';
+import { createVerificationToken, createVerificationTokenWithRaw } from '../src/services/tokenService';
+import { randomUUID } from 'crypto';
 import { logAuditEvent, logEmailEvent } from '../src/services/loggingService';
 import { sendVerificationEmail } from '../src/services/emailService';
+import { supabaseServer } from '../src/integrations/supabase/serverClient';
 
 // Initialize Postmark client
 const postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
@@ -13,68 +15,65 @@ const postmarkClient = new Client(process.env.POSTMARK_SERVER_TOKEN || '');
 const signupAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 
-// In-memory storage for development (replace with database in production)
-let users: any[] = [];
+// In-memory storage for companies (will be replaced with Supabase table later)
 let companies: any[] = [];
-let verificationTokens: any[] = [];
 
 /**
- * Validates signup request data
+ * Validate signup request data
  */
 function validateSignupRequest(data: any): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  if (!data.firstName || typeof data.firstName !== 'string' || data.firstName.trim().length < 1) {
-    errors.push('First name is required');
+  if (!data.email || typeof data.email !== 'string') {
+    errors.push('Email is required');
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+    errors.push('Invalid email format');
   }
 
-  if (!data.surname || typeof data.surname !== 'string' || data.surname.trim().length < 1) {
-    errors.push('Surname is required');
-  }
-
-  if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length < 1) {
-    errors.push('Company name is required');
-  }
-
-  if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-    errors.push('Valid email is required');
-  }
-
-  if (!data.position || typeof data.position !== 'string') {
-    errors.push('Position is required');
-  }
-
-  if (!data.password || typeof data.password !== 'string' || data.password.length < 8) {
+  if (!data.password || typeof data.password !== 'string') {
+    errors.push('Password is required');
+  } else if (data.password.length < 8) {
     errors.push('Password must be at least 8 characters long');
   }
 
-  if (data.password !== data.confirmPassword) {
+  if (!data.confirmPassword || typeof data.confirmPassword !== 'string') {
+    errors.push('Password confirmation is required');
+  } else if (data.password !== data.confirmPassword) {
     errors.push('Passwords do not match');
   }
 
-  return { valid: errors.length === 0, errors };
-}
-
-/**
- * Checks if email already exists and is verified
- */
-function checkEmailExists(email: string): { exists: boolean; verified: boolean; userId?: string } {
-  try {
-    const existingUser = users.find((user: any) => user.email.toLowerCase() === email.toLowerCase());
-
-    if (existingUser) {
-      return { exists: true, verified: !!existingUser.verified, userId: existingUser.id };
-    }
-
-    return { exists: false, verified: false };
-  } catch (error) {
-    console.error('Error checking email existence:', error);
-    return { exists: false, verified: false };
+  if (!data.firstName || typeof data.firstName !== 'string' || data.firstName.trim().length === 0) {
+    errors.push('First name is required');
   }
+
+  if (!data.surname || typeof data.surname !== 'string' || data.surname.trim().length === 0) {
+    errors.push('Surname is required');
+  }
+
+  if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length === 0) {
+    errors.push('Company name is required');
+  }
+
+  if (!data.position || typeof data.position !== 'string' || data.position.trim().length === 0) {
+    errors.push('Position is required');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
 }
 
 /**
- * Creates a new company
+ * Check if email already exists in Supabase auth
+ */
+async function checkEmailExists(email: string): Promise<{ exists: boolean; verified: boolean; userId?: string }> {
+  // Without admin APIs (legacy keys disabled), skip pre-check and let signup handle duplicates
+  return { exists: false, verified: false };
+}
+
+/**
+ * Create a new company
  */
 function createCompany(companyData: {
   name: string;
@@ -82,101 +81,126 @@ function createCompany(companyData: {
   ownerUserId: string;
 }): { success: boolean; companyId?: string; error?: string } {
   try {
-    // Check if company name already exists
-    const existingCompany = companies.find((c: any) => c.name.toLowerCase() === companyData.name.toLowerCase());
-    if (existingCompany) {
-      return { success: false, error: 'Company name already exists' };
-    }
-
     const companyId = `company_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const company = {
+    
+    const newCompany = {
       id: companyId,
       name: companyData.name,
-      ownerUserId: companyData.ownerUserId,
       contactEmail: companyData.contactEmail,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      ownerUserId: companyData.ownerUserId,
+      createdAt: new Date().toISOString()
     };
-
-    companies.push(company);
+    
+    companies.push(newCompany);
     return { success: true, companyId };
   } catch (error) {
     console.error('Error creating company:', error);
-    return { success: false, error: 'Failed to create company' };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 /**
- * Creates a new user
+ * Create user using Supabase auth
  */
-function createUser(userData: {
+async function createUser(userData: {
   companyId: string;
   email: string;
   firstName: string;
   surname: string;
   position: string;
-  passwordHash: string;
-}): { success: boolean; userId?: string; error?: string } {
+  password: string;
+}): Promise<{ success: boolean; userId?: string; error?: string }> {
   try {
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const user = {
-      id: userId,
-      companyId: userData.companyId,
-      email: userData.email.toLowerCase(),
-      firstName: userData.firstName,
-      surname: userData.surname,
-      position: userData.position,
-      passwordHash: userData.passwordHash,
-      verified: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    // Use publishable/anon key for public signup; legacy admin APIs may be disabled
+    const SUPABASE_URL = process.env.SUPABASE_URL || '';
+    const PUBLIC_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+    const publicClient = createClient(SUPABASE_URL, PUBLIC_KEY);
 
-    users.push(user);
-    return { success: true, userId };
+    const { data, error } = await publicClient.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: {
+          firstName: userData.firstName,
+          surname: userData.surname,
+          position: userData.position,
+          companyId: userData.companyId
+        }
+      }
+    });
+
+    if (error) {
+      console.error('Error creating user in Supabase (signUp):', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data.user) {
+      return { success: false, error: 'Failed to create user' };
+    }
+
+    return { success: true, userId: data.user.id };
   } catch (error) {
     console.error('Error creating user:', error);
-    return { success: false, error: 'Failed to create user' };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 /**
- * Stores a verification token
+ * Store verification token in Supabase
  */
-function storeVerificationToken(token: any): void {
+async function storeVerificationToken(token: any): Promise<void> {
   try {
-    verificationTokens.push(token);
+    console.log('Token object received:', JSON.stringify(token, null, 2));
+    console.log('Token hash value:', token.tokenHash);
+    
+    const { error } = await supabaseServer
+      .from('verification_tokens')
+      .insert({
+        id: token.id,
+        user_id: token.userId,
+        token_hash: token.tokenHash,
+        purpose: token.purpose,
+        expires_at: token.expiresAt,
+        created_at: token.createdAt
+      });
+
+    if (error) {
+      console.error('Error storing verification token:', error);
+      throw new Error(`Failed to store verification token: ${error.message}`);
+    }
   } catch (error) {
     console.error('Error storing verification token:', error);
+    throw error;
   }
 }
 
 /**
- * Checks rate limiting for signup attempts
+ * Check rate limiting for signup attempts
  */
 function checkRateLimit(identifier: string): { allowed: boolean; waitTime?: number } {
   const now = Date.now();
-  const attempt = signupAttempts.get(identifier);
+  const attempts = signupAttempts.get(identifier);
 
-  if (!attempt) {
+  if (!attempts) {
     signupAttempts.set(identifier, { count: 1, lastAttempt: now });
     return { allowed: true };
   }
 
-  // Reset count if more than 1 hour has passed
-  if (now - attempt.lastAttempt > 60 * 60 * 1000) {
+  // Reset if enough time has passed
+  if (now - attempts.lastAttempt > RESEND_COOLDOWN_MS) {
     signupAttempts.set(identifier, { count: 1, lastAttempt: now });
     return { allowed: true };
   }
 
-  // Allow max 5 attempts per hour
-  if (attempt.count >= 5) {
-    const waitTime = 60 * 60 * 1000 - (now - attempt.lastAttempt);
+  // Check if too many attempts
+  if (attempts.count >= 3) {
+    const waitTime = RESEND_COOLDOWN_MS - (now - attempts.lastAttempt);
     return { allowed: false, waitTime };
   }
 
-  attempt.count++;
-  attempt.lastAttempt = now;
+  // Increment attempts
+  attempts.count++;
+  attempts.lastAttempt = now;
   return { allowed: true };
 }
 
@@ -184,43 +208,16 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  // Only allow POST requests
   if (req.method !== 'POST') {
-    logAuditEvent('signup.attempt', undefined, undefined, req.url, req.socket.remoteAddress, req.headers['user-agent'], 0, {
-      method: req.method,
-      reason: 'method_not_allowed'
-    });
-    return res.status(405).json({ success: false, message: 'Method not allowed' });
-  }
-
-  // Get client IP for rate limiting
-  const clientIP = req.socket.remoteAddress || req.headers['x-forwarded-for'] as string || 'unknown';
-
-  // Rate limiting check
-  const rateLimitResult = checkRateLimit(clientIP);
-  if (!rateLimitResult.allowed) {
-    logAuditEvent('signup.attempt', undefined, undefined, req.url, clientIP, req.headers['user-agent'], 0, {
-      reason: 'rate_limited',
-      waitTime: rateLimitResult.waitTime
-    });
-    return res.status(429).json({
+    return res.status(405).json({
       success: false,
-      message: `Too many signup attempts. Please try again in ${Math.ceil((rateLimitResult.waitTime || 0) / 60000)} minutes.`
+      message: 'Method not allowed'
     });
   }
 
   try {
     const requestData: SignupRequest = req.body;
+    const clientIP = req.headers['x-forwarded-for'] as string || req.connection?.remoteAddress || 'unknown';
 
     // Validate request data
     const validation = validateSignupRequest(requestData);
@@ -232,15 +229,27 @@ export default async function handler(
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        error: validation.errors.join(', ')
+        errors: validation.errors
       });
     }
 
-    // Normalize email
+    // Check rate limiting
+    const rateLimit = checkRateLimit(clientIP);
+    if (!rateLimit.allowed) {
+      logAuditEvent('signup.attempt', undefined, undefined, req.url, clientIP, req.headers['user-agent'], 0, {
+        reason: 'rate_limited',
+        waitTime: rateLimit.waitTime
+      });
+      return res.status(429).json({
+        success: false,
+        message: `Too many signup attempts. Please wait ${Math.ceil((rateLimit.waitTime || 0) / 1000)} seconds before trying again.`
+      });
+    }
+
     const normalizedEmail = requestData.email.toLowerCase().trim();
 
     // Check if email already exists
-    const emailCheck = checkEmailExists(normalizedEmail);
+    const emailCheck = await checkEmailExists(normalizedEmail);
     if (emailCheck.exists) {
       if (emailCheck.verified) {
         logAuditEvent('signup.attempt', emailCheck.userId, undefined, req.url, clientIP, req.headers['user-agent'], 0, {
@@ -249,30 +258,26 @@ export default async function handler(
         });
         return res.status(409).json({
           success: false,
-          message: 'An account with this email already exists. Please sign in instead.'
+          message: 'An account with this email already exists and is verified. Please sign in instead.'
         });
       } else {
-        // Email exists but not verified - allow resend
         logAuditEvent('signup.attempt', emailCheck.userId, undefined, req.url, clientIP, req.headers['user-agent'], 0, {
           reason: 'email_exists_unverified',
           email: normalizedEmail
         });
         return res.status(409).json({
           success: false,
-          message: 'An account with this email already exists but is not verified. Please check your email or request a new verification link.'
+          message: 'An account with this email exists but is not verified. Please check your email for the verification link.'
         });
       }
     }
 
-    // Hash password
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(requestData.password, saltRounds);
-
-    // Create company first
+    // Create company first (temporary user ID for now)
+    const tempUserId = `temp_${Date.now()}`;
     const companyResult = createCompany({
       name: requestData.companyName.trim(),
       contactEmail: normalizedEmail,
-      ownerUserId: '' // Will be set after user creation
+      ownerUserId: tempUserId
     });
 
     if (!companyResult.success) {
@@ -288,13 +293,13 @@ export default async function handler(
     }
 
     // Create user
-    const userResult = createUser({
+    const userResult = await createUser({
       companyId: companyResult.companyId!,
       email: normalizedEmail,
       firstName: requestData.firstName.trim(),
       surname: requestData.surname.trim(),
       position: requestData.position,
-      passwordHash
+      password: requestData.password
     });
 
     if (!userResult.success) {
@@ -309,19 +314,29 @@ export default async function handler(
       });
     }
 
-    // Update company with owner user ID
+    // Update company with actual owner user ID
     const companyIndex = companies.findIndex((c: any) => c.id === companyResult.companyId);
     if (companyIndex !== -1) {
       companies[companyIndex].ownerUserId = userResult.userId!;
     }
 
-    // Create verification token
-    const verificationToken = createVerificationToken(userResult.userId!, 'email_verification');
-    storeVerificationToken(verificationToken);
+    // Create verification token with raw token for URL
+    const tokenData = createVerificationTokenWithRaw(userResult.userId!, 'email_verification');
+    console.log('Raw token for verification:', tokenData.rawToken); // DEBUG: Log raw token
+    const verificationToken = {
+      id: randomUUID(),
+      userId: tokenData.userId,
+      tokenHash: tokenData.tokenHash,
+      purpose: tokenData.purpose,
+      expiresAt: tokenData.expiresAt,
+      createdAt: new Date().toISOString()
+    };
+    await storeVerificationToken(verificationToken);
 
-    // Build verification URL
-    const appHost = process.env.APP_HOST || 'http://localhost:8082';
-    const verifyUrl = `${appHost}/auth/verify-email?token=${verificationToken.id}&uid=${userResult.userId}`;
+    // Build verification URL using the raw token
+const appHost = process.env.APP_HOST || 'http://localhost:8080';
+    const verifyUrl = `${appHost}/auth/verify-email?token=${tokenData.rawToken}&uid=${userResult.userId}`;
+    console.log('Verification URL:', verifyUrl); // DEBUG: Log verification URL
 
     // Send verification email
     try {
@@ -381,6 +396,7 @@ export default async function handler(
   } catch (error) {
     console.error('Signup error:', error);
 
+    const clientIP = req.headers['x-forwarded-for'] as string || req.connection?.remoteAddress || 'unknown';
     logAuditEvent('signup.attempt', undefined, undefined, req.url, clientIP, req.headers['user-agent'], 0, {
       reason: 'server_error',
       error: error instanceof Error ? error.message : 'Unknown error'

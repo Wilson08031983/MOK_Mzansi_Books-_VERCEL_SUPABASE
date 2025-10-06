@@ -4,6 +4,11 @@ import React from 'react';
 import emailConfig from '@/emails/config/emailConfig';
 import { v4 as uuidv4 } from 'uuid';
 
+// Enforce server-only usage: fail fast if imported on the client
+if (typeof window !== 'undefined') {
+  throw new Error('postmarkService is server-only and must not be imported in client code');
+}
+
 // Browser-safe UUID generator
 const genId = (): string => {
   try {
@@ -22,18 +27,13 @@ const genId = (): string => {
   }
 };
 
-// Safely detect server environment to avoid process reference errors in the browser
-const isServerEnv = false; // Force client-side mode to avoid process reference errors
-
 // PostMark client configuration - lazy initialization
 let postmarkClient: Client | null = null;
 
 function getPostmarkClient(): Client {
   if (!postmarkClient) {
-    // Get token from environment variables
-    const token = import.meta.env.VITE_POSTMARK_SERVER_TOKEN || 
-                  import.meta.env.POSTMARK_SERVER_TOKEN || 
-                  '1d8c2f0c-3a66-4693-8374-9c1052879d9d'; // Fallback token
+    // Get token strictly from server environment variables
+    const token = (typeof process !== 'undefined' && process.env ? process.env.POSTMARK_SERVER_TOKEN : null);
     
     if (!token) {
       throw new Error('Postmark server token not found in environment variables');
@@ -96,9 +96,11 @@ class PostMarkService {
     // Avoid constructing the Postmark client when in DRY RUN to prevent token verification errors
     this.client = POSTMARK_DRY_RUN ? null : getPostmarkClient();
     
-    // Use Vite environment variables for frontend
-    const senderEmail = import.meta.env.VITE_POSTMARK_SENDER_EMAIL || 'noreply@mokmzansibooks.com';
-    const senderName = import.meta.env.VITE_POSTMARK_SENDER_NAME || emailConfig.company.name;
+    // Use server environment variables only
+    const senderEmail = (typeof process !== 'undefined' && process.env ? process.env.POSTMARK_SENDER_EMAIL : null) ||
+                       'noreply@mokmzansibooks.com';
+    const senderName = (typeof process !== 'undefined' && process.env ? process.env.POSTMARK_SENDER_NAME : null) ||
+                      emailConfig.company.name;
     
     this.defaultFrom = `${senderName} <${senderEmail}>`;
     this.defaultReplyTo = emailConfig.company.email || 'support@mokmzansibooks.com';

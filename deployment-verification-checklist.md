@@ -26,8 +26,7 @@ Based on `.env.local`, the following variables must be set in Vercel:
 
 #### Database Configuration
 - [ ] `DATABASE_URL=[encoded URL from .env.local]`
-- [ ] `VITE_POSTGRES_TRANSACTION_POOLER=[pooler URL]`
-- [ ] `VITE_SUPABASE_SERVICE_ROLE_KEY=[service role key]`
+- [ ] `SUPABASE_SERVICE_ROLE_KEY=[service role key]` (server-only)
 
 #### Paystack Configuration
 - [ ] `PAYSTACK_SECRET_KEY=[live secret key]`
@@ -41,6 +40,7 @@ Based on `.env.local`, the following variables must be set in Vercel:
 - [ ] `POSTMARK_SERVER_TOKEN=[server token]`
 - [ ] `POSTMARK_SENDER_EMAIL=noreply@mokmzansibooks.com`
 - [ ] `POSTMARK_SENDER_NAME=MOK Mzansi Books`
+- [ ] `POSTMARK_WEBHOOK_SECRET=[secure random string]` (server-only)
 
 ## Email Functionality Verification ✅
 
@@ -102,6 +102,7 @@ Based on `.env.local`, the following variables must be set in Vercel:
 - [ ] No sensitive data exposed in client-side code
 - [ ] API keys properly secured
 - [ ] Database credentials protected
+- [ ] No `VITE_` or `NEXT_PUBLIC_` variables contain secrets
 
 ## Performance Testing
 

@@ -112,7 +112,7 @@ The verification email system has been thoroughly tested and is **WORKING CORREC
 
 ### Required Environment Variables
 - `POSTMARK_SERVER_TOKEN`: ✅ Configured
-- `POSTMARK_SENDER_EMAIL`: ✅ Configured (`noreply@mokmzansibooks.com`)
+- `POSTMARK_FROM_EMAIL`: ✅ Configured (`noreply@mokmzansibooks.com`)
 - `APP_HOST`: ✅ Configured for verification URLs
 
 ### Email Template

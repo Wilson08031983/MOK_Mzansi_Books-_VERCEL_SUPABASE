@@ -286,7 +286,7 @@ const bounces = await postmarkService.getBouncedEmails(50, 0);
 ### Common Issues
 
 1. **401 Unauthorized**
-   - Check `POSTMARK_API_TOKEN` is correct
+   - Check `POSTMARK_SERVER_TOKEN` is correct
    - Verify token has send permissions
 
 2. **422 Unprocessable Entity**

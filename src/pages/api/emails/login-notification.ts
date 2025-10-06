@@ -7,6 +7,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  if (!process.env.POSTMARK_SERVER_TOKEN) {
+    return res.status(500).json({ message: 'Postmark server token not configured' });
+  }
+
   const { to, deviceName, browser, location, timestamp, userName = 'User' } = req.body || {};
 
   if (!to || !deviceName || !browser || !location || !timestamp) {

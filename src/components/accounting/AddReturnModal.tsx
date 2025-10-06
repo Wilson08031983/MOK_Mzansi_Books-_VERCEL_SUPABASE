@@ -16,7 +16,6 @@ import { directDeductionsLinkService, DirectPAYEUIFData } from '../../services/d
 import { accountingPayeUifCalculatorService } from '../../services/accountingPayeUifCalculatorService';
 import { turnoverTaxCalculatorService, TurnoverTaxCalculation, TurnoverTaxPeriod } from '../../services/turnoverTaxCalculatorService';
 import { manualTaxReturnsService, ManualTaxReturn, ManualTaxFile, IRP6Inputs, ITR14Inputs, DTR01Inputs, CustomsInputs } from '../../services/manualTaxReturnsService';
-import { stuckToastCleanupService } from '@/services/stuckToastCleanupService';
 import { generateVAT201PDF } from '../../utils/vat201PdfGenerator';
 import { toast } from 'sonner';
 
@@ -251,9 +250,6 @@ const AddReturnModal: React.FC<AddReturnModalProps> = ({ isOpen, onClose, onAdd 
       const currentYear = new Date().getFullYear();
       const periods = turnoverTaxCalculatorService.generateTaxPeriods(currentYear);
       setTurnoverTaxPeriods(periods);
-      
-      // Clean up any stuck PAYE sync toasts when modal opens
-      stuckToastCleanupService.forceCleanupAndShowStatus();
     }
   }, [isOpen]);
 

@@ -105,28 +105,8 @@ export const usePayment = () => {
               throw new Error('Server verification failed');
             }
           } catch (_serverErr) {
-            console.log('Dev mode: Falling back to direct Paystack verification with TEST key');
-            // Only fallback to direct verify if a TEST secret is explicitly provided on the client
-            const paystackSecretKey = (import.meta as any).env?.VITE_PAYSTACK_TEST_SECRET_KEY;
-            if (!paystackSecretKey) throw _serverErr;
-
-            const paystackResp = await fetch(`https://api.paystack.co/transaction/verify/${reference?.reference || reference}` , {
-              method: 'GET',
-              headers: { 'Authorization': `Bearer ${paystackSecretKey}`, 'Content-Type': 'application/json' },
-            });
-            if (paystackResp.ok) {
-              const paystackData = await paystackResp.json();
-              const status = paystackData?.data?.status?.toLowerCase();
-              verified = status === 'success' || status === 'successful';
-              if (!verified && (status === 'pending' || status === 'processing')) {
-                if (attempt < maxRetries) {
-                  await new Promise(res => setTimeout(res, retryDelay));
-                  continue;
-                }
-              }
-            } else {
-              throw new Error('Paystack verification failed');
-            }
+            console.log('Dev mode: Server verification failed; not using client secrets');
+            throw _serverErr;
           }
         } else {
           // Production mode: use API route

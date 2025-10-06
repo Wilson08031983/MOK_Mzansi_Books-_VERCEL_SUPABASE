@@ -95,18 +95,26 @@ const API_BASE = typeof window !== 'undefined' ? '/api/emails' : 'http://localho
 
 async function postJson<T = any>(path: string, body: any): Promise<T> {
   const url = path.startsWith('http') ? path : `${API_BASE}/${path}`;
+  console.log('postJson called with:', { url, body });
+  
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  
+  console.log('Response status:', res.status, res.statusText);
+  
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.error('API error response:', text);
     throw new Error(`Email API error ${res.status}: ${text || res.statusText}`);
   }
   // Some routes may return no JSON body
   try {
-    return (await res.json()) as T;
+    const result = (await res.json()) as T;
+    console.log('API response:', result);
+    return result;
   } catch {
     return {} as T;
   }
@@ -205,9 +213,15 @@ export const sendConfirmationEmail = async (options: { to: string; subject?: str
 export const sendPasswordResetEmail = async (options: PasswordResetEmailOptions): Promise<boolean> => {
   try {
     const { to, subject, resetToken, firstName = 'there' } = options;
+    console.log('sendPasswordResetEmail called with:', { to, subject, resetToken, firstName });
+    
     if (!to || !resetToken) throw new Error('Missing required parameters');
 
-    await postJson('password-reset', { to, subject, resetToken, firstName });
+    const payload = { to, subject, resetToken, firstName };
+    console.log('Sending payload to API:', payload);
+    
+    await postJson('password-reset', payload);
+    console.log('Password reset email sent successfully');
     return true;
   } catch (error: any) {
     console.error('Error sending password reset email:', error);

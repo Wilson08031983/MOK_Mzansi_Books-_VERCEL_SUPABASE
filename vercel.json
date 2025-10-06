@@ -3,6 +3,19 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "installCommand": "pnpm install --no-frozen-lockfile",
+  "devCommand": "vite --port $PORT",
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://ulduqjddmhnwvdeeldsb.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsZHVxamRkbWhud3ZkZWVsZHNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTg1NzEsImV4cCI6MjA3MjU3NDU3MX0.CRjFvK8kNrLD7m1n2qJsXwK0TnYuzYxxHl_YxIK1M6c",
+    "SUPABASE_URL": "https://ulduqjddmhnwvdeeldsb.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsZHVxamRkbWhud3ZkZWVsZHNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Njk5ODU3MSwiZXhwIjoyMDcyNTc0NTcxfQ.y4mp8OKb26b-HA0Z25PLeEVrg3WKpvbEi94I41FFxsQ",
+    "SUPABASE_SECRET_KEY": "sb_secret_yyJSx9jbIVejpygo0qu7lA_7q1cDBaG",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_WYlJV0yHW2p_lGRr6X1i4Q_IDD3DVB4",
+    "DATABASE_URL": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:6543/postgres",
+    "VITE_POSTGRES_DIRECT_CONNECTION": "postgresql://postgres:Ka%21gi%23so123J@db.ulduqjddmhnwvdeeldsb.supabase.co:5432/postgres",
+    "VITE_POSTGRES_TRANSACTION_POOLER": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:6543/postgres",
+    "VITE_POSTGRES_SESSON_POOLER": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
+  },
   "rewrites": [
     { "source": "/((?!api).*)", "destination": "/index.html" }
   ],
