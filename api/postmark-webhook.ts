@@ -1,5 +1,4 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import crypto from 'crypto';
 
 interface PostmarkWebhookEvent {
   RecordType: 'Delivery' | 'Bounce' | 'SpamComplaint' | 'Open' | 'Click';
@@ -29,57 +28,42 @@ export default async function handler(
   }
 
   try {
-    // Verify webhook signature if POSTMARK_WEBHOOK_SECRET is set
-    const webhookSecret = process.env.POSTMARK_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const signature = req.headers['x-postmark-signature'] as string;
-      if (!signature) {
-        return res.status(401).json({ error: 'Missing webhook signature' });
-      }
-
-      const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(JSON.stringify(req.body))
-        .digest('base64');
-
-      if (signature !== expectedSignature) {
-        return res.status(401).json({ error: 'Invalid webhook signature' });
-      }
-    }
-
-    const event: PostmarkWebhookEvent = req.body;
+    // Postmark doesn't use HMAC signature verification
+    // They only support Basic HTTP Auth or IP filtering for webhook security
+    // Parse the webhook event directly from the request body
+    const event: PostmarkWebhookEvent = req.body as PostmarkWebhookEvent;
     
     console.log('Received Postmark webhook event:', {
       type: event.RecordType,
       messageId: event.MessageID,
-      email: event.Email,
+      email: event.Email || 'undefined',
       timestamp: event.DeliveredAt || event.BouncedAt || new Date().toISOString()
     });
 
     // Handle different event types
     switch (event.RecordType) {
       case 'Delivery':
-        console.log(`Email delivered successfully to ${event.Email}`);
+        console.log(`Email delivered successfully to ${event.Email || 'unknown recipient'}`);
         // Add your delivery handling logic here
         break;
         
       case 'Bounce':
-        console.log(`Email bounced for ${event.Email}: ${event.Description}`);
+        console.log(`Email bounced for ${event.Email || 'unknown recipient'}: ${event.Description}`);
         // Add your bounce handling logic here
         break;
         
       case 'SpamComplaint':
-        console.log(`Spam complaint received for ${event.Email}`);
+        console.log(`Spam complaint received for ${event.Email || 'unknown recipient'}`);
         // Add your spam complaint handling logic here
         break;
         
       case 'Open':
-        console.log(`Email opened by ${event.Email}`);
+        console.log(`Email opened by ${event.Email || 'unknown recipient'}`);
         // Add your open tracking logic here
         break;
         
       case 'Click':
-        console.log(`Link clicked by ${event.Email}`);
+        console.log(`Link clicked by ${event.Email || 'unknown recipient'}`);
         // Add your click tracking logic here
         break;
         
