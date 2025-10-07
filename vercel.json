@@ -14,7 +14,8 @@
     "DATABASE_URL": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:6543/postgres",
     "VITE_POSTGRES_DIRECT_CONNECTION": "postgresql://postgres:Ka%21gi%23so123J@db.ulduqjddmhnwvdeeldsb.supabase.co:5432/postgres",
     "VITE_POSTGRES_TRANSACTION_POOLER": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:6543/postgres",
-    "VITE_POSTGRES_SESSON_POOLER": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
+    "VITE_POSTGRES_SESSON_POOLER": "postgresql://postgres.ulduqjddmhnwvdeeldsb:Ka%21gi%23so123J@aws-1-sa-east-1.pooler.supabase.com:5432/postgres",
+    "POSTMARK_WEBHOOK_SECRET": "e27a62e3-6b1a-4f8a-9d3b-2a5b6a7c8d9e"
   },
   "rewrites": [
     { "source": "/((?!api).*)", "destination": "/index.html" }
@@ -25,7 +26,7 @@
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-Postmark-Signature" }
       ]
     }
   ]

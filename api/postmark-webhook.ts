@@ -29,7 +29,12 @@ export default async function handler(
 
   // --- 1. Bearer Token Authentication ---
   const authHeader = req.headers.authorization;
-  const expectedToken = `Bearer ${process.env.POSTMARK_WEBHOOK_SECRET}`;
+  const secret = process.env.POSTMARK_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('POSTMARK_WEBHOOK_SECRET is not configured in the environment');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
+  const expectedToken = `Bearer ${secret}`;
 
   if (!authHeader || authHeader !== expectedToken) {
     console.warn('Unauthorized webhook access attempt', {
