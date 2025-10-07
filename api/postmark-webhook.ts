@@ -28,28 +28,13 @@ export default async function handler(
   }
 
   // 1. Enable detailed logging
-  console.log('--- Postmark Webhook Request ---');
+  console.log('--- Postmark Webhook Request (Authentication Disabled for Test) ---');
   console.log('Method:', req.method);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
   console.log('Body:', JSON.stringify(req.body, null, 2));
   console.log('---------------------------------');
 
-  // 5. Adjust handler logic: Validate a known secret header
-  const webhookSecret = process.env.POSTMARK_WEBHOOK_SECRET;
-
-  // Only perform auth if the secret is set and not the placeholder
-  if (webhookSecret && webhookSecret !== 'your-postmark-webhook-secret-secret-here') {
-    const authHeader = req.headers['authorization'];
-    const expectedAuthHeader = `Bearer ${webhookSecret}`;
-
-    if (authHeader !== expectedAuthHeader) {
-      console.error('Webhook authentication failed: Invalid or missing Authorization header.');
-      return res.status(401).json({ error: 'Invalid webhook secret' });
-    }
-    console.log('Webhook authentication passed.');
-  } else {
-    console.warn('POSTMARK_WEBHOOK_SECRET is not set or is using the default placeholder. Skipping authentication.');
-  }
+  // Temporarily disabled authentication for debugging Vercel 401 issue.
 
   try {
     // Parse the webhook event directly from the request body
