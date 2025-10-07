@@ -31,6 +31,13 @@ export default async function handler(
     return res.status(400).json({ message: 'Missing required parameter: to' });
   }
 
+  // Validate email format and reject invalid recipients
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(to) || to === '.' || to.trim() === '') {
+    console.error('[api/emails/confirmation] Invalid recipient email:', to);
+    return res.status(400).json({ message: 'Invalid email address format' });
+  }
+
   // Minimal, non-sensitive request logging
   try {
     console.log('[api/emails/confirmation] Incoming request', {

@@ -3,6 +3,27 @@ import { VerificationRequest, VerificationResponse } from '../../types/auth';
 import { validateToken, hashToken } from '../../services/tokenService';
 import { logAuditEvent } from '../../services/loggingService';
 import { findTokenByHash, markTokenUsed, invalidateOtherTokensForUser, markUserEmailVerified } from '../../repositories/verificationRepo';
+import { setEmailVerifiedByEmail } from '../../services/localAuthService';
+import { supabaseServer } from '../../integrations/supabase/serverClient';
+
+/**
+ * Gets user email by userId from Supabase auth
+ */
+async function getUserEmailById(userId: string): Promise<string | null> {
+  try {
+    const { data: authData, error: authError } = await supabaseServer.auth.admin.listUsers();
+    
+    if (!authError && authData?.users) {
+      const authUser = authData.users.find(user => user.id === userId);
+      return authUser?.email || null;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting user email by ID:', error);
+    return null;
+  }
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -81,6 +102,20 @@ export default async function handler(
         });
       } catch {}
       return res.status(500).json({ success: false, message: 'Failed to verify email. Please try again.' });
+    }
+
+    // Sync verification status with localStorage
+    const userEmail = await getUserEmailById(requestData.userId);
+    if (userEmail) {
+      try {
+        await setEmailVerifiedByEmail(userEmail, true);
+        console.log('✅ Successfully synced verification status with localStorage');
+      } catch (localStorageError) {
+        console.warn('⚠️ Failed to sync with localStorage (non-blocking):', localStorageError);
+        // Don't fail the request if localStorage sync fails
+      }
+    } else {
+      console.warn('⚠️ Could not retrieve user email for localStorage sync');
     }
 
     // Mark token as used and invalidate other tokens
