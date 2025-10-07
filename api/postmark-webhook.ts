@@ -22,7 +22,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Only allow POST requests
+  console.log('Webhook handler invoked - start of function');\nconsole.log('Incoming request method:', req.method);\nconsole.log('Incoming headers:', JSON.stringify(req.headers, null, 2));\nconsole.log('Incoming body:', JSON.stringify(req.body, null, 2));\n  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
