@@ -27,14 +27,27 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // 1. Enable detailed logging
-  console.log('--- Postmark Webhook Request (Authentication Disabled for Test) ---');
+  // --- 1. Bearer Token Authentication ---
+  const authHeader = req.headers.authorization;
+  const expectedToken = `Bearer ${process.env.POSTMARK_WEBHOOK_SECRET}`;
+
+  if (!authHeader || authHeader !== expectedToken) {
+    console.warn('Unauthorized webhook access attempt', {
+      url: req.url,
+      ip: req.socket.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    });
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  console.log('Webhook authentication passed');
+
+  // --- 2. Detailed Logging ---
+  console.log('--- Postmark Webhook Request ---');
   console.log('Method:', req.method);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
   console.log('Body:', JSON.stringify(req.body, null, 2));
   console.log('---------------------------------');
-
-  // Temporarily disabled authentication for debugging Vercel 401 issue.
 
   try {
     // Parse the webhook event directly from the request body

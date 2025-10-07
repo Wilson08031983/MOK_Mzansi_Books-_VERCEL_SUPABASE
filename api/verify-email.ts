@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { VerificationRequest, VerificationResponse } from '../src/types/auth.ts';
-import { validateToken, hashToken } from '../src/services/tokenService.ts';
-import { logAuditEvent } from '../src/services/loggingService.ts';
-import { findTokenByHash, markTokenUsed, invalidateOtherTokensForUser, markUserEmailVerified } from '../src/repositories/verificationRepo.ts';
+import { VerificationRequest, VerificationResponse } from '../src/types/auth';
+import { validateToken, hashToken } from '../src/services/tokenService';
+import { logAuditEvent } from '../src/services/loggingService';
+import { findTokenByHash, markTokenUsed, invalidateOtherTokensForUser, markUserEmailVerified } from '../src/repositories/verificationRepo';
 
 // All localStorage-based functions have been removed as they are not compatible with server-side execution
 // The API now uses Supabase-backed functions from verificationRepo instead

@@ -1,208 +1,42 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
-
-interface PostmarkWebhookEvent {
-  RecordType: 'Delivery' | 'Bounce' | 'SpamComplaint' | 'Open' | 'Click';
-  MessageID: string;
-  DeliveredAt?: string;
-  BouncedAt?: string;
-  Email?: string;
-  From?: string;
-  Subject?: string;
-  Tag?: string;
-  Details?: string;
-  Description?: string;
-  Type?: string;
-  TypeCode?: number;
-  Name?: string;
-  MessageStream?: string;
-  Metadata?: Record<string, any>;
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Log all incoming headers and request method for debugging
-  console.log('--- Postmark Webhook Request ---');
-  console.log('Method:', req.method);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-  console.log('---------------------------------');
-
-  try {
-    // Postmark doesn't use HMAC signature verification
-    // They only support Basic HTTP Auth or IP filtering for webhook security
-    // Parse the webhook event directly from the request body
-    const event: PostmarkWebhookEvent = req.body as PostmarkWebhookEvent;
-    
-    console.log('Received Postmark webhook event:', {
-      type: event.RecordType,
-      messageId: event.MessageID,
-      email: event.Email || 'undefined',
-      timestamp: event.DeliveredAt || event.BouncedAt || new Date().toISOString()
-    });
-
-    // Handle different event types
-    switch (event.RecordType) {
-      case 'Delivery':
-        console.log(`Email delivered successfully to ${event.Email || 'unknown recipient'}`);
-        // Add your delivery handling logic here
-        break;
-        
-      case 'Bounce':
-        console.log(`Email bounced for ${event.Email || 'unknown recipient'}: ${event.Description}`);
-        // Add your bounce handling logic here
-        break;
-        
-      case 'SpamComplaint':
-        console.log(`Spam complaint received for ${event.Email || 'unknown recipient'}`);
-        // Add your spam complaint handling logic here
-        break;
-        
-      case 'Open':
-        console.log(`Email opened by ${event.Email || 'unknown recipient'}`);
-        // Add your open tracking logic here
-        break;
-        
-      case 'Click':
-        console.log(`Link clicked by ${event.Email || 'unknown recipient'}`);
-        // Add your click tracking logic here
-        break;
-        
-      default:
-        console.log('Unknown event type:', event.RecordType);
-    }
-
-    // Respond with success
-    res.status(200).json({ 
-      success: true, 
-      message: 'Webhook processed successfully',
-      eventType: event.RecordType,
-      messageId: event.MessageID
-    });
-    
-  } catch (error) {
-    console.error('Error processing Postmark webhook:', error);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-}
-
-import { VercelRequest, VercelResponse } from '@vercel/node';
-
-interface PostmarkWebhookEvent {
-  RecordType: 'Delivery' | 'Bounce' | 'SpamComplaint' | 'Open' | 'Click';
-  MessageID: string;
-  DeliveredAt?: string;
-  BouncedAt?: string;
-  Email?: string;
-  From?: string;
-  Subject?: string;
-  Tag?: string;
-  Details?: string;
-  Description?: string;
-  Type?: string;
-  TypeCode?: number;
-  Name?: string;
-  MessageStream?: string;
-  Metadata?: Record<string, any>;
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // 1. Enable detailed logging
-  console.log('--- Postmark Webhook Request ---');
-  console.log('Method:', req.method);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-  console.log('---------------------------------');
-
-  // 5. Adjust handler logic: Validate a known secret header
-  const webhookSecret = process.env.POSTMARK_WEBHOOK_SECRET;
-
-  // Only perform auth if the secret is set and not the placeholder
-  if (webhookSecret && webhookSecret !== 'your-postmark-webhook-secret-secret-here') {
-    const authHeader = req.headers['authorization'];
-    const expectedAuthHeader = `Bearer ${webhookSecret}`;
-
-    if (authHeader !== expectedAuthHeader) {
-      console.error('Webhook authentication failed: Invalid or missing Authorization header.');
-      return res.status(401).json({ error: 'Invalid webhook secret' });
-    }
-    console.log('Webhook authentication passed.');
-  } else {
-    console.warn('POSTMARK_WEBHOOK_SECRET is not set or is using the default placeholder. Skipping authentication.');
-  }
-
-  try {
-    // Parse the webhook event directly from the request body
-    const event: PostmarkWebhookEvent = req.body as PostmarkWebhookEvent;
-    
-    console.log('Received Postmark webhook event:', {
-      type: event.RecordType,
-      messageId: event.MessageID,
-      email: event.Email || 'undefined',
-      timestamp: event.DeliveredAt || event.BouncedAt || new Date().toISOString()
-    });
-
-    // Handle different event types
-    switch (event.RecordType) {
-      case 'Delivery':
-        console.log(`Email delivered successfully to ${event.Email || 'unknown recipient'}`);
-        // Add your delivery handling logic here
-        break;
-        
-      case 'Bounce':
-        console.log(`Email bounced for ${event.Email || 'unknown recipient'}: ${event.Description}`);
-        // Add your bounce handling logic here
-        break;
-        
-      case 'SpamComplaint':
-        console.log(`Spam complaint received for ${event.Email || 'unknown recipient'}`);
-        // Add your spam complaint handling logic here
-        break;
-        
-      case 'Open':
-        console.log(`Email opened by ${event.Email || 'unknown recipient'}`);
-        // Add your open tracking logic here
-        break;
-        
-      case 'Click':
-        console.log(`Link clicked by ${event.Email || 'unknown recipient'}`);
-        // Add your click tracking logic here
-        break;
-        
-      default:
-        console.log('Unknown event type:', event.RecordType);
-    }
-
-    // Respond with success
-    res.status(200).json({ 
-      success: true, 
-      message: 'Webhook processed successfully',
-      eventType: event.RecordType,
-      messageId: event.MessageID
-    });
-    
-  } catch (error) {
-    console.error('Error processing Postmark webhook:', error);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-}
+16:52:05.725 
+Detected `pnpm-lock.yaml` version 9 generated by pnpm@10.x with package.json#packageManager pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748
+16:52:05.778 
+Using TypeScript 5.9.3 (local user-provided)
+16:52:06.028 
+Detected `pnpm-lock.yaml` version 9 generated by pnpm@10.x with package.json#packageManager pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748
+16:52:06.086 
+Using TypeScript 5.9.3 (local user-provided)
+16:52:06.510 
+api/resend-verification.ts(19,76): error TS2339: Property 'admin' does not exist on type 'SupabaseAuthClient'.
+16:52:06.510 
+16:52:06.723 
+src/repositories/verificationRepo.ts(62,47): error TS2339: Property 'admin' does not exist on type 'SupabaseAuthClient'.
+16:52:06.723 
+16:52:07.221 
+Detected `pnpm-lock.yaml` version 9 generated by pnpm@10.x with package.json#packageManager pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748
+16:52:07.279 
+Using TypeScript 5.9.3 (local user-provided)
+16:52:07.448 
+api/signup.ts(119,53): error TS2339: Property 'signUp' does not exist on type 'SupabaseAuthClient'.
+16:52:07.448 
+16:52:08.182 
+Detected `pnpm-lock.yaml` version 9 generated by pnpm@10.x with package.json#packageManager pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748
+16:52:08.244 
+Using TypeScript 5.9.3 (local user-provided)
+16:52:08.366 
+api/verify-email.ts(2,59): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+16:52:08.366 
+api/verify-email.ts(3,42): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+16:52:08.367 
+api/verify-email.ts(4,31): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+16:52:08.367 
+api/verify-email.ts(5,101): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+16:52:08.367 
+16:52:08.448 
+Build Completed in /vercel/output [1m]
+16:52:08.767 
+Deploying outputs...
+16:52:16.791 
+Deployment completed
+16:52:17.671 
+Creating build cache...

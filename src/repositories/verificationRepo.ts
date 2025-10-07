@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { supabaseServer } from '@/integrations/supabase/serverClient';
 
 export async function insertVerificationToken(params: {
@@ -58,14 +59,19 @@ export async function invalidateOtherTokensForUser(userId: string, exceptId?: st
 }
 
 export async function markUserEmailVerified(userId: string): Promise<{ success: boolean; error?: string }> {
-  // Try to update the auth.users table directly since profiles table doesn't exist
-  const { error } = await supabaseServer.auth.admin.updateUserById(userId, {
-    email_confirm: true
+  // The `auth.admin` interface is deprecated. Create a dedicated admin client
+  // using the service role key to perform administrative tasks.
+  const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false },
+  });
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+    email_confirm: true,
   });
 
   if (error) {
     console.error('Failed to update auth.users:', error.message);
-    
+
     // Fallback: try to create a simple record in a custom table
     const { error: fallbackError } = await supabaseServer
       .from('user_verifications')
